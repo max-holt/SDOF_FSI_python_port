@@ -5,7 +5,7 @@ Every VBA ``Function`` appears here in the same order and under the same name
 operation order, loop order, loop bounds and index values are kept as written, and
 nothing is vectorised, merged or simplified. Readability is not a goal in this stage;
 numerical equivalence with the VBA is. Helpers that emulate VBA runtime semantics
-(``CLng``, the ``CLng(x - 0.5)`` floor idiom, ``modDbl``, ``sign``, ``minUnsigned``,
+(``CLng``, the VBA ``floor``, ``modDbl``, ``sign``, ``minUnsigned``,
 ``maxUnsigned``) live in ``vba_compat.py`` and are imported into their VBA slot below.
 
 Array conventions
@@ -338,8 +338,8 @@ def get_pressure_response(
         for tot_ind in range(0, out_max + 1):
             # every loop is 2 time steps
             # VBA assigns a Double (modDbl + 1) to the Long i: implicit CLng.
-            # modDbl carries D-2: an exact odd multiple of UBound gives i = UBound + 1,
-            # which the clamp below folds back to UBound.
+            # (D-2/D-11 fixed with the VBA floor: modDbl is 0 at exact multiples of
+            # UBound, so i is always within 1..UBound here.)
             i = clng(mod_dbl(vba_floor(tot_ind * factor * 2), ubound(valve_pattern, 1)) + 1)
             j = vba_floor(tot_ind * factor * 2 / ubound(valve_pattern, 1)) + 1
             if i >= ubound(valve_pattern, 1) and j < ubound(valve_pattern, 2):
@@ -1005,7 +1005,7 @@ def get_peak_response_jc(
                         imax = min(i + 1, ubound(force_history, 1))
                     for k in range(0, step_qty - 1 + 1):
                         # MoC
-                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        # D-2 (fixed): with the fixed VBA floor, modDbl(n, 2) = 0 for every even n
                         if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
                             # update even cells
                             v_av = array_a[1, pipe_seg_qty]
@@ -1162,7 +1162,7 @@ def get_peak_response_jc(
                         ibmax = min(ib + 1, ubound(force_history, 1))
                     for k in range(0, step_qty - k_overlap - 1 + 1):
                         # MoC
-                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        # D-2 (fixed): with the fixed VBA floor, modDbl(n, 2) = 0 for every even n
                         if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
                             # update even cells
                             v_av = array_a[1, pipe_seg_qty]
@@ -1296,7 +1296,7 @@ def get_peak_response_jc(
                         ibmax = min(ib + 1, ubound(force_history, 1))
                     for k in range(step_qty - k_overlap, step_qty - 1 + 1):
                         # MoC
-                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        # D-2 (fixed): with the fixed VBA floor, modDbl(n, 2) = 0 for every even n
                         if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
                             # update even cells
                             v_av = array_a[1, pipe_seg_qty]
@@ -1431,7 +1431,7 @@ def get_peak_response_jc(
                 tot_ind = tot_ind + 1
                 for k in range(1, step_qty + 1):
                     # MoC
-                    # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                    # D-2 (fixed): with the fixed VBA floor, modDbl(n, 2) = 0 for every even n
                     if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
                         # update even cells
                         v_av = array_a[1, pipe_seg_qty]

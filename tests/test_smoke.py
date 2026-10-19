@@ -153,13 +153,17 @@ def test_peak_response_step_qty_one_divides_by_zero():
 
 def test_peak_response_single_row_history_is_out_of_range():
     # D-8: a 1 x n (horizontal) forceHistory leaves iB = UBound(1) + 1 after the first
-    # block and the second block indexes past the array (VBA error 9). Needs a
-    # non-integer delay so kOverlap < stepQTY and the first k loop actually runs.
+    # block and the second block indexes past the array (VBA error 9) whenever the first
+    # k loop runs, i.e. kOverlap < stepQTY. With the fixed floor (D-1) an integer delay
+    # gives kOverlap = 0, so it fails too (under the original floor an odd-integer delay
+    # gave kOverlap = stepQTY and escaped).
     force = step_force().reshape(1, 100)
-    with pytest.raises(IndexError):
-        lp.get_peak_response(force, **dict(PEAK_KW, physical_length=12.5))
-    # with an integer delay kOverlap = stepQTY skips that loop and iB is re-based first
-    lp.get_peak_response(force, **dict(PEAK_KW, physical_length=10.0))
+    for physical_length in (12.5, 10.0):
+        with pytest.raises(IndexError):
+            lp.get_peak_response(force, **dict(PEAK_KW, physical_length=physical_length))
+    # only a fractional part that rounds kOverlap up to stepQTY skips that loop and lets
+    # iB be re-based first: unballanceStepQTY = 1.96 -> kOverlap = CLng(9.6) = 10
+    lp.get_peak_response(force, **dict(PEAK_KW, physical_length=19.6))
 
 
 # ------------------------------------------------------------------ GetPeakResponseJC

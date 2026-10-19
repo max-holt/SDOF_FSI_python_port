@@ -136,8 +136,7 @@ def test_2d_inputs_are_walked_column_major():
             a = func(flat, **kw, output_type=output_type)
             b = func(as_f, **kw, output_type=output_type)
             np.testing.assert_array_equal(a, b)
-    # Valve pattern: exact binary fractions, linear up to sample 80 then constant, so the
-    # multi-column index quirk (D-11) is value-neutral and the identity is exact.
+    # Valve pattern: exact binary fractions so the identity is exact.
     closure = np.minimum(np.arange(100), 80) / 128.0
     a = lp.get_pressure_response(closure, **PRESSURE_KW)
     b = lp.get_pressure_response(closure.reshape(10, 10, order="F"), **PRESSURE_KW)
@@ -161,15 +160,17 @@ PRESSURE_KW = dict(
 )
 
 
-def test_pressure_response_multicolumn_pattern_index_quirk():
-    """D-11: for a 10 x 10 pattern the VBA reads the *last* pattern value at position
-    p = 91 (floor(91) = 90, modDbl(90, 10) = 10 -> i = 11 -> clamped to (10, 10)),
-    so a valve that closes only at the final sample briefly closes at p = 91 too.
-    A single-column pattern is not affected (it self-corrects through frac = 1)."""
+def test_pressure_response_multicolumn_pattern_matches_single_column():
+    """D-11 (fixed): under the original floor a 10 x 10 pattern read the *last* pattern
+    value early at position p = 91 (floor(91) = 90, modDbl(90, 10) = 10 -> i = 11 ->
+    clamped to (10, 10)), so a valve that closes only at the final sample briefly closed
+    at p = 91 too. With the fixed floor the index pair is consistent at every p and the
+    multi-column result is exactly the single-column one, spike included."""
     spike = np.zeros(100)
     spike[99] = 1.0
     one_col = lp.get_pressure_response(spike, **PRESSURE_KW)
     ten_cols = lp.get_pressure_response(spike.reshape(10, 10, order="F"), **PRESSURE_KW)
-    # p = 0..90 contain only extrapolations of zeros, so nothing differs before 91
-    np.testing.assert_array_equal(one_col[:91], ten_cols[:91])
-    assert ten_cols[91] > 100 * one_col[91]
+    np.testing.assert_array_equal(one_col, ten_cols)
+    # the closing sample does change the response, so the equality is not vacuous
+    never_closes = lp.get_pressure_response(np.zeros(100), **PRESSURE_KW)
+    assert not np.array_equal(one_col, never_closes)
