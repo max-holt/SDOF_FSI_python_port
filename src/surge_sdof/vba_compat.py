@@ -11,6 +11,8 @@ index 0 unused, so VBA index values can be used unchanged. ``ubound(arr, dim)``
 returns ``shape[dim - 1] - 1`` for such padded arrays, i.e. the VBA ``UBound``.
 """
 
+import math
+
 import numpy as np
 
 __all__ = [
@@ -35,25 +37,32 @@ def clng(x):
 
 
 def vba_floor(val):
-    """VBA ``floor``: ``floor = CLng(val - 0.5)``.
+    """VBA ``floor`` (lead author's fixed version, ``legacy/vba`` commit da022b8)::
 
-    This is *not* a mathematical floor. Because ``CLng`` rounds half to even, an exact
-    odd integer comes out one too low (``floor(5.0) = CLng(4.5) = 4``) while an exact
-    even integer is correct (``floor(4.0) = CLng(3.5) = 4``). Negative odd integers
-    are also one too low (``floor(-1.0) = CLng(-1.5) = -2``). Non-integer values are
-    floored correctly. The bug is reproduced on purpose.
+        floor = max(CLng(val - 0.5), CLng(val + 0.5) - 1)
+
+    That expression is a true mathematical floor for every finite double (within the
+    VBA ``Long`` range, where ``val +/- 0.5`` is exact): for a non-integer ``n + f``
+    both operands equal ``n``; for an exact integer ``n`` half-to-even rounding makes
+    exactly one of the two operands ``n - 1`` and the other ``n``, and ``max`` picks
+    ``n``. It is therefore implemented as ``math.floor`` and returns an ``int``.
+
+    The original VBA ``CLng(val - 0.5)`` was one too low for exact odd integers
+    (``floor(5.0) = 4``); see DEVIATIONS.md D-1 (fixed). ``tests/test_vba_compat.py``
+    pins this function against the literal transcription of the fixed VBA.
     """
-    # VBA quirk D-1 preserved
-    return clng(val - 0.5)
+    # D-1 fixed: true floor
+    return math.floor(val)
 
 
 def mod_dbl(num, div):
     """VBA ``modDbl``: ``num - (floor(CDbl(num) / CDbl(div)) * div)``.
 
-    Inherits the ``vba_floor`` bug: when ``num / div`` is an exact odd integer the
-    result is ``div`` instead of 0 (``modDbl(6, 2) = 2``, ``modDbl(15, 5) = 5``).
+    With the fixed ``floor`` this is the ordinary floored modulo
+    (``modDbl(6, 2) = 0``, ``modDbl(7, 2) = 1``). The original VBA ``floor`` made it
+    return ``div`` instead of 0 whenever ``num / div`` was an exact odd integer; see
+    DEVIATIONS.md D-2 (fixed).
     """
-    # VBA quirk D-2 preserved (consequence of D-1)
     return num - (vba_floor(float(num) / float(div)) * div)
 
 

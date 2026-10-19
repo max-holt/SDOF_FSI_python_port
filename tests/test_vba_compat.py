@@ -2,7 +2,7 @@
 
 Reference definitions (legacy/vba/Existing Code.bas):
     CLng          -> round half to even
-    floor(val)    = CLng(val - 0.5)
+    floor(val)    = max(CLng(val - 0.5), CLng(val + 0.5) - 1)   (fixed, commit da022b8)
     modDbl(n, d)  = n - (floor(CDbl(n) / CDbl(d)) * d)
     sign(val, lim): 1 if val > lim, -1 if val < -lim, else 0
     minUnsigned / maxUnsigned: see lines 19-49
@@ -77,55 +77,77 @@ def test_clng_accepts_numpy_scalars():
     assert clng(np.int64(3)) == 3
 
 
+def _vba_floor_literal(val):
+    """Literal transcription of the lead author's fixed VBA floor (line 98):
+    floor = max(CLng(val - 0.5), CLng(val + 0.5) - 1)"""
+    return max(clng(val - 0.5), clng(val + 0.5) - 1)
+
+
 @pytest.mark.parametrize(
-    "val, expected",
+    "val",
     [
-        # exact even integers: correct
-        (0.0, 0),
-        (2.0, 2),
-        (4.0, 4),
-        (400.0, 400),
-        (-2.0, -2),
-        # exact odd integers: one too low (the VBA bug)
-        (1.0, 0),
-        (3.0, 2),
-        (5.0, 4),
-        (7.0, 6),
-        (-1.0, -2),
-        (-3.0, -4),
-        # non-integers: correct floor
-        (4.3, 4),
-        (4.7, 4),
-        (4.5, 4),
-        (5.5, 5),
-        (5.0001, 5),
-        (4.9999, 4),
-        (-0.3, -1),
-        (-0.5, -1),
-        (-1.2, -2),
-        (0.49, 0),
-        (0.51, 0),
+        # exact even integers
+        0.0,
+        2.0,
+        4.0,
+        400.0,
+        -2.0,
+        -4.0,
+        # exact odd integers (one too low under the original CLng(val - 0.5))
+        1.0,
+        3.0,
+        5.0,
+        7.0,
+        -1.0,
+        -3.0,
+        # fractional part < 0.5
+        4.3,
+        5.0001,
+        0.49,
+        0.1,
+        -0.3,
+        -1.2,
+        -5.9999,
+        # fractional part = 0.5 (CLng ties)
+        4.5,
+        5.5,
+        0.5,
+        -0.5,
+        -1.5,
+        -2.5,
+        # fractional part > 0.5
+        4.7,
+        4.9999,
+        0.51,
+        0.9,
+        -0.7,
+        -1.8,
+        -4.0001,
     ],
 )
-def test_vba_floor(val, expected):
-    assert vba_floor(val) == expected
+def test_vba_floor(val):
+    assert vba_floor(val) == _vba_floor_literal(val)
+    assert vba_floor(val) == math.floor(val)
+    assert isinstance(vba_floor(val), int)
 
 
-def test_vba_floor_odd_integer_bug_is_systematic():
+def test_vba_floor_is_a_true_floor_on_all_integers():
     for n in range(-21, 22):
-        if n % 2 == 0:
-            assert vba_floor(float(n)) == n
-        else:
-            assert vba_floor(float(n)) == n - 1
+        assert vba_floor(float(n)) == n
+        assert _vba_floor_literal(float(n)) == n
 
 
-def test_vba_floor_non_integers_match_math_floor():
+def test_vba_floor_matches_math_floor_and_vba_on_random_values():
     rng = random.Random(99)
     for _ in range(5000):
         x = rng.uniform(-1e3, 1e3)
-        if x == math.floor(x):
-            continue
         assert vba_floor(x) == math.floor(x)
+        assert vba_floor(x) == _vba_floor_literal(x)
+    # exact .5 ties and exact integers on a grid
+    for k in range(-50, 51):
+        for x in (k + 0.5, float(k)):
+            assert vba_floor(x) == math.floor(x)
+            assert vba_floor(x) == _vba_floor_literal(x)
 
 
 @pytest.mark.parametrize(
