@@ -86,6 +86,7 @@ __all__ = [
     "solve_poly",
     "get_pressure_response",
     "get_peak_response",
+    "get_peak_response_jc",
 ]
 
 
@@ -768,3 +769,798 @@ def get_peak_response(
             result_array[4] = f_max  # max applied force
 
         return result_array
+
+
+# VBA line 622: Function GetPeakResponseJC(forceHistory As Variant, stepQTY As Integer, sampleFreq As Double, physicalLength As Double, flexuralRigidityEI As Double, celerity As Double, massPerUnitLen As Double, fluidDensty As Double, fluidArea As Double, dampingPercent As Double, dynamicFric As Double, natFreq As Double, Optional restrainFreqRatio As Double = 1, Optional gap As Double = 0, Optional outputType As Integer = 0) As Double()
+def get_peak_response_jc(
+    force_history,
+    step_qty,
+    sample_freq,
+    physical_length,
+    flexural_rigidity_ei,
+    celerity,
+    mass_per_unit_len,
+    fluid_densty,
+    fluid_area,
+    damping_percent,
+    dynamic_fric,
+    nat_freq,
+    restrain_freq_ratio=1,
+    gap=0,
+    output_type=0,
+):
+    """Returns the peak displacement response (consistent unites except dynamicFric).
+
+    Junction-coupling (JC) variant: a 1-D MoC fluid column inside the pipe span is
+    accelerated with the mass and feeds a pressure-difference force ``dF`` back into
+    the SDOF equation. Falls back to ``get_peak_response`` (lumped mass) when the span
+    is too short to hold the MoC grid.
+
+    Parameters
+    ----------
+    force_history : array_like
+        force-time history at one location. A 2-D array is walked column-major (first
+        index fastest); a 1-D array is treated as a single column.
+    step_qty : int
+        simulation frequency (steps per sample)
+    sample_freq : float
+        frequency of time values for data in forceHistory
+    physical_length : float
+        length between elbows
+    flexural_rigidity_ei : float
+        E * I
+    celerity : float
+        effective progression speed of force History
+    mass_per_unit_len : float
+        mass (pipe and fluid) / physicalLength
+    fluid_densty : float
+        fluid density
+    fluid_area : float
+        fluid pressure area (internal cross-sectional area of pipe)
+    damping_percent : float
+        percent critical damping
+    dynamic_fric : float
+        friction acting on mass to resist movement (assumes units are m,sec)
+    nat_freq : float
+        sqrt(k/m) [assumed modeled with fluid mass included]
+    restrain_freq_ratio : float, optional
+        ratio of natural frequency when support gaps are closed to when support gaps are
+        open (default 1)
+    gap : float, optional
+        support gaps (measured effective gap at center of mass or equivalently mode
+        maximum displacement) (default 0)
+    output_type : int, optional
+        (No VBA comment.) 0: peak summary; 1: displacement history; 2: velocity history;
+        3: acceleration history (default 0).
+
+    Returns
+    -------
+    numpy.ndarray
+        As for ``get_peak_response``: ``resultArray(0 To 4)`` for ``output_type == 0``,
+        otherwise the 1-based ``resultArray(1 To outMax * 2)`` with element 0 unused.
+
+    Raises
+    ------
+    Exception
+        Any runtime error inside the integration. The VBA ``On Error GoTo ErrFound``
+        swallowed these and returned an uninitialised array (D-9); Python re-raises.
+    """
+    pi = 3.14159265358979
+    use_undamped = False  # Const useUndamped = False: dead branch kept below
+    damping_a = 0.25
+    ext_qty = 4  # QTY at each end are not active
+
+    with np.errstate(divide="raise", invalid="raise", over="raise"):
+        # Keep the caller's array for the lumped-mass fallback, which re-runs the
+        # same input normalisation itself.
+        force_history_in = force_history
+        # VBA 702-710: Range -> .Value; 1-D -> AddDimension(…, 1, 1); otherwise the array
+        # is re-based to (1, 1). For numpy input the last case is served by vba_2d (the
+        # VBA ArrayStartOne path, D-3, is never taken).
+        if get_dimension(force_history) < 2:
+            force_history = add_dimension(force_history, 1, 1)
+        else:
+            force_history = vba_2d(force_history)
+
+        unballance_step_qty = physical_length / (celerity / sample_freq)
+
+        out_max = ubound(force_history, 1) * ubound(force_history, 2) + clng(unballance_step_qty)
+        result_array = np.zeros(out_max * 2 + 1)  # ReDim resultArray(1 To outMax * 2); [0] unused
+
+        k_overlap = clng((unballance_step_qty - vba_floor(unballance_step_qty)) * step_qty)
+
+        dt = 1 / (sample_freq * step_qty)
+
+        portal_frame_height = solve_poly(
+            -12 * flexural_rigidity_ei / ((2 * pi * nat_freq) ** 2),
+            physical_length * mass_per_unit_len,
+            mass_per_unit_len * 4 / 3,
+        )
+        for _i in range(0, 10 + 1):
+            portal_frame_height = solve_poly(
+                -12
+                * flexural_rigidity_ei
+                * (
+                    0.5
+                    + 1.5 * ((portal_frame_height / (physical_length + portal_frame_height)) ** 2)
+                )
+                / ((2 * pi * nat_freq) ** 2),
+                physical_length * mass_per_unit_len,
+                mass_per_unit_len * 4 / 3,
+            )
+
+        mass = (portal_frame_height * 4 / 3) * mass_per_unit_len + physical_length * (
+            mass_per_unit_len - fluid_densty * fluid_area
+        )  # remove core fluid to get rigid mass
+        stiffness = (
+            ((nat_freq * 2 * pi) ** 2)
+            * (physical_length + portal_frame_height * 4 / 3)
+            * mass_per_unit_len
+        )  # assume total mass has same bases as natural frequency (fluid is included in CAESAR)
+        damping = (
+            2
+            * (
+                (stiffness * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len))
+                ** 0.5
+            )
+            * damping_percent
+            / 100
+        )  # assume critical damping is relative to total mass
+        fric_acc = (
+            0.5
+            * dynamic_fric
+            * 9.81
+            * dt
+            * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len)
+            / mass
+        )  # mass correction from frictional to inertial
+
+        dacay_factor = 2 ** ((celerity * dt) / physical_length)
+
+        pivot_seg_qty = ext_qty + clng(portal_frame_height / (2 * celerity * dt))
+        pipe_seg_qty = 2 + clng(physical_length / (4 * celerity * dt) + pivot_seg_qty) * 2
+
+        if pipe_seg_qty - 2 * pivot_seg_qty <= 2:
+            # insufficient length, use lumped mass
+            return get_peak_response(
+                force_history_in,
+                step_qty,
+                sample_freq,
+                physical_length,
+                flexural_rigidity_ei,
+                celerity,
+                mass_per_unit_len,
+                damping_percent,
+                dynamic_fric,
+                nat_freq,
+                restrain_freq_ratio,
+                gap,
+                output_type,
+            )
+
+        array_a = np.zeros((2, pipe_seg_qty + 1))  # ReDim arrayA(0 To 1, 0 To pipeSegQTY)
+        array_b = np.zeros((2, pipe_seg_qty - 1 + 1))  # ReDim arrayB(0 To 1, 0 To pipeSegQTY - 1)
+
+        # Dim contA0(0 To 1, -3 To 0, 1 To 2): stored as cont_a0[m, p + 3, n] (n = 0 unused)
+        cont_a0 = np.zeros((2, 4, 3))
+        # Dim contAN(0 To 1, -3 To 0, -2 To -1): stored as cont_an[m, p + 3, n + 2]
+        cont_an = np.zeros((2, 4, 2))
+
+        for m in range(0, 1 + 1):  # loop over states
+            for p in range(-3, 0 + 1):  # loop over past
+                for n in range(1, 2 + 1):  # loop over neighbours
+                    cont_a0[m, p + 3, n] = 0
+                for n in range(-2, -1 + 1):
+                    cont_an[m, p + 3, n + 2] = 0
+            for n in range(0, pipe_seg_qty - 1 + 1):
+                array_a[m, n] = 0
+                array_b[m, n] = 0
+            array_a[m, pipe_seg_qty] = 0
+
+        rho_c = fluid_densty * celerity
+
+        x = 0.0
+        x_max = 0.0
+        v = 0.0
+        v_max = 0.0
+        a = 0.0
+        a_max = 0.0
+        d_f = 0.0
+        f_max = 0.0  # Dim FMax As Double: never explicitly initialised in the VBA
+        x_zero = 0.0  # Dim default
+        v_new = 0.0  # Dim default
+        a_new = 0.0  # Dim default
+        v_av = 0.0  # Dim default
+        dv = 0.0  # Dim default
+
+        force_a = force_history[1, 1]
+
+        # VBA: On Error GoTo ErrFound. The handler (line 1216-1217) does nothing and the
+        # function returns an uninitialised Double(). Python re-raises instead.
+        # VBA quirk D-9 preserved (as a raise)
+        try:
+            tot_ind = 0
+            # VBA: For jB = 1 To 1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))
+            #          For iB = 1 To UBound(forceHistory, 1)
+            # Written as while loops: jB and iB are read after the loops (VBA 896-899,
+            # 911+) and must hold VBA's post-loop values.
+            jb_to = 1 + clng(unballance_step_qty / ubound(force_history, 2))
+            jb = 1
+            while jb <= jb_to:
+                ib_to = ubound(force_history, 1)
+                ib = 1
+                while ib <= ib_to:
+                    tot_ind = tot_ind + 1
+                    if jb > ubound(force_history, 2):
+                        j = ubound(force_history, 2)
+                        i = ubound(force_history, 1)
+                    else:
+                        j = jb
+                        i = ib
+                    if i + 1 > ubound(force_history, 1) and j < ubound(force_history, 2):
+                        jmax = min(j + 1, ubound(force_history, 2))
+                        imax = 1
+                    else:
+                        jmax = min(j, ubound(force_history, 2))
+                        imax = min(i + 1, ubound(force_history, 1))
+                    for k in range(0, step_qty - 1 + 1):
+                        # MoC
+                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
+                            # update even cells
+                            v_av = array_a[1, pipe_seg_qty]
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                v_av = v_av + array_a[1, n]
+                                v_av = v_av + array_b[1, n]
+                            v_av = v_av / (2 * pipe_seg_qty - 1)
+                            if use_undamped:
+                                for m in range(0, 1 + 1):
+                                    # https://docs.aft.com/impulse/InfinitePipeTransientTheory.html
+                                    array_a[m, 0] = (
+                                        3 * array_b[m, 0]
+                                        - 3 * cont_a0[m, -2 + 3, 1]
+                                        + cont_a0[m, -3 + 3, 2]
+                                        - m * v_av
+                                    )
+                                    array_a[m, pipe_seg_qty] = (
+                                        3 * array_b[m, pipe_seg_qty - 1]
+                                        - 3 * cont_an[m, -2 + 3, -1 + 2]
+                                        + cont_an[m, -3 + 3, -2 + 2]
+                                        - m * v_av
+                                    )
+
+                                    cont_a0[m, -2 + 3, 1] = cont_a0[m, 0 + 3, 1] - m * v_av
+                                    cont_a0[m, 0 + 3, 1] = array_b[m, 0] - m * v_av
+                                    cont_a0[m, -3 + 3, 2] = cont_a0[m, -1 + 3, 2] - m * v_av
+                                    cont_a0[m, -1 + 3, 2] = array_a[m, 1] - m * v_av
+
+                                    cont_an[m, -2 + 3, -1 + 2] = (
+                                        cont_an[m, 0 + 3, -1 + 2] - m * v_av
+                                    )
+                                    cont_an[m, 0 + 3, -1 + 2] = (
+                                        array_b[m, pipe_seg_qty - 1] - m * v_av
+                                    )
+                                    cont_an[m, -3 + 3, -2 + 2] = (
+                                        cont_an[m, -1 + 3, -2 + 2] - m * v_av
+                                    )
+                                    cont_an[m, -1 + 3, -2 + 2] = (
+                                        array_a[m, pipe_seg_qty - 2] - m * v_av
+                                    )
+                            else:
+                                array_a[0, 0] = array_b[0, 0] / dacay_factor
+                                array_a[0, pipe_seg_qty] = (
+                                    array_b[0, pipe_seg_qty - 1] / dacay_factor
+                                )
+                                array_a[1, 0] = array_b[1, 0] - v_av
+                                array_a[1, pipe_seg_qty] = array_b[1, pipe_seg_qty - 1] - v_av
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[0, n] = (array_b[0, n - 1] + array_b[0, n]) / 2 + rho_c * (
+                                    array_b[1, n - 1] - array_b[1, n]
+                                ) / 2
+                                array_a[1, n] = (
+                                    dv
+                                    - v_av
+                                    + (array_b[0, n - 1] - array_b[0, n]) / (2 * rho_c)
+                                    + (array_b[1, n - 1] + array_b[1, n]) / 2
+                                )
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[1, n] = dv - v_av + array_b[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_a[0, pivot_seg_qty]
+                                + array_a[0, pivot_seg_qty - 1]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty + 1]
+                            ) / 2
+                        else:
+                            # update odd cells
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[0, n] = (array_a[0, n] + array_a[0, n + 1]) / 2 + rho_c * (
+                                    array_a[1, n] - array_a[1, n + 1]
+                                ) / 2
+                                array_b[1, n] = (
+                                    dv
+                                    + (array_a[0, n] - array_a[0, n + 1]) / (2 * rho_c)
+                                    + (array_a[1, n] + array_a[1, n + 1]) / 2
+                                )
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[1, n] = dv + array_a[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_b[0, pivot_seg_qty] - array_b[0, pipe_seg_qty - pivot_seg_qty]
+                            )
+
+                        # Kinematics
+                        # VBA quirk D-7 preserved: stepQTY = 1 divides by zero here
+                        force_b = force_history[i, j] * (1 - k / (step_qty - 1)) + force_history[
+                            imax, jmax
+                        ] * (k / (step_qty - 1))
+
+                        a_new = (
+                            d_f
+                            + (force_a - force_b)
+                            - (
+                                min_unsigned(gap, x)
+                                + max(0, abs(x) - gap) * sign(x) * (restrain_freq_ratio**2)
+                            )
+                            * stiffness
+                            - v * damping
+                        ) / mass
+                        if abs(v) < fric_acc:
+                            v_new = (a + a_new) * dt / 2
+                        else:
+                            v_new = v + (a + a_new) * dt / 2 - sign(v, 0.000001) * fric_acc
+                        x = x + (v + v_new) * dt / 2
+                        v = v_new
+                        a = a_new
+
+                        if abs(a) > a_max:
+                            a_max = abs(a)
+                        if abs(v) > v_max:
+                            v_max = abs(v)
+                        if abs(x) > x_max:
+                            x_max = abs(x)
+                        if abs(force_a - force_b) > f_max:
+                            f_max = abs(force_a - force_b)
+                        if (tot_ind - 1) * step_qty + 1 + k > unballance_step_qty * step_qty:
+                            break
+                    if output_type > 0:
+                        if output_type == 1:
+                            result_array[tot_ind] = x
+                        elif output_type == 2:
+                            result_array[tot_ind] = v
+                        elif output_type == 3:
+                            result_array[tot_ind] = a
+                    if tot_ind > unballance_step_qty:
+                        break  # Exit For (iB keeps its current value)
+                    ib = ib + 1
+                if tot_ind > unballance_step_qty:
+                    break  # Exit For (jB keeps its current value)
+                jb = jb + 1
+
+            # VBA quirk D-8 preserved: see get_peak_response
+            if jb > ubound(force_history, 2):
+                jb = ubound(force_history, 2)
+                ib = ubound(force_history, 1)
+
+            for j in range(1, ubound(force_history, 2) + 1):
+                for i in range(1, ubound(force_history, 1) + 1):
+                    tot_ind = tot_ind + 1
+                    if i + 1 > ubound(force_history, 1) and j < ubound(force_history, 2):
+                        jmax = min(j + 1, ubound(force_history, 2))
+                        imax = 1
+                    else:
+                        jmax = j
+                        imax = min(i + 1, ubound(force_history, 1))
+                    if ib + 1 > ubound(force_history, 1) and jb < ubound(force_history, 2):
+                        jbmax = min(jb + 1, ubound(force_history, 2))
+                        ibmax = 1
+                    else:
+                        jbmax = jb
+                        ibmax = min(ib + 1, ubound(force_history, 1))
+                    for k in range(0, step_qty - k_overlap - 1 + 1):
+                        # MoC
+                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
+                            # update even cells
+                            v_av = array_a[1, pipe_seg_qty]
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                v_av = v_av + array_a[1, n]
+                                v_av = v_av + array_b[1, n]
+                            v_av = v_av / (2 * pipe_seg_qty - 1)
+                            if use_undamped:
+                                for m in range(0, 1 + 1):
+                                    # https://docs.aft.com/impulse/InfinitePipeTransientTheory.html
+                                    array_a[m, 0] = (
+                                        3 * array_b[m, 0]
+                                        - 3 * cont_a0[m, -2 + 3, 1]
+                                        + cont_a0[m, -3 + 3, 2]
+                                        - m * v_av
+                                    )
+                                    array_a[m, pipe_seg_qty] = (
+                                        3 * array_b[m, pipe_seg_qty - 1]
+                                        - 3 * cont_an[m, -2 + 3, -1 + 2]
+                                        + cont_an[m, -3 + 3, -2 + 2]
+                                        - m * v_av
+                                    )
+
+                                    cont_a0[m, -2 + 3, 1] = cont_a0[m, 0 + 3, 1] - m * v_av
+                                    cont_a0[m, 0 + 3, 1] = array_b[m, 0] - m * v_av
+                                    cont_a0[m, -3 + 3, 2] = cont_a0[m, -1 + 3, 2] - m * v_av
+                                    cont_a0[m, -1 + 3, 2] = array_a[m, 1] - m * v_av
+
+                                    cont_an[m, -2 + 3, -1 + 2] = (
+                                        cont_an[m, 0 + 3, -1 + 2] - m * v_av
+                                    )
+                                    cont_an[m, 0 + 3, -1 + 2] = (
+                                        array_b[m, pipe_seg_qty - 1] - m * v_av
+                                    )
+                                    cont_an[m, -3 + 3, -2 + 2] = (
+                                        cont_an[m, -1 + 3, -2 + 2] - m * v_av
+                                    )
+                                    cont_an[m, -1 + 3, -2 + 2] = (
+                                        array_a[m, pipe_seg_qty - 2] - m * v_av
+                                    )
+                            else:
+                                array_a[0, 0] = array_b[0, 0] / dacay_factor
+                                array_a[0, pipe_seg_qty] = (
+                                    array_b[0, pipe_seg_qty - 1] / dacay_factor
+                                )
+                                array_a[1, 0] = array_b[1, 0] - v_av
+                                array_a[1, pipe_seg_qty] = array_b[1, pipe_seg_qty - 1] - v_av
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[0, n] = (array_b[0, n - 1] + array_b[0, n]) / 2 + rho_c * (
+                                    array_b[1, n - 1] - array_b[1, n]
+                                ) / 2
+                                array_a[1, n] = (
+                                    dv
+                                    - v_av
+                                    + (array_b[0, n - 1] - array_b[0, n]) / (2 * rho_c)
+                                    + (array_b[1, n - 1] + array_b[1, n]) / 2
+                                )
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[1, n] = dv - v_av + array_b[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_a[0, pivot_seg_qty]
+                                + array_a[0, pivot_seg_qty - 1]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty + 1]
+                            ) / 2
+                        else:
+                            # update odd cells
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[0, n] = (array_a[0, n] + array_a[0, n + 1]) / 2 + rho_c * (
+                                    array_a[1, n] - array_a[1, n + 1]
+                                ) / 2
+                                array_b[1, n] = (
+                                    dv
+                                    + (array_a[0, n] - array_a[0, n + 1]) / (2 * rho_c)
+                                    + (array_a[1, n] + array_a[1, n + 1]) / 2
+                                )
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[1, n] = dv + array_a[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_b[0, pivot_seg_qty] - array_b[0, pipe_seg_qty - pivot_seg_qty]
+                            )
+
+                        # Kinematics
+                        force_a = force_history[i, j] * (1 - k / (step_qty - 1)) + force_history[
+                            imax, jmax
+                        ] * (k / (step_qty - 1))
+                        force_b = force_history[ib, jb] * (
+                            1 - (k + k_overlap) / (step_qty - 1)
+                        ) + force_history[ibmax, jbmax] * ((k + k_overlap) / (step_qty - 1))
+
+                        a_new = (
+                            d_f
+                            + (force_a - force_b)
+                            - (
+                                min_unsigned(gap, x)
+                                + max(0, abs(x) - gap) * sign(x) * (restrain_freq_ratio**2)
+                            )
+                            * stiffness
+                            - v * damping
+                        ) / mass
+                        if abs(v) < fric_acc:
+                            v_new = (a + a_new) * dt / 2
+                        else:
+                            v_new = v + (a + a_new) * dt / 2 - sign(v, 0.000001) * fric_acc
+                        x = x + (v + v_new) * dt / 2
+                        v = v_new
+                        a = a_new
+
+                        if abs(a) > a_max:
+                            a_max = abs(a)
+                        if abs(v) > v_max:
+                            v_max = abs(v)
+                        if abs(x) > x_max:
+                            x_max = abs(x)
+                        if abs(force_a - force_b) > f_max:
+                            f_max = abs(force_a - force_b)
+                    if ib + 1 > ubound(force_history, 1) and jb < ubound(force_history, 2):
+                        jb = min(jb + 1, ubound(force_history, 2))
+                        ib = 1
+                    else:
+                        ib = min(ib + 1, ubound(force_history, 1))
+                    if ib + 1 > ubound(force_history, 1) and jb < ubound(force_history, 2):
+                        jbmax = min(jb + 1, ubound(force_history, 2))
+                        ibmax = 1
+                    else:
+                        jbmax = jb
+                        ibmax = min(ib + 1, ubound(force_history, 1))
+                    for k in range(step_qty - k_overlap, step_qty - 1 + 1):
+                        # MoC
+                        # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                        if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
+                            # update even cells
+                            v_av = array_a[1, pipe_seg_qty]
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                v_av = v_av + array_a[1, n]
+                                v_av = v_av + array_b[1, n]
+                            v_av = v_av / (2 * pipe_seg_qty - 1)
+                            if use_undamped:
+                                for m in range(0, 1 + 1):
+                                    # https://docs.aft.com/impulse/InfinitePipeTransientTheory.html
+                                    array_a[m, 0] = (
+                                        3 * array_b[m, 0]
+                                        - 3 * cont_a0[m, -2 + 3, 1]
+                                        + cont_a0[m, -3 + 3, 2]
+                                        - m * v_av
+                                    )
+                                    array_a[m, pipe_seg_qty] = (
+                                        3 * array_b[m, pipe_seg_qty - 1]
+                                        - 3 * cont_an[m, -2 + 3, -1 + 2]
+                                        + cont_an[m, -3 + 3, -2 + 2]
+                                        - m * v_av
+                                    )
+
+                                    cont_a0[m, -2 + 3, 1] = cont_a0[m, 0 + 3, 1] - m * v_av
+                                    cont_a0[m, 0 + 3, 1] = array_b[m, 0] - m * v_av
+                                    cont_a0[m, -3 + 3, 2] = cont_a0[m, -1 + 3, 2] - m * v_av
+                                    cont_a0[m, -1 + 3, 2] = array_a[m, 1] - m * v_av
+
+                                    cont_an[m, -2 + 3, -1 + 2] = (
+                                        cont_an[m, 0 + 3, -1 + 2] - m * v_av
+                                    )
+                                    cont_an[m, 0 + 3, -1 + 2] = (
+                                        array_b[m, pipe_seg_qty - 1] - m * v_av
+                                    )
+                                    cont_an[m, -3 + 3, -2 + 2] = (
+                                        cont_an[m, -1 + 3, -2 + 2] - m * v_av
+                                    )
+                                    cont_an[m, -1 + 3, -2 + 2] = (
+                                        array_a[m, pipe_seg_qty - 2] - m * v_av
+                                    )
+                            else:
+                                array_a[0, 0] = array_b[0, 0] / dacay_factor
+                                array_a[0, pipe_seg_qty] = (
+                                    array_b[0, pipe_seg_qty - 1] / dacay_factor
+                                )
+                                array_a[1, 0] = array_b[1, 0] - v_av
+                                array_a[1, pipe_seg_qty] = array_b[1, pipe_seg_qty - 1] - v_av
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[0, n] = (array_b[0, n - 1] + array_b[0, n]) / 2 + rho_c * (
+                                    array_b[1, n - 1] - array_b[1, n]
+                                ) / 2
+                                array_a[1, n] = (
+                                    dv
+                                    - v_av
+                                    + (array_b[0, n - 1] - array_b[0, n]) / (2 * rho_c)
+                                    + (array_b[1, n - 1] + array_b[1, n]) / 2
+                                )
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[1, n] = dv - v_av + array_b[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_a[0, pivot_seg_qty]
+                                + array_a[0, pivot_seg_qty - 1]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty]
+                                - array_a[0, pipe_seg_qty - pivot_seg_qty + 1]
+                            ) / 2
+                        else:
+                            # update odd cells
+                            for n in range(0, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                                array_b[0, n] = (array_a[0, n] + array_a[0, n + 1]) / 2 + rho_c * (
+                                    array_a[1, n] - array_a[1, n + 1]
+                                ) / 2
+                                array_b[1, n] = (
+                                    dv
+                                    + (array_a[0, n] - array_a[0, n + 1]) / (2 * rho_c)
+                                    + (array_a[1, n] + array_a[1, n + 1]) / 2
+                                )
+                            for n in range(1, pipe_seg_qty - 1 + 1):
+                                dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                                array_a[1, n] = dv + array_a[1, n]
+                            d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                                array_b[0, pivot_seg_qty] - array_b[0, pipe_seg_qty - pivot_seg_qty]
+                            )
+
+                        # Kinematics
+                        force_a = force_history[i, j] * (1 - k / (step_qty - 1)) + force_history[
+                            imax, jmax
+                        ] * (k / (step_qty - 1))
+                        force_b = force_history[ib, jb] * (
+                            1 - (k - step_qty + k_overlap) / (step_qty - 1)
+                        ) + force_history[ibmax, jbmax] * (
+                            (k - step_qty + k_overlap) / (step_qty - 1)
+                        )
+
+                        a_new = (
+                            d_f
+                            + (force_a - force_b)
+                            - (
+                                min_unsigned(gap, x)
+                                + max(0, abs(x) - gap) * sign(x) * (restrain_freq_ratio**2)
+                            )
+                            * stiffness
+                            - v * damping
+                        ) / mass
+                        if abs(v) < fric_acc:
+                            v_new = (a + a_new) * dt / 2
+                        else:
+                            v_new = v + (a + a_new) * dt / 2 - sign(v, 0.000001) * fric_acc
+                        x = x + (v + v_new) * dt / 2
+                        v = v_new
+                        a = a_new
+
+                        if abs(a) > a_max:
+                            a_max = abs(a)
+                        if abs(v) > v_max:
+                            v_max = abs(v)
+                        if abs(x) > x_max:
+                            x_max = abs(x)
+                        if abs(force_a - force_b) > f_max:
+                            f_max = abs(force_a - force_b)
+                    if output_type > 0:
+                        if output_type == 1:
+                            result_array[tot_ind] = x
+                        elif output_type == 2:
+                            result_array[tot_ind] = v
+                        elif output_type == 3:
+                            result_array[tot_ind] = a
+            x_zero = x
+            while x * x_zero > 0.01:
+                tot_ind = tot_ind + 1
+                for k in range(1, step_qty + 1):
+                    # MoC
+                    # D-2: with the VBA floor, modDbl(n, 2) = 0 only when n is a multiple of 4
+                    if mod_dbl(k + (tot_ind - 1) * step_qty, 2) == 0:
+                        # update even cells
+                        v_av = array_a[1, pipe_seg_qty]
+                        for n in range(0, pipe_seg_qty - 1 + 1):
+                            v_av = v_av + array_a[1, n]
+                            v_av = v_av + array_b[1, n]
+                        v_av = v_av / (2 * pipe_seg_qty - 1)
+                        if use_undamped:
+                            for m in range(0, 1 + 1):
+                                # https://docs.aft.com/impulse/InfinitePipeTransientTheory.html
+                                array_a[m, 0] = (
+                                    3 * array_b[m, 0]
+                                    - 3 * cont_a0[m, -2 + 3, 1]
+                                    + cont_a0[m, -3 + 3, 2]
+                                    - m * v_av
+                                )
+                                array_a[m, pipe_seg_qty] = (
+                                    3 * array_b[m, pipe_seg_qty - 1]
+                                    - 3 * cont_an[m, -2 + 3, -1 + 2]
+                                    + cont_an[m, -3 + 3, -2 + 2]
+                                    - m * v_av
+                                )
+
+                                cont_a0[m, -2 + 3, 1] = cont_a0[m, 0 + 3, 1] - m * v_av
+                                cont_a0[m, 0 + 3, 1] = array_b[m, 0] - m * v_av
+                                cont_a0[m, -3 + 3, 2] = cont_a0[m, -1 + 3, 2] - m * v_av
+                                cont_a0[m, -1 + 3, 2] = array_a[m, 1] - m * v_av
+
+                                cont_an[m, -2 + 3, -1 + 2] = cont_an[m, 0 + 3, -1 + 2] - m * v_av
+                                cont_an[m, 0 + 3, -1 + 2] = array_b[m, pipe_seg_qty - 1] - m * v_av
+                                cont_an[m, -3 + 3, -2 + 2] = cont_an[m, -1 + 3, -2 + 2] - m * v_av
+                                cont_an[m, -1 + 3, -2 + 2] = array_a[m, pipe_seg_qty - 2] - m * v_av
+                        else:
+                            array_a[0, 0] = array_b[0, 0] / dacay_factor
+                            array_a[0, pipe_seg_qty] = array_b[0, pipe_seg_qty - 1] / dacay_factor
+                            array_a[1, 0] = array_b[1, 0] - v_av
+                            array_a[1, pipe_seg_qty] = array_b[1, pipe_seg_qty - 1] - v_av
+                        for n in range(1, pipe_seg_qty - 1 + 1):
+                            dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                            array_a[0, n] = (array_b[0, n - 1] + array_b[0, n]) / 2 + rho_c * (
+                                array_b[1, n - 1] - array_b[1, n]
+                            ) / 2
+                            array_a[1, n] = (
+                                dv
+                                - v_av
+                                + (array_b[0, n - 1] - array_b[0, n]) / (2 * rho_c)
+                                + (array_b[1, n - 1] + array_b[1, n]) / 2
+                            )
+                        for n in range(0, pipe_seg_qty - 1 + 1):
+                            dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                            array_b[1, n] = dv - v_av + array_b[1, n]
+                        d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                            array_a[0, pivot_seg_qty]
+                            + array_a[0, pivot_seg_qty - 1]
+                            - array_a[0, pipe_seg_qty - pivot_seg_qty]
+                            - array_a[0, pipe_seg_qty - pivot_seg_qty + 1]
+                        ) / 2
+                    else:
+                        # update odd cells
+                        for n in range(0, pipe_seg_qty - 1 + 1):
+                            dv = a * dt * interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                            array_b[0, n] = (array_a[0, n] + array_a[0, n + 1]) / 2 + rho_c * (
+                                array_a[1, n] - array_a[1, n + 1]
+                            ) / 2
+                            array_b[1, n] = (
+                                dv
+                                + (array_a[0, n] - array_a[0, n + 1]) / (2 * rho_c)
+                                + (array_a[1, n] + array_a[1, n + 1]) / 2
+                            )
+                        for n in range(1, pipe_seg_qty - 1 + 1):
+                            dv = a * dt * interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                            array_a[1, n] = dv + array_a[1, n]
+                        d_f = (damping_a) * d_f + (1 - damping_a) * fluid_area * (
+                            array_b[0, pivot_seg_qty] - array_b[0, pipe_seg_qty - pivot_seg_qty]
+                        )
+
+                    # Kinematics
+                    a_new = (
+                        d_f
+                        - (
+                            min_unsigned(gap, x)
+                            + max(0, abs(x) - gap) * sign(x) * (restrain_freq_ratio**2)
+                        )
+                        * stiffness
+                        - v * damping
+                    ) / mass
+                    if abs(v) < fric_acc:
+                        v_new = (a + a_new) * dt / 2
+                    else:
+                        v_new = v + (a + a_new) * dt / 2 - sign(v, 0.000001) * fric_acc
+                    x = x + (v + v_new) * dt / 2
+                    v = v_new
+                    a = a_new
+
+                    if abs(a) > a_max:
+                        a_max = abs(a)
+                    if abs(v) > v_max:
+                        v_max = abs(v)
+                    if abs(x) > x_max:
+                        x_max = abs(x)
+
+                    if x * x_zero <= 0.01:
+                        x_zero = 0
+                if output_type > 0:
+                    if tot_ind <= out_max * 2:
+                        if output_type == 1:
+                            result_array[tot_ind] = x
+                        elif output_type == 2:
+                            result_array[tot_ind] = v
+                        elif output_type == 3:
+                            result_array[tot_ind] = a
+
+            if output_type == 0:
+                result_array = np.zeros(4 + 1)  # ReDim resultArray(0 To 4)
+                result_array[0] = (
+                    abs(
+                        min_unsigned(gap, x_max)
+                        + max(0, abs(x_max) - gap) * sign(x_max) * (restrain_freq_ratio**2)
+                    )
+                    * stiffness
+                )  # max static equivalent
+                result_array[1] = x_max  # max displacement
+                result_array[2] = v_max  # max velocity
+                result_array[3] = a_max  # max acceloration
+                result_array[4] = f_max  # max applied force
+
+            return result_array
+        except Exception:
+            # ErrFound:
+            #     rhoC = rhoC
+            # VBA quirk D-9 preserved: re-raise instead of returning an empty array
+            raise

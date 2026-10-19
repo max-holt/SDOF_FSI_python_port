@@ -16,6 +16,8 @@ These are consistency checks, not oracles: the Excel golden fixtures are the ora
    that Stage 1 preserves; see NOTES.md.
 """
 
+import functools
+
 import numpy as np
 import pytest
 
@@ -42,7 +44,10 @@ def step_force(n=100, amplitude=1000.0):
     return f
 
 
-PEAK_FUNCS = [lp.get_peak_response]
+jc_with_fluid = functools.partial(lp.get_peak_response_jc, fluid_densty=1000.0, fluid_area=0.005)
+jc_with_fluid.__name__ = "get_peak_response_jc"
+
+PEAK_FUNCS = [lp.get_peak_response, jc_with_fluid]
 
 
 @pytest.mark.parametrize("func", PEAK_FUNCS)
@@ -86,8 +91,10 @@ def static_case():
     return kw, force, amplitude / stiffness
 
 
-@pytest.mark.parametrize("func", PEAK_FUNCS)
-def test_undamped_constant_force_oscillates_about_static_deflection(func):
+def test_undamped_constant_force_oscillates_about_static_deflection():
+    # Lumped solver only: with a negligible portal frame height the JC variant has
+    # pivotSegQTY = extQTY and interpFractionB(3) divides by zero (D-4), as in the VBA.
+    func = lp.get_peak_response
     kw, force, x_static = static_case()
     hist = func(force, **kw, restrain_freq_ratio=1, gap=1e9, output_type=1)
     # forced phase: samples 1..401 carry unbalance forceA - forceB = 0 - F = -F;
@@ -104,3 +111,65 @@ def test_undamped_constant_force_oscillates_about_static_deflection(func):
     peaks = func(force, **kw, restrain_freq_ratio=1, gap=1e9, output_type=0)
     stiffness = 1e5 / x_static
     assert peaks[0] / peaks[1] == pytest.approx(stiffness, rel=1e-3)
+
+
+@pytest.mark.parametrize("output_type", [0, 1, 2, 3])
+def test_jc_without_fluid_area_is_identical_to_lumped_mass(output_type):
+    """With fluidArea = 0 the JC force dF stays exactly 0 and the mass, stiffness,
+    damping and friction formulas reduce to the lumped ones, so the two integrators
+    must agree bit for bit (the MoC still runs but cannot feed back)."""
+    force = step_force()
+    kw = dict(BASE_KW, damping_percent=0.0, dynamic_fric=0.0)
+    lumped = lp.get_peak_response(force, **kw, gap=1e9, output_type=output_type)
+    jc = lp.get_peak_response_jc(
+        force, **kw, fluid_densty=1000.0, fluid_area=0.0, gap=1e9, output_type=output_type
+    )
+    np.testing.assert_array_equal(jc, lumped)
+
+
+def test_2d_inputs_are_walked_column_major():
+    """D-10: a 2-D forceHistory / valvePattern is flattened first-index-fastest."""
+    flat = step_force()[:, 0]
+    as_f = flat.reshape(10, 10, order="F")  # column-major: as_f[i, j] = flat[i + 10 j]
+    for func, kw in ((lp.get_peak_response, BASE_KW), (jc_with_fluid, BASE_KW)):
+        for output_type in (0, 1):
+            a = func(flat, **kw, output_type=output_type)
+            b = func(as_f, **kw, output_type=output_type)
+            np.testing.assert_array_equal(a, b)
+    # Valve pattern: exact binary fractions, linear up to sample 80 then constant, so the
+    # multi-column index quirk (D-11) is value-neutral and the identity is exact.
+    closure = np.minimum(np.arange(100), 80) / 128.0
+    a = lp.get_pressure_response(closure, **PRESSURE_KW)
+    b = lp.get_pressure_response(closure.reshape(10, 10, order="F"), **PRESSURE_KW)
+    np.testing.assert_array_equal(a, b)
+    # and the row-major reshape is a different pattern
+    c = lp.get_pressure_response(closure.reshape(10, 10, order="C"), **PRESSURE_KW)
+    assert not np.array_equal(a, c)
+
+
+PRESSURE_KW = dict(
+    closure_time=1.0,
+    celerity=1000.0,
+    density=1000.0,
+    time_step=0.005,  # factor * 2 = 1: loop index totInd is the pattern position p
+    pressure_drop_from_pump=0.5,
+    flow_rate=100.0,
+    pipe_area=7850.0,
+    valve_cv=500.0,
+    length_to_pump=500.0,
+    pump_ramp_pressure=2.0,
+)
+
+
+def test_pressure_response_multicolumn_pattern_index_quirk():
+    """D-11: for a 10 x 10 pattern the VBA reads the *last* pattern value at position
+    p = 91 (floor(91) = 90, modDbl(90, 10) = 10 -> i = 11 -> clamped to (10, 10)),
+    so a valve that closes only at the final sample briefly closes at p = 91 too.
+    A single-column pattern is not affected (it self-corrects through frac = 1)."""
+    spike = np.zeros(100)
+    spike[99] = 1.0
+    one_col = lp.get_pressure_response(spike, **PRESSURE_KW)
+    ten_cols = lp.get_pressure_response(spike.reshape(10, 10, order="F"), **PRESSURE_KW)
+    # p = 0..90 contain only extrapolations of zeros, so nothing differs before 91
+    np.testing.assert_array_equal(one_col[:91], ten_cols[:91])
+    assert ten_cols[91] > 100 * one_col[91]

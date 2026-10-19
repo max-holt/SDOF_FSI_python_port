@@ -160,3 +160,63 @@ def test_peak_response_single_row_history_is_out_of_range():
         lp.get_peak_response(force, **dict(PEAK_KW, physical_length=12.5))
     # with an integer delay kOverlap = stepQTY skips that loop and iB is re-based first
     lp.get_peak_response(force, **dict(PEAK_KW, physical_length=10.0))
+
+
+# ------------------------------------------------------------------ GetPeakResponseJC
+JC_KW = dict(PEAK_KW, fluid_densty=1000.0, fluid_area=0.005)  # kg/m3, m^2 (5 kg/m fluid)
+
+
+@pytest.mark.parametrize("physical_length", [10.0, 12.5, 7.0])
+def test_peak_response_jc_runs_for_all_output_types(physical_length):
+    kw = dict(JC_KW, physical_length=physical_length)
+    force = step_force()
+    peaks = lp.get_peak_response_jc(force, **kw, output_type=0)
+    assert peaks.shape == (5,)
+    assert np.all(np.isfinite(peaks))
+    assert np.all(peaks >= 0)
+    for output_type in (1, 2, 3):
+        hist = lp.get_peak_response_jc(force, **kw, output_type=output_type)
+        assert hist.shape == (expected_history_length(force, kw),)
+        assert np.all(np.isfinite(hist))
+        assert hist[0] == 0.0
+        assert np.any(hist != 0.0)
+
+
+def test_peak_response_jc_short_pipe_falls_back_to_lumped_mass():
+    # pipeSegQTY - 2 * pivotSegQTY <= 2 -> GetPeakResponse with the same arguments
+    force = step_force()
+    for output_type in (0, 1):
+        kw = dict(JC_KW, physical_length=1.0)
+        jc = lp.get_peak_response_jc(force, **kw, output_type=output_type)
+        lumped = lp.get_peak_response(
+            force,
+            **{k: v for k, v in kw.items() if not k.startswith("fluid")},
+            output_type=output_type,
+        )
+        np.testing.assert_array_equal(jc, lumped)
+
+
+def test_peak_response_jc_fluid_coupling_changes_the_answer():
+    force = step_force()
+    with_fluid = lp.get_peak_response_jc(force, **JC_KW)
+    without = lp.get_peak_response_jc(force, **dict(JC_KW, fluid_area=0.0))
+    assert with_fluid[1] != without[1]
+    assert with_fluid[4] == without[4] == pytest.approx(1000.0)
+
+
+def test_peak_response_jc_1d_input_matches_column_input():
+    force = step_force()
+    a = lp.get_peak_response_jc(force, **JC_KW, output_type=1)
+    b = lp.get_peak_response_jc(force[:, 0], **JC_KW, output_type=1)
+    np.testing.assert_array_equal(a, b)
+
+
+def test_peak_response_jc_runtime_errors_are_raised():
+    # D-9: the VBA `On Error GoTo ErrFound` returned an uninitialised array; Python raises.
+    force = step_force()
+    with pytest.raises(ZeroDivisionError):  # D-7 inside the guarded region
+        lp.get_peak_response_jc(force, **dict(JC_KW, step_qty=1))
+    with pytest.raises((ZeroDivisionError, FloatingPointError)):  # rhoC = 0
+        lp.get_peak_response_jc(force, **dict(JC_KW, fluid_densty=0.0))
+    with pytest.raises(IndexError):  # D-8 inside the guarded region
+        lp.get_peak_response_jc(force.reshape(1, 100), **dict(JC_KW, physical_length=12.5))
