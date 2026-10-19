@@ -29,7 +29,6 @@ Stage 1 (literal port): code complete and aligned with the lead author's upstrea
 - No Excel golden fixtures yet (`tests/fixtures/` empty); `tests/test_golden.py` and `tools/golden_report.py` do not exist. Equivalence with Excel is unverified.
 - Performance: pure Python; JC with long spans is slow (cells ∝ unballanceStepQTY × stepQTY / 2). Not a Stage 1 concern.
 - numba and hypothesis are permitted by `CLAUDE.md` but not added to `pyproject.toml`.
-- `CLAUDE.md` "Known VBA gotchas" still lists the original `floor(x) = CLng(x - 0.5)` bug; it is fixed in the source now. Left for the owner to reword.
 - The project hooks in `.claude/settings.json` load only when Claude Code is started from the repository root.
 
 ## Next action

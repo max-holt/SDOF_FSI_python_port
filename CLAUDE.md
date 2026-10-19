@@ -4,7 +4,7 @@
 Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response with Coulomb friction, support gaps and MoC junction-coupling FSI. Source of truth for behaviour is `legacy/vba/` and the Excel-generated fixtures in `tests/fixtures/`.
 
 ## Stage discipline (read NOTES.md for the current stage)
-- Stage 1 (literal port): preserve VBA semantics exactly — operation order, loop order, 1-based indices, `CLng` = round-half-to-even, the `CLng(x-0.5)` floor idiom, Integer/Long types. Do not simplify expressions. Do not fix apparent bugs; record them in DEVIATIONS.md with status "preserved".
+- Stage 1 (literal port): preserve VBA semantics exactly — operation order, loop order, 1-based indices, `CLng` = round-half-to-even, the VBA `floor` (`max(CLng(x-0.5), CLng(x+0.5)-1)`), Integer/Long types. Do not simplify expressions. Do not fix apparent bugs; record them in DEVIATIONS.md with status "preserved".
 - Stage 2+ (refactor): one behaviour-preserving change per commit; golden tests must stay green at the tolerance recorded in `tests/test_golden.py`. A deviation is only allowed with a DEVIATIONS.md row and a test that pins the new behaviour.
 
 ## Hard rules
@@ -21,7 +21,7 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 pytest -q`
 
 ## Known VBA gotchas
-- `floor(x) = CLng(x - 0.5)`: wrong for odd integers (floor(5.0) = 4). Port as `vba_floor`; see DEVIATIONS.md.
+- `floor(x) = max(CLng(x - 0.5), CLng(x + 0.5) - 1)`: a true floor (fixed upstream in commit da022b8; the original `CLng(x - 0.5)` was one too low for odd integers). Port as `vba_floor`, transcribed literally; see DEVIATIONS.md D-1/D-2/D-11 (fixed). Excel fixtures must come from a workbook with the fixed `floor`.
 - `ArrayStartOne` assigns to the wrong name and returns an empty array (dead/broken path).
 - `interpFractionB` uses `n < 3` where `interpFractionA` uses `n < extQTY` (4).
 - Friction clamp differs between the two MoC half-loops in `GetPressureResponse` (0.9 vs 0.9*rhoC).
