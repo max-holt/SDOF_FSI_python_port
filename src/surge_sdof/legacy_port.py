@@ -60,10 +60,13 @@ listed in DEVIATIONS.md.
 import numpy as np
 
 from surge_sdof.vba_compat import (
+    clng,
     max_unsigned,
     min_unsigned,
     mod_dbl,
     sign,
+    ubound,
+    vba_2d,
     vba_floor,
 )
 
@@ -81,6 +84,7 @@ __all__ = [
     "interp_fraction_a",
     "interp_fraction_b",
     "solve_poly",
+    "get_pressure_response",
 ]
 
 
@@ -228,3 +232,187 @@ def solve_poly(var_a, var_b, var_c):
         grad = 3 * var_b * (len_val**2) + 4 * var_c * (len_val**3)
         len_val = len_val - relax * error_val / grad
     return len_val
+
+
+# VBA line 155: Function GetPressureResponse(valvePattern As Variant, closureTime As Double, celerity As Double, density As Double, timeStep As Double, pressureDropFromPump As Double, flowRate As Double, pipeArea As Double, valveCv As Double, lengthToPump As Double, pumpRampPressure As Double) As Double()
+def get_pressure_response(
+    valve_pattern,
+    closure_time,
+    celerity,
+    density,
+    time_step,
+    pressure_drop_from_pump,
+    flow_rate,
+    pipe_area,
+    valve_cv,
+    length_to_pump,
+    pump_ramp_pressure,
+):
+    """Returns the pressure response at valve.
+
+    Parameters
+    ----------
+    valve_pattern : array_like
+        (No VBA comment.) Valve closure history, 0 = open to 1 = closed, spread evenly
+        over ``closure_time``. A 2-D array is walked column-major (first index fastest);
+        a 1-D array is treated as a single column.
+    closure_time : float
+        valve closure time (sec)
+    celerity : float
+        fluid/pipe effective pressure wave speed (m/sec)
+    density : float
+        fluid density (kg/m3)
+    time_step : float
+        simulation time step (sec)
+    pressure_drop_from_pump : float
+        total pressure drop from pump to valve (bar) @ flowRate
+    flow_rate : float
+        simulation initial flowrate (m3/h)
+    pipe_area : float
+        pipe flowing cress-sectional area (mm^2)
+    valve_cv : float
+        (flowRate in US gallons per minute)*(SG/pressure drop over valve in psi)^0.5
+    length_to_pump : float
+        length of pipe to the pump (m)
+    pump_ramp_pressure : float
+        difference in pressure between operating and shut-in (bar)
+
+    Returns
+    -------
+    numpy.ndarray
+        ``resultArray(0 To outMax)``, 0-based: valve pressure (Pa, gauge relative to the
+        pump shut-in datum used by the VBA) at every ``2 * time_step``
+        (``outMax = CLng(closure_time / time_step)``).
+    """
+    with np.errstate(divide="raise", invalid="raise", over="raise"):
+        # VBA 196-204: Range -> .Value; 1-D -> AddDimension(…, 1, 1); otherwise the array
+        # is re-based to (1, 1). For numpy input the last case is served by vba_2d (the
+        # VBA ArrayStartOne path, D-3, is never taken).
+        if get_dimension(valve_pattern) < 2:
+            valve_pattern = add_dimension(valve_pattern, 1, 1)
+        else:
+            valve_pattern = vba_2d(valve_pattern)
+
+        out_max = clng(closure_time / time_step)
+        pipe_seg_qty = 1 + clng(min(out_max, length_to_pump / (celerity * time_step)) / 2)
+
+        result_array = np.zeros(out_max + 1)  # ReDim resultArray(0 To outMax)
+        array_a = np.zeros((2, pipe_seg_qty + 1))  # ReDim arrayA(0 To 1, 0 To pipeSegQTY)
+        array_b = np.zeros((2, pipe_seg_qty + 1))  # ReDim arrayB(0 To 1, 0 To pipeSegQTY)
+        sys_mat = np.zeros(2)  # Dim sysMat(0 To 1)
+
+        factor = ubound(valve_pattern, 1) * ubound(valve_pattern, 2) * time_step / closure_time
+
+        rho_c = density * celerity
+
+        velocity_initial = -flow_rate * 1000000 / (pipe_area * 60 * 60)  # m/s
+        valve_loss = (
+            (density / 1000)
+            * 100000
+            / (((valve_cv * 0.865 * 1000000) / (pipe_area * 60 * 60)) ** 2)
+        )  # Pa/(m/s)^2
+        valve_dp_initial = valve_loss * (velocity_initial**2)  # Pa
+        pipe_loss = pressure_drop_from_pump * 100000 / (1 + pipe_seg_qty * 2)  # Pa/segment
+
+        for i in range(0, pipe_seg_qty + 1):
+            array_a[0, i] = i * 2 * pipe_loss + valve_dp_initial
+            array_b[0, i] = (1 + i * 2) * pipe_loss + valve_dp_initial
+            array_a[1, i] = -i * 2 * pipe_loss / rho_c + velocity_initial
+            array_b[1, i] = -(1 + i * 2) * pipe_loss / rho_c + velocity_initial
+
+        vel_at_pump = array_b[1, pipe_seg_qty]
+
+        # 'pipeLoss = pipeLoss / (velocityInitial ^ 2) 'Pa/(m/s)^2
+        #
+        # 'self.mocMat = self.invertMatrix([[-1.0,-1.0/self.rhoC],
+        # '                                 [-1.0,+1.0/self.rhoC]])
+        #
+        # 'self.mocMat = [[-0.5,-0.5],
+        # '               [-self.rhoC/2,+self.rhoC/2]]
+        #
+        # '        mat = [[loss-vL-pL/self.rhoC],
+        # '               [loss-vR+pR/self.rhoC]]
+
+        for tot_ind in range(0, out_max + 1):
+            # every loop is 2 time steps
+            # VBA assigns a Double (modDbl + 1) to the Long i: implicit CLng.
+            # modDbl carries D-2: an exact odd multiple of UBound gives i = UBound + 1,
+            # which the clamp below folds back to UBound.
+            i = clng(mod_dbl(vba_floor(tot_ind * factor * 2), ubound(valve_pattern, 1)) + 1)
+            j = vba_floor(tot_ind * factor * 2 / ubound(valve_pattern, 1)) + 1
+            if i >= ubound(valve_pattern, 1) and j < ubound(valve_pattern, 2):
+                i = ubound(valve_pattern, 1)
+                jmax = min(j + 1, ubound(valve_pattern, 2))
+                imax = 1
+            else:
+                if i > ubound(valve_pattern, 1):
+                    i = ubound(valve_pattern, 1)
+                jmax = j
+                imax = min(i + 1, ubound(valve_pattern, 1))
+            # get valve position
+            if j > ubound(valve_pattern, 2):
+                closure = valve_pattern[ubound(valve_pattern, 1), ubound(valve_pattern, 2)]
+            elif i == imax and j == jmax:
+                closure = valve_pattern[i, j]
+            else:
+                frac = ((i - 1) + (j - 1) * ubound(valve_pattern, 1) - tot_ind * factor * 2) / (
+                    (i - 1)
+                    + (j - 1) * ubound(valve_pattern, 1)
+                    - ((imax - 1) + (jmax - 1) * ubound(valve_pattern, 1))
+                )
+                closure = valve_pattern[i, j] * (1 - frac) + valve_pattern[imax, jmax] * frac
+            # valve pressure is determined by the velocity
+            if closure < 0.999999999:
+                array_a[1, 0] = (array_a[1, 0] + array_b[1, 0]) / 2 + (
+                    array_a[0, 0] - array_b[0, 0]
+                ) / (2 * rho_c)
+                array_a[0, 0] = min(
+                    ((valve_loss / (1 - closure)) * (array_a[1, 0] ** 2)),
+                    max(
+                        array_b[0, 0],
+                        (array_a[0, 0] + array_b[0, 0]) / 2 - array_a[1, 0] * rho_c,
+                    ),
+                )
+            else:
+                array_a[1, 0] = 0
+                array_a[0, 0] = max(array_b[0, 0], array_b[0, 0] - array_b[1, 0] * rho_c)
+            # MoC
+            for i in range(1, min(pipe_seg_qty, tot_ind) + 1):
+                v = (array_b[1, i - 1] + array_b[1, i]) / 2
+                vel_init_local = i * 2 * pipe_loss / rho_c + velocity_initial
+                # VBA quirk D-6 preserved: clamp is 0.9 here, 0.9 * rhoC in the second half-loop
+                loss = v * min(0.9, abs(v) * pipe_loss / (rho_c * (vel_init_local**2)))
+
+                sys_mat[0] = -loss - array_b[1, i - 1] - array_b[0, i - 1] / rho_c
+                sys_mat[1] = loss - array_b[1, i] + array_b[0, i] / rho_c
+
+                array_a[1, i] = -(sys_mat[0] + sys_mat[1]) / 2
+                array_a[0, i] = max(0, -(sys_mat[0] - sys_mat[1]) * rho_c / 2)
+            # pump pressure is determined by the velocity
+            array_b[0, pipe_seg_qty] = max(
+                0,
+                valve_dp_initial
+                + 100000
+                * (
+                    pressure_drop_from_pump
+                    + pump_ramp_pressure
+                    * (1 - (min(0, array_a[1, pipe_seg_qty]) / vel_at_pump) ** 2)
+                ),
+            )
+            array_b[1, pipe_seg_qty] = min(0, array_a[1, pipe_seg_qty])
+            # MoC
+            for i in range(0, min(pipe_seg_qty - 1, tot_ind) + 1):
+                v = (array_a[1, i] + array_a[1, i + 1]) / 2
+                vel_init_local = (1 + i * 2) * pipe_loss / rho_c + velocity_initial
+                # VBA quirk D-6 preserved: clamp is 0.9 * rhoC here, 0.9 in the first half-loop
+                loss = v * min(0.9 * rho_c, abs(v) * pipe_loss / (rho_c * (vel_init_local**2)))
+
+                sys_mat[0] = -loss - array_a[1, i] - array_a[0, i] / rho_c
+                sys_mat[1] = loss - array_a[1, i + 1] + array_a[0, i + 1] / rho_c
+
+                array_b[1, i] = -(sys_mat[0] + sys_mat[1]) / 2
+                array_b[0, i] = max(0, -(sys_mat[0] - sys_mat[1]) * rho_c / 2)
+
+            result_array[tot_ind] = array_a[0, 0]
+
+        return result_array
