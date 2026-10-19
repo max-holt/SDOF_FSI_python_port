@@ -11,8 +11,6 @@ index 0 unused, so VBA index values can be used unchanged. ``ubound(arr, dim)``
 returns ``shape[dim - 1] - 1`` for such padded arrays, i.e. the VBA ``UBound``.
 """
 
-import math
-
 import numpy as np
 
 __all__ = [
@@ -41,18 +39,18 @@ def vba_floor(val):
 
         floor = max(CLng(val - 0.5), CLng(val + 0.5) - 1)
 
-    That expression is a true mathematical floor for every finite double (within the
-    VBA ``Long`` range, where ``val +/- 0.5`` is exact): for a non-integer ``n + f``
-    both operands equal ``n``; for an exact integer ``n`` half-to-even rounding makes
-    exactly one of the two operands ``n - 1`` and the other ``n``, and ``max`` picks
-    ``n``. It is therefore implemented as ``math.floor`` and returns an ``int``.
+    Transcribed literally (VBA ``max`` on two Longs is the built-in ``max`` here). The
+    expression is a true mathematical floor for every finite double within the VBA
+    ``Long`` range (where ``val +/- 0.5`` is exact): for a non-integer ``n + f`` both
+    operands equal ``n``; for an exact integer ``n`` half-to-even rounding makes exactly
+    one of the two operands ``n - 1`` and the other ``n``, and ``max`` picks ``n``.
+    ``tests/test_vba_compat.py`` pins it against ``math.floor``.
 
     The original VBA ``CLng(val - 0.5)`` was one too low for exact odd integers
-    (``floor(5.0) = 4``); see DEVIATIONS.md D-1 (fixed). ``tests/test_vba_compat.py``
-    pins this function against the literal transcription of the fixed VBA.
+    (``floor(5.0) = 4``); see DEVIATIONS.md D-1 (fixed upstream).
     """
-    # D-1 fixed: true floor
-    return math.floor(val)
+    # D-1 fixed in the VBA source (commit da022b8)
+    return max(clng(val - 0.5), clng(val + 0.5) - 1)
 
 
 def mod_dbl(num, div):
