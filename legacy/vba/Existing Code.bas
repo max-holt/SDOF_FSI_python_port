@@ -95,7 +95,7 @@ Function ArrayStartOne(arr As Variant) As Double()
 End Function
 
 Function floor(val As Variant) As Long
-    floor = CLng(val - 0.5)
+    floor = max(CLng(val - 0.5), CLng(val + 0.5) - 1)
 End Function
 
 Function modDbl(num As Variant, div As Variant) As Double
