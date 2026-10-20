@@ -137,6 +137,11 @@ def main(argv=None) -> int:
         solver, m = match_case(text)
         if m is None:
             raise SystemExit(f"{CASE_SHEET}!H{r}: unexpected formula shape: {text}")
+        # The five outputs are resultArray(0..4) spilled into H..L; make that explicit.
+        if getattr(cell.value, "ref", None) != f"H{r}:L{r}":
+            raise SystemExit(
+                f"{CASE_SHEET}!H{r}: array formula range is {cell.value.ref!r}, expected 'H{r}:L{r}'"
+            )
         c0, c1, e_row, g_row, f_row = (int(x) for x in m.groups())
         if not (e_row == g_row == f_row == r):
             raise SystemExit(f"{CASE_SHEET}!H{r}: formula refers to another row: {text}")
