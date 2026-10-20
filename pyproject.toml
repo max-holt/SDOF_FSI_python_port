@@ -17,7 +17,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# Golden curve cases are excluded by default; `pytest -m slow` runs the 75 lumped cases
+# (~3.5 min), `pytest -m "slow or jc_slow"` adds the 3 junction-coupling cases (hours).
+addopts = "-ra -m 'not slow and not jc_slow'"
+markers = [
+    "slow: golden-master lumped (GetPeakResponse) curve cases, ~3 s each, 75 cases",
+    "jc_slow: golden-master junction-coupling (GetPeakResponseJC) curve cases, hours each in pure Python",
+]
 
 [tool.ruff]
 line-length = 100
