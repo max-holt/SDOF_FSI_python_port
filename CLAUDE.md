@@ -11,7 +11,7 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 - Never edit files under `tests/fixtures/` or `legacy/`.
 - Never delete, skip or loosen a test to make it pass. Raise the failure in NOTES.md instead.
 - Run `pytest -q` before every commit.
-- Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba without asking.
+- Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba, openpyxl, oletools (the last two are dev extras for fixture extraction only) without asking.
 - When unsure of the VBA intent, stop and ask; do not guess.
 
 ## Commands

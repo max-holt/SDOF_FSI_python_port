@@ -45,7 +45,6 @@ Stage 1 (literal port) complete and **verified against Excel for the lumped solv
 - JC golden cases never run; `GetPressureResponse` has no golden case (would need a UDF call with a committed valve pattern in the workbook).
 - Rows 100-101 of `curve_10in` hold pasted numbers (no formula) and were skipped by the extractor; if they are meant to be cases they need live formulas in the workbook.
 - Performance: pure Python; JC cases are hours each (see baseline above). Stage 5 (Numba) target.
-- CLAUDE.md's dependency rule still names only numpy, pytest, ruff, hypothesis, numba; the owner approved openpyxl and oletools as `dev` extras (2026-10-20). The rule's wording was left to the owner.
 - Marker interpretation: "whole curve set slow" was implemented as `slow` on the 75 lumped cases and `jc_slow` (only) on the 3 JC cases, so that `pytest -m slow` excludes JC as requested.
 - numba and hypothesis are permitted by `CLAUDE.md` but not added to `pyproject.toml`. oletools is a `dev` extra (approved) but no tool uses it yet; the VBA-module identity check in this session used an ad-hoc MS-OVBA decompressor that is not in the repo (`olevba` would do the same).
 - The project hooks in `.claude/settings.json` load only when Claude Code is started from the repository root.
