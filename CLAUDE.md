@@ -10,15 +10,17 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 ## Hard rules
 - Never edit files under `tests/fixtures/` or `legacy/`.
 - Never delete, skip or loosen a test to make it pass. Raise the failure in NOTES.md instead.
-- Run `pytest -q` before every commit.
+- Run `pytest -q` before every commit; run `pytest -m slow` before every commit that touches `src/`.
 - Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba, openpyxl, oletools (the last two are dev extras for fixture extraction only) without asking.
 - When unsure of the VBA intent, stop and ask; do not guess.
 
 ## Commands
-- Tests: `pytest -q`
-- Golden suite only: `pytest -q tests/test_golden.py -m "slow or jc_slow"`
+Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an isolated uv tool without numpy); `pytest` below is shorthand for that.
+- Tests: `.venv/bin/python -m pytest -q`
+- Lumped golden gate (before commits touching `src/`): `.venv/bin/python -m pytest -q -m slow`
+- Golden suite only: `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"`
 - Lint/format: `ruff check . && ruff format .`
-- Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 pytest -q`
+- Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 .venv/bin/python -m pytest -q`
 
 ## Known VBA gotchas
 - `floor(x) = max(CLng(x - 0.5), CLng(x + 0.5) - 1)`: a true floor (fixed upstream in commit da022b8; the original `CLng(x - 0.5)` was one too low for odd integers). Port as `vba_floor`, transcribed literally; see DEVIATIONS.md D-1/D-2/D-11 (fixed). Excel fixtures must come from a workbook with the fixed `floor`.
