@@ -10,7 +10,7 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 ## Hard rules
 - Never edit files under `tests/fixtures/` or `legacy/`.
 - Never delete, skip or loosen a test to make it pass. Raise the failure in NOTES.md instead.
-- Run `pytest -q` before every commit; run `pytest -m slow` before every commit that touches `src/`.
+- Run `.venv/bin/python -m pytest -q` before every commit; run `.venv/bin/python -m pytest -q -m slow` before any commit touching `src/`.
 - Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba, openpyxl, oletools (the last two are dev extras for fixture extraction only) without asking.
 - When unsure of the VBA intent, stop and ask; do not guess.
 
@@ -30,6 +30,7 @@ Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an is
 - `On Error GoTo ErrFound` in `GetPeakResponseJC` swallows every runtime error.
 - `stepQTY = 1` divides by zero (`k/(stepQTY-1)`).
 - 2-D `forceHistory`/`valvePattern` inputs are flattened column-major (first index fastest).
+- `GetPeakResponseJC` MoC parity index is `k + (totInd-1)*stepQTY` with each phase's own `k` range (phase 3 starts at `k = 1`), so the even/odd alternation can double-update a half-grid at phase boundaries; a single-loop refactor must keep the per-phase formula or prove the parity sequence equal (docs/port_review.md §2.5, DEVIATIONS D-19).
 
 ## Session end
 Update NOTES.md (stage, done, open issues, next action) and commit.
