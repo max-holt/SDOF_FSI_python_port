@@ -1,0 +1,33 @@
+{
+  "step_qty": 40,
+  "sample_freq": 1265.1287638419617,
+  "celerity": 1237,
+  "fluid_densty": 1000,
+  "mass_per_unit_len": 102.78478903765223,
+  "damping_percent": 0.5,
+  "fluid_area": 0.052076806971772055,
+  "restrain_freq_ratio": 1,
+  "gap": 0.002,
+  "flexural_rigidity_ei": 11162875.772100575,
+  "output_type": 0,
+  "n_samples": 25135,
+  "force": {
+    "file": "force_history.csv",
+    "column": "history_B",
+    "source": "Sheet1!D3:D25137",
+    "excel_expression": "curve_10in!$C$2:$C$25136*1000*$N$13",
+    "multipliers": [
+      1000,
+      0.35595212889771094
+    ]
+  },
+  "source_workbook": "tests/fixtures/source/surge_force_data.xlsm",
+  "case_sheet": "curve_10in",
+  "expected_outputs": [
+    "max_static_equivalent_force",
+    "max_displacement",
+    "max_velocity",
+    "max_acceleration",
+    "max_applied_force"
+  ]
+}
