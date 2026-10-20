@@ -24,8 +24,7 @@ Run manually (this is the only sanctioned way to produce files under tests/fixtu
 
     python tools/extract_fixtures.py
 
-Requires ``openpyxl``, which is deliberately *not* a project dependency
-(``pip install openpyxl`` into the dev venv when regenerating fixtures).
+Requires ``openpyxl`` (a ``dev`` extra: ``pip install -e ".[dev]"``).
 """
 
 from __future__ import annotations

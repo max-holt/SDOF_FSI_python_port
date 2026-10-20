@@ -16,7 +16,7 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 
 ## Commands
 - Tests: `pytest -q`
-- Golden suite only: `pytest -q tests/test_golden.py`
+- Golden suite only: `pytest -q tests/test_golden.py -m "slow or jc_slow"`
 - Lint/format: `ruff check . && ruff format .`
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 pytest -q`
 
