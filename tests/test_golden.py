@@ -12,15 +12,15 @@ Tolerance record
 ----------------
 Relative tolerance per solver, ``|py - xl| <= RTOL * |xl|`` for each of the five outputs:
 
-* ``lumped`` (``GetPeakResponse``): RTOL = 1e-10. Measured on 2026-10-20 over all 75
+* ``lumped`` (``GetPeakResponse``): RTOL = 5e-12. Measured on 2026-10-20 over all 75
   cases (375 outputs): max relative error 8.3e-13 (row 66, max displacement), median
-  per-case maximum 1.0e-13, max applied force exact in every case. 1e-10 leaves ~120x
-  margin for accumulated last-bit differences (VBA vs Python ``pow``) on the ~1e6-step
-  integration. Run time 3 min 34 s for the 75 cases (2.6-3.5 s each).
-* ``jc`` (``GetPeakResponseJC``): RTOL = 1e-8, **provisional**: not yet measured. The JC
-  cases run ~5.5e8-6.7e8 MoC cell updates each and are not run by default (see markers);
-  their first full run is a Stage 5 deliverable, after which this value must be replaced
-  by a measured one (tighten, or justify in NOTES.md/DEVIATIONS.md).
+  per-case maximum 1.0e-13, max applied force exact in every case. The ~6x margin covers
+  last-bit differences between the C ``pow`` behind Python's ``**`` and Excel's runtime,
+  accumulated over the ~1e6-step integration. Run time 3 min 34 s for the 75 cases.
+* ``jc`` (``GetPeakResponseJC``): RTOL = 1e-12, **unmeasured**. The JC cases (~5.5e8-6.7e8
+  MoC cell updates each) have never been run; their first full run is a Stage 5
+  deliverable. This value may be relaxed only with evidence from an actual run, recorded
+  here and in NOTES.md; never to make a run pass without that evidence.
 
 Markers
 -------
@@ -41,7 +41,10 @@ import pytest
 
 from surge_sdof import legacy_port as lp
 
-RTOL = {"lumped": 1e-10, "jc": 1e-8}
+RTOL = {
+    "lumped": 5e-12,  # measured: worst 8.3e-13 over 75 cases
+    "jc": 1e-12,  # unmeasured; relax only with evidence from an actual JC run
+}
 
 CURVE_DIR = Path(__file__).parent / "fixtures" / "curve_10in"
 CACHE_DIR = Path(__file__).parent / ".golden_cache"
