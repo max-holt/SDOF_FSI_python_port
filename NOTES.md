@@ -161,6 +161,19 @@ Plan (one commit per step; fast suite before each commit, `-m slow` before each 
   numpy element access and numpy-scalar arithmetic inside the cell sweeps, which is exactly what
   the Stage 5 `@njit` of `moc.step` removes. In the legacy (c) the two `interp_fraction` helpers
   alone were 25.5 s of 197.7 s profiled.
+- JC golden gate (`pytest -m jc_slow -k peak_response_jc_matches_excel_on_the_golden_curve`,
+  the new solver with the legacy flags against the Excel fixture at 5e-12, three single-case
+  processes in parallel on 4 cores, pure Python; the literal-port golden tests were not re-run,
+  owner's decision): 3/3 pass.
+
+  | row | f (Hz) | N | time (s) | max rel err | per output (static-eq / x / v / a / F) |
+  |---|---|---|---|---|---|
+  | 96 | 3 | 666 | 969 | 8.6e-13 | 7.5e-13 / 7.5e-13 / 8.6e-13 / 2.0e-13 / 0 |
+  | 97 | 7.5 | 592 | 856 | 2.1e-14 | 2.1e-14 / 2.1e-14 / 1.8e-14 / 1.5e-14 / 0 |
+  | 98 | 22 | 546 | 800 | 8.4e-15 | 8.4e-15 / 8.4e-15 / 2.7e-15 / 6.5e-15 / 0 |
+
+  The errors are the literal port's to the digits shown (484b25e: 8.6e-13 / 2.1e-14 / 8.4e-15),
+  as the bitwise sweep predicts. Legacy times for comparison, sequential: 1827 / 1565 / 1412 s.
 
 ### Stage 4.2 — F-1/F-2 before/after
 **Finding (not the expected 0.4 %): F-1 is numerically inert for the outputs.** `dF` is built

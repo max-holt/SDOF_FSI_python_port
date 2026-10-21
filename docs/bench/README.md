@@ -10,8 +10,9 @@ One row per `tools/bench.py` run (median of the timed repeats). Cloud containers
 
 ## JC golden suite (`pytest -m jc_slow --durations=0`)
 
-Full `GetPeakResponseJC` golden cases against Excel (25135 samples, stepQTY 40); sequential, one process. Not part of `tools/bench.py`.
+Full `GetPeakResponseJC` golden cases against Excel (25135 samples, stepQTY 40). Not part of `tools/bench.py`. The 484b25e row is the literal port, sequential in one process; the 293e507 row is `response.peak_response_jc` with the legacy flags (`tests/test_differential.py::test_peak_response_jc_matches_excel_on_the_golden_curve`), the three cases as parallel single-case processes on 4 cores (Intel Xeon @ 2.80 GHz), max rel err per case from `tests/.golden_cache/*_response.json`.
 
 | date (UTC) | sha | python | numpy | numba | row 96 (f 3 Hz, N 666) | row 97 (f 7.5 Hz, N 592) | row 98 (f 22 Hz, N 546) | total | max rel err (96 / 97 / 98) | result |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 2026-10-21 | 484b25e | 3.13.16 | 2.5.4 | absent | 1826.8 s | 1564.5 s | 1411.5 s | 1:20:02 | 8.6e-13 / 2.1e-14 / 8.4e-15 | 3/3 pass at 1e-12; RTOL set to 5e-12 |
+| 2026-10-21 | 293e507 | 3.13.16 | 2.5.4 | absent | 969 s | 856 s | 800 s | 16:12 wall (3 in parallel) | 8.6e-13 / 2.1e-14 / 8.4e-15 | 3/3 pass at 5e-12 (`peak_response_jc`, legacy flags) |
