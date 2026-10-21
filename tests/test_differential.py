@@ -29,9 +29,10 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
+import test_golden as tg
 
 from surge_sdof import legacy_port as lp
-from surge_sdof import structure
+from surge_sdof import loads, structure
 
 SEED = 20261019
 N_CASES = 50
@@ -337,3 +338,71 @@ def test_step_replays_the_legacy_substeps(idx):
     # the chain is also consistent: every post-state is the next pre-state
     for prev, nxt in zip(trace.substeps, trace.substeps[1:], strict=False):
         assert prev.post == nxt.pre
+
+
+# ------------------------------------------------------------------ loads.py
+
+
+def _legacy_forced_samples(trace: LegacyTrace) -> list[list[float]]:
+    """The legacy solver's ``forceA - forceB`` per sub-step, grouped by sample."""
+    samples: dict[int, list[float]] = {}
+    for s in trace.substeps:
+        if not s.free_decay:
+            samples.setdefault(s.tot_ind, []).append(float(s.f))
+    assert sorted(samples) == list(range(1, len(samples) + 1))
+    return [samples[t] for t in range(1, len(samples) + 1)]
+
+
+def _check_unbalance(force, kw, trace):
+    expected = _legacy_forced_samples(trace)
+    actual = list(
+        loads.unbalance_force(
+            force, kw["sample_freq"], kw["physical_length"], kw["celerity"], kw["step_qty"]
+        )
+    )
+    assert len(actual) == len(expected)
+    for got, want in zip(actual, expected, strict=True):
+        assert len(got) == len(want)
+        assert all(type(v) is float for v in got)
+        assert_close(got, want)
+    unb = loads.transit_delay(kw["physical_length"], kw["celerity"], kw["sample_freq"])
+    assert unb == trace.setup["unballance_step_qty"]
+    assert loads.overlap_substeps(unb, kw["step_qty"]) == trace.setup["k_overlap"]
+    return actual
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=SWEEP_IDS)
+def test_unbalance_force_matches_legacy_sequence(idx):
+    case, trace = sweep_cases()[idx], sweep_trace(idx)
+    samples = _check_unbalance(case.force, case.kw, trace)
+    # phase 1 yields totInd samples, the last truncated; phase 2 one full sample per element
+    n_elements = int(np.size(case.force))
+    s = case.kw["step_qty"]
+    n_delay = len(samples) - n_elements
+    assert n_delay >= 1
+    assert all(len(x) == s for x in samples[: n_delay - 1])
+    assert 1 <= len(samples[n_delay - 1]) <= s
+    assert all(len(x) == s for x in samples[n_delay:])
+
+
+def test_unbalance_force_matches_legacy_on_the_example_case():
+    case = next(c for c in tg.EXAMPLE_CASES if c["solver"] == "lumped")
+    force = np.asarray(case["force_history"], dtype=float)
+    kw = {k: case["kwargs"][k] for k in LUMPED_KEYS if k in case["kwargs"]}
+    trace = trace_legacy(force, **kw, output_type=0)
+    _check_unbalance(force, kw, trace)
+
+
+def test_unbalance_force_step_qty_one_divides_by_zero():
+    # D-7 preserved
+    with pytest.raises(ZeroDivisionError):
+        next(loads.unbalance_force(np.ones(10), 100.0, 10.0, 1000.0, 1))
+
+
+def test_unbalance_force_single_row_history_raises_index_error():
+    # D-8 preserved: a (1, n) history exhausts the phase-1 walk without Exit For
+    force = np.ones((1, 10))
+    with pytest.raises(IndexError):
+        list(loads.unbalance_force(force, 100.0, 100.0, 1000.0, 10))
+    with pytest.raises(IndexError):
+        lp.get_peak_response(force, 10, 100.0, 100.0, 2e5, 1000.0, 10.0, 2.0, 0.3, 5.0)
