@@ -1,6 +1,12 @@
 # NOTES — session handoff
 
 ## Current stage
+Stage 4.2 (refactor, JC path) done 2026-10-21: `src/surge_sdof/moc.py`, `coupling.JunctionCoupling`,
+`structure.jc_params`, `response.peak_response_jc` (shared `_integrate`), approved fixes F-1 and
+F-2 applied flag-first and flipped to the defaults (`vav_denominator="fixed"`, `parity="running"`;
+the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIONS D-17/D-19 "fixed",
+JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
+numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
 ## Stage 4.1 — scope and plan (recorded 2026-10-21 before touching `src/`)
@@ -96,6 +102,114 @@ Plan (one commit per step; fast suite before each commit, `-m slow` before each 
 7. `-m jc_slow` once with the legacy flags (3 parallel single-case processes); per-case time and
    max relative error recorded. `port-reviewer` on the final diff; correctness findings only.
    Next action = Stage 4.3 (`pressure.py`).
+
+## Stage 4.2 — done (2026-10-21)
+- Modules (see `docs/architecture.md`): `moc.py` (grid set-up, tabulated interp fractions,
+  four contiguous 1-D state arrays, one `step` kernel with scalar loop bodies; the dead
+  `useUndamped` branch is not ported), `coupling.JunctionCoupling` (owns the column and `dF`;
+  `coupling_force(state, step_index)` = `moc.step` on the half-grid `step_index % 2` selects),
+  `structure.jc_params` (VBA 726-729 literally), `response.peak_response_jc` (JC set-up,
+  short-pipe fallback to `peak_response`, the shared `_integrate` under `np.errstate(raise)`).
+  The F-2 parity choice lives in `_integrate`: `step_index = n + off`, `off = 0` for the running
+  counter, or the VBA per-phase offset fixed per sample (`(totInd-1)*s - n`, phase 3 `+1`).
+- Differential suite (`tests/test_differential.py`, rtol 1e-12, legacy flags
+  `vav_denominator="legacy", parity="per_phase"`): MoC replay on four small grids (5117 sub-steps,
+  arrays and `dF` **bitwise**), `JunctionCoupling` `dF` sequence (bitwise), `peak_response_jc` on
+  the small cases for output types 0-3 (16/16 bitwise), the Example JC case vs Excel (1e-12; it
+  enters phase 3), the JC sweep (50 sets, seed 20261019; 10 fallback cases, 8 phase-3 cases of
+  which 2 on the MoC path, 27 of 40 MoC cases with a discontinuous literal parity at 1→2):
+  **100/100 comparisons bitwise** (summary and history). Fast suite 625 tests, 40 s (was 8 s:
+  the JC sweep costs ~12 s, the flip pins ~14 s).
+- Flag flip: defaults are now `vav_denominator="fixed"`, `parity="running"`; the legacy flags
+  are pinned bitwise on the sweep (`test_legacy_flags_reproduce_legacy_bitwise`), the fixed
+  behaviour by `test_fixed_vav_divides_by_the_number_of_terms`,
+  `test_running_parity_is_continuous_across_phase_boundaries` (half-grid sequence recorded
+  through `moc.step` on the D-19 case: strictly alternating; `"per_phase"` equals the legacy
+  `modDbl` sequence) and `test_fixed_flags_change_only_where_expected`. DEVIATIONS D-17 and D-19
+  are "fixed"; the `test_quirks.py` pins on `legacy_port` are untouched (the literal port keeps
+  the quirks).
+
+### Stage 4.2 — F-1/F-2 before/after
+**Finding (not the expected 0.4 %): F-1 is numerically inert for the outputs.** `dF` is built
+from pressures; pressures are built from velocity *differences* between neighbouring cells;
+`vAv` is subtracted from every velocity of the column uniformly (end nodes included). The
+divisor therefore cannot reach `dF` except through rounding: on the sweep F-1 alone changes
+results by ≤ 3e-15 (0 on 31 cases), on the golden cases by ≤ 1e-14. The fix corrects the
+column's mean-velocity bookkeeping (the velocities themselves do shift), not the force on the
+structure. F-2 acts where the literal parity sequence is discontinuous on a fluid-coupled MoC
+case: 2e-4 to 1e-2 on the sweep; provably zero on the golden cases (`k_exit = 21` odd with
+`stepQTY = 40`, phase 3 never entered), confirmed by the fixed-flag runs below.
+
+Golden JC cases, `peak_response_jc` with the defaults (F-1 and F-2 on) vs the Excel fixture
+(= the legacy result to 8.6e-13), relative change per output
+(static-eq. force / displacement / velocity / acceleration / applied force), one run per case:
+
+| row | f (Hz) | N | time, fixed flags (s, 4 processes sharing 4 cores) | fixed flags vs Excel | legacy vs Excel (golden run 484b25e) | fixed vs legacy (cached `tests/.golden_cache`) |
+|---|---|---|---|---|---|---|
+| 96 | 3 | 666 | 975 | 7.4e-13 / 7.4e-13 / 8.6e-13 / 2.0e-13 / 0 | 7.5e-13 / 7.5e-13 / 8.6e-13 / 2.0e-13 / 0 | 1.2e-16 / 1.2e-16 / 9.5e-16 / 3.6e-16 / 0 |
+| 97 | 7.5 | 592 | 876 | 2.1e-14 / 2.1e-14 / 1.9e-14 / 1.5e-14 / 0 | 2.1e-14 / 2.1e-14 / 1.8e-14 / 1.5e-14 / 0 | 0 / 0 / 3.7e-16 / 2.4e-16 / 0 |
+| 98 | 22 | 546 | 799 | -8.6e-15 / -8.5e-15 / -2.5e-15 / -6.0e-15 / 0 | -8.4e-15 / -8.4e-15 / -2.7e-15 / -6.5e-15 / 0 | 1.9e-16 / 1.4e-16 / 1.8e-16 / 4.2e-16 / 0 |
+
+Max relative change on the golden cases: **9.5e-16** (row 96, max velocity): F-2 is zero by
+construction there and F-1 is rounding-level (see the finding above). All three stay inside
+the golden tolerance 5e-12 with the defaults.
+
+JC sweep, output type 0, max relative change over the five outputs vs the legacy flags
+(F-1 alone = `("fixed", "per_phase")`, F-2 alone = `("legacy", "running")`, both = defaults):
+
+| case | fluidArea | fallback | k_exit | 1→2 continuous | phase 3 | F-1 alone | F-2 alone | both |
+|---|---|---|---|---|---|---|---|---|
+| j00_q40_A0.05_N28 | 0.05 | - | 16 | no | - | 4.4e-16 | 2.2e-03 | 2.2e-03 |
+| j01_q7_A0.05_N28 | 0.05 | - | 2 | yes | - | 3.5e-16 | 0 | 3.5e-16 |
+| j02_q7_A0.01_N30 | 0.01 | - | 1 | no | - | 4.3e-16 | 1.7e-04 | 1.7e-04 |
+| j03_q7_A0.05_N12 | 0.05 | yes | 1 | no | - | 0 | 0 | 0 |
+| j04_q40_A0.0_N18 | 0.0 | - | 8 | no | - | 0 | 0 | 0 |
+| j05_q7_A0.0_N32 | 0.0 | - | 3 | no | - | 0 | 0 | 0 |
+| j06_q40_A0.01_N18 | 0.01 | - | 4 | no | - | 1.2e-16 | 7.9e-04 | 7.9e-04 |
+| j07_q40_A0.0_N28 | 0.0 | - | 26 | no | yes | 0 | 0 | 0 |
+| j08_q2_A0.0_N36 | 0.0 | - | 1 | yes | yes | 0 | 0 | 0 |
+| j09_q40_A0.0_N22 | 0.0 | - | 6 | no | - | 0 | 0 | 0 |
+| j10_q2_A0.0_N24 | 0.0 | - | 0 | no | - | 0 | 0 | 0 |
+| j11_q40_A0.05_N28 | 0.05 | - | 7 | yes | - | 2.6e-16 | 0 | 2.6e-16 |
+| j12_q7_A0.05_N36 | 0.05 | - | 4 | yes | - | 0 | 0 | 0 |
+| j13_q40_A0.01_N20 | 0.01 | - | 7 | yes | - | 2.8e-15 | 0 | 2.8e-15 |
+| j14_q7_A0.01_N34 | 0.01 | - | 5 | no | yes | 1.4e-16 | 4.7e-04 | 4.7e-04 |
+| j15_q2_A0.0_N12 | 0.0 | yes | 1 | yes | - | 0 | 0 | 0 |
+| j16_q40_A0.0_N20 | 0.0 | - | 4 | no | - | 0 | 0 | 0 |
+| j17_q40_A0.0_N34 | 0.0 | - | 2 | no | yes | 0 | 0 | 0 |
+| j18_q2_A0.01_N20 | 0.01 | - | 0 | no | - | 0 | 1.4e-03 | 1.4e-03 |
+| j19_q2_A0.05_N14 | 0.05 | yes | 0 | no | - | 0 | 0 | 0 |
+| j20_q40_A0.05_N18 | 0.05 | yes | 0 | no | - | 0 | 0 | 0 |
+| j21_q2_A0.05_N16 | 0.05 | - | 1 | yes | - | 8.7e-16 | 0 | 8.7e-16 |
+| j22_q7_A0.01_N32 | 0.01 | - | 0 | yes | - | 4.9e-16 | 0 | 4.9e-16 |
+| j23_q7_A0.05_N26 | 0.05 | - | 4 | yes | - | 6.1e-16 | 0 | 6.1e-16 |
+| j24_q40_A0.0_N38 | 0.0 | - | 30 | no | yes | 0 | 0 | 0 |
+| j25_q40_A0.05_N22 | 0.05 | - | 16 | no | - | 2.1e-16 | 4.7e-03 | 4.7e-03 |
+| j26_q40_A0.05_N40 | 0.05 | - | 22 | no | - | 0 | 9.6e-03 | 9.6e-03 |
+| j27_q7_A0.0_N20 | 0.0 | yes | 0 | yes | - | 0 | 0 | 0 |
+| j28_q40_A0.05_N26 | 0.05 | - | 21 | yes | yes | 3.7e-16 | 0 | 3.7e-16 |
+| j29_q40_A0.0_N34 | 0.0 | - | 36 | no | - | 0 | 0 | 0 |
+| j30_q2_A0.01_N18 | 0.01 | yes | 1 | yes | - | 0 | 0 | 0 |
+| j31_q7_A0.0_N24 | 0.0 | - | 4 | yes | yes | 0 | 0 | 0 |
+| j32_q40_A0.05_N16 | 0.05 | yes | 1 | yes | - | 0 | 0 | 0 |
+| j33_q40_A0.01_N28 | 0.01 | - | 15 | yes | - | 0 | 0 | 0 |
+| j34_q7_A0.01_N24 | 0.01 | - | 6 | yes | - | 2.0e-16 | 0 | 2.0e-16 |
+| j35_q7_A0.0_N36 | 0.0 | - | 2 | yes | - | 0 | 0 | 0 |
+| j36_q40_A0.0_N22 | 0.0 | - | 11 | yes | - | 0 | 0 | 0 |
+| j37_q7_A0.05_N12 | 0.05 | yes | 1 | no | - | 0 | 0 | 0 |
+| j38_q40_A0.05_N48 | 0.05 | - | 7 | yes | - | 0 | 0 | 0 |
+| j39_q40_A0.01_N38 | 0.01 | - | 7 | yes | - | 5.6e-16 | 0 | 5.6e-16 |
+| j40_q40_A0.01_N48 | 0.01 | - | 35 | yes | yes | 0 | 0 | 0 |
+| j41_q2_A0.01_N28 | 0.01 | - | 0 | no | - | 3.6e-16 | 9.8e-04 | 9.8e-04 |
+| j42_q2_A0.01_N12 | 0.01 | yes | 1 | yes | - | 0 | 0 | 0 |
+| j43_q40_A0.05_N42 | 0.05 | - | 5 | yes | - | 9.9e-16 | 0 | 9.9e-16 |
+| j44_q40_A0.0_N18 | 0.0 | - | 10 | no | - | 0 | 0 | 0 |
+| j45_q2_A0.01_N32 | 0.01 | - | 0 | no | - | 0 | 5.1e-04 | 5.1e-04 |
+| j46_q7_A0.01_N30 | 0.01 | - | 6 | yes | - | 0 | 0 | 0 |
+| j47_q7_A0.01_N18 | 0.01 | - | 4 | yes | - | 3.9e-16 | 0 | 3.9e-16 |
+| j48_q7_A0.0_N12 | 0.0 | yes | 0 | yes | - | 0 | 0 | 0 |
+| j49_q7_A0.0_N24 | 0.0 | - | 3 | no | - | 0 | 0 | 0 |
+
 
 ## Done
 - `vba_compat.py`: `clng` (half-to-even), `vba_floor` (literal transcription of the fixed VBA `max(CLng(val - 0.5), CLng(val + 0.5) - 1)`, pinned against `math.floor`), `mod_dbl` (ordinary floored modulo now), `sign`, `min_unsigned`, `max_unsigned`, plus `ubound`/`vba_2d` for the padded 1-based array convention. `tests/test_vba_compat.py` pins them against the VBA definitions.

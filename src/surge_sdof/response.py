@@ -156,8 +156,8 @@ def peak_response_jc(
     gap: float = 0,
     output_type: int = 0,
     *,
-    vav_denominator: str = "legacy",
-    parity: str = "per_phase",
+    vav_denominator: str = "fixed",
+    parity: str = "running",
 ) -> PeakResponse:
     """Peak displacement response with junction-coupling FSI (``GetPeakResponseJC``).
 
@@ -166,7 +166,8 @@ def peak_response_jc(
     column inside the span feeds the pressure-difference force ``dF`` back). Spans too
     short for the MoC grid fall back to ``peak_response`` with the same arguments.
     ``vav_denominator`` ("legacy" | "fixed") and ``parity`` ("per_phase" | "running")
-    select the approved fixes F-1 and F-2 (module docstring).
+    select the approved fixes F-1 and F-2 (module docstring); the defaults are the
+    fixes, the legacy values reproduce ``legacy_port.get_peak_response_jc`` bitwise.
     """
     if parity not in ("per_phase", "running"):
         raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")

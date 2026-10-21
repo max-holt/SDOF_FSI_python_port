@@ -1091,3 +1091,161 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
         lumped_kw = {k: v for k, v in case.kw.items() if not k.startswith("fluid")}
         lumped = response.peak_response(case.force, **lumped_kw, output_type=0)
         assert np.array_equal(results[0].summary(), lumped.summary())
+
+
+# ------------------------------------------------------------------ approved fixes F-1, F-2
+
+FIXED_FLAGS = dict(vav_denominator="fixed", parity="running")
+
+
+def test_peak_response_jc_defaults_are_the_approved_fixes():
+    params = inspect.signature(response.peak_response_jc).parameters
+    assert params["vav_denominator"].default == "fixed"
+    assert params["parity"].default == "running"
+    assert inspect.signature(coupling.JunctionCoupling).parameters["vav_denominator"].default == (
+        "fixed"
+    )
+    _id, force, kw = JC_SMALL[0]
+    default = response.peak_response_jc(force, **kw)
+    explicit = response.peak_response_jc(force, **kw, **FIXED_FLAGS)
+    assert np.array_equal(default.summary(), explicit.summary())
+
+
+def test_fixed_vav_divides_by_the_number_of_terms():
+    """F-1 (D-17 fixed): the mean velocity over the 2N + 1 velocities is divided by
+    2N + 1. With every velocity 1 and no acceleration, vAv = 1 exactly and the even
+    update leaves the end nodes at v_b[0] - vAv = 0; the legacy divisor gives
+    (2N + 1) / (2N - 1)."""
+    n_seg, pivot = 18, 5
+    frac_a, frac_b = moc.interp_fractions(n_seg, pivot)
+    for vav_denominator, expected_v0 in (("fixed", 0.0), ("legacy", 1 - 37 / 35)):
+        p_a, v_a, p_b, v_b = moc.new_column(n_seg)
+        v_a[:] = 1.0
+        v_b[:] = 1.0
+        moc.step(
+            True,
+            0.0,
+            p_a,
+            v_a,
+            p_b,
+            v_b,
+            frac_a,
+            frac_b,
+            n_seg,
+            pivot,
+            1e6,
+            1.001,
+            moc.vav_divisor(n_seg, vav_denominator),
+            0.01,
+            0.0,
+        )
+        assert v_a[0] == v_a[n_seg] == expected_v0
+        assert np.all(v_b == 1.0 - (1.0 - expected_v0))  # dv - vAv + v_b with dv = 0
+
+
+def _half_grid_sequence(monkeypatch, force, kw, **flags):
+    """The sequence of half-grids (True = even/A) ``moc.step`` is asked to update."""
+    evens = []
+    original = moc.step
+
+    def recording_step(even, *args):
+        evens.append(bool(even))
+        return original(even, *args)
+
+    monkeypatch.setattr(coupling.moc, "step", recording_step)
+    res = response.peak_response_jc(force, **kw, output_type=1, **flags)
+    return evens, res
+
+
+def test_running_parity_is_continuous_across_phase_boundaries(monkeypatch):
+    """F-2 (D-19 fixed), on the case ``test_quirks.py`` pins for the literal port:
+    unballanceStepQTY = 1.25 (phase 1 exits at k = 2, even) and a ramp force that
+    enters phase 3. With ``parity="running"`` the half-grids strictly alternate for
+    the whole run; with ``"per_phase"`` the sequence is the legacy ``modDbl`` one,
+    double-even at the 1 -> 2 boundary and double-odd at 2 -> 3."""
+    s = 10
+    n = 100
+    kw = dict(
+        JC_SMALL_KW,
+        physical_length=12.5,
+        dynamic_fric=0.0,
+        damping_percent=10.0,
+    )
+    force = (np.arange(n, dtype=float) * 2.5e6 / 100.0).reshape(n, 1)
+
+    # the legacy index sequence, recorded as tests/test_quirks.py::test_d19 does
+    indices = []
+    original = lp.mod_dbl
+
+    def recording_mod_dbl(num, div):
+        indices.append(int(num))
+        return original(num, div)
+
+    monkeypatch.setattr(lp, "mod_dbl", recording_mod_dbl)
+    lp.get_peak_response_jc(force, **kw, output_type=1)
+    legacy_evens = [i % 2 == 0 for i in indices]
+    jumps = np.flatnonzero(np.diff(np.array(indices)) != 1)
+    assert len(jumps) == 2  # the two phase boundaries
+    b1, b2 = jumps
+    assert legacy_evens[b1] == legacy_evens[b1 + 1] is True  # double-even at 1 -> 2
+    assert legacy_evens[b2] == legacy_evens[b2 + 1] is False  # double-odd at 2 -> 3
+    assert (indices[b1], indices[b1 + 1]) == (s + 2, 2 * s)
+
+    per_phase, res_legacy = _half_grid_sequence(
+        monkeypatch, force, kw, vav_denominator="legacy", parity="per_phase"
+    )
+    assert per_phase == legacy_evens
+    running, res_fixed = _half_grid_sequence(
+        monkeypatch, force, kw, vav_denominator="legacy", parity="running"
+    )
+    assert len(running) == len(legacy_evens)
+    assert running == [i % 2 == 0 for i in range(len(running))]
+    assert res_legacy.free_decay_samples > 0 and res_fixed.free_decay_samples > 0
+    assert not np.array_equal(res_legacy.history, res_fixed.history)
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
+def test_legacy_flags_reproduce_legacy_bitwise(idx):
+    """After the flip the explicit legacy flags still give the literal port's result
+    bitwise (``jc_sweep_results`` compares at RTOL; this pins exact equality)."""
+    case = jc_sweep_cases()[idx]
+    legacy = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
+    res = response.peak_response_jc(case.force, **case.kw, output_type=0, **LEGACY_FLAGS)
+    assert np.array_equal(res.summary(), legacy)
+
+
+def _max_rel_change(summary, base):
+    diff = summary != base
+    if not np.any(diff):
+        return 0.0
+    return float(np.max(np.abs(summary[diff] - base[diff]) / np.abs(base[diff])))
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
+def test_fixed_flags_change_only_where_expected(idx):
+    """Where the fixes cannot act, the defaults equal the legacy bitwise: no fluid
+    (dF = 0), the fallback (no MoC), and for F-2 alone a continuous literal parity
+    sequence (1 -> 2 boundary continuous and phase 3 not entered). Where F-2 does act
+    on a fluid-coupled MoC case (discontinuous 1 -> 2 boundary) the result changes."""
+    case = jc_sweep_cases()[idx]
+    base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
+    res_legacy = jc_sweep_results(idx)[0]
+    f1 = response.peak_response_jc(
+        case.force, **case.kw, vav_denominator="fixed", parity="per_phase"
+    ).summary()
+    f2 = response.peak_response_jc(
+        case.force, **case.kw, vav_denominator="legacy", parity="running"
+    ).summary()
+    both = response.peak_response_jc(case.force, **case.kw).summary()
+    no_effect = case.fallback or case.kw["fluid_area"] == 0.0
+    if no_effect:
+        assert np.array_equal(f1, base) and np.array_equal(f2, base) and np.array_equal(both, base)
+    if case.parity_continuous and res_legacy.free_decay_samples == 0:
+        assert np.array_equal(f2, base)
+    elif not no_effect and not case.parity_continuous:
+        assert not np.array_equal(f2, base)
+    # the changes are small corrections, not different answers
+    assert _max_rel_change(f1, base) < 1e-2
+    assert _max_rel_change(f2, base) < 2e-2
+    assert _max_rel_change(both, base) < 2e-2
+    assert np.array_equal(f1, base) or case.kw["fluid_area"] > 0.0

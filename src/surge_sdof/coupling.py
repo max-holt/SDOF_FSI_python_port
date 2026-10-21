@@ -86,7 +86,7 @@ class JunctionCoupling:
         rho_c: float,
         fluid_area: float,
         decay: float,
-        vav_denominator: str = "legacy",
+        vav_denominator: str = "fixed",
     ):
         self.n_seg = int(pipe_seg_qty)
         self.pivot = int(pivot_seg_qty)
