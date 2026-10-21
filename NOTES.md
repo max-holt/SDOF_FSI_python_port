@@ -50,6 +50,53 @@ Judgement calls (flag if you disagree):
 - `NoCoupling` adds `0.0` to the unbalance force and supplies `0.0` in free decay: identical to
   the literal `(forceA − forceB)` / `−R` except for the sign of an exact zero.
 
+## Stage 4.2 — scope and plan (recorded 2026-10-21 before touching `src/`)
+Owner's instruction (this session): `moc.py`, `coupling.JunctionCoupling`, `response.peak_response_jc`
+built from the same `_integrate` loop as `peak_response`; approved fixes F-1 and F-2 flag-first.
+Amendments agreed at plan approval: (1) the `jc_slow` gate runs the new solver with the legacy
+flags against the Excel fixture at the golden tolerance only (no re-run of
+`legacy_port.get_peak_response_jc` on the full cases; bitwise-vs-legacy is established by the
+small-grid sweep); (2) the golden before/after record is one fixed-flag run per case (F-2 is
+provably zero there: `k_exit = 21` odd, phase 3 never entered).
+
+Plan (one commit per step; fast suite before each commit, `-m slow` before each `src/` commit):
+1. `moc.py`: set-up helpers called once per run (`grid_size`, `is_short_pipe`, `decay_factor`,
+   `interp_fractions` as float64 arrays, literal copies of `interpFractionA/B` incl. D-4,
+   `new_column`) and one kernel `step(even, a_dt, p_a, v_a, p_b, v_b, frac_a, frac_b, n_seg,
+   pivot, rho_c, decay, vav_divisor, fluid_area, d_f) -> d_f` with scalar loop bodies over four
+   contiguous 1-D arrays, VBA operation order, previous-cell values carried in locals; no Python
+   objects (Stage 5 `@njit`s it whole). The dead `useUndamped` branch is not ported.
+   Tests: fractions bitwise vs the legacy helpers; chained replay of the legacy MoC block
+   (settrace probe: arrays, `d_f`, `a` per sub-step) on small grids, bitwise.
+2. `coupling.py`: `JunctionCoupling` owning the column arrays and `dF`;
+   `coupling_force(state, step_index)` = `moc.step(step_index % 2 == 0, a * dt, …)`, returns a
+   Python float. Test: `dF` sequence vs the legacy's per-sub-step `d_f`.
+3. `response.py` + `structure.jc_params` (VBA 726-729 literally; its own function, not a flag
+   on `lumped_params`): `peak_response_jc(...)` with keyword-only `vav_denominator`
+   ("legacy" 2N-1 | "fixed" 2N+1) and `parity` ("per_phase" | "running"), short-pipe fallback to
+   `peak_response`, otherwise the shared `_integrate` under `np.errstate(raise)` (the MoC arrays
+   are numpy; `rhoC = 0` and fluid overflow raise mid-run as the legacy does). Parity lives in the
+   loop: with `parity="per_phase"` `_integrate` passes the VBA index `(totInd-1)*stepQTY + k`
+   (phase 3 `+1`) as `step_index`; with `"running"` the running counter. Tests: Example JC case
+   vs legacy (output types 0-3) at 1e-12 and vs Excel; fallback ≡ `peak_response` bitwise;
+   three `jc_slow` tests (new solver, legacy flags, vs Excel at 5e-12).
+4. Sweep: 50 JC parameter sets (`random.Random(20261019)`), fluidArea {0, 0.01, 0.05}, density
+   1000, stepQTY {2, 7, 40}, ratio U(0.5, 4), engaged gaps, 1-D and 2-3 column histories,
+   outputType 0 plus one of 1-3, fallback spans; asserted ≥ 1 phase-3 case, ≥ 1 fallback, ≥ 1
+   MoC case with the gap engaged. Compared with explicit legacy flags at rtol 1e-12 (bitwise
+   measured and recorded). Grids of ~20-40 cells so the fast suite grows by ~30 s.
+5. Flag flip: defaults "fixed" / "running"; pin tests for the fixed behaviour on the new
+   modules (the `test_quirks.py` pins on `legacy_port` stay as written); DEVIATIONS D-17 and
+   D-19 → "fixed"; max relative change per sweep case (F-1 alone, F-2 alone, both) and per
+   golden output recorded here and in the commit message.
+6. Bench: `tools/bench.py` re-runs case (a) in-session as the reference and reports every case
+   as seconds and as a ratio to (a); new case (g) `response.peak_response_jc` (legacy flags) on
+   the truncated row 96 (digest must equal (c)); cell-updates/s for (c) and (g) (sub-steps ×
+   pipeSegQTY / s); README rows carry the CPU model; rows go into the main table.
+7. `-m jc_slow` once with the legacy flags (3 parallel single-case processes); per-case time and
+   max relative error recorded. `port-reviewer` on the final diff; correctness findings only.
+   Next action = Stage 4.3 (`pressure.py`).
+
 ## Done
 - `vba_compat.py`: `clng` (half-to-even), `vba_floor` (literal transcription of the fixed VBA `max(CLng(val - 0.5), CLng(val + 0.5) - 1)`, pinned against `math.floor`), `mod_dbl` (ordinary floored modulo now), `sign`, `min_unsigned`, `max_unsigned`, plus `ubound`/`vba_2d` for the padded 1-based array convention. `tests/test_vba_compat.py` pins them against the VBA definitions.
 - Upstream `floor` fix applied: `main` merged, `vba_floor`/`mod_dbl` updated, the tests that pinned the old bug (mod_dbl table, parity test, D-11 multi-column pressure test, D-8 trigger condition) re-pinned to the fixed behaviour. DEVIATIONS D-1, D-2, D-11 are status "fixed" with the reason "source corrected upstream".
@@ -181,6 +228,8 @@ Approved fixes (lead author, 21 Oct 2026):
 F-1 vAv denominator: 2N+1 (number of terms), was 2N-1. port_review §3.2a.
 F-2 MoC parity: continuous even/odd alternation for the whole run via a single running step counter in the refactored JC solver; the literal port keeps the per-phase index. Intent: alternation never double-steps a half-grid at a phase boundary. port_review §2.5, §3.2c. Differential tests vs legacy_port.py for JC must therefore compare with a tolerance only on cases where the literal port's parity sequence is continuous (phase 3 not entered and phase-1 exit k odd); for the others, assert the refactored result against a legacy run patched to a running counter, and record the before/after difference.
 F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is the only module the decision may touch.
+
+Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixes are built behind keyword flags defaulting to the VBA behaviour, the differential suite passes bitwise on the legacy flags, then the defaults flip; this supersedes the tolerance-only comparison note under F-2 above.
 
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
