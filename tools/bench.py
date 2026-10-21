@@ -10,6 +10,9 @@ synthetic):
 
 * ``lumped_r20``  - golden lumped case ``source_row`` 20 (L = 3 m, f = 2 Hz).
 * ``lumped_r80``  - golden lumped case ``source_row`` 80 (L = 48 m, f = 2 Hz).
+* ``response_r20``, ``response_r80`` - the same two cases through the Stage 4
+  ``response.peak_response`` (structure + loads + NoCoupling); their digests must equal
+  the ``lumped_*`` ones.
 * ``jc_r96_n2000`` - golden JC case ``source_row`` 96 (L = 24 m, f = 3 Hz) with the force
   history truncated to the first 2000 samples of ``history_B`` so that it finishes
   (the full case is ~1e6 sub-steps). Its result is therefore *not* the golden value.
@@ -63,6 +66,7 @@ sys.path.insert(0, str(REPO / "tests"))
 import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
 
 from surge_sdof import legacy_port as lp  # noqa: E402
+from surge_sdof import response  # noqa: E402
 
 BENCH_DIR = REPO / "docs" / "bench"
 README = BENCH_DIR / "README.md"
@@ -98,7 +102,7 @@ def build_cases():
     force = tg.load_force(params)
     by_row = {c["source_row"]: c for c in tg.load_cases()}
 
-    def peak_case(cid, row, solver, n=None):
+    def peak_case(cid, row, solver, n=None, summary=lambda res: res):
         case = by_row[row]
         kw = tg.case_params(case, params)
         hist = force if n is None else force[:n]
@@ -108,12 +112,16 @@ def build_cases():
         return {
             "id": cid,
             "description": f"golden {case['solver']} source_row {row} ({case['case_id']})"
-            + (f", first {n} samples" if n is not None else ""),
-            "run": lambda: solver(hist, **kw),
+            + (f", first {n} samples" if n is not None else "")
+            + (f" via {solver.__module__}.{solver.__name__}"),
+            "run": lambda: summary(solver(hist, **kw)),
             "substeps": substep_count(hist.shape[0], kw),
             "expected": expected,
             "digest": lambda res: [float(v) for v in res],
         }
+
+    def peak_response_summary(res):
+        return res.summary()
 
     pressure = {
         "id": "pressure_example",
@@ -131,6 +139,8 @@ def build_cases():
     return [
         peak_case("lumped_r20", "20", lp.get_peak_response),
         peak_case("lumped_r80", "80", lp.get_peak_response),
+        peak_case("response_r20", "20", response.peak_response, summary=peak_response_summary),
+        peak_case("response_r80", "80", response.peak_response, summary=peak_response_summary),
         peak_case("jc_r96_n2000", "96", lp.get_peak_response_jc, n=JC_TRUNCATE),
         pressure,
     ]
@@ -310,8 +320,9 @@ README_HEADER = (
     "truncated to 2000 samples). `sha` is HEAD when the run started (`-dirty` = uncommitted changes under src/tests/tools), so the commit that adds a row is that sha's child. Details, result digests and profiles are in "
     "`<sha>.json` next to this file.\n\n"
     "| date (UTC) | sha | python | numpy | numba | NUMBA_DISABLE_JIT | (a) lumped r20 | "
-    "(b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | (c) us/sub-step | profile |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    "(b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | (c) us/sub-step | profile | "
+    "(e) response r20 | (f) response r80 |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
 )
 
 
@@ -324,7 +335,9 @@ def append_readme(run):
         f"{run['numba_disable_jit'] or '-'} | {fmt_time(by_id['lumped_r20']['median_s'])} | "
         f"{fmt_time(by_id['lumped_r80']['median_s'])} | {fmt_time(jc['median_s'])} | "
         f"{fmt_time(by_id['pressure_example']['median_s'])} | "
-        f"{jc['s_per_substep'] * 1e6:.1f} | {'yes' if run['profile'] else 'no'} |\n"
+        f"{jc['s_per_substep'] * 1e6:.1f} | {'yes' if run['profile'] else 'no'} | "
+        f"{fmt_time(by_id['response_r20']['median_s'])} | "
+        f"{fmt_time(by_id['response_r80']['median_s'])} |\n"
     )
     if not README.exists():
         README.write_text(README_HEADER)
