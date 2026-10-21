@@ -128,6 +128,15 @@ Plan (one commit per step; fast suite before each commit, `-m slow` before each 
   `modDbl` sequence) and `test_fixed_flags_change_only_where_expected`. DEVIATIONS D-17 and D-19
   are "fixed"; the `test_quirks.py` pins on `legacy_port` are untouched (the literal port keeps
   the quirks).
+- Port review (Stage 4.2): `port-reviewer` on `git diff 5241908..293e507` (diff + VBA only):
+  **no correctness findings**. It checked `moc.step` expression by expression against VBA
+  795-847 (summation order of `vAv`, boundary order, sweep bounds and the `pb_prev` locals, the
+  `dF` association), the tabulated fraction index ranges, `jc_params` association against VBA
+  726-729, the `n + off` parity index for all three phases including the phase-1 `Exit For` and
+  phase 3's `k = 1 To stepQTY`, the set-up/fallback order and the `dF + (forceA − forceB)`
+  summation, and that no test was deleted, skipped or loosened and no fixture or legacy file is
+  in the diff. One coverage note (not a finding): the bitwise pin of the legacy flags covers
+  output type 0; histories are compared at rtol 1e-12 by the sweep fixture (observed bitwise).
 
 ### Stage 4.2 — F-1/F-2 before/after
 **Finding (not the expected 0.4 %): F-1 is numerically inert for the outputs.** `dF` is built
