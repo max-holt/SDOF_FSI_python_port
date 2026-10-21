@@ -1,7 +1,7 @@
 # NOTES — session handoff
 
 ## Current stage
-Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. No solver changes. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
 ## Stage 4.1 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction: refactor, first seam. Target layout for all of Stage 4 is in
@@ -61,6 +61,49 @@ Judgement calls (flag if you disagree):
 - Golden fixtures (2026-10-20): the owner committed the source workbook `tests/fixtures/source/surge_force_data.xlsm`. `tools/extract_fixtures.py` (needs openpyxl, a `dev` extra) writes `tests/fixtures/curve_10in/{force_history.csv, params.json, cases.csv}` from the Excel-cached values: full `Sheet1` extent (25303 rows), `n_samples = 25135`, 78 cases with `source_row` and `solver` columns (75 lumped rows 20-94, 3 JC rows 96-98). The workbook's `Module1` was decompressed and its 16 ported procedures are byte-identical to `legacy/vba/Existing Code.bas` (fixed `floor` included), so the cached results come from the same code the port transcribes.
 - Example-sheet fixtures (2026-10-21): `tools/extract_fixtures.py` also writes `tests/fixtures/example/cases.json` (three self-contained cases: `example_pressure` from B3:B7 / J33:J42 / C3:C123 with `pipeArea = PI()*(J39^2/4)` and Excel `PI()` = IEEE double pi, `example_lumped` from E3:E27 / J6:J14 / F3:F7, `example_jc` from E3:E27 / J19:J29 / G3:G7) and `tests/fixtures/manifest.json` listing both fixture sets. `test_golden.py` reads the manifest; the Example cases are unmarked fast tests (`test_golden_example`, milliseconds) at RTOL 1e-12 (owner's decision); measured 1.2e-14 / 2.8e-14 / 2.6e-15. `GetPressureResponse` thereby has its first golden case.
 - `tests/test_golden.py` + `tools/golden_report.py` + markers `slow` (75 lumped) / `jc_slow` (3 JC), both excluded by default (`addopts`). `pytest -m slow` = lumped only (3 min 34 s), `pytest -m "slow or jc_slow"` = everything; `/golden` runs the latter with the 3 JC cases `--deselect`ed unless invoked as `/golden --jc`. Results are cached in `tests/.golden_cache/` (git-ignored) for `/golden`.
+
+## Stage 4.1 — done (2026-10-21)
+- Modules (see `docs/architecture.md` for responsibilities and the fixed interfaces):
+  `structure.py` (`solve_poly` literal copy, `solve_portal_height`, `lumped_params`,
+  `effective_displacement` / `restoring_force`, `step` on Python floats with the `minUnsigned` /
+  `max(0, |x| − gap)` / `sign` ladders inlined and `dt / 2` hoisted), `loads.py` (`transit_delay`,
+  `overlap_substeps`, `unbalance_force` generator: one list of per-sub-step `forceA − forceB` per
+  sample, ramp fractions tabulated once), `coupling.py` (`Coupling` protocol, `NoCoupling`),
+  `response.py` (`PeakResponse` dataclass, `peak_response`, shared `_integrate` loop: sample loop,
+  max trackers, 0-based result history, free decay, D-23 overflow checks).
+- `tests/test_differential.py`: `sys.settrace` probe on `legacy_port.get_peak_response` (set-up
+  constants, per-sub-step force / pre-state / post-state); seed 20261019, 50 parameter sets
+  (`stepQTY` {2, 7, 40}, 1-D and 2-/3-column histories, `dynamicFric` {0, 0.005, 0.1}, ratio
+  U(0.5, 4), gap 10-50 % of the gap-free `xMax`, damping U(0.5, 5) %, ω·dt ≤ 0.03); 20 cases enter
+  phase 3, 49 engage the gap (both asserted ≥ 1). Each module is compared at rtol 1e-12:
+  `step` replays every legacy sub-step (49,822 sub-steps), `unbalance_force` reproduces every
+  per-sample sequence, `peak_response` matches for `outputType` 0 and one of 1-3 per case, the
+  Example-sheet lumped case for 0-3 (and Excel at 1e-12), and the 75 curve cases (`slow`, 0 and
+  Excel at 5e-12). **Measured: bitwise equal in every comparison** (summary 50/50, histories
+  50/50, Example 4/4, step and loads sequences 50/50) — the rtol is the contract, bitwise the
+  observation. Error paths pinned: D-7 (`stepQTY = 1`), D-8 (single-row history), D-23.
+- Three gates run before each `src/` commit: fast suite (442 tests, ≈ 8 s), `-m slow` (75 golden
+  + 75 differential curve cases, ≈ 10 min). All green.
+- Bench (`docs/bench/4ea09d2.json`, README row): the lumped golden cases through
+  `response.peak_response` vs the literal port, pure Python, same inputs, results `same`:
+  row 20 3.235 s → 0.910 s (3.22 → 0.91 µs/sub-step, **3.55x**),
+  row 80 3.107 s → 0.925 s (3.08 → 0.92 µs/sub-step, **3.36x**).
+  That is the speed-up from the restructure alone (Python-float state, inlined helpers, hoisted
+  constants; no vectorisation, no JIT). The remaining cost per sub-step is the `step` call, the
+  `coupling_force` call, the generator and the four max trackers.
+  Re-timed afterwards with nothing else running (`--only`, not written): 3.24 / 3.32 s vs
+  0.95 / 0.93 s, same conclusion. Profile of `response_r20` (cProfile, one run, 1,005,523
+  sub-steps): `_integrate` self 1.34 s (loop, trackers, calls), `step` self 1.09 s, `abs`
+  0.81 s (7.25 M calls, 7.2 per sub-step), `unbalance_force` 0.56 s cumulative, `list.append`
+  0.16 s, `NoCoupling.coupling_force` 0.10 s. Next lever (Stage 5) is the JIT; in pure Python
+  the remaining per-sub-step cost is call overhead, not arithmetic.
+- Port review (Stage 4.1): `port-reviewer` on `git diff 08515b3..HEAD` (diff + VBA only):
+  **no correctness findings**. It checked the six exactness claims (half_dt, the inlined ladders,
+  the tabulated ramp fractions incl. kOverlap ∈ {0, stepQTY}, the phase-1 Exit For / jB-iB
+  re-base, phase 3, the static-equivalent force) against the VBA, fuzzed the ladders and the
+  dt/2 rewrite bitwise (0 mismatches), and ran its own bitwise script over the sweep, the Example
+  case and constructed kOverlap edge cases for output types 0-3 (0 mismatches). One
+  non-correctness note (a stale docstring reference) was fixed in the follow-up commit.
 
 ## Golden results (2026-10-20, this container, pure Python)
 - Lumped, 5 timed cases (first of each span; Excel vs Python, outputType 0):
@@ -143,4 +186,12 @@ F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is 
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-Stage 4.1 (owner's instruction, 2026-10-20). Run `tools/bench.py` at the end of every Stage 4/5 session and commit `docs/bench/` (CLAUDE.md); compare the "result vs prev" column, which must read `same` for a behaviour-preserving commit. No document in the repo defines the Stage 4.1 scope; the only stage material beyond Stage 1 is the refactor map in `docs/port_review.md` §2 (Stage 4) and the Numba target (Stage 5), so record the 4.1 scope in this file at the start of that session before touching `src/`. Read `docs/port_review.md` §2 (refactor map, §2.5 parity hazard) and §4 (blind spots) first. Gate: `.venv/bin/python -m pytest -q` before every commit, `-m slow` (3.5 min) before any commit touching `src/`; `tests/test_quirks.py` must stay green as written (a change to a pinned quirk needs a DEVIATIONS.md row). The 3 JC cases have run once (1 h 20 min, all pass, tolerance 5e-12 measured); re-run them (`pytest -m jc_slow`, background) before any commit that touches the JC solver path, and before the Stage 5 Numba acceptance. If `GetPressureResponse` needs a golden case, add a UDF call with a committed valve pattern to the workbook and extend `tools/extract_fixtures.py`.
+Stage 4.2: `moc.py` + the JC coupling + `response.peak_response_jc` against the interfaces in
+`docs/architecture.md` (`coupling_force(state, step_index)`, running sub-step counter for the
+MoC parity → apply approved fix F-2 there, and F-1 `vAv` divisor; F-3 deferred). Differential
+tests vs `legacy_port.get_peak_response_jc` per the F-2 note (tolerance only where the literal
+parity sequence is continuous; otherwise a legacy run patched to a running counter). Do the JC
+set-up as its own function (`structure.jc_params` or similar), not a flag on `lumped_params`.
+Re-run `pytest -m jc_slow` (1 h 20 min, background) before any commit touching the JC path.
+
+Previous next action (Stage 4.1, owner's instruction, 2026-10-20), kept for the record: Run `tools/bench.py` at the end of every Stage 4/5 session and commit `docs/bench/` (CLAUDE.md); compare the "result vs prev" column, which must read `same` for a behaviour-preserving commit. No document in the repo defines the Stage 4.1 scope; the only stage material beyond Stage 1 is the refactor map in `docs/port_review.md` §2 (Stage 4) and the Numba target (Stage 5), so record the 4.1 scope in this file at the start of that session before touching `src/`. Read `docs/port_review.md` §2 (refactor map, §2.5 parity hazard) and §4 (blind spots) first. Gate: `.venv/bin/python -m pytest -q` before every commit, `-m slow` (3.5 min) before any commit touching `src/`; `tests/test_quirks.py` must stay green as written (a change to a pinned quirk needs a DEVIATIONS.md row). The 3 JC cases have run once (1 h 20 min, all pass, tolerance 5e-12 measured); re-run them (`pytest -m jc_slow`, background) before any commit that touches the JC solver path, and before the Stage 5 Numba acceptance. If `GetPressureResponse` needs a golden case, add a UDF call with a committed valve pattern to the workbook and extend `tools/extract_fixtures.py`.
