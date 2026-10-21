@@ -137,6 +137,30 @@ Plan (one commit per step; fast suite before each commit, `-m slow` before each 
   summation, and that no test was deleted, skipped or loosened and no fixture or legacy file is
   in the diff. One coverage note (not a finding): the bitwise pin of the legacy flags covers
   output type 0; histories are compared at rtol 1e-12 by the sweep fixture (observed bitwise).
+- Bench (`docs/bench/293e507.json`, README row; `tools/bench.py --profile`, this container, pure
+  Python, Intel Xeon @ 2.80 GHz, nothing else running). `tools/bench.py` now always re-runs the
+  frozen legacy lumped case (a) in-session as the reference (also under `--only`) and reports
+  every case in seconds and as a ratio to (a); JC cases also report cell-updates/s
+  (sub-steps × pipeSegQTY / s); README rows carry the CPU model and are inserted into the main
+  table (the stray 4ea09d2 row that had landed under the JC table was moved up).
+
+  | case | median | × (a) | per sub-step | cells/s | result |
+  |---|---|---|---|---|---|
+  | (a) legacy lumped r20 | 3.195 s | 1.000 | 3.18 µs | - | same as 4ea09d2 |
+  | (b) legacy lumped r80 | 3.132 s | 0.980 | 3.11 µs | - | same |
+  | (e) `peak_response` r20 | 0.995 s | 0.312 | 0.99 µs | - | same |
+  | (f) `peak_response` r80 | 0.933 s | 0.292 | 0.93 µs | - | same |
+  | (c) legacy JC r96, 2000 samples (N 666) | 147.04 s | 46.0 | 1816 µs | 0.37 M | same |
+  | (g) `peak_response_jc` r96, 2000 samples, legacy flags | 77.06 s | 24.1 | 952 µs | 0.70 M | digest equal to (c) |
+  | (d) pressure example | 10.7 ms | 0.003 | - | - | same |
+
+  **Truncated JC case (c) → (g): 1.91x from the restructure alone** (tabulated fractions, four
+  1-D arrays with the previous cell carried in locals, hoisted `a·dt` and `2·rhoC`, Python-float
+  SDOF state; no vectorisation, no JIT). Profile of (g): `moc.step` self 80.5 s of 81.3 s (99 %),
+  `_integrate` 0.22 s, `structure.step` 0.23 s, `coupling_force` 0.17 s — the remaining cost is
+  numpy element access and numpy-scalar arithmetic inside the cell sweeps, which is exactly what
+  the Stage 5 `@njit` of `moc.step` removes. In the legacy (c) the two `interp_fraction` helpers
+  alone were 25.5 s of 197.7 s profiled.
 
 ### Stage 4.2 — F-1/F-2 before/after
 **Finding (not the expected 0.4 %): F-1 is numerically inert for the outputs.** `dF` is built

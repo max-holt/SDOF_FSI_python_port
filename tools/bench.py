@@ -16,22 +16,34 @@ synthetic):
 * ``jc_r96_n2000`` - golden JC case ``source_row`` 96 (L = 24 m, f = 3 Hz) with the force
   history truncated to the first 2000 samples of ``history_B`` so that it finishes
   (the full case is ~1e6 sub-steps). Its result is therefore *not* the golden value.
+* ``response_jc_r96_n2000`` - the same truncated case through the Stage 4.2
+  ``response.peak_response_jc`` with the legacy flags (``vav_denominator="legacy"``,
+  ``parity="per_phase"``); its digest must equal the ``jc_r96_n2000`` one.
 * ``pressure_example`` - the ``Example`` sheet ``GetPressureResponse`` call of the source
   workbook (``Example!C3:C123``): valve pattern ``B3:B7``, parameters ``J33:J42``,
   ``pipeArea = PI()*(J39^2/4)``. Transcribed here because ``tools/extract_fixtures.py``
   does not extract that sheet.
 
 Each case runs ``--repeats`` times (default 3); the median wall time is reported, and for
-the three peak-response cases the time per SDOF sub-step. The sub-step count is
+the peak-response cases the time per SDOF sub-step. The sub-step count is
 ``n_samples * stepQTY + floor(unb * stepQTY) + 1`` (phase 2 plus the phase-1 delay; phase
 3 never runs on these inputs), checked against a call count of the per-sub-step helpers.
+For the JC cases the MoC cell-updates per second are also reported: ``sub-steps *
+pipeSegQTY / median`` (each sub-step updates one half-grid of ``pipeSegQTY`` cells).
+
+Cloud containers differ between sessions, so absolute times are not comparable across
+rows. Case (a), the frozen legacy lumped case ``lumped_r20``, is therefore always run
+in-session as the reference (it cannot be skipped with ``--only``) and every case is
+reported both in seconds and as a ratio ``median / median(a)``; the README row also
+carries the CPU model.
 
 Outputs (committed):
 
 * ``docs/bench/<git-short-sha>.json`` - environment, per-case timings, result digests
   (the five ``outputType = 0`` numbers, or first/max/last of the pressure history) and,
   with ``--profile``, the top 15 functions by cumulative time per case.
-* ``docs/bench/README.md`` - one summary row appended per run.
+* ``docs/bench/README.md`` - one summary row per run, inserted at the end of the main
+  table (the JC golden-suite table below it is maintained by hand).
 
 The table printed at the end carries a "vs prev" column (previous median / this median,
 > 1 is faster) and a result-digest comparison against the most recent other JSON in
@@ -66,7 +78,7 @@ sys.path.insert(0, str(REPO / "tests"))
 import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
 
 from surge_sdof import legacy_port as lp  # noqa: E402
-from surge_sdof import response  # noqa: E402
+from surge_sdof import moc, response, structure  # noqa: E402
 
 BENCH_DIR = REPO / "docs" / "bench"
 README = BENCH_DIR / "README.md"
@@ -88,6 +100,8 @@ EXAMPLE_PRESSURE_KW = dict(
     pump_ramp_pressure=2.0,
 )
 JC_TRUNCATE = 2000
+REFERENCE_CASE = "lumped_r20"  # case (a): always run, every case is also a ratio to it
+LEGACY_FLAGS = dict(vav_denominator="legacy", parity="per_phase")
 
 
 def substep_count(n_samples, kw):
@@ -97,14 +111,26 @@ def substep_count(n_samples, kw):
     return n_samples * s + math.floor(unb * s) + 1
 
 
+def pipe_seg_qty(kw):
+    """``pipeSegQTY`` of a JC case (cells of the MoC grid), from the same set-up the
+    solvers use."""
+    dt = 1 / (kw["sample_freq"] * kw["step_qty"])
+    h = structure.solve_portal_height(
+        kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
+    )
+    return moc.grid_size(kw["physical_length"], h, kw["celerity"], dt)[0]
+
+
 def build_cases():
     params = tg.load_params()
     force = tg.load_force(params)
     by_row = {c["source_row"]: c for c in tg.load_cases()}
 
-    def peak_case(cid, row, solver, n=None, summary=lambda res: res):
+    def peak_case(cid, row, solver, n=None, summary=lambda res: res, flags=None):
         case = by_row[row]
         kw = tg.case_params(case, params)
+        if flags:
+            kw = dict(kw, **flags)
         hist = force if n is None else force[:n]
         expected = (
             None if n is not None else [float(case[name]) for name in params["expected_outputs"]]
@@ -113,9 +139,11 @@ def build_cases():
             "id": cid,
             "description": f"golden {case['solver']} source_row {row} ({case['case_id']})"
             + (f", first {n} samples" if n is not None else "")
-            + (f" via {solver.__module__}.{solver.__name__}"),
+            + (f" via {solver.__module__}.{solver.__name__}")
+            + (f" {flags}" if flags else ""),
             "run": lambda: summary(solver(hist, **kw)),
             "substeps": substep_count(hist.shape[0], kw),
+            "cells": pipe_seg_qty(kw) if case["solver"] == "jc" else None,
             "expected": expected,
             "digest": lambda res: [float(v) for v in res],
         }
@@ -128,6 +156,7 @@ def build_cases():
         "description": "Example sheet GetPressureResponse (Example!C3:C123)",
         "run": lambda: lp.get_pressure_response(EXAMPLE_VALVE_PATTERN, **EXAMPLE_PRESSURE_KW),
         "substeps": None,
+        "cells": None,
         "expected": None,
         "digest": lambda res: {
             "first": float(res[0]),
@@ -142,6 +171,14 @@ def build_cases():
         peak_case("response_r20", "20", response.peak_response, summary=peak_response_summary),
         peak_case("response_r80", "80", response.peak_response, summary=peak_response_summary),
         peak_case("jc_r96_n2000", "96", lp.get_peak_response_jc, n=JC_TRUNCATE),
+        peak_case(
+            "response_jc_r96_n2000",
+            "96",
+            response.peak_response_jc,
+            n=JC_TRUNCATE,
+            summary=peak_response_summary,
+            flags=LEGACY_FLAGS,
+        ),
         pressure,
     ]
 
@@ -246,6 +283,10 @@ def run_cases(cases, repeats, profile):
             "median_s": round(median, 6),
             "substeps": case["substeps"],
             "s_per_substep": round(median / case["substeps"], 12) if case["substeps"] else None,
+            "cells": case["cells"],
+            "cell_updates_per_s": (
+                round(case["substeps"] * case["cells"] / median) if case["cells"] else None
+            ),
             "result": case["digest"](result),
         }
         if case["expected"] is not None:
@@ -257,6 +298,9 @@ def run_cases(cases, repeats, profile):
             row["profile"] = profile_case(case)
         print(f"{case['id']}: median {median:.3f} s", flush=True)
         out.append(row)
+    ref = next(c["median_s"] for c in out if c["id"] == REFERENCE_CASE)
+    for row in out:
+        row["ratio_to_reference"] = round(row["median_s"] / ref, 4)
     return out
 
 
@@ -285,7 +329,7 @@ def fmt_time(seconds):
 
 def print_table(run, prev):
     prev_cases = {c["id"]: c for c in prev["cases"]} if prev else {}
-    header = ("case", "median", "per sub-step", "vs prev", "result vs prev")
+    header = ("case", "median", "x ref (a)", "per sub-step", "cells/s", "vs prev", "result vs prev")
     rows = []
     for c in run["cases"]:
         p = prev_cases.get(c["id"])
@@ -295,7 +339,9 @@ def print_table(run, prev):
             speed = f"{p['median_s'] / c['median_s']:.2f}x"
             same = "same" if p.get("result") == c["result"] else "DIFFERS"
         per = f"{c['s_per_substep'] * 1e6:.3f} us" if c["s_per_substep"] else "-"
-        rows.append((c["id"], fmt_time(c["median_s"]), per, speed, same))
+        cells = f"{c['cell_updates_per_s'] / 1e6:.2f} M" if c.get("cell_updates_per_s") else "-"
+        ratio = f"{c['ratio_to_reference']:.3f}"
+        rows.append((c["id"], fmt_time(c["median_s"]), ratio, per, cells, speed, same))
     widths = [max(len(str(r[i])) for r in rows + [header]) for i in range(len(header))]
     print()
     print(" | ".join(h.ljust(w) for h, w in zip(header, widths, strict=True)))
@@ -316,33 +362,59 @@ def print_table(run, prev):
 
 README_HEADER = (
     "# Benchmark history\n\n"
-    "One row per `tools/bench.py` run (median of the timed repeats; `(c)` is the JC case "
-    "truncated to 2000 samples). `sha` is HEAD when the run started (`-dirty` = uncommitted changes under src/tests/tools), so the commit that adds a row is that sha's child. Details, result digests and profiles are in "
-    "`<sha>.json` next to this file.\n\n"
-    "| date (UTC) | sha | python | numpy | numba | NUMBA_DISABLE_JIT | (a) lumped r20 | "
-    "(b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | (c) us/sub-step | profile | "
-    "(e) response r20 | (f) response r80 |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    "One row per `tools/bench.py` run (median of the timed repeats). Cloud containers differ "
+    "between sessions, so absolute times are not comparable across rows: case (a), the frozen "
+    "legacy lumped case, is re-run in-session as the reference and every other case is given "
+    "in seconds and, in brackets, as the ratio of its median to (a)'s. `(c)` and `(g)` are the "
+    "JC case truncated to 2000 samples through the literal port and through "
+    "`response.peak_response_jc` (legacy flags); `(e)`/`(f)` are `(a)`/`(b)` through "
+    "`response.peak_response`; `cells/s` is MoC cell-updates per second (sub-steps x pipeSegQTY "
+    "/ s). `sha` is HEAD when the run started (`-dirty` = uncommitted changes under "
+    "src/tests/tools), so the commit that adds a row is that sha's child. Details, result "
+    "digests and profiles are in `<sha>.json` next to this file.\n\n"
+    "| date (UTC) | sha | python | numpy | numba | NUMBA_DISABLE_JIT | cpu | (a) lumped r20 | "
+    "(b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | (e) response r20 | "
+    "(f) response r80 | (g) response_jc r96 n2000 | (c) us/sub-step | (g) us/sub-step | "
+    "(c) cells/s | (g) cells/s | profile |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
 )
 
 
-def append_readme(run):
+def fmt_ratio(c):
+    return f"{fmt_time(c['median_s'])} [{c['ratio_to_reference']:.2f}]"
+
+
+def readme_row(run):
     by_id = {c["id"]: c for c in run["cases"]}
-    jc = by_id["jc_r96_n2000"]
+    jc, rjc = by_id["jc_r96_n2000"], by_id["response_jc_r96_n2000"]
     sha = run["git_short_sha"] + ("-dirty" if run["git_dirty"] else "")
-    row = (
+    return (
         f"| {run['date']} | {sha} | {run['python']} | {run['numpy']} | {run['numba']} | "
-        f"{run['numba_disable_jit'] or '-'} | {fmt_time(by_id['lumped_r20']['median_s'])} | "
-        f"{fmt_time(by_id['lumped_r80']['median_s'])} | {fmt_time(jc['median_s'])} | "
-        f"{fmt_time(by_id['pressure_example']['median_s'])} | "
-        f"{jc['s_per_substep'] * 1e6:.1f} | {'yes' if run['profile'] else 'no'} | "
-        f"{fmt_time(by_id['response_r20']['median_s'])} | "
-        f"{fmt_time(by_id['response_r80']['median_s'])} |\n"
+        f"{run['numba_disable_jit'] or '-'} | {run['cpu']} | "
+        f"{fmt_time(by_id[REFERENCE_CASE]['median_s'])} | "
+        f"{fmt_ratio(by_id['lumped_r80'])} | {fmt_ratio(jc)} | "
+        f"{fmt_ratio(by_id['pressure_example'])} | {fmt_ratio(by_id['response_r20'])} | "
+        f"{fmt_ratio(by_id['response_r80'])} | {fmt_ratio(rjc)} | "
+        f"{jc['s_per_substep'] * 1e6:.1f} | {rjc['s_per_substep'] * 1e6:.1f} | "
+        f"{jc['cell_updates_per_s'] / 1e6:.2f} M | {rjc['cell_updates_per_s'] / 1e6:.2f} M | "
+        f"{'yes' if run['profile'] else 'no'} |\n"
     )
+
+
+def append_readme(run):
+    """Insert the row at the end of the main table (the first table in the file), so that
+    tables maintained by hand below it stay intact."""
+    row = readme_row(run)
     if not README.exists():
-        README.write_text(README_HEADER)
-    with open(README, "a") as fh:
-        fh.write(row)
+        README.write_text(README_HEADER + row)
+        return
+    lines = README.read_text().splitlines(keepends=True)
+    header_at = next(i for i, line in enumerate(lines) if line.startswith("| date (UTC) |"))
+    end = header_at + 1
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    lines.insert(end, row)
+    README.write_text("".join(lines))
 
 
 def main(argv=None):
@@ -357,7 +429,7 @@ def main(argv=None):
     env = environment()
     cases = build_cases()
     if args.only:
-        cases = [c for c in cases if c["id"] in args.only]
+        cases = [c for c in cases if c["id"] in args.only or c["id"] == REFERENCE_CASE]
     run = dict(env, repeats=args.repeats, profile=args.profile, cases=[])
     run["cases"] = run_cases(cases, args.repeats, args.profile)
 
