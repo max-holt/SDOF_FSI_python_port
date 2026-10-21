@@ -123,7 +123,7 @@ def check_digest_pairs(run) -> bool:
     ok = True
     for new_id, ref_id in DIGEST_PAIRS:
         if new_id in by_id and ref_id in by_id:
-            same = by_id[new_id]["digest"] == by_id[ref_id]["digest"]
+            same = by_id[new_id]["result"] == by_id[ref_id]["result"]  # the stored digest
             ok &= same
             print(f"digest {new_id} == {ref_id}: {'yes' if same else 'NO'}")
     return ok

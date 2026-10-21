@@ -132,6 +132,9 @@ case (h)). `legacy_port.py`, `vba_compat.py`, `tests/fixtures/`, `legacy/` untou
   independently confirmed bitwise equality on the 49 non-raising sweep cases and the Example case. Its two
   notes were applied: the `pressure.py` docstring now says the suite pins rtol 1e-12 and bitwise is the
   measured result; `tools/bench.py` now checks the paired digests in-run (`DIGEST_PAIRS`, exit 1 on mismatch).
+- Bench (`tools/bench.py` on `6fa4595`, `docs/bench/6fa4595.json`, README row): every previous case's digest
+  reads `same`; new case (h) `response_pressure_example` 4.70 ms vs (d) `pressure_example` 6.18 ms (0.76x, ratio
+  to (a) 0.003 for both), digests of all four refactored/literal pairs identical. Run time 8 min.
 - Judgement calls: the sweep's one overflowing case is kept as a "raises identically" differential rather than
   tuned away; `pressure_response` returns the plain 0-based array (no dataclass) because the legacy result was
   already 0-based and the bench/golden consumers index it directly.
@@ -485,13 +488,16 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-Stage 4.3: `pressure.py` — `get_pressure_response` (valve/pump MoC) as a standalone driver against
-the interface row in `docs/architecture.md`; differential against `legacy_port.get_pressure_response`
-on the Example-sheet case (Excel at 1e-12) and a seeded sweep covering what port_review §4 item 1
-lists (fully-closed branch, pump ramp, the two friction clamps D-6, the `outMax` truncation,
-multi-column patterns). Keep the two half-loops' asymmetry (0.9 vs 0.9·rhoC, D-6) literal. Gates
-as before (`pytest -q`, `-m slow` before any `src/` commit). Not touching the JC path, so no
-`jc_slow` re-run is needed unless `response._integrate` changes.
+Stage 4.3 is done; Stage 4 now covers every entry point (`response.peak_response`, `response.peak_response_jc`,
+`pressure.pressure_response`) with `legacy_port.py` still the frozen reference. Owner to name the next stage:
+the candidates recorded so far are Stage 4.4 (owner's label for applying approved fixes; F-1/F-2 were already
+applied in 4.2, so 4.4 would be whatever the owner adds, e.g. the D-6 clamp question and the `velInitLocal`
+singularity found by the pressure sweep, raised with the lead author), Stage 5 (Numba: `moc.step` and the
+pressure half-loops are written as scalar loops over contiguous arrays for `@njit`; `**` vs `pow`, D-15, to be
+judged against the recorded tolerances; the three `jc_slow` cases are the acceptance test), Stage 5b (F-3 JC
+fidelity sweep, `coupling.py` only) and Stage 6 (remove `legacy_port.py`; `tests/test_quirks.py` pins move to
+the new modules). Gates unchanged: `.venv/bin/python -m pytest -q` before every commit, `-m slow` before any
+`src/` commit, `tools/bench.py` at the end of every Stage 4/5 session with `docs/bench/` committed.
 
 Previous next action (Stage 4.2, kept for the record): `moc.py` + the JC coupling +
 `response.peak_response_jc` with F-1/F-2 flag-first — done, see "Stage 4.2 — done".

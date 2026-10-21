@@ -1,0 +1,194 @@
+{
+ "git_sha": "6fa4595802ab80348f5ef31e2860f20215018025",
+ "git_short_sha": "6fa4595",
+ "git_dirty": false,
+ "date": "2026-10-21T22:34:12+00:00",
+ "python": "3.13.16",
+ "numpy": "2.5.4",
+ "numba": "absent",
+ "numba_disable_jit": null,
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+ "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+ "repeats": 3,
+ "profile": false,
+ "cases": [
+  {
+   "id": "lumped_r20",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    2.101289,
+    1.850437,
+    1.765487
+   ],
+   "median_s": 1.850437,
+   "substeps": 1005523,
+   "s_per_substep": 1.840273e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "ratio_to_reference": 1.0
+  },
+  {
+   "id": "lumped_r80",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    2.153997,
+    2.082524,
+    2.121355
+   ],
+   "median_s": 2.121355,
+   "substeps": 1007364,
+   "s_per_substep": 2.105848e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "ratio_to_reference": 1.1464
+  },
+  {
+   "id": "response_r20",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.890662,
+    0.809427,
+    0.785976
+   ],
+   "median_s": 0.809427,
+   "substeps": 1005523,
+   "s_per_substep": 8.04981e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "ratio_to_reference": 0.4374
+  },
+  {
+   "id": "response_r80",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.803166,
+    0.814301,
+    0.783371
+   ],
+   "median_s": 0.803166,
+   "substeps": 1007364,
+   "s_per_substep": 7.97294e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "ratio_to_reference": 0.434
+  },
+  {
+   "id": "jc_r96_n2000",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.legacy_port.get_peak_response_jc",
+   "times_s": [
+    101.900666,
+    100.950073,
+    101.162366
+   ],
+   "median_s": 101.162366,
+   "substeps": 80982,
+   "s_per_substep": 0.001249195696,
+   "cells": 666,
+   "cell_updates_per_s": 533143,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "ratio_to_reference": 54.6694
+  },
+  {
+   "id": "response_jc_r96_n2000",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase'}",
+   "times_s": [
+    52.932814,
+    52.016113,
+    52.625573
+   ],
+   "median_s": 52.625573,
+   "substeps": 80982,
+   "s_per_substep": 0.000649842845,
+   "cells": 666,
+   "cell_updates_per_s": 1024863,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "ratio_to_reference": 28.4395
+  },
+  {
+   "id": "pressure_example",
+   "description": "Example sheet GetPressureResponse (Example!C3:C123)",
+   "times_s": [
+    0.006183,
+    0.006247,
+    0.006105
+   ],
+   "median_s": 0.006183,
+   "substeps": null,
+   "s_per_substep": null,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": {
+    "first": 10312.473102362614,
+    "max": 6192617.475685546,
+    "last": 210322.47206994976,
+    "len": 121
+   },
+   "ratio_to_reference": 0.0033
+  },
+  {
+   "id": "response_pressure_example",
+   "description": "Example sheet GetPressureResponse via surge_sdof.pressure.pressure_response",
+   "times_s": [
+    0.004733,
+    0.004621,
+    0.004702
+   ],
+   "median_s": 0.004702,
+   "substeps": null,
+   "s_per_substep": null,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": {
+    "first": 10312.473102362614,
+    "max": 6192617.475685546,
+    "last": 210322.47206994976,
+    "len": 121
+   },
+   "ratio_to_reference": 0.0025
+  }
+ ]
+}

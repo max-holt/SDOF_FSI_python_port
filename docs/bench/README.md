@@ -7,6 +7,7 @@ One row per `tools/bench.py` run (median of the timed repeats). Cloud containers
 | 2026-10-21T02:02:19+00:00 | 1adaddd-dirty | 3.13.16 | 2.5.4 | absent | - | Intel(R) Xeon(R) Processor @ 2.80GHz | 3.090 s | 3.124 s [1.01] | 141.495 s [45.8] | 9.28 ms [0.003] | - | - | - | - | 1747.2 | - | - | - | yes |
 | 2026-10-21T08:19:30+00:00 | 4ea09d2 | 3.13.16 | 2.5.4 | absent | - | Intel(R) Xeon(R) Processor @ 2.80GHz | 3.235 s | 3.107 s [0.96] | 146.834 s [45.4] | 9.89 ms [0.003] | 0.910 s [0.28] | 0.925 s [0.29] | - | - | 1813.2 | - | - | - | yes |
 | 2026-10-21T09:50:42+00:00 | 293e507-dirty | 3.13.16 | 2.5.4 | absent | - | Intel(R) Xeon(R) Processor @ 2.80GHz | 3.195 s | 3.132 s [0.98] | 147.042 s [46.03] | 10.71 ms [0.00] | 0.995 s [0.31] | 0.933 s [0.29] | 77.064 s [24.12] | - | 1815.7 | 951.6 | 0.37 M | 0.70 M | yes |
+| 2026-10-21T22:34:12+00:00 | 6fa4595 | 3.13.16 | 2.5.4 | absent | - | Intel(R) Xeon(R) Processor @ 2.10GHz | 1.850 s | 2.121 s [1.15] | 101.162 s [54.67] | 6.18 ms [0.00] | 0.809 s [0.44] | 0.803 s [0.43] | 52.626 s [28.44] | 4.70 ms [0.00] | 1249.2 | 649.8 | 0.53 M | 1.02 M | no |
 
 ## JC golden suite (`pytest -m jc_slow --durations=0`)
 
