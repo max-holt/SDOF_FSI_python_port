@@ -15,8 +15,9 @@ force, the state after each sub-step, the set-up constants) it is read through a
 ``sys.settrace`` probe on the solver's frame, exactly as ``tests/test_quirks.py`` does;
 ``legacy_port.py`` is not instrumented or modified.
 
-The tolerance is ``RTOL = 1e-12`` relative (``atol = 0``); the restructure is expected to
-be bitwise, and ``test_sweep_is_bitwise`` records that it is.
+The tolerance is ``RTOL = 1e-12`` relative (``atol = 0``) and is the contract; the
+restructure is expected to be bitwise, which NOTES.md records as the measured result (not
+pinned here, so that a later JIT stage is judged against the tolerance).
 """
 
 from __future__ import annotations
