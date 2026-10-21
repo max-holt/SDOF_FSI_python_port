@@ -56,6 +56,56 @@ Judgement calls (flag if you disagree):
 - `NoCoupling` adds `0.0` to the unbalance force and supplies `0.0` in free decay: identical to
   the literal `(forceA − forceB)` / `−R` except for the sign of an exact zero.
 
+## Stage 4.3 — scope and plan (recorded 2026-10-21 before touching `src/`)
+Owner's instruction: `pressure.py` as a standalone driver against the architecture row; differential
+against `legacy_port.get_pressure_response` on the Example-sheet case (Excel at 1e-12) and a seeded
+sweep covering port_review §4 item 1; the two half-loops' clamp asymmetry (0.9 vs 0.9·rhoC, D-6)
+stays literal. Amendments at plan approval ("go", 2026-10-21): (1) the public function is
+`pressure_response(...)` to match `response.py`; `get_pressure_response` stays as a thin alias so
+legacy-signature callers and the bench case (d) keep working; the architecture row is updated;
+(2) sweep ranges as proposed (below); (3) the VBA `min`/`max` tie semantics (`If a < b Then a Else
+b`: ties and NaN return the second argument) live in one place that survives the Stage 6 removal
+of `legacy_port.py`: a new `src/surge_sdof/_vba_semantics.py` (`vba_min`, `vba_max`), not in
+`pressure.py`; `docs/architecture.md` notes that `vba_compat.py` is frozen and `_vba_semantics.py`
+is the live home for VBA tie/NaN semantics. (The plan text itself was lost with a worker restart;
+this section is its reconstruction from the owner's amendments, the Stage 4.2 pattern and the
+Next action recorded below.)
+
+Plan (fast suite before each commit, `-m slow` before the `src/` commit):
+1. `_vba_semantics.py`: `vba_min`, `vba_max` (literal `legacy_port.min/max`). Tests: ties and NaN
+   return the second argument, `-0.0`/`0.0` tie, equality with `lp.min/max` on a seeded sweep.
+2. `pressure.py`: set-up once per run (`setup` → `PressureSetup`: `outMax`, `pipeSegQTY`
+   (`grid_size`, VBA 207, D-22 truncation), `factor`, `rhoC`, `velocityInitial`, `valveLoss`,
+   `valveDPInitial`, `pipeLoss`; `initial_column` → four contiguous arrays `p_a, v_a, p_b, v_b`
+   of length `N + 1`, VBA 222-227, and `velAtPump`), `valve_closure` (the column-major pattern
+   walk with the `jB > U2` clamp and linear interpolation, VBA 244-265, on the 0-based 2-D pattern
+   from `loads.as_history_2d`), `valve_boundary` (VBA 267-273, the fully-closed branch at
+   `closure >= 0.999999999`), `pump_boundary` (VBA 287-288), `half_step_a_from_b` (VBA 275-285,
+   clamp `0.9`) and `half_step_b_from_a` (VBA 290-300, clamp `0.9 * rhoC`): scalar loop bodies
+   over the arrays, `sysMat` as two locals, VBA operation order; `pressure_response` drives them
+   under `np.errstate(raise)` (the arrays are numpy, as in the legacy, so `rhoC = 0` and overflow
+   raise as before) and returns the 0-based `resultArray(0 To outMax)` unchanged.
+   `get_pressure_response(...)` forwards to it.
+3. Differential tests (`tests/test_differential.py`, new section): set-up constants vs the legacy
+   locals (settrace probe at the main loop), `pressure_response` vs legacy on the Example case
+   (and vs Excel at 1e-12), on a 50-case seeded sweep (`random.Random(20261019)`, rtol 1e-12,
+   bitwise expected and recorded), 1-D ≡ column, alias identity.
+   Sweep ranges: closureTime U(0.2, 3) s with 20-300 result steps (`timeStep = closureTime /
+   steps`); celerity U(900, 1500); density {850, 1000, 1100}; pressureDropFromPump 0 (1 in 5)
+   or U(0.01, 2) bar; flowRate 10^U(0.3, 3.3) m³/h (low flows make the `0.9` clamp saturate);
+   pipe ID U(50, 600) mm (`pipeArea = pi·ID²/4`); valveCv U(100, 5000); lengthToPump U(5, 2000) m
+   (long pipes trigger the `outMax` truncation); pumpRampPressure 0 (3 in 10) or U(0.5, 5) bar;
+   valve patterns of 3-40 samples, 1 column (1 in 2) or 2-3 columns (column-major), shapes
+   linear / smoothstep / early-close-then-plateau / stepped, end value exactly 1.0 (1 in 2, the
+   fully-closed branch) or U(0.3, 0.99). Asserted coverage: fully-closed steps, `outMax`
+   truncation, zero and non-zero pump ramp, zero pipe loss, 1-D and 2-D patterns, saturation of
+   the `0.9` clamp (counted through the probe); the `0.9·rhoC` clamp is expected never to
+   saturate (port_review §1.4) and the count is recorded, not asserted.
+4. Bench: case (h) `response_pressure_example` (`pressure.pressure_response`, digest must equal
+   (d)); README column added, earlier rows get `-`. `docs/architecture.md` (pressure and
+   `_vba_semantics` rows, interface, exactness note), DEVIATIONS D-6/D-22 Python locations.
+5. `port-reviewer` on the final diff; NOTES done section; next action.
+
 ## Stage 4.2 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction (this session): `moc.py`, `coupling.JunctionCoupling`, `response.peak_response_jc`
 built from the same `_integrate` loop as `peak_response`; approved fixes F-1 and F-2 flag-first.
