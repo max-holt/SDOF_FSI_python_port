@@ -936,3 +936,158 @@ def test_peak_response_jc_matches_excel_on_the_golden_curve(case):
         tg.RTOL["jc"],
     )
     assert res.free_decay_samples == 0
+
+
+# ------------------------------------------------------------------ JC random sweep
+
+
+@dataclass
+class JcSweepCase:
+    id: str
+    force: np.ndarray
+    kw: dict  # keyword arguments of get_peak_response_jc / peak_response_jc (gap engaged)
+    history_type: int
+    x_max_free: float
+    pipe_seg_qty: int
+    pivot_seg_qty: int
+    fallback: bool  # the span is too short for the MoC grid
+    k_exit: int  # the VBA k of the last phase-1 sub-step
+    parity_continuous: bool  # the literal per-phase index alternates across phase 1 -> 2
+
+
+def _draw_jc_case(rng):
+    """One draw of the JC sweep; None when the grid would hit D-4 (``pivotSegQTY = 4``,
+    division by zero in both solvers)."""
+    step_qty = rng.choice([2, 7, 40])
+    sample_freq = rng.uniform(50.0, 300.0)
+    dt = 1 / (sample_freq * step_qty)
+    nat_freq = rng.uniform(0.005, 0.03) * sample_freq * step_qty / (2 * np.pi)
+    celerity = rng.uniform(300.0, 1500.0)
+    # span in half-cells of the MoC grid (cell = 2 c dt): 1-12 keeps the grid at 20-45
+    # cells; about one case in seven is shorter than half a cell and takes the fallback
+    short = rng.random() < 0.15
+    n_half = rng.uniform(0.05, 0.45) if short else rng.uniform(1.0, 12.0)
+    physical_length = n_half * 4 * celerity * dt
+    fluid_area = rng.choice([0.0, 0.01, 0.05])
+    fluid_densty = 1000.0
+    mass_per_unit_len = rng.uniform(60.0, 150.0)  # > fluidDensty * fluidArea: rigid mass > 0
+    flexural_rigidity_ei = rng.uniform(1e4, 1e6)
+    damping_percent = rng.uniform(0.5, 5.0)
+    dynamic_fric = rng.choice([0.0, 0.005, 0.1])
+    restrain_freq_ratio = rng.uniform(0.5, 4.0)
+    h = structure.solve_portal_height(
+        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+    )
+    pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, h, celerity, dt)
+    if pivot_seg_qty == 4:
+        return None
+    cols = rng.choice([1, 2, 3])
+    n = int(min(max(rng.uniform(1.0, 4.0) * sample_freq / nat_freq, 18), 120))
+    n -= n % cols
+    stiffness_approx = (2 * np.pi * nat_freq) ** 2 * physical_length * mass_per_unit_len
+    amplitude = rng.uniform(0.05, 1.0) * stiffness_approx
+    flat = np.array(_piecewise_levels(rng, n, amplitude))
+    force = flat if cols == 1 else flat.reshape(n // cols, cols, order="F")
+    kw = dict(
+        step_qty=step_qty,
+        sample_freq=sample_freq,
+        physical_length=physical_length,
+        flexural_rigidity_ei=flexural_rigidity_ei,
+        celerity=celerity,
+        mass_per_unit_len=mass_per_unit_len,
+        fluid_densty=fluid_densty,
+        fluid_area=fluid_area,
+        damping_percent=damping_percent,
+        dynamic_fric=dynamic_fric,
+        nat_freq=nat_freq,
+        restrain_freq_ratio=restrain_freq_ratio,
+    )
+    return force, kw, rng.choice([1, 2, 3]), pipe_seg_qty, pivot_seg_qty
+
+
+def _make_jc_case(rng, idx) -> JcSweepCase:
+    while True:
+        drawn = _draw_jc_case(rng)
+        if drawn is not None:
+            break
+    force, kw, history_type, pipe_seg_qty, pivot_seg_qty = drawn
+    x_max_free = float(lp.get_peak_response_jc(force, **kw, gap=1e9, output_type=0)[1])
+    kw["gap"] = rng.uniform(0.1, 0.5) * x_max_free
+    samples = list(
+        loads.unbalance_force(
+            force, kw["sample_freq"], kw["physical_length"], kw["celerity"], kw["step_qty"]
+        )
+    )
+    k_exit = len(samples[len(samples) - int(np.size(force)) - 1]) - 1
+    s = kw["step_qty"]
+    return JcSweepCase(
+        id=f"j{idx:02d}_q{s}_A{kw['fluid_area']}_N{pipe_seg_qty}",
+        force=force,
+        kw=kw,
+        history_type=history_type,
+        x_max_free=x_max_free,
+        pipe_seg_qty=pipe_seg_qty,
+        pivot_seg_qty=pivot_seg_qty,
+        fallback=moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty),
+        k_exit=k_exit,
+        # phase 2 restarts at index totInd * s after phase 1 ended at (totInd - 1) * s +
+        # k_exit: continuous iff s - 1 - k_exit is even (port_review §2.5)
+        parity_continuous=(s - 1 - k_exit) % 2 == 0,
+    )
+
+
+@functools.cache
+def jc_sweep_cases() -> tuple[JcSweepCase, ...]:
+    rng = random.Random(SEED)
+    return tuple(_make_jc_case(rng, i) for i in range(N_CASES))
+
+
+JC_SWEEP_IDS = [c.id for c in jc_sweep_cases()]
+
+
+@functools.cache
+def jc_sweep_results(idx):
+    """``peak_response_jc`` (legacy flags) for output type 0 and the case's history
+    type, checked against the legacy solver."""
+    case = jc_sweep_cases()[idx]
+    return _check_peak_response_jc(case.force, case.kw, (0, case.history_type))
+
+
+def test_jc_sweep_covers_the_oracle_blind_spots():
+    cases = jc_sweep_cases()
+    assert len(cases) == N_CASES
+    assert {c.kw["step_qty"] for c in cases} == {2, 7, 40}
+    assert {c.kw["fluid_area"] for c in cases} == {0.0, 0.01, 0.05}
+    assert all(c.kw["fluid_densty"] == 1000.0 for c in cases)
+    assert {c.kw["dynamic_fric"] for c in cases} == {0.0, 0.005, 0.1}
+    assert {np.ndim(c.force) for c in cases} == {1, 2}
+    assert {c.force.shape[1] for c in cases if c.force.ndim == 2} == {2, 3}
+    assert {c.history_type for c in cases} == {1, 2, 3}
+    assert all(0.5 <= c.kw["restrain_freq_ratio"] <= 4.0 for c in cases)
+    assert all(c.kw["restrain_freq_ratio"] != 1.0 for c in cases)
+    assert all(0.1 * c.x_max_free <= c.kw["gap"] <= 0.5 * c.x_max_free for c in cases)
+    assert all(c.pivot_seg_qty >= 5 for c in cases)
+    moc_cases = [c for c in cases if not c.fallback]
+    assert 1 <= len(cases) - len(moc_cases) <= 15, "expected a few short-pipe fallbacks"
+    assert max(c.pipe_seg_qty for c in moc_cases) <= 60  # small grids keep the suite fast
+    results = [jc_sweep_results(i)[0] for i in range(N_CASES)]
+    assert all(np.all(np.isfinite(r.summary())) for r in results)
+    phase3 = [c for c, r in zip(cases, results, strict=True) if r.free_decay_samples > 0]
+    assert any(not c.fallback for c in phase3), "no MoC sweep case enters phase 3"
+    assert any(
+        r.max_displacement > c.kw["gap"] and not c.fallback
+        for c, r in zip(cases, results, strict=True)
+    )
+    # both parity situations at the 1 -> 2 boundary occur among the MoC cases
+    assert {c.parity_continuous for c in moc_cases} == {False, True}
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
+def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
+    case = jc_sweep_cases()[idx]
+    results = jc_sweep_results(idx)
+    assert set(results) == {0, case.history_type}
+    if case.fallback:
+        lumped_kw = {k: v for k, v in case.kw.items() if not k.startswith("fluid")}
+        lumped = response.peak_response(case.force, **lumped_kw, output_type=0)
+        assert np.array_equal(results[0].summary(), lumped.summary())
