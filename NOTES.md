@@ -1,6 +1,7 @@
 # NOTES — session handoff
 
 ## Current stage
+Stage 4.3 (refactor, pressure driver) done 2026-10-21: `src/surge_sdof/pressure.py` (`pressure_response`, `get_pressure_response` alias) and `_vba_semantics.py`, differential sweep 49/50 bitwise + 1 identical raise, Example case bitwise and at 1e-12 vs Excel; see "Stage 4.3 — done" (bench row and port review recorded there).
 Stage 4.2 (refactor, JC path) done 2026-10-21: `src/surge_sdof/moc.py`, `coupling.JunctionCoupling`,
 `structure.jc_params`, `response.peak_response_jc` (shared `_integrate`), approved fixes F-1 and
 F-2 applied flag-first and flipped to the defaults (`vav_denominator="fixed"`, `parity="running"`;
@@ -105,6 +106,31 @@ Plan (fast suite before each commit, `-m slow` before the `src/` commit):
    (d)); README column added, earlier rows get `-`. `docs/architecture.md` (pressure and
    `_vba_semantics` rows, interface, exactness note), DEVIATIONS D-6/D-22 Python locations.
 5. `port-reviewer` on the final diff; NOTES done section; next action.
+
+## Stage 4.3 — done (2026-10-21)
+Commits `bbc8f6a` (scope), `5df78fd` (`pressure.py`, `_vba_semantics.py`, tests), `6fa4595` (docs, bench
+case (h)). `legacy_port.py`, `vba_compat.py`, `tests/fixtures/`, `legacy/` untouched.
+- `pressure.pressure_response(...)`: the valve/pump MoC driver from the Stage 4 layout; `get_pressure_response`
+  is a thin legacy-signature alias (bench case (d) and any legacy caller keep working). D-6 clamp asymmetry
+  and D-22 truncation kept literal. `_vba_semantics.vba_min/vba_max` hold the VBA tie rule (second argument on
+  ties and NaN) in one place that survives the Stage 6 removal of `legacy_port.py`.
+- Differential results (`tests/test_differential.py`, pressure section, 50 seeded cases + Example): set-up
+  constants identical to the legacy locals in all 50 cases; `pressure_response` **bitwise identical** to
+  `legacy_port.get_pressure_response` in 49 of 50 sweep cases and on the Example case (which also matches
+  Excel at 1e-12); the 50th case (`p24_c2_smooth_closed`) overflows inside the legacy MoC (`FloatingPointError`
+  under `np.errstate(raise)`, second half-loop) and the refactor raises the same exception, asserted as such.
+  Sweep coverage: 20 cases take the fully-closed valve branch, 10 hit the `outMax` pipe truncation, 12 have
+  zero pump ramp, 9 zero pipe loss, patterns with 1-3 columns. Lumped golden gate (`-m slow`) run before the
+  `src/` commit: 75 pass. Fast suite 732 passed (≈ 33 s).
+- Finding (recorded in DEVIATIONS D-6): **both** friction clamps saturate in the sweep. The `0.9` clamp bites
+  at low flow (12 cases, 8141 cell updates). The `0.9·rhoC` clamp, which port_review §1.4 expected to be
+  effectively absent, bites in 2 cases (1095 cell updates): the loss term is `|v|·pipeLoss / (rhoC·velInitLocal²)`
+  and `velInitLocal = (1 + 2i)·pipeLoss/rhoC + velocityInitial` passes through zero along the pipe when the
+  pressure drop is large relative to the flow, making the friction term singular there. A modelling quirk of
+  the VBA (preserved); worth raising with the lead author alongside D-17/D-18.
+- Judgement calls: the sweep's one overflowing case is kept as a "raises identically" differential rather than
+  tuned away; `pressure_response` returns the plain 0-based array (no dataclass) because the legacy result was
+  already 0-based and the bench/golden consumers index it directly.
 
 ## Stage 4.2 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction (this session): `moc.py`, `coupling.JunctionCoupling`, `response.peak_response_jc`
