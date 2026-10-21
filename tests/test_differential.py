@@ -32,8 +32,8 @@ import numpy as np
 import pytest
 import test_golden as tg
 
+from surge_sdof import coupling, loads, moc, response, structure
 from surge_sdof import legacy_port as lp
-from surge_sdof import loads, moc, response, structure
 
 SEED = 20261019
 N_CASES = 50
@@ -754,3 +754,53 @@ def test_moc_step_fixed_vav_divisor_changes_the_mean_velocity_only():
     # the first even step from rest: vAv = 0 both ways, no difference yet
     assert legacy[first_even][4] == fixed[first_even][4]
     assert any(a[4] != b[4] for a, b in zip(legacy, fixed, strict=True))
+
+
+# ------------------------------------------------------------------ coupling.py
+
+
+@pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
+def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
+    """Drive ``JunctionCoupling`` with the legacy's per-phase parity index and its
+    pre-update state and compare ``dF`` and the column after every sub-step."""
+    _id, _force, kw = JC_SMALL[idx]
+    trace = jc_small_trace(idx)
+    su = trace.setup
+    jc = coupling.JunctionCoupling(
+        su["pipe_seg_qty"],
+        su["pivot_seg_qty"],
+        su["dt"],
+        su["rho_c"],
+        kw["fluid_area"],
+        su["dacay_factor"],
+        vav_denominator="legacy",
+    )
+    assert jc.rho_c == kw["fluid_densty"] * kw["celerity"]
+    d_fs = []
+    for s in trace.substeps:
+        d_f = jc.coupling_force(tuple(float(q) for q in s.pre), s.legacy_index)
+        assert type(d_f) is float
+        d_fs.append(d_f)
+        p_a, v_a, p_b, v_b = jc.column()
+        assert_close(p_a, s.array_a[0])
+        assert_close(v_a, s.array_a[1])
+        assert_close(p_b, s.array_b[0])
+        assert_close(v_b, s.array_b[1])
+    assert_close(d_fs, [s.d_f for s in trace.substeps])
+    assert jc.d_f == d_fs[-1]
+
+
+def test_junction_coupling_without_fluid_area_returns_exact_zero():
+    _id, _force, kw = JC_SMALL[0]
+    su = jc_small_trace(0).setup
+    jc = coupling.JunctionCoupling(
+        su["pipe_seg_qty"], su["pivot_seg_qty"], su["dt"], su["rho_c"], 0.0, su["dacay_factor"]
+    )
+    for n in range(50):
+        d_f = jc.coupling_force((0.0, 0.0, 3.0), n)
+        assert d_f == 0.0 and not np.signbit(d_f)
+    assert np.any(jc.column()[1] != 0.0)  # the column still moves with the mass
+
+
+def test_no_coupling_is_unchanged():
+    assert coupling.NoCoupling().coupling_force((1.0, 2.0, 3.0), 7) == 0.0
