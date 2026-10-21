@@ -39,6 +39,7 @@ __all__ = [
     "solve_poly",
     "solve_portal_height",
     "lumped_params",
+    "jc_params",
     "effective_displacement",
     "restoring_force",
     "step",
@@ -114,12 +115,65 @@ def lumped_params(
     restrain_freq_ratio: float,
 ) -> SdofParams:
     """Mass, stiffness, damping and friction velocity increment of the lumped proxy
-    (``GetPeakResponse``; the JC variant removes the core fluid and is a separate
-    function in a later session)."""
+    (``GetPeakResponse``; the JC variant removes the core fluid: ``jc_params``)."""
     mass = (physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len
     stiffness = ((nat_freq * 2 * VBA_PI) ** 2) * mass
     damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / 100
     fric_acc = 0.5 * dynamic_fric * 9.81 * dt
+    return SdofParams(
+        float(mass),
+        float(stiffness),
+        float(damping),
+        float(fric_acc),
+        float(gap),
+        float(restrain_freq_ratio) ** 2,
+    )
+
+
+# VBA lines 726-729 (GetPeakResponseJC)
+def jc_params(
+    physical_length: float,
+    portal_frame_height: float,
+    mass_per_unit_len: float,
+    fluid_densty: float,
+    fluid_area: float,
+    damping_percent: float,
+    dynamic_fric: float,
+    nat_freq: float,
+    dt: float,
+    gap: float,
+    restrain_freq_ratio: float,
+) -> SdofParams:
+    """The junction-coupling proxy (``GetPeakResponseJC``): the core fluid is removed from
+    the mass (rigid mass only) while stiffness, critical damping and the friction
+    velocity increment are scaled on the total mass, as the VBA does. The expressions keep
+    the VBA's left-to-right association, which differs from ``lumped_params`` (there
+    ``stiffness = w2 * mass``; here ``w2 * (L + h * 4 / 3) * m'``)."""
+    mass = (portal_frame_height * 4 / 3) * mass_per_unit_len + physical_length * (
+        mass_per_unit_len - fluid_densty * fluid_area
+    )  # remove core fluid to get rigid mass
+    stiffness = (
+        ((nat_freq * 2 * VBA_PI) ** 2)
+        * (physical_length + portal_frame_height * 4 / 3)
+        * mass_per_unit_len
+    )  # assume total mass has same bases as natural frequency (fluid is included in CAESAR)
+    damping = (
+        2
+        * (
+            (stiffness * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len))
+            ** 0.5
+        )
+        * damping_percent
+        / 100
+    )  # assume critical damping is relative to total mass
+    fric_acc = (
+        0.5
+        * dynamic_fric
+        * 9.81
+        * dt
+        * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len)
+        / mass
+    )  # mass correction from frictional to inertial
     return SdofParams(
         float(mass),
         float(stiffness),

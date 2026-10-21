@@ -4,9 +4,18 @@
 line 309) from the Stage 4 modules: ``structure`` (portal-frame proxy, SDOF kernel),
 ``loads`` (unbalance force schedule) and ``coupling`` (``NoCoupling``). Set-up is done
 here per solver; the sample loop, max trackers, result history, free-decay phase and
-output-type switch live in one shared ``_integrate``. ``peak_response_jc`` (a later
-session) does its own fluid-corrected set-up and passes the JC coupling to the same loop;
-the two set-ups are not merged.
+output-type switch live in one shared ``_integrate``. ``peak_response_jc`` reproduces
+``GetPeakResponseJC`` (line 622): its own fluid-corrected set-up (``structure.jc_params``,
+``moc.grid_size``, the short-pipe fallback to ``peak_response``) and the
+``JunctionCoupling`` passed to the same loop; the two set-ups are not merged.
+
+Approved fixes F-1 and F-2 (NOTES.md) are keyword flags of ``peak_response_jc``:
+``vav_denominator`` ("legacy": ``vAv`` divided by ``2N - 1``, D-17; "fixed": by the
+``2N + 1`` terms summed) and ``parity`` ("per_phase": the VBA index
+``k + (totInd - 1) * stepQTY`` with each phase's own ``k`` range, D-19; "running": one
+running sub-step counter for the whole run, so the even/odd alternation never
+double-steps a half-grid at a phase boundary). The parity flag is applied by
+``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
 
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
@@ -20,6 +29,14 @@ Differences from ``legacy_port.get_peak_response`` (all proved value-identical b
   a complex portal-frame height (``EI < 0``, D-12) raises ``TypeError`` at the set-up.
 * Phase 3 computes ``0.0 - R`` where the VBA has ``-R``: identical except for the sign of
   an exact zero.
+
+Differences of ``peak_response_jc`` from ``legacy_port.get_peak_response_jc`` (proved
+value-identical with the legacy flags by ``tests/test_differential.py``): the same
+return type and float state; the MoC arrays are numpy, so the loop runs under
+``np.errstate(raise)`` and ``rhoC = 0`` or an overflow in the fluid raises
+``FloatingPointError`` mid-run as the legacy did (D-9: nothing is swallowed); a
+``pivotSegQTY`` of 4 raises ``ZeroDivisionError`` at the set-up (D-4) rather than in the
+first MoC update.
 """
 
 from __future__ import annotations
@@ -29,12 +46,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from surge_sdof import loads, structure
-from surge_sdof.coupling import Coupling, NoCoupling
+from surge_sdof import loads, moc, structure
+from surge_sdof.coupling import Coupling, JunctionCoupling, NoCoupling
 from surge_sdof.structure import SdofParams, step
 from surge_sdof.vba_compat import clng
 
-__all__ = ["PeakResponse", "peak_response"]
+__all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
 
 
 @dataclass(frozen=True)
@@ -122,6 +139,111 @@ def peak_response(
     return _integrate(forces, params, dt, step_qty, NoCoupling(), out_max, output_type)
 
 
+def peak_response_jc(
+    force_history,
+    step_qty: int,
+    sample_freq: float,
+    physical_length: float,
+    flexural_rigidity_ei: float,
+    celerity: float,
+    mass_per_unit_len: float,
+    fluid_densty: float,
+    fluid_area: float,
+    damping_percent: float,
+    dynamic_fric: float,
+    nat_freq: float,
+    restrain_freq_ratio: float = 1,
+    gap: float = 0,
+    output_type: int = 0,
+    *,
+    vav_denominator: str = "legacy",
+    parity: str = "per_phase",
+) -> PeakResponse:
+    """Peak displacement response with junction-coupling FSI (``GetPeakResponseJC``).
+
+    Parameters as ``peak_response`` plus ``fluid_densty`` and ``fluid_area`` (the
+    internal cross-section; the core fluid is removed from the rigid mass and a 1-D MoC
+    column inside the span feeds the pressure-difference force ``dF`` back). Spans too
+    short for the MoC grid fall back to ``peak_response`` with the same arguments.
+    ``vav_denominator`` ("legacy" | "fixed") and ``parity`` ("per_phase" | "running")
+    select the approved fixes F-1 and F-2 (module docstring).
+    """
+    if parity not in ("per_phase", "running"):
+        raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")
+    step_qty = int(step_qty)
+    sample_freq = float(sample_freq)
+    physical_length = float(physical_length)
+    flexural_rigidity_ei = float(flexural_rigidity_ei)
+    celerity = float(celerity)
+    mass_per_unit_len = float(mass_per_unit_len)
+    fluid_densty = float(fluid_densty)
+    fluid_area = float(fluid_area)
+    output_type = int(output_type)
+
+    history = loads.as_history_2d(force_history)
+    unb = loads.transit_delay(physical_length, celerity, sample_freq)
+    out_max = history.shape[0] * history.shape[1] + clng(unb)  # VBA line 714
+    dt = 1 / (sample_freq * step_qty)
+
+    h = structure.solve_portal_height(
+        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+    )
+    # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
+    params = structure.jc_params(
+        physical_length,
+        h,
+        mass_per_unit_len,
+        fluid_densty,
+        fluid_area,
+        damping_percent,
+        dynamic_fric,
+        nat_freq,
+        dt,
+        gap,
+        restrain_freq_ratio,
+    )
+    decay = moc.decay_factor(celerity, dt, physical_length)
+    pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, h, celerity, dt)
+    if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
+        # insufficient length, use lumped mass (VBA 736-740)
+        return peak_response(
+            force_history,
+            step_qty,
+            sample_freq,
+            physical_length,
+            flexural_rigidity_ei,
+            celerity,
+            mass_per_unit_len,
+            damping_percent,
+            dynamic_fric,
+            nat_freq,
+            restrain_freq_ratio,
+            gap,
+            output_type,
+        )
+    junction = JunctionCoupling(
+        pipe_seg_qty,
+        pivot_seg_qty,
+        dt,
+        fluid_densty * celerity,
+        fluid_area,
+        decay,
+        vav_denominator,
+    )
+    forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
+    with np.errstate(divide="raise", invalid="raise", over="raise"):
+        return _integrate(
+            forces,
+            params,
+            dt,
+            step_qty,
+            junction,
+            out_max,
+            output_type,
+            legacy_parity=(parity == "per_phase"),
+        )
+
+
 def _decay_test(x: float, x_zero: float) -> float:
     """``x * xZero`` of the free-decay test; VBA raises error 6 if the product
     overflows (the numpy state of the legacy port did the same), so this does too."""
@@ -139,24 +261,33 @@ def _integrate(
     coupling: Coupling,
     out_max: int,
     output_type: int,
+    legacy_parity: bool = False,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: phases 1-2 driven by ``forces``
     (one list of per-sub-step unbalance values per sample), then free decay while
-    ``x * xZero > 0.01``; max trackers; result history per sample."""
+    ``x * xZero > 0.01``; max trackers; result history per sample.
+
+    ``step_index`` passed to the coupling is the running sub-step counter ``n`` (0 at the
+    first sub-step), or with ``legacy_parity`` the VBA per-phase index
+    ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
+    with ``off`` fixed per sample (D-19, approved fix F-2)."""
     dt = float(dt)
     coupling_force = coupling.coupling_force
     x = v = a = 0.0
     x_max = v_max = a_max = f_max = 0.0
     state = (x, v, a)
-    n = 0  # running sub-step counter (step_index of the coupling)
+    n = 0  # running sub-step counter
+    off = 0  # step_index = n + off
     tot_ind = 0
     history = np.zeros(out_max * 2) if output_type > 0 else None
 
     # ------------------------------------------------- phases 1-2: forced response
     for sample in forces:
         tot_ind += 1
+        if legacy_parity:
+            off = (tot_ind - 1) * step_qty - n
         for f in sample:
-            state = step(state, coupling_force(state, n) + f, params, dt)
+            state = step(state, coupling_force(state, n + off) + f, params, dt)
             n += 1
             x, v, a = state
             if abs(a) > a_max:
@@ -180,8 +311,10 @@ def _integrate(
     x_zero = x
     while _decay_test(x, x_zero) > 0.01:
         tot_ind += 1
+        if legacy_parity:
+            off = (tot_ind - 1) * step_qty + 1 - n
         for _k in range(step_qty):
-            state = step(state, coupling_force(state, n), params, dt)
+            state = step(state, coupling_force(state, n + off), params, dt)
             n += 1
             x, v, a = state
             if abs(a) > a_max:

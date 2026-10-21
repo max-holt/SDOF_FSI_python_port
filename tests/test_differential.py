@@ -804,3 +804,135 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
 
 def test_no_coupling_is_unchanged():
     assert coupling.NoCoupling().coupling_force((1.0, 2.0, 3.0), 7) == 0.0
+
+
+# ------------------------------------------------------------------ response.py (JC)
+
+LEGACY_FLAGS = dict(vav_denominator="legacy", parity="per_phase")
+
+
+@pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
+def test_jc_params_match_legacy(idx):
+    _id, _force, kw = JC_SMALL[idx]
+    su = jc_small_trace(idx).setup
+    p = structure.jc_params(
+        kw["physical_length"],
+        su["portal_frame_height"],
+        kw["mass_per_unit_len"],
+        kw["fluid_densty"],
+        kw["fluid_area"],
+        kw["damping_percent"],
+        kw["dynamic_fric"],
+        kw["nat_freq"],
+        su["dt"],
+        kw.get("gap", 0.0),
+        kw.get("restrain_freq_ratio", 1.0),
+    )
+    assert (p.mass, p.stiffness, p.damping, p.fric_acc) == (
+        su["mass"],
+        su["stiffness"],
+        su["damping"],
+        su["fric_acc"],
+    )
+    assert all(type(v) is float for v in p)
+
+
+def _check_peak_response_jc(force, kw, output_types, flags=LEGACY_FLAGS):
+    """``peak_response_jc`` (with ``flags``) against ``get_peak_response_jc`` per output type."""
+    results = {}
+    for output_type in output_types:
+        legacy = lp.get_peak_response_jc(force, **kw, output_type=output_type)
+        res = response.peak_response_jc(force, **kw, output_type=output_type, **flags)
+        assert isinstance(res, response.PeakResponse)
+        assert res.output_type == output_type
+        if output_type == 0:
+            assert res.history is None
+            assert legacy.shape == (5,)
+            assert_close(res.summary(), legacy)
+            assert all(type(getattr(res, f)) is float for f in SUMMARY_FIELDS)
+        else:
+            assert res.history is not None
+            assert res.history.shape == (legacy.shape[0] - 1,)
+            assert_close(res.history, legacy[1:])
+        results[output_type] = res
+    return results
+
+
+@pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
+def test_peak_response_jc_matches_legacy_on_the_small_cases(idx):
+    _id, force, kw = JC_SMALL[idx]
+    trace = jc_small_trace(idx)
+    results = _check_peak_response_jc(force, kw, (0, 1, 2, 3))
+    free = {s.tot_ind for s in trace.substeps if s.free_decay}
+    assert all(r.free_decay_samples == len(free) for r in results.values())
+
+
+def test_peak_response_jc_matches_excel_on_the_example_case():
+    case, force, kw = _example_jc()
+    res = response.peak_response_jc(force, **kw, **LEGACY_FLAGS)
+    np.testing.assert_allclose(
+        res.summary(), np.asarray(case["expected"], float), rtol=tg.EXAMPLE_RTOL, atol=0
+    )
+    assert res.free_decay_samples > 0  # the Example JC case ends with |x| > 0.1
+
+
+def test_peak_response_jc_short_pipe_falls_back_to_the_lumped_solver():
+    force = _step_force()
+    kw = dict(JC_SMALL_KW, physical_length=1.0)
+    lumped_kw = {k: v for k, v in kw.items() if not k.startswith("fluid")}
+    for output_type in (0, 1):
+        res = _check_peak_response_jc(force, kw, (output_type,))[output_type]
+        lumped = response.peak_response(force, **lumped_kw, output_type=output_type)
+        assert np.array_equal(res.summary(), lumped.summary())
+        assert res.free_decay_samples == lumped.free_decay_samples
+        if output_type == 0:
+            assert res.history is None and lumped.history is None
+        else:
+            assert np.array_equal(res.history, lumped.history)
+    # the legacy took its fallback too: no JC sub-step was traced
+    assert not trace_legacy_jc(force, **kw, output_type=0).substeps
+
+
+def test_peak_response_jc_rejects_unknown_flags():
+    _id, force, kw = JC_SMALL[0]
+    with pytest.raises(ValueError):
+        response.peak_response_jc(force, **kw, parity="phase")
+    with pytest.raises(ValueError):
+        response.peak_response_jc(force, **kw, vav_denominator="2N")
+
+
+def test_peak_response_jc_runtime_errors_are_raised():
+    # D-9 as a raise, like the legacy: D-7, rhoC = 0 (FloatingPointError from the numpy
+    # MoC arrays under errstate), D-8
+    force = _step_force()
+    with pytest.raises(ZeroDivisionError):
+        response.peak_response_jc(force, **dict(JC_SMALL_KW, step_qty=1))
+    with pytest.raises(FloatingPointError):
+        response.peak_response_jc(force, **dict(JC_SMALL_KW, fluid_densty=0.0))
+    with pytest.raises(IndexError):
+        response.peak_response_jc(force.reshape(1, 100), **dict(JC_SMALL_KW, physical_length=12.5))
+
+
+@pytest.mark.jc_slow
+@pytest.mark.parametrize(
+    "case", [c for c in tg.CASES if c["solver"] == "jc"], ids=lambda c: c["case_id"]
+)
+def test_peak_response_jc_matches_excel_on_the_golden_curve(case):
+    """The new solver with the legacy flags against the Excel fixture at the golden
+    tolerance. The fixture is the legacy result (the literal port matched it to 8.6e-13);
+    bitwise agreement with ``legacy_port`` is established on the small grids above and in
+    the sweep, so the legacy solver is not re-run here (owner's decision, Stage 4.2)."""
+    kw = {k: v for k, v in tg.case_params(case, tg.PARAMS).items() if k != "output_type"}
+    force = tg.load_force(tg.PARAMS)
+    res = response.peak_response_jc(force, **kw, **LEGACY_FLAGS)
+    expected = [float(case[name]) for name in tg.OUTPUT_NAMES]
+    tg.check_and_cache(
+        case["case_id"] + "_response",
+        "jc",
+        f"curve_10in row {case['source_row']} via response.peak_response_jc (legacy flags)",
+        tg.OUTPUT_NAMES,
+        res.summary(),
+        expected,
+        tg.RTOL["jc"],
+    )
+    assert res.free_decay_samples == 0
