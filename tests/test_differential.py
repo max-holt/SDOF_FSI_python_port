@@ -33,7 +33,7 @@ import pytest
 import test_golden as tg
 
 from surge_sdof import legacy_port as lp
-from surge_sdof import loads, response, structure
+from surge_sdof import loads, moc, response, structure
 
 SEED = 20261019
 N_CASES = 50
@@ -503,3 +503,254 @@ def test_peak_response_raises_on_overflow():
         lp.get_peak_response(force, **kw)
     with pytest.raises(FloatingPointError):
         response.peak_response(force, **kw)
+
+
+# ================================================================== JC path (Stage 4.2)
+# Reference: ``lp.get_peak_response_jc``. The MoC arrays, ``dF`` and the acceleration the
+# MoC block consumed live only in the solver's locals and are read with the same probe
+# technique; fallback cases never reach the JC set-up line and are detected by an empty
+# trace (the lumped solver runs in its own frame, which the probe does not follow).
+
+JC_KEYS = LUMPED_KEYS[:7] + ("fluid_densty", "fluid_area") + LUMPED_KEYS[7:]
+JC_SETUP_NAMES = SETUP_NAMES + (
+    "dacay_factor",
+    "pivot_seg_qty",
+    "pipe_seg_qty",
+    "rho_c",
+    "fluid_area",
+)
+
+
+@dataclass
+class JcSubstep:
+    free_decay: bool
+    tot_ind: int
+    k: int  # the VBA loop variable (phase 3: 1 .. stepQTY)
+    f: float | None  # forceA - forceB; None in free decay
+    pre: tuple  # (x, v, a) before the SDOF update; ``a`` is what the MoC block used
+    post: tuple
+    d_f: float  # dF after this sub-step's MoC update
+    array_a: np.ndarray | None  # arrayA / arrayB after the MoC update (``arrays=True``)
+    array_b: np.ndarray | None
+
+    @property
+    def legacy_index(self) -> int:
+        """``k + (totInd - 1) * stepQTY``, the VBA parity index (D-19)."""
+        return self.k + (self.tot_ind - 1) * self.step_qty
+
+    step_qty: int = 0
+
+
+def trace_legacy_jc(force, arrays=False, **kw) -> LegacyTrace:
+    """Run ``lp.get_peak_response_jc`` under a line tracer; ``setup`` is empty and
+    ``substeps`` is empty when the short-pipe fallback was taken."""
+    func = lp.get_peak_response_jc
+    code = func.__code__
+    arm_lines = _line_numbers(func, "a_new = (")
+    record_lines = _line_numbers(func, "if abs(a) > a_max:")
+    setup_lines = _line_numbers(func, "x = 0.0")
+    (decay_line,) = _line_numbers(func, "x_zero = x")
+    step_qty = int(kw["step_qty"])
+    setup = {}
+    substeps = []
+    armed = []
+
+    def local_tracer(frame, event, arg):
+        if event != "line":
+            return local_tracer
+        ln = frame.f_lineno
+        if ln in arm_lines:
+            loc = frame.f_locals
+            free = ln > decay_line
+            armed[:] = [
+                JcSubstep(
+                    free,
+                    loc["tot_ind"],
+                    loc["k"],
+                    None if free else loc["force_a"] - loc["force_b"],
+                    (loc["x"], loc["v"], loc["a"]),
+                    (),
+                    loc["d_f"],
+                    loc["array_a"].copy() if arrays else None,
+                    loc["array_b"].copy() if arrays else None,
+                    step_qty,
+                )
+            ]
+        elif ln in record_lines and armed:
+            loc = frame.f_locals
+            s = armed[0]
+            s.post = (loc["x"], loc["v"], loc["a"])
+            substeps.append(s)
+            armed.clear()
+        elif ln in setup_lines and not setup:
+            loc = frame.f_locals
+            setup.update({n: loc[n] for n in JC_SETUP_NAMES})
+        return local_tracer
+
+    def global_tracer(frame, event, arg):
+        return local_tracer if frame.f_code is code else None
+
+    previous = sys.gettrace()
+    sys.settrace(global_tracer)
+    try:
+        result = func(force, **kw)
+    finally:
+        sys.settrace(previous)
+    assert bool(setup) == bool(substeps)
+    return LegacyTrace(setup, substeps, result)
+
+
+# Small JC cases (grids of 14-18 cells, 100 samples): the smoke-test parameters at the
+# three spans of ``test_smoke.py`` plus the Example-sheet JC case.
+JC_SMALL_KW = dict(
+    step_qty=10,
+    sample_freq=100.0,
+    physical_length=10.0,
+    flexural_rigidity_ei=2e5,
+    celerity=1000.0,
+    mass_per_unit_len=10.0,
+    damping_percent=2.0,
+    dynamic_fric=0.3,
+    nat_freq=5.0,
+    fluid_densty=1000.0,
+    fluid_area=0.005,
+)
+
+
+def _step_force(n=100, amplitude=1000.0):
+    f = np.full((n, 1), amplitude)
+    f[0, 0] = 0.0
+    return f
+
+
+def _example_jc():
+    case = next(c for c in tg.EXAMPLE_CASES if c["solver"] == "jc")
+    force = np.asarray(case["force_history"], dtype=float)
+    kw = {k: case["kwargs"][k] for k in JC_KEYS if k in case["kwargs"]}
+    return case, force, kw
+
+
+def jc_small_cases():
+    cases = [
+        (f"smoke_L{L}", _step_force(), dict(JC_SMALL_KW, physical_length=L))
+        for L in (10.0, 12.5, 7.0)
+    ]
+    _case, force, kw = _example_jc()
+    cases.append(("example_jc", force, kw))
+    return cases
+
+
+JC_SMALL = jc_small_cases()
+JC_SMALL_IDS = [c[0] for c in JC_SMALL]
+
+
+@functools.cache
+def jc_small_trace(idx) -> LegacyTrace:
+    _id, force, kw = JC_SMALL[idx]
+    return trace_legacy_jc(force, arrays=True, **kw, output_type=0)
+
+
+# ------------------------------------------------------------------ moc.py
+
+
+@pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
+def test_moc_grid_setup_matches_legacy(idx):
+    _id, _force, kw = JC_SMALL[idx]
+    su = jc_small_trace(idx).setup
+    assert su, "expected a MoC run, not the fallback"
+    grid = moc.grid_size(kw["physical_length"], su["portal_frame_height"], kw["celerity"], su["dt"])
+    assert grid == (su["pipe_seg_qty"], su["pivot_seg_qty"])
+    assert not moc.is_short_pipe(*grid)
+    assert moc.decay_factor(kw["celerity"], su["dt"], kw["physical_length"]) == su["dacay_factor"]
+    assert moc.vav_divisor(grid[0], "legacy") == 2 * grid[0] - 1
+    assert moc.vav_divisor(grid[0], "fixed") == 2 * grid[0] + 1
+    with pytest.raises(ValueError):
+        moc.vav_divisor(grid[0], "other")
+
+
+def test_interp_fractions_match_the_legacy_helpers():
+    for pipe_seg_qty in (14, 16, 18, 30, 64, 546, 666):
+        for pivot_seg_qty in (5, 6, 7, 27, 50, 87):
+            if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
+                continue
+            frac_a, frac_b = moc.interp_fractions(pipe_seg_qty, pivot_seg_qty)
+            assert frac_a.shape == (pipe_seg_qty + 1,) and frac_b.shape == (pipe_seg_qty,)
+            assert frac_a[0] == frac_a[pipe_seg_qty] == 0.0  # never read by step
+            for n in range(1, pipe_seg_qty):
+                assert frac_a[n] == lp.interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+                assert moc.interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty) == frac_a[n]
+            for n in range(0, pipe_seg_qty):
+                assert frac_b[n] == lp.interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+                assert moc.interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty) == frac_b[n]
+
+
+def test_interp_fractions_minimal_pivot_divides_by_zero_at_setup():
+    # D-4: interpFractionB(3) with pivotSegQTY = 4; the legacy raised in its first MoC
+    # update, the tabulation raises at set-up
+    with pytest.raises(ZeroDivisionError):
+        lp.interp_fraction_b(3, 4, 20)
+    with pytest.raises(ZeroDivisionError):
+        moc.interp_fractions(20, 4)
+
+
+def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
+    """Chain ``moc.step`` over the legacy's parity sequence and accelerations, starting
+    from rest, and return the per-sub-step (p_a, v_a, p_b, v_b, d_f) it produces."""
+    su = trace.setup
+    n_seg, pivot = su["pipe_seg_qty"], su["pivot_seg_qty"]
+    frac_a, frac_b = moc.interp_fractions(n_seg, pivot)
+    p_a, v_a, p_b, v_b = moc.new_column(n_seg)
+    vav_div = moc.vav_divisor(n_seg, vav_denominator)
+    dt = float(su["dt"])
+    d_f = 0.0
+    out = []
+    for s in trace.substeps:
+        even = s.legacy_index % 2 == 0
+        d_f = moc.step(
+            even,
+            float(s.pre[2]) * dt,
+            p_a,
+            v_a,
+            p_b,
+            v_b,
+            frac_a,
+            frac_b,
+            n_seg,
+            pivot,
+            float(su["rho_c"]),
+            float(su["dacay_factor"]),
+            vav_div,
+            float(su["fluid_area"]),
+            d_f,
+        )
+        out.append((p_a.copy(), v_a.copy(), p_b.copy(), v_b.copy(), float(d_f)))
+    return out
+
+
+@pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
+def test_moc_step_replays_the_legacy_moc_block(idx):
+    """Drive ``moc.step`` with the legacy solver's own parity sequence and accelerations
+    and compare the four arrays and ``dF`` after every sub-step: the chained replay
+    isolates the MoC kernel from the SDOF update and the force scheduling."""
+    trace = jc_small_trace(idx)
+    replay = _replay_moc(trace)
+    assert len(replay) == len(trace.substeps) > 0
+    for (p_a, v_a, p_b, v_b, d_f), s in zip(replay, trace.substeps, strict=True):
+        assert_close(p_a, s.array_a[0])
+        assert_close(v_a, s.array_a[1])
+        assert_close(p_b, s.array_b[0])
+        assert_close(v_b, s.array_b[1])
+        assert_close(d_f, s.d_f)
+    assert any(s.d_f != 0.0 for s in trace.substeps)
+
+
+def test_moc_step_fixed_vav_divisor_changes_the_mean_velocity_only():
+    """F-1 behind the flag: with 2N + 1 the replay differs from the legacy, and the
+    difference is confined to what vAv touches (every velocity on an even step)."""
+    trace = jc_small_trace(0)
+    legacy = _replay_moc(trace, "legacy")
+    fixed = _replay_moc(trace, "fixed")
+    first_even = next(i for i, s in enumerate(trace.substeps) if s.legacy_index % 2 == 0)
+    # the first even step from rest: vAv = 0 both ways, no difference yet
+    assert legacy[first_even][4] == fixed[first_even][4]
+    assert any(a[4] != b[4] for a, b in zip(legacy, fixed, strict=True))
