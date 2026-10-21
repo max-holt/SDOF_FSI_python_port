@@ -32,7 +32,7 @@ import pytest
 import test_golden as tg
 
 from surge_sdof import legacy_port as lp
-from surge_sdof import loads, structure
+from surge_sdof import loads, response, structure
 
 SEED = 20261019
 N_CASES = 50
@@ -406,3 +406,99 @@ def test_unbalance_force_single_row_history_raises_index_error():
         list(loads.unbalance_force(force, 100.0, 100.0, 1000.0, 10))
     with pytest.raises(IndexError):
         lp.get_peak_response(force, 10, 100.0, 100.0, 2e5, 1000.0, 10.0, 2.0, 0.3, 5.0)
+
+
+# ------------------------------------------------------------------ response.py
+
+
+def _check_peak_response(force, kw, output_types):
+    """``peak_response`` against ``get_peak_response`` for each output type."""
+    results = {}
+    for output_type in output_types:
+        legacy = lp.get_peak_response(force, **kw, output_type=output_type)
+        res = response.peak_response(force, **kw, output_type=output_type)
+        assert isinstance(res, response.PeakResponse)
+        assert res.output_type == output_type
+        if output_type == 0:
+            assert res.history is None
+            assert legacy.shape == (5,)
+            assert_close(res.summary(), legacy)
+        else:
+            assert res.history is not None
+            assert res.history.shape == (legacy.shape[0] - 1,)
+            assert_close(res.history, legacy[1:])
+        results[output_type] = res
+    return results
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=SWEEP_IDS)
+def test_peak_response_matches_legacy_on_the_sweep(idx):
+    case, trace = sweep_cases()[idx], sweep_trace(idx)
+    results = _check_peak_response(case.force, case.kw, (0, case.history_type))
+    free = {s.tot_ind for s in trace.substeps if s.free_decay}
+    for res in results.values():
+        assert res.free_decay_samples == len(free)
+        assert all(type(getattr(res, f)) is float for f in SUMMARY_FIELDS)
+
+
+def test_sweep_enters_free_decay_and_engages_the_gap():
+    cases = sweep_cases()
+    results = [response.peak_response(c.force, **c.kw) for c in cases]
+    assert sum(r.free_decay_samples > 0 for r in results) >= 1
+    assert sum(r.max_displacement > c.kw["gap"] for r, c in zip(results, cases, strict=True)) >= 1
+    # and the gap matters: the clamped case differs from the gap-free run
+    assert any(r.max_displacement != c.x_max_free for r, c in zip(results, cases, strict=True))
+
+
+def _example_lumped():
+    case = next(c for c in tg.EXAMPLE_CASES if c["solver"] == "lumped")
+    force = np.asarray(case["force_history"], dtype=float)
+    kw = {k: case["kwargs"][k] for k in LUMPED_KEYS if k in case["kwargs"]}
+    return case, force, kw
+
+
+def test_peak_response_matches_legacy_on_the_example_case():
+    case, force, kw = _example_lumped()
+    results = _check_peak_response(force, kw, (0, 1, 2, 3))
+    np.testing.assert_allclose(
+        results[0].summary(), np.asarray(case["expected"], float), rtol=tg.EXAMPLE_RTOL, atol=0
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "case", [c for c in tg.CASES if c["solver"] == "lumped"], ids=lambda c: c["case_id"]
+)
+def test_peak_response_matches_legacy_on_the_golden_curve(case):
+    kw = {k: v for k, v in tg.case_params(case, tg.PARAMS).items() if k != "output_type"}
+    force = tg.load_force(tg.PARAMS)
+    results = _check_peak_response(force, kw, (0,))
+    expected = [float(case[name]) for name in tg.OUTPUT_NAMES]
+    np.testing.assert_allclose(results[0].summary(), expected, rtol=tg.RTOL["lumped"], atol=0)
+
+
+def test_peak_response_1d_history_equals_its_column():
+    case, force, kw = _example_lumped()
+    a = response.peak_response(force[:, 0], **kw)
+    b = response.peak_response(force, **kw)
+    assert a == b or np.array_equal(a.summary(), b.summary())
+
+
+def test_peak_response_raises_on_overflow():
+    # D-23. (a) x ~ 1e301 at the end of the forced phase: the free-decay test x * xZero
+    # overflows; the legacy numpy state raises there and so does peak_response.
+    _case, _force, kw = _example_lumped()
+    force = np.array([0.0, 1e308, -1e308, 1e308, -1e308, 0.0, 0.0, 0.0, 0.0, 0.0])
+    with pytest.raises(FloatingPointError):
+        lp.get_peak_response(force, **kw)
+    with pytest.raises(FloatingPointError):
+        response.peak_response(force, **kw)
+    # (b) stiffness = inf (pure-Python set-up overflow, D-14): the legacy raises at the
+    # first invalid 0 * inf in the restoring term; the Python-float state carries the
+    # nan to the end and peak_response raises there.
+    _case, force, kw = _example_lumped()
+    kw = dict(kw, nat_freq=1e150)
+    with pytest.raises(FloatingPointError):
+        lp.get_peak_response(force, **kw)
+    with pytest.raises(FloatingPointError):
+        response.peak_response(force, **kw)
