@@ -17,10 +17,12 @@ Relative tolerance per solver, ``|py - xl| <= RTOL * |xl|`` for each of the five
   per-case maximum 1.0e-13, max applied force exact in every case. The ~6x margin covers
   last-bit differences between the C ``pow`` behind Python's ``**`` and Excel's runtime,
   accumulated over the ~1e6-step integration. Run time 3 min 34 s for the 75 cases.
-* ``jc`` (``GetPeakResponseJC``): RTOL = 1e-12, **unmeasured**. The JC cases (~5.5e8-6.7e8
-  MoC cell updates each) have never been run; their first full run is a Stage 5
-  deliverable. This value may be relaxed only with evidence from an actual run, recorded
-  here and in NOTES.md; never to make a run pass without that evidence.
+* ``jc`` (``GetPeakResponseJC``): RTOL = 5e-12. Measured on 2026-10-21 over all 3 cases
+  (15 outputs, pure Python, first full run): max relative error 8.6e-13 (row 96, max
+  velocity; row 97 2.1e-14, row 98 8.4e-15), max applied force exact in every case. All
+  three passed at the provisional 1e-12; the tolerance is set by the lumped rule
+  (5x the worst, rounded up to one significant figure). Run time 1 h 20 min
+  (1827 s, 1565 s, 1411 s).
 
 Markers
 -------
@@ -43,7 +45,7 @@ from surge_sdof import legacy_port as lp
 
 RTOL = {
     "lumped": 5e-12,  # measured: worst 8.3e-13 over 75 cases
-    "jc": 1e-12,  # unmeasured; relax only with evidence from an actual JC run
+    "jc": 5e-12,  # measured: worst 8.6e-13 over 3 cases (2026-10-21)
 }
 
 CURVE_DIR = Path(__file__).parent / "fixtures" / "curve_10in"
