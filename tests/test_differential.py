@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import math
 import random
 import sys
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ import numpy as np
 import pytest
 import test_golden as tg
 
-from surge_sdof import coupling, loads, moc, response, structure
+from surge_sdof import _vba_semantics, coupling, loads, moc, pressure, response, structure
 from surge_sdof import legacy_port as lp
 
 SEED = 20261019
@@ -1249,3 +1250,294 @@ def test_fixed_flags_change_only_where_expected(idx):
     assert _max_rel_change(f2, base) < 2e-2
     assert _max_rel_change(both, base) < 2e-2
     assert np.array_equal(f1, base) or case.kw["fluid_area"] > 0.0
+
+
+# ------------------------------------------------------------------ _vba_semantics.py
+
+
+def test_vba_min_max_return_the_second_argument_on_ties_and_nan():
+    nan = float("nan")
+    vmin, vmax = _vba_semantics.vba_min, _vba_semantics.vba_max
+    assert vmin(1.0, 1.0) == 1.0
+    # ties: the second argument, with its sign of zero and its type
+    assert math.copysign(1, vmax(0, -0.0)) == -1 and type(vmax(0, -0.0)) is float
+    assert math.copysign(1, vmin(0.0, -0.0)) == -1
+    assert vmax(0, -1.5) == 0 and type(vmax(0, -1.5)) is int
+    assert vmax(0, 1.5) == 1.5
+    # NaN: every comparison is false, so again the second argument
+    assert math.isnan(vmin(1.0, nan)) and math.isnan(vmax(1.0, nan))
+    assert vmin(nan, 1.0) == 1.0 and vmax(nan, 1.0) == 1.0
+    # Python's built-ins return the first argument in all these cases
+    assert math.isnan(min(nan, 1.0)) and math.copysign(1, max(0.0, -0.0)) == 1
+
+
+def test_vba_min_max_are_the_legacy_helpers():
+    rng = random.Random(SEED)
+    for _ in range(2000):
+        a = rng.choice([rng.uniform(-10, 10), rng.randint(-3, 3), 0, -0.0, 0.0])
+        b = rng.choice([rng.uniform(-10, 10), rng.randint(-3, 3), 0, -0.0, 0.0, a])
+        for ours, theirs in ((_vba_semantics.vba_min, lp.min), (_vba_semantics.vba_max, lp.max)):
+            x, y = ours(a, b), theirs(a, b)
+            assert x == y and type(x) is type(y) and math.copysign(1, x) == math.copysign(1, y)
+
+
+# ------------------------------------------------------------------ pressure.py
+
+
+PRESSURE_SETUP_NAMES = (
+    "out_max",
+    "pipe_seg_qty",
+    "factor",
+    "rho_c",
+    "velocity_initial",
+    "valve_loss",
+    "valve_dp_initial",
+    "pipe_loss",
+    "vel_at_pump",
+)
+
+
+@dataclass
+class PressureTrace:
+    setup: dict
+    closed_steps: int  # loop iterations that took the fully-closed valve branch
+    clamp_a_saturated: int  # first half-loop cell updates where the 0.9 clamp bit
+    clamp_b_saturated: int  # second half-loop cell updates where the 0.9 * rhoC clamp bit
+    cell_updates: int
+    result: np.ndarray | None  # None when the legacy raised (``error`` holds the exception)
+    error: BaseException | None = None
+
+
+def trace_legacy_pressure(pattern, **kw) -> PressureTrace:
+    """Run ``lp.get_pressure_response`` under a line tracer: set-up constants at the main
+    loop, the fully-closed branch count and the friction-clamp saturation counts."""
+    func = lp.get_pressure_response
+    code = func.__code__
+    (setup_line,) = _line_numbers(func, "for tot_ind in range(0, out_max + 1):")
+    (closed_line,) = _line_numbers(func, "array_a[1, 0] = 0")
+    (a_line,) = _line_numbers(
+        func, "sys_mat[0] = -loss - array_b[1, i - 1] - array_b[0, i - 1] / rho_c"
+    )
+    (b_line,) = _line_numbers(func, "sys_mat[0] = -loss - array_a[1, i] - array_a[0, i] / rho_c")
+    rec = {"setup": None, "closed": 0, "a_sat": 0, "b_sat": 0, "cells": 0}
+
+    def saturated(loc, clamp):
+        return (
+            abs(loc["v"]) * loc["pipe_loss"] / (loc["rho_c"] * (loc["vel_init_local"] ** 2)) > clamp
+        )
+
+    def local_tracer(frame, event, _arg):
+        if event != "line":
+            return local_tracer
+        line = frame.f_lineno
+        if line == setup_line:
+            if rec["setup"] is None:
+                rec["setup"] = {k: frame.f_locals[k] for k in PRESSURE_SETUP_NAMES}
+        elif line == closed_line:
+            rec["closed"] += 1
+        elif line == a_line:
+            rec["cells"] += 1
+            rec["a_sat"] += saturated(frame.f_locals, 0.9)
+        elif line == b_line:
+            rec["cells"] += 1
+            rec["b_sat"] += saturated(frame.f_locals, 0.9 * frame.f_locals["rho_c"])
+        return local_tracer
+
+    def global_tracer(frame, event, _arg):
+        return local_tracer if event == "call" and frame.f_code is code else None
+
+    previous = sys.gettrace()
+    sys.settrace(global_tracer)
+    result = error = None
+    try:
+        result = func(pattern, **kw)
+    except FloatingPointError as exc:  # the legacy overflowed mid-run (numpy errstate)
+        error = exc
+    finally:
+        sys.settrace(previous)
+    assert rec["setup"] is not None
+    return PressureTrace(
+        rec["setup"], rec["closed"], rec["a_sat"], rec["b_sat"], rec["cells"], result, error
+    )
+
+
+@dataclass
+class PressureCase:
+    id: str
+    pattern: np.ndarray  # as passed to the solvers: 1-D, or 2-D walked column-major
+    kw: dict
+    closes_fully: bool  # the pattern reaches exactly 1.0
+    truncated: bool  # outMax < L / (c dt): the pipe is cut to the wave travel in closureTime
+
+
+def _closure_profile(rng, n, end, shape):
+    t = np.linspace(0.0, 1.0, n)
+    if shape == "linear":
+        c = t
+    elif shape == "smooth":
+        c = 3 * t**2 - 2 * t**3
+    elif shape == "early":  # reaches `end` part way and stays there
+        c = np.minimum(t / rng.uniform(0.2, 0.7), 1.0)
+    else:  # "stepped"
+        k = rng.randint(2, 6)
+        c = np.floor(t * k) / k
+        c[-1] = 1.0
+    return c * end
+
+
+def _make_pressure_case(rng, idx) -> PressureCase:
+    cols = rng.choice([1, 1, 2, 3])
+    n = rng.randint(3, 40)
+    n = max(cols, n - n % cols)
+    end = 1.0 if rng.random() < 0.5 else rng.uniform(0.3, 0.99)
+    shape = rng.choice(["linear", "smooth", "early", "stepped"])
+    flat = _closure_profile(rng, n, end, shape)
+    pattern = flat if cols == 1 else flat.reshape(n // cols, cols, order="F")
+    closure_time = rng.uniform(0.2, 3.0)
+    steps = rng.randint(20, 300)
+    time_step = closure_time / steps
+    celerity = rng.uniform(900.0, 1500.0)
+    length_to_pump = rng.uniform(5.0, 2000.0)
+    pipe_id = rng.uniform(50.0, 600.0)  # mm
+    kw = dict(
+        closure_time=closure_time,
+        celerity=celerity,
+        density=rng.choice([850.0, 1000.0, 1100.0]),
+        time_step=time_step,
+        pressure_drop_from_pump=0.0 if rng.random() < 0.2 else rng.uniform(0.01, 2.0),
+        flow_rate=10 ** rng.uniform(0.3, 3.3),
+        pipe_area=math.pi * pipe_id**2 / 4,
+        valve_cv=rng.uniform(100.0, 5000.0),
+        length_to_pump=length_to_pump,
+        pump_ramp_pressure=0.0 if rng.random() < 0.3 else rng.uniform(0.5, 5.0),
+    )
+    out_max = round(closure_time / time_step)
+    return PressureCase(
+        id=f"p{idx:02d}_c{cols}_{shape}_{'closed' if end == 1.0 else 'partial'}",
+        pattern=pattern,
+        kw=kw,
+        closes_fully=end == 1.0,
+        truncated=out_max < length_to_pump / (celerity * time_step),
+    )
+
+
+@functools.cache
+def pressure_cases() -> tuple[PressureCase, ...]:
+    rng = random.Random(SEED)
+    return tuple(_make_pressure_case(rng, i) for i in range(N_CASES))
+
+
+@functools.cache
+def pressure_trace(idx) -> PressureTrace:
+    case = pressure_cases()[idx]
+    return trace_legacy_pressure(case.pattern, **case.kw)
+
+
+PRESSURE_IDS = [c.id for c in pressure_cases()]
+
+
+def test_pressure_sweep_covers_the_oracle_blind_spots():
+    cases = pressure_cases()
+    traces = [pressure_trace(i) for i in range(N_CASES)]
+    assert {np.ndim(c.pattern) for c in cases} == {1, 2}
+    assert {c.pattern.shape[1] for c in cases if c.pattern.ndim == 2} == {2, 3}
+    # the fully-closed valve branch (VBA 270-273) runs in some cases and never in others
+    assert any(t.closed_steps > 0 for t in traces)
+    assert any(t.closed_steps == 0 for t in traces)
+    assert all((t.closed_steps > 0) <= c.closes_fully for t, c in zip(traces, cases, strict=True))
+    # outMax truncation of the pipe (VBA 207, D-22): both sides
+    assert any(c.truncated for c in cases) and any(not c.truncated for c in cases)
+    assert all(
+        (t.setup["pipe_seg_qty"] == 1 + round(t.setup["out_max"] / 2)) == c.truncated
+        for t, c in zip(traces, cases, strict=True)
+    )
+    # pump ramp on and off, zero and non-zero pipe loss
+    assert any(c.kw["pump_ramp_pressure"] == 0.0 for c in cases)
+    assert any(c.kw["pump_ramp_pressure"] > 0.0 for c in cases)
+    assert any(c.kw["pressure_drop_from_pump"] == 0.0 for c in cases)
+    # both friction clamps (D-6) saturate somewhere in the sweep: the 0.9 clamp at low flow,
+    # the 0.9 * rhoC clamp only where the local initial velocity passes through zero
+    assert sum(t.clamp_a_saturated > 0 for t in traces) >= 5
+    assert sum(t.clamp_b_saturated > 0 for t in traces) >= 1
+    assert all(t.cell_updates > 0 for t in traces)
+    # at most a few cases blow up (the MoC with a near-zero local velocity); those are
+    # compared as "raises identically" below
+    assert sum(t.error is not None for t in traces) <= 2
+    assert sum(t.error is None for t in traces) >= 48
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=PRESSURE_IDS)
+def test_pressure_setup_matches_legacy_constants(idx):
+    case = pressure_cases()[idx]
+    su = pressure_trace(idx).setup
+    pattern = loads.as_history_2d(case.pattern)
+    kw = {k: v for k, v in case.kw.items() if k != "pump_ramp_pressure"}
+    s = pressure.setup(pattern.shape[0], pattern.shape[1], **kw)
+    for name in PRESSURE_SETUP_NAMES[:-1]:
+        assert getattr(s, name) == su[name], name
+    assert type(s.out_max) is int and type(s.pipe_seg_qty) is int
+    p_a, v_a, p_b, v_b, vel_at_pump = pressure.initial_column(s)
+    assert vel_at_pump == su["vel_at_pump"]
+    assert p_a.shape == v_a.shape == p_b.shape == v_b.shape == (s.pipe_seg_qty + 1,)
+
+
+def _check_pressure_response(pattern, kw):
+    legacy = lp.get_pressure_response(pattern, **kw)
+    res = pressure.pressure_response(pattern, **kw)
+    assert isinstance(res, np.ndarray) and res.dtype == np.float64
+    assert res.shape == legacy.shape
+    assert_close(res, legacy)
+    return res, legacy
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=PRESSURE_IDS)
+def test_pressure_response_matches_legacy_on_the_sweep(idx):
+    case = pressure_cases()[idx]
+    trace = pressure_trace(idx)
+    if trace.error is not None:
+        # the legacy overflowed under np.errstate(raise); so must the refactor
+        with pytest.raises(type(trace.error)):
+            pressure.pressure_response(case.pattern, **case.kw)
+        return
+    res, legacy = _check_pressure_response(case.pattern, case.kw)
+    assert np.all(np.isfinite(res))
+    assert np.array_equal(legacy, trace.result)
+
+
+def _example_pressure():
+    case = next(c for c in tg.EXAMPLE_CASES if c["solver"] == "pressure")
+    return case, np.asarray(case["valve_pattern"], dtype=float), dict(case["kwargs"])
+
+
+def test_pressure_response_matches_legacy_and_excel_on_the_example_case():
+    case, pattern, kw = _example_pressure()
+    res, _legacy = _check_pressure_response(pattern, kw)
+    np.testing.assert_allclose(
+        res, np.asarray(case["expected"], float), rtol=tg.EXAMPLE_RTOL, atol=0
+    )
+
+
+def test_pressure_response_1d_pattern_equals_its_column():
+    _case, pattern, kw = _example_pressure()
+    assert np.array_equal(
+        pressure.pressure_response(pattern[:, 0], **kw), pressure.pressure_response(pattern, **kw)
+    )
+
+
+def test_get_pressure_response_is_a_thin_alias():
+    _case, pattern, kw = _example_pressure()
+    assert inspect.signature(pressure.get_pressure_response).parameters.keys() == (
+        inspect.signature(lp.get_pressure_response).parameters.keys()
+    )
+    assert np.array_equal(
+        pressure.get_pressure_response(pattern, **kw), pressure.pressure_response(pattern, **kw)
+    )
+
+
+def test_pressure_response_raises_where_the_legacy_does():
+    _case, pattern, kw = _example_pressure()
+    for bad in (dict(density=0.0), dict(time_step=0.0)):
+        with pytest.raises((ZeroDivisionError, FloatingPointError)):
+            lp.get_pressure_response(pattern, **dict(kw, **bad))
+        with pytest.raises((ZeroDivisionError, FloatingPointError)):
+            pressure.pressure_response(pattern, **dict(kw, **bad))
