@@ -327,6 +327,17 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- **F-1 to raise with the lead author**: the approved `vAv` divisor fix is numerically inert for
+  the solver outputs (rounding level on the golden cases and the sweep) because `dF` depends on
+  pressures, which depend on velocity differences only, and `vAv` shifts every velocity uniformly.
+  The fix is applied as approved; whether the mean-velocity subtraction itself is the intended
+  model (it only bookkeeps the column's mean velocity and never reaches the force) is a modelling
+  question for the owner, not a port question.
+- The fast suite is now 40 s (was 8 s before Stage 4.2): the JC sweep (~12 s) and the F-1/F-2
+  pins, which run the sweep three more times (~14 s). If this matters, the pins can share the
+  sweep's cached runs.
+- `pytest -m jc_slow` now holds 6 tests: the 3 literal-port golden cases (80 min) and the 3
+  `peak_response_jc` legacy-flag cases (~13-16 min each in pure Python).
 - Two of the §3.2 items are to be raised with the lead author as more than a DEVIATIONS row (owner to name which two; the note naming them did not reach this session). §3.1-d (now D-15): Numba/LLVM lowers integer-literal `**` to multiplication, which measurably differs from C `pow` (used by both Python and numpy `**`); Stage 5 must judge this against the golden tolerance rather than expect bit-identity.
 - Rows 100-101 of `curve_10in` hold pasted numbers (no formula) and were skipped by the extractor; if they are meant to be cases they need live formulas in the workbook.
 - Performance: pure Python; measured baseline in the Stage 4.0 section (JC cases 23-30 min each, 1 h 20 min for `pytest -m jc_slow`). Stage 5 (Numba) target; the JC golden run is its acceptance test and now has a measured tolerance (5e-12).
@@ -348,12 +359,15 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-Stage 4.2: `moc.py` + the JC coupling + `response.peak_response_jc` against the interfaces in
-`docs/architecture.md` (`coupling_force(state, step_index)`, running sub-step counter for the
-MoC parity → apply approved fix F-2 there, and F-1 `vAv` divisor; F-3 deferred). Differential
-tests vs `legacy_port.get_peak_response_jc` per the F-2 note (tolerance only where the literal
-parity sequence is continuous; otherwise a legacy run patched to a running counter). Do the JC
-set-up as its own function (`structure.jc_params` or similar), not a flag on `lumped_params`.
-Re-run `pytest -m jc_slow` (1 h 20 min, background) before any commit touching the JC path.
+Stage 4.3: `pressure.py` — `get_pressure_response` (valve/pump MoC) as a standalone driver against
+the interface row in `docs/architecture.md`; differential against `legacy_port.get_pressure_response`
+on the Example-sheet case (Excel at 1e-12) and a seeded sweep covering what port_review §4 item 1
+lists (fully-closed branch, pump ramp, the two friction clamps D-6, the `outMax` truncation,
+multi-column patterns). Keep the two half-loops' asymmetry (0.9 vs 0.9·rhoC, D-6) literal. Gates
+as before (`pytest -q`, `-m slow` before any `src/` commit). Not touching the JC path, so no
+`jc_slow` re-run is needed unless `response._integrate` changes.
+
+Previous next action (Stage 4.2, kept for the record): `moc.py` + the JC coupling +
+`response.peak_response_jc` with F-1/F-2 flag-first — done, see "Stage 4.2 — done".
 
 Previous next action (Stage 4.1, owner's instruction, 2026-10-20), kept for the record: Run `tools/bench.py` at the end of every Stage 4/5 session and commit `docs/bench/` (CLAUDE.md); compare the "result vs prev" column, which must read `same` for a behaviour-preserving commit. No document in the repo defines the Stage 4.1 scope; the only stage material beyond Stage 1 is the refactor map in `docs/port_review.md` §2 (Stage 4) and the Numba target (Stage 5), so record the 4.1 scope in this file at the start of that session before touching `src/`. Read `docs/port_review.md` §2 (refactor map, §2.5 parity hazard) and §4 (blind spots) first. Gate: `.venv/bin/python -m pytest -q` before every commit, `-m slow` (3.5 min) before any commit touching `src/`; `tests/test_quirks.py` must stay green as written (a change to a pinned quirk needs a DEVIATIONS.md row). The 3 JC cases have run once (1 h 20 min, all pass, tolerance 5e-12 measured); re-run them (`pytest -m jc_slow`, background) before any commit that touches the JC solver path, and before the Stage 5 Numba acceptance. If `GetPressureResponse` needs a golden case, add a UDF call with a committed valve pattern to the workbook and extend `tools/extract_fixtures.py`.
