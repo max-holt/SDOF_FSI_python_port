@@ -76,6 +76,7 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- Tag `v0.1-literal-port` (annotated) exists locally at `fea6d8b` (the merged `main` head, 2026-10-21) but could not be pushed from the cloud session: the git proxy denies pushes to `refs/tags` (HTTP 403 policy), the GitHub API tools expose no tag creation, and `gh` is unauthenticated. The owner pushes it from a local clone (command and message in the session log).
 - Two of the §3.2 items are to be raised with the lead author as more than a DEVIATIONS row (owner to name which two; the note naming them did not reach this session). §3.1-d (now D-15): Numba/LLVM lowers integer-literal `**` to multiplication, which measurably differs from C `pow` (used by both Python and numpy `**`); Stage 5 must judge this against the golden tolerance rather than expect bit-identity.
 - Rows 100-101 of `curve_10in` hold pasted numbers (no formula) and were skipped by the extractor; if they are meant to be cases they need live formulas in the workbook.
 - Performance: pure Python; measured baseline in the Stage 4.0 section (JC cases 23-30 min each, 1 h 20 min for `pytest -m jc_slow`). Stage 5 (Numba) target; the JC golden run is its acceptance test and now has a measured tolerance (5e-12).
