@@ -2,7 +2,8 @@
 
 Run ``pytest -q tests/test_golden.py -m slow`` (or ``-m "slow or jc_slow"``) first; each
 case writes ``tests/.golden_cache/<case_id>.json``. This script only reads those files and
-``tests/fixtures/curve_10in/cases.csv``; it never runs a solver and never writes.
+the case lists named by ``tests/fixtures/manifest.json`` (``curve_10in/cases.csv`` and
+``example/cases.json``); it never runs a solver and never writes.
 
 Columns: case id, output name of the worst output, max |rel err|, max |abs err|, status.
 Status is PASS / FAIL (per the tolerance the test used) or "not run" for a case without a
@@ -17,13 +18,23 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-CASES_CSV = REPO / "tests" / "fixtures" / "curve_10in" / "cases.csv"
+FIXTURES_DIR = REPO / "tests" / "fixtures"
 CACHE_DIR = REPO / "tests" / ".golden_cache"
 
 
+def load_case_ids():
+    with open(FIXTURES_DIR / "manifest.json") as fh:
+        manifest = json.load(fh)
+    sets = manifest["sets"]
+    with open(FIXTURES_DIR / sets["example"]["dir"] / "cases.json") as fh:
+        example = [{"case_id": c["case_id"]} for c in json.load(fh)]
+    with open(FIXTURES_DIR / sets["curve_10in"]["dir"] / "cases.csv", newline="") as fh:
+        curve = list(csv.DictReader(fh))
+    return example + curve
+
+
 def main() -> int:
-    with open(CASES_CSV, newline="") as fh:
-        cases = list(csv.DictReader(fh))
+    cases = load_case_ids()
     header = ("case id", "output", "max |rel err|", "max |abs err|", "status")
     rows, failures, counts = [], [], {"PASS": 0, "FAIL": 0, "not run": 0}
     for case in cases:

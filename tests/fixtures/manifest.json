@@ -1,0 +1,40 @@
+{
+ "generated_by": "tools/extract_fixtures.py",
+ "source_workbook": "tests/fixtures/source/surge_force_data.xlsm",
+ "sets": {
+  "curve_10in": {
+   "dir": "curve_10in",
+   "files": [
+    "params.json",
+    "force_history.csv",
+    "cases.csv"
+   ],
+   "sheet": "curve_10in",
+   "cases": 78,
+   "solvers": {
+    "lumped": 75,
+    "jc": 3
+   },
+   "markers": {
+    "lumped": "slow",
+    "jc": "jc_slow"
+   },
+   "n_samples": 25135
+  },
+  "example": {
+   "dir": "example",
+   "files": [
+    "cases.json"
+   ],
+   "sheet": "Example",
+   "cases": 3,
+   "solvers": {
+    "pressure": 1,
+    "lumped": 1,
+    "jc": 1
+   },
+   "markers": {},
+   "note": "fast cases (milliseconds); run in the default suite"
+  }
+ }
+}
