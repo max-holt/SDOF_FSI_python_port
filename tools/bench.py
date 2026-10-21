@@ -26,6 +26,11 @@ synthetic):
 * ``response_pressure_example`` - the same call through the Stage 4.3
   ``pressure.pressure_response``; its digest must equal the ``pressure_example`` one.
 
+The "must equal" pairs above (``response_* ↔ lumped_* / jc_* / pressure_example``) are
+checked in-run (``DIGEST_PAIRS``): a mismatch is printed and the exit code is 1. The
+numerical proof itself lives in ``tests/test_differential.py``; this is a guard against a
+bench case drifting from the solver it claims to mirror.
+
 Each case runs ``--repeats`` times (default 3); the median wall time is reported, and for
 the peak-response cases the time per SDOF sub-step. The sub-step count is
 ``n_samples * stepQTY + floor(unb * stepQTY) + 1`` (phase 2 plus the phase-1 delay; phase
@@ -103,6 +108,27 @@ EXAMPLE_PRESSURE_KW = dict(
 )
 JC_TRUNCATE = 2000
 REFERENCE_CASE = "lumped_r20"  # case (a): always run, every case is also a ratio to it
+# (refactored case, literal-port case) whose result digests must be identical in a run
+DIGEST_PAIRS = (
+    ("response_r20", "lumped_r20"),
+    ("response_r80", "lumped_r80"),
+    ("response_jc_r96_n2000", "jc_r96_n2000"),
+    ("response_pressure_example", "pressure_example"),
+)
+
+
+def check_digest_pairs(run) -> bool:
+    """Print the paired-digest comparison; True when every pair present in the run matches."""
+    by_id = {c["id"]: c for c in run["cases"]}
+    ok = True
+    for new_id, ref_id in DIGEST_PAIRS:
+        if new_id in by_id and ref_id in by_id:
+            same = by_id[new_id]["digest"] == by_id[ref_id]["digest"]
+            ok &= same
+            print(f"digest {new_id} == {ref_id}: {'yes' if same else 'NO'}")
+    return ok
+
+
 LEGACY_FLAGS = dict(vav_denominator="legacy", parity="per_phase")
 
 
@@ -461,8 +487,9 @@ def main(argv=None):
         json.dump(run, fh, indent=1)
         fh.write("\n")
     append_readme(run)
+    pairs_ok = check_digest_pairs(run)
     print(f"\nwrote {out.relative_to(REPO)} and appended {README.relative_to(REPO)}")
-    return 0
+    return 0 if pairs_ok else 1
 
 
 if __name__ == "__main__":

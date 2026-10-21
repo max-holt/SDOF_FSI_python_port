@@ -128,6 +128,10 @@ case (h)). `legacy_port.py`, `vba_compat.py`, `tests/fixtures/`, `legacy/` untou
   and `velInitLocal = (1 + 2i)·pipeLoss/rhoC + velocityInitial` passes through zero along the pipe when the
   pressure drop is large relative to the flow, making the friction term singular there. A modelling quirk of
   the VBA (preserved); worth raising with the lead author alongside D-17/D-18.
+- Port review (`port-reviewer`, diff `bbc8f6a..6fa4595`, diff + VBA only): **no correctness findings**; it
+  independently confirmed bitwise equality on the 49 non-raising sweep cases and the Example case. Its two
+  notes were applied: the `pressure.py` docstring now says the suite pins rtol 1e-12 and bitwise is the
+  measured result; `tools/bench.py` now checks the paired digests in-run (`DIGEST_PAIRS`, exit 1 on mismatch).
 - Judgement calls: the sweep's one overflowing case is kept as a "raises identically" differential rather than
   tuned away; `pressure_response` returns the plain 0-based array (no dataclass) because the legacy result was
   already 0-based and the bench/golden consumers index it directly.
