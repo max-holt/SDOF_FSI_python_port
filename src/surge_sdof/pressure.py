@@ -14,8 +14,9 @@ and they know nothing about it (``docs/architecture.md``). The VBA semantics it 
 come from ``vba_compat`` (``CLng``, ``floor``, ``modDbl``; frozen) and ``_vba_semantics``
 (``vba_min``/``vba_max``, the VBA tie rule).
 
-Differences from ``legacy_port.get_pressure_response`` (none numerical; proved bitwise on
-the Example-sheet case and a 50-case seeded sweep by ``tests/test_differential.py``):
+Differences from ``legacy_port.get_pressure_response`` (none numerical:
+``tests/test_differential.py`` pins the Example-sheet case and a 50-case seeded sweep at
+rtol 1e-12, and the measured result is bitwise equality, recorded in NOTES.md):
 
 * The set-up constants are computed once into a ``PressureSetup`` and the column lives
   in four contiguous 1-D arrays (``p_a``, ``v_a``, ``p_b``, ``v_b``) instead of two
