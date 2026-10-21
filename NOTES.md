@@ -3,6 +3,53 @@
 ## Current stage
 Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. No solver changes. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Stage 4.1 — scope and plan (recorded 2026-10-21 before touching `src/`)
+Owner's instruction: refactor, first seam. Target layout for all of Stage 4 is in
+`docs/architecture.md` (one line per module, responsibilities and what each must not know).
+This session builds `structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only) and the
+lumped path of `response.py`; `moc.py`, the JC coupling and `pressure.py` are later sessions.
+`legacy_port.py` is frozen and stays the reference until Stage 6.
+
+Plan (one commit per module; fast + slow golden gates and the differential suite green before each):
+1. `structure.py`: `solve_poly` (copied literally so the module survives the Stage 6 removal of
+   `legacy_port`), `solve_portal_height`, `lumped_params`, `restoring_force(x, k, gap, ratio)`,
+   `step(state, f_applied, params, dt)` on Python floats with the `minUnsigned` / `max(0, …)` /
+   `sign` ladders inlined. Tests: `tests/test_differential.py` replays the legacy solver's
+   per-sub-step `(f, x, v, a)` sequence (read through a `sys.settrace` probe, as
+   `test_quirks.py` does; `legacy_port.py` untouched) through `step` and compares bitwise.
+2. `loads.py`: `transit_delay`, `unbalance_force(history, sample_freq, length, celerity, step_qty)`
+   yielding one list of per-sub-step `forceA − forceB` per sample, reproducing the delay phase
+   (`forceA` held, mid-sample `Exit For`), the ramp phase with the `kOverlap` split and the
+   column-major walk with the `jB > U2` clamp. Tested against the `(forceA − forceB)` sequence
+   the literal port computes (same probe).
+3. `response.py` + `coupling.py`: `peak_response(...)` = set-up (structure) + loads + one shared
+   integration loop with `NoCoupling`; returns `PeakResponse`. Differential against
+   `get_peak_response` for `outputType` 0–3 on the Example-sheet lumped case (fast), the 75
+   curve cases (`slow`) and the seeded sweep.
+4. `tools/bench.py`: two extra cases (`peak_response` on rows 20 and 80); run, commit `docs/bench/`,
+   report the pure-Python speedup of the lumped cases. `port-reviewer` on the final diff.
+
+Sweep design (`tests/test_differential.py`, 50 parameter sets, `random.Random(20261019)`, rtol 1e-12):
+covers what the Excel oracle does not (port_review §4): `restrainFreqRatio` U(0.5, 4); `gap` =
+U(0.1, 0.5) × the case's own gap-free `xMax`; `outputType` 0 always plus one of 1–3 per case;
+1-D histories and 2-D with 2–3 columns (column-major); `stepQTY` ∈ {2, 7, 40}; `dynamicFric` ∈
+{0, 0.005, 0.1}; `dampingPercent` U(0.5, 5) (phase 3 must terminate); `ω·dt` ≤ 0.03 so the
+explicit scheme stays stable; piecewise-constant random force levels scaled to `F/k` ~ 0.05–1 so
+the free-decay threshold `|x| > 0.1` is reachable; rows ≥ 2 × columns so the phase-1 walk cannot
+hit D-8. Asserted: ≥ 1 case enters phase 3 (`free_decay_samples > 0`) and ≥ 1 engages the gap
+(`max_displacement > gap`).
+
+Judgement calls (flag if you disagree):
+- `unbalance_force` yields per *sample* a list of the per-sub-step values rather than a flat
+  per-sub-step stream, because the caller must act at sample boundaries (result history, the
+  phase-1 `Exit For` truncates the last delay-phase sample). Flattened, it is exactly the
+  per-sub-step sequence the test compares.
+- `peak_response` runs on Python floats, so overflow no longer raises `FloatingPointError`
+  mid-run as the numpy state did (D-14); it raises `FloatingPointError` at the end if the final
+  state is not finite (nan/inf are absorbing in the update). Recorded as D-23 with a pin test.
+- `NoCoupling` adds `0.0` to the unbalance force and supplies `0.0` in free decay: identical to
+  the literal `(forceA − forceB)` / `−R` except for the sign of an exact zero.
+
 ## Done
 - `vba_compat.py`: `clng` (half-to-even), `vba_floor` (literal transcription of the fixed VBA `max(CLng(val - 0.5), CLng(val + 0.5) - 1)`, pinned against `math.floor`), `mod_dbl` (ordinary floored modulo now), `sign`, `min_unsigned`, `max_unsigned`, plus `ubound`/`vba_2d` for the padded 1-based array convention. `tests/test_vba_compat.py` pins them against the VBA definitions.
 - Upstream `floor` fix applied: `main` merged, `vba_floor`/`mod_dbl` updated, the tests that pinned the old bug (mod_dbl table, parity test, D-11 multi-column pressure test, D-8 trigger condition) re-pinned to the fixed behaviour. DEVIATIONS D-1, D-2, D-11 are status "fixed" with the reason "source corrected upstream".
