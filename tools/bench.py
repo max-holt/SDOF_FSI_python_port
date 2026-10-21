@@ -23,6 +23,8 @@ synthetic):
   workbook (``Example!C3:C123``): valve pattern ``B3:B7``, parameters ``J33:J42``,
   ``pipeArea = PI()*(J39^2/4)``. Transcribed here because ``tools/extract_fixtures.py``
   does not extract that sheet.
+* ``response_pressure_example`` - the same call through the Stage 4.3
+  ``pressure.pressure_response``; its digest must equal the ``pressure_example`` one.
 
 Each case runs ``--repeats`` times (default 3); the median wall time is reported, and for
 the peak-response cases the time per SDOF sub-step. The sub-step count is
@@ -78,7 +80,7 @@ sys.path.insert(0, str(REPO / "tests"))
 import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
 
 from surge_sdof import legacy_port as lp  # noqa: E402
-from surge_sdof import moc, response, structure  # noqa: E402
+from surge_sdof import moc, pressure, response, structure  # noqa: E402
 
 BENCH_DIR = REPO / "docs" / "bench"
 README = BENCH_DIR / "README.md"
@@ -151,20 +153,32 @@ def build_cases():
     def peak_response_summary(res):
         return res.summary()
 
-    pressure = {
-        "id": "pressure_example",
-        "description": "Example sheet GetPressureResponse (Example!C3:C123)",
-        "run": lambda: lp.get_pressure_response(EXAMPLE_VALVE_PATTERN, **EXAMPLE_PRESSURE_KW),
-        "substeps": None,
-        "cells": None,
-        "expected": None,
-        "digest": lambda res: {
-            "first": float(res[0]),
-            "max": float(np.max(res)),
-            "last": float(res[-1]),
-            "len": int(res.shape[0]),
-        },
-    }
+    def pressure_case(cid, solver, description):
+        return {
+            "id": cid,
+            "description": description,
+            "run": lambda: solver(EXAMPLE_VALVE_PATTERN, **EXAMPLE_PRESSURE_KW),
+            "substeps": None,
+            "cells": None,
+            "expected": None,
+            "digest": lambda res: {
+                "first": float(res[0]),
+                "max": float(np.max(res)),
+                "last": float(res[-1]),
+                "len": int(res.shape[0]),
+            },
+        }
+
+    pressure_legacy = pressure_case(
+        "pressure_example",
+        lp.get_pressure_response,
+        "Example sheet GetPressureResponse (Example!C3:C123)",
+    )
+    pressure_new = pressure_case(
+        "response_pressure_example",
+        pressure.pressure_response,
+        "Example sheet GetPressureResponse via surge_sdof.pressure.pressure_response",
+    )
     return [
         peak_case("lumped_r20", "20", lp.get_peak_response),
         peak_case("lumped_r80", "80", lp.get_peak_response),
@@ -179,7 +193,8 @@ def build_cases():
             summary=peak_response_summary,
             flags=LEGACY_FLAGS,
         ),
-        pressure,
+        pressure_legacy,
+        pressure_new,
     ]
 
 
@@ -368,15 +383,16 @@ README_HEADER = (
     "in seconds and, in brackets, as the ratio of its median to (a)'s. `(c)` and `(g)` are the "
     "JC case truncated to 2000 samples through the literal port and through "
     "`response.peak_response_jc` (legacy flags); `(e)`/`(f)` are `(a)`/`(b)` through "
-    "`response.peak_response`; `cells/s` is MoC cell-updates per second (sub-steps x pipeSegQTY "
+    "`response.peak_response`; `(h)` is `(d)` through `pressure.pressure_response`; `cells/s` is MoC cell-updates per second (sub-steps x pipeSegQTY "
     "/ s). `sha` is HEAD when the run started (`-dirty` = uncommitted changes under "
     "src/tests/tools), so the commit that adds a row is that sha's child. Details, result "
     "digests and profiles are in `<sha>.json` next to this file.\n\n"
     "| date (UTC) | sha | python | numpy | numba | NUMBA_DISABLE_JIT | cpu | (a) lumped r20 | "
     "(b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | (e) response r20 | "
-    "(f) response r80 | (g) response_jc r96 n2000 | (c) us/sub-step | (g) us/sub-step | "
+    "(f) response r80 | (g) response_jc r96 n2000 | (h) response_pressure example | "
+    "(c) us/sub-step | (g) us/sub-step | "
     "(c) cells/s | (g) cells/s | profile |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
 )
 
 
@@ -395,6 +411,7 @@ def readme_row(run):
         f"{fmt_ratio(by_id['lumped_r80'])} | {fmt_ratio(jc)} | "
         f"{fmt_ratio(by_id['pressure_example'])} | {fmt_ratio(by_id['response_r20'])} | "
         f"{fmt_ratio(by_id['response_r80'])} | {fmt_ratio(rjc)} | "
+        f"{fmt_ratio(by_id['response_pressure_example'])} | "
         f"{jc['s_per_substep'] * 1e6:.1f} | {rjc['s_per_substep'] * 1e6:.1f} | "
         f"{jc['cell_updates_per_s'] / 1e6:.2f} M | {rjc['cell_updates_per_s'] / 1e6:.2f} M | "
         f"{'yes' if run['profile'] else 'no'} |\n"
