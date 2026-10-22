@@ -27,6 +27,14 @@ arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba c
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
 
+Session V.1 (trace): both solvers take ``trace_every: int = 0``. With ``k > 0`` every
+``k``-th sub-step is recorded into preallocated arrays the kernel takes (``trace.allocate``)
+and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kernel takes
+empty arrays and the recording branch is never entered. The recording reads the state and
+writes to the trace arrays only, so the ``PeakResponse`` values of a traced run are bitwise
+those of the untraced run (``tests/test_trace.py``). ``loads.elbow_forces`` supplies the
+per-sub-step elbow forces and the transit/history boundary for the trace.
+
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
 
@@ -54,14 +62,35 @@ from __future__ import annotations
 
 import itertools
 import math
+import operator
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numba
 import numpy as np
 
 from surge_sdof import loads, moc, structure
+from surge_sdof import trace as tracing
 from surge_sdof.coupling import Coupling, JunctionCoupling, NoCoupling
 from surge_sdof.structure import SdofParams, step_scalars
+from surge_sdof.trace import (
+    F_A,
+    F_DF,
+    F_FA,
+    F_FB,
+    F_FFRIC,
+    F_FU,
+    F_V,
+    F_X,
+    I_PHASE,
+    I_SAMPLE,
+    I_STICK,
+    I_SUB_STEP,
+    PHASE_FREE_DECAY,
+    PHASE_HISTORY,
+    PHASE_TRANSIT,
+    Trace,
+)
 from surge_sdof.vba_compat import clng
 
 __all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
@@ -94,6 +123,9 @@ class PeakResponse:
         The requested output type.
     free_decay_samples : int
         Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``, D-21).
+    trace : trace.Trace or None
+        The sub-step trace when the solver was called with ``trace_every > 0``
+        (Session V.1); None otherwise.
     """
 
     max_static_equivalent_force: float
@@ -107,6 +139,8 @@ class PeakResponse:
     output_type: int
     free_decay_samples: int
     """Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``)."""
+    trace: Trace | None = None
+    """``trace.Trace`` of the run when ``trace_every > 0``, else None (Session V.1)."""
 
     def summary(self) -> np.ndarray:
         """The five maxima as the VBA ``resultArray(0 To 4)`` (N, m, m/s, m/s², N)."""
@@ -135,6 +169,7 @@ def peak_response(
     restrain_freq_ratio: float = 1,
     gap: float = 0,
     output_type: int = 0,
+    trace_every: int = 0,
 ) -> PeakResponse:
     """Peak response of the lumped SDOF proxy to a force history (``GetPeakResponse``).
 
@@ -171,6 +206,10 @@ def peak_response(
     output_type : int, optional
         0: the five maxima only; 1 / 2 / 3: also the displacement / velocity /
         acceleration history (default 0).
+    trace_every : int, optional
+        0 (default): no trace. ``k > 0``: record every ``k``-th sub-step into
+        ``PeakResponse.trace`` (``trace.Trace``; Session V.1). The maxima and the history
+        are the same bitwise either way.
 
     Returns
     -------
@@ -178,6 +217,8 @@ def peak_response(
 
     Raises
     ------
+    ValueError
+        ``trace_every < 0``, or a trace that would exceed ``trace.MAX_TRACE_VALUES``.
     ZeroDivisionError
         ``step_qty = 1`` (D-7) or ``mass = 0``.
     IndexError
@@ -201,6 +242,7 @@ def peak_response(
     celerity = float(celerity)
     mass_per_unit_len = float(mass_per_unit_len)
     output_type = int(output_type)
+    trace_every = _trace_stride(trace_every)
 
     history = loads.as_history_2d(force_history)
     unb = loads.transit_delay(physical_length, celerity, sample_freq)
@@ -222,7 +264,39 @@ def peak_response(
         restrain_freq_ratio,
     )
     forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
-    return _integrate(forces, params, dt, step_qty, NoCoupling(), out_max, output_type)
+    meta = None
+    if trace_every:
+        meta = _TraceMeta(
+            "peak_response",
+            {
+                "force_history": history,
+                "step_qty": step_qty,
+                "sample_freq": sample_freq,
+                "physical_length": physical_length,
+                "flexural_rigidity_ei": flexural_rigidity_ei,
+                "celerity": celerity,
+                "mass_per_unit_len": mass_per_unit_len,
+                "damping_percent": damping_percent,
+                "dynamic_fric": dynamic_fric,
+                "nat_freq": nat_freq,
+                "restrain_freq_ratio": restrain_freq_ratio,
+                "gap": gap,
+                "output_type": output_type,
+            },
+            celerity,
+            loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
+        )
+    return _integrate(
+        forces,
+        params,
+        dt,
+        step_qty,
+        NoCoupling(),
+        out_max,
+        output_type,
+        trace_every=trace_every,
+        meta=meta,
+    )
 
 
 def peak_response_jc(
@@ -241,6 +315,7 @@ def peak_response_jc(
     restrain_freq_ratio: float = 1,
     gap: float = 0,
     output_type: int = 0,
+    trace_every: int = 0,
     *,
     vav_denominator: str = "fixed",
     parity: str = "running",
@@ -258,6 +333,10 @@ def peak_response_jc(
         Internal cross-sectional (pressure) area of the pipe, m². The core fluid is
         removed from the rigid mass and a 1-D MoC column inside the span feeds the
         pressure-difference force ``dF`` (N) back.
+    trace_every : int, optional
+        As ``peak_response``; a JC trace also carries the column (``p_cells``,
+        ``v_cells``) and the grid geometry. The short-pipe fallback passes it on, so the
+        trace of such a call is a lumped one (``trace.solver == "peak_response"``).
     vav_denominator : {"fixed", "legacy"}, keyword-only
         Divisor of the MoC mean-velocity sum: the number of terms ``2N + 1`` (approved
         fix F-1, default) or the VBA's ``2N - 1`` (D-17).
@@ -275,7 +354,8 @@ def peak_response_jc(
     Raises
     ------
     ValueError
-        Unknown ``parity`` or ``vav_denominator``.
+        Unknown ``parity`` or ``vav_denominator``; ``trace_every < 0`` or a trace over
+        ``trace.MAX_TRACE_VALUES``.
     ZeroDivisionError
         ``step_qty = 1`` (D-7); ``pivotSegQTY = 4`` at the set-up (D-4).
     IndexError
@@ -305,6 +385,7 @@ def peak_response_jc(
     fluid_densty = float(fluid_densty)
     fluid_area = float(fluid_area)
     output_type = int(output_type)
+    trace_every = _trace_stride(trace_every)
 
     history = loads.as_history_2d(force_history)
     unb = loads.transit_delay(physical_length, celerity, sample_freq)
@@ -346,6 +427,7 @@ def peak_response_jc(
             restrain_freq_ratio,
             gap,
             output_type,
+            trace_every,
         )
     rho_c = fluid_densty * celerity
     if rho_c == 0:
@@ -363,6 +445,32 @@ def peak_response_jc(
         vav_denominator,
     )
     forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
+    meta = None
+    if trace_every:
+        meta = _TraceMeta(
+            "peak_response_jc",
+            {
+                "force_history": history,
+                "step_qty": step_qty,
+                "sample_freq": sample_freq,
+                "physical_length": physical_length,
+                "flexural_rigidity_ei": flexural_rigidity_ei,
+                "celerity": celerity,
+                "mass_per_unit_len": mass_per_unit_len,
+                "fluid_densty": fluid_densty,
+                "fluid_area": fluid_area,
+                "damping_percent": damping_percent,
+                "dynamic_fric": dynamic_fric,
+                "nat_freq": nat_freq,
+                "restrain_freq_ratio": restrain_freq_ratio,
+                "gap": gap,
+                "output_type": output_type,
+                "vav_denominator": vav_denominator,
+                "parity": parity,
+            },
+            celerity,
+            loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
+        )
     return _integrate(
         forces,
         params,
@@ -372,7 +480,26 @@ def peak_response_jc(
         out_max,
         output_type,
         legacy_parity=(parity == "per_phase"),
+        trace_every=trace_every,
+        meta=meta,
     )
+
+
+def _trace_stride(trace_every) -> int:
+    """``trace_every`` as a non-negative int (``operator.index``: no silent truncation)."""
+    trace_every = operator.index(trace_every)
+    if trace_every < 0:
+        raise ValueError(f"trace_every must be >= 0, got {trace_every}")
+    return trace_every
+
+
+class _TraceMeta(NamedTuple):
+    """What ``_integrate`` needs beyond the kernel arrays to build a ``Trace``."""
+
+    solver: str
+    inputs: dict
+    celerity: float
+    elbows: object  # the loads.elbow_forces generator
 
 
 @numba.njit(cache=True)
@@ -399,6 +526,58 @@ def _record(
         history[index] = a
 
 
+@numba.njit(cache=True)
+def _trace_frame(
+    tr_f: np.ndarray,
+    tr_i: np.ndarray,
+    tr_p: np.ndarray,
+    tr_v: np.ndarray,
+    frame: int,
+    n: int,
+    sample: int,
+    phase: int,
+    x: float,
+    v: float,
+    a: float,
+    f_a: float,
+    f_b: float,
+    f_u: float,
+    f_fric: float,
+    stick: bool,
+    d_f: float,
+    kind: int,
+    p_a: np.ndarray,
+    v_a: np.ndarray,
+    p_b: np.ndarray,
+    v_b: np.ndarray,
+    n_seg: int,
+) -> None:
+    """Write one trace frame (Session V.1): the scalars into row ``frame`` of ``tr_f`` /
+    ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, for ``kind`` 1, the column
+    interleaved ``A0 B0 A1 ... A(N)`` into ``tr_p`` / ``tr_v``. Reads only; the solver
+    state is untouched."""
+    tr_f[frame, F_X] = x
+    tr_f[frame, F_V] = v
+    tr_f[frame, F_A] = a
+    tr_f[frame, F_FA] = f_a
+    tr_f[frame, F_FB] = f_b
+    tr_f[frame, F_FU] = f_u
+    tr_f[frame, F_FFRIC] = f_fric
+    tr_f[frame, F_DF] = d_f
+    tr_i[frame, I_SUB_STEP] = n
+    tr_i[frame, I_SAMPLE] = sample
+    tr_i[frame, I_PHASE] = phase
+    tr_i[frame, I_STICK] = 1 if stick else 0
+    if kind == 1:
+        for c in range(n_seg):
+            tr_p[frame, 2 * c] = p_a[c]
+            tr_p[frame, 2 * c + 1] = p_b[c]
+            tr_v[frame, 2 * c] = v_a[c]
+            tr_v[frame, 2 * c + 1] = v_b[c]
+        tr_p[frame, 2 * n_seg] = p_a[n_seg]
+        tr_v[frame, 2 * n_seg] = v_a[n_seg]
+
+
 def _integrate(
     forces,
     params: SdofParams,
@@ -408,6 +587,8 @@ def _integrate(
     out_max: int,
     output_type: int,
     legacy_parity: bool = False,
+    trace_every: int = 0,
+    meta: _TraceMeta | None = None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: phases 1-2 driven by ``forces``
     (one list of per-sub-step unbalance values per sample), then free decay while
@@ -420,7 +601,12 @@ def _integrate(
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
     ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
-    with ``off`` fixed per sample (D-19, approved fix F-2)."""
+    with ``off`` fixed per sample (D-19, approved fix F-2).
+
+    Session V.1: with ``trace_every > 0`` the elbow forces of ``meta.elbows`` are
+    flattened like ``forces``, the trace arrays are allocated (``trace.check_memory``,
+    ``trace.allocate``) and the kernel fills them; ``trace.build`` makes the ``Trace``.
+    With 0 the kernel takes empty arrays."""
     dt = float(dt)
     samples = list(forces)
     offsets = np.zeros(len(samples) + 1, dtype=np.int64)
@@ -431,6 +617,31 @@ def _integrate(
     )
     history = np.zeros(out_max * 2 if output_type > 0 else 0)
     kind = coupling.KIND
+
+    # ----------------------------------------------------------------- trace set-up
+    n_cells = 2 * coupling.n_seg + 1 if kind == JunctionCoupling.KIND else 0
+    delay_substeps = 0
+    if trace_every > 0:
+        if meta is None:
+            raise TypeError("trace_every > 0 needs the trace meta")
+        elbows = list(meta.elbows)
+        if [len(fa) for _ph, fa, _fb in elbows] != [len(s) for s in samples]:
+            raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
+        n_sub = int(offsets[-1])
+        flat_a = np.fromiter(
+            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbows), np.float64, count=n_sub
+        )
+        flat_b = np.fromiter(
+            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbows), np.float64, count=n_sub
+        )
+        delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
+        cap = tracing.check_memory(
+            n_sub, len(samples), int(out_max), int(step_qty), trace_every, n_cells
+        )
+    else:
+        flat_a = flat_b = np.zeros(0)
+        cap = 0
+    tr_f, tr_i, tr_p, tr_v = tracing.allocate(cap, n_cells)
     if kind == JunctionCoupling.KIND:
         jc: JunctionCoupling = coupling
         column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)
@@ -442,24 +653,34 @@ def _integrate(
     else:
         raise TypeError(f"unknown coupling kind {kind!r}")
 
-    x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f = _integrate_kernel(
-        flat,
-        offsets,
-        params.mass,
-        params.stiffness,
-        params.damping,
-        params.fric_acc,
-        params.gap,
-        params.ratio2,
-        dt,
-        int(step_qty),
-        int(out_max),
-        int(output_type),
-        bool(legacy_parity),
-        history,
-        int(kind),
-        *column,
-        *scalars,
+    (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, n_frames) = (
+        _integrate_kernel(
+            flat,
+            offsets,
+            params.mass,
+            params.stiffness,
+            params.damping,
+            params.fric_acc,
+            params.gap,
+            params.ratio2,
+            dt,
+            int(step_qty),
+            int(out_max),
+            int(output_type),
+            bool(legacy_parity),
+            history,
+            int(kind),
+            *column,
+            *scalars,
+            int(trace_every),
+            flat_a,
+            flat_b,
+            int(delay_substeps),
+            tr_f,
+            tr_i,
+            tr_p,
+            tr_v,
+        )
     )
     if kind == JunctionCoupling.KIND:
         jc.d_f = float(d_f)
@@ -471,6 +692,25 @@ def _integrate(
     static_equivalent = (
         abs(structure.effective_displacement(x_max, params.gap, params.ratio2)) * params.stiffness
     )
+    trace = None
+    if trace_every > 0:
+        trace = tracing.build(
+            meta.solver,
+            meta.inputs,
+            trace_every,
+            dt,
+            step_qty,
+            out_max,
+            params,
+            int(n_frames),
+            tr_f,
+            tr_i,
+            tr_p,
+            tr_v,
+            jc=coupling if kind == JunctionCoupling.KIND else None,
+            celerity=meta.celerity,
+            ext_qty=moc.EXT_QTY,
+        )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent),
         max_displacement=float(x_max),
@@ -480,6 +720,7 @@ def _integrate(
         history=history if output_type > 0 else None,
         output_type=output_type,
         free_decay_samples=int(tot_ind - forced_samples),
+        trace=trace,
     )
 
 
@@ -513,6 +754,14 @@ def _integrate_kernel(
     vav_div: int,
     fluid_area: float,
     d_f: float,
+    trace_every: int,
+    flat_a: np.ndarray,
+    flat_b: np.ndarray,
+    delay_substeps: int,
+    tr_f: np.ndarray,
+    tr_i: np.ndarray,
+    tr_p: np.ndarray,
+    tr_v: np.ndarray,
 ):
     """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
 
@@ -520,8 +769,17 @@ def _integrate_kernel(
     values. ``kind`` 1 advances the MoC column (``moc.step`` on the half-grid selected by
     the parity of ``n + off``) before each SDOF sub-step and adds ``dF``; ``kind`` 0 adds
     ``0.0`` (the ``NoCoupling`` of Stage 4). Returns ``(x_max, v_max, a_max, f_max, x, v,
-    a, tot_ind, forced_samples, d_f)``; ``history`` is filled in place for
+    a, tot_ind, forced_samples, d_f, n_frames)``; ``history`` is filled in place for
     ``output_type`` 1-3.
+
+    Trace (Session V.1): with ``trace_every > 0`` every sub-step whose running index
+    ``n`` is a multiple of it, while ``tot_ind <= out_max * 2`` and the capacity lasts,
+    is written by ``_trace_frame`` after the SDOF update (``flat_a`` / ``flat_b`` are
+    the elbow forces per forced sub-step, ``delay_substeps`` the transit -> history
+    boundary). ``f_friction`` is ``mass * (v_new - (v_old + (a_old + a_new) * half_dt))
+    / dt`` with the same ``half_dt = dt / 2`` as ``step_scalars``; ``stick`` is ``|v_old| <
+    fric_acc``. With ``trace_every == 0`` the branch is never entered and the arrays are
+    empty.
     """
     x = 0.0
     v = 0.0
@@ -534,6 +792,12 @@ def _integrate_kernel(
     off = 0  # step_index = n + off
     tot_ind = 0
     n_samples = offsets.shape[0] - 1
+    # trace (Session V.1)
+    frame = 0
+    cap = tr_i.shape[0]
+    half_dt = dt / 2
+    v_old = 0.0
+    a_old = 0.0
 
     # ------------------------------------------------- phases 1-2: forced response
     for s in range(n_samples):
@@ -542,6 +806,10 @@ def _integrate_kernel(
             off = (tot_ind - 1) * step_qty - n
         for i in range(offsets[s], offsets[s + 1]):
             f = float(flat[i])
+            rec = trace_every > 0 and n % trace_every == 0 and frame < cap
+            if rec:
+                v_old = v
+                a_old = a
             if kind == 1:
                 d_f = float(
                     moc.step(
@@ -568,6 +836,33 @@ def _integrate_kernel(
             x, v, a = step_scalars(
                 x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
             )
+            if rec:
+                _trace_frame(
+                    tr_f,
+                    tr_i,
+                    tr_p,
+                    tr_v,
+                    frame,
+                    n,
+                    tot_ind - 1,
+                    PHASE_TRANSIT if n < delay_substeps else PHASE_HISTORY,
+                    x,
+                    v,
+                    a,
+                    flat_a[i],
+                    flat_b[i],
+                    f,
+                    mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
+                    abs(v_old) < fric_acc,
+                    d_f if kind == 1 else 0.0,
+                    kind,
+                    p_a,
+                    v_a,
+                    p_b,
+                    v_b,
+                    n_seg,
+                )
+                frame += 1
             n += 1
             if abs(a) > a_max:
                 a_max = abs(a)
@@ -588,6 +883,12 @@ def _integrate_kernel(
         if legacy_parity:
             off = (tot_ind - 1) * step_qty + 1 - n
         for _k in range(step_qty):
+            rec = (
+                trace_every > 0 and n % trace_every == 0 and frame < cap and tot_ind <= out_max * 2
+            )
+            if rec:
+                v_old = v
+                a_old = a
             if kind == 1:
                 d_f = float(
                     moc.step(
@@ -614,6 +915,33 @@ def _integrate_kernel(
             x, v, a = step_scalars(
                 x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
             )
+            if rec:
+                _trace_frame(
+                    tr_f,
+                    tr_i,
+                    tr_p,
+                    tr_v,
+                    frame,
+                    n,
+                    tot_ind - 1,
+                    PHASE_FREE_DECAY,
+                    x,
+                    v,
+                    a,
+                    0.0,
+                    0.0,
+                    0.0,
+                    mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
+                    abs(v_old) < fric_acc,
+                    d_f if kind == 1 else 0.0,
+                    kind,
+                    p_a,
+                    v_a,
+                    p_b,
+                    v_b,
+                    n_seg,
+                )
+                frame += 1
             n += 1
             if abs(a) > a_max:
                 a_max = abs(a)
@@ -626,4 +954,4 @@ def _integrate_kernel(
         if output_type > 0 and tot_ind <= out_max * 2:
             _record(history, output_type, tot_ind - 1, x, v, a)
 
-    return (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f)
+    return (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, frame)
