@@ -17,7 +17,8 @@ from A; the structure's acceleration enters as ``a dt`` weighted by the interp-f
 profiles, which depend only on the grid and are tabulated once per run.
 
 ``step`` is one function over the four arrays and scalars with scalar loop bodies: no
-per-cell helper calls and no Python objects, so that Stage 5 can ``@njit`` it whole. The
+per-cell helper calls and no Python objects; Stage 5 compiles it whole with ``@njit`` (``cache=True``,
+no fastmath; the same source runs as Python under ``NUMBA_DISABLE_JIT=1``). The
 dead ``useUndamped`` branch (``Const useUndamped = False``, the AFT infinite-pipe boundary)
 is not ported; only the live decaying boundary (``dacayFactor``) is.
 
@@ -36,6 +37,7 @@ history or output types. See ``docs/architecture.md``.
 
 from __future__ import annotations
 
+import numba
 import numpy as np
 
 from surge_sdof.vba_compat import clng
@@ -277,6 +279,7 @@ def vav_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
     raise ValueError(f"vav_denominator must be 'legacy' or 'fixed', got {vav_denominator!r}")
 
 
+@numba.njit(cache=True)
 def step(
     even: bool,
     a_dt: float,
@@ -338,6 +341,11 @@ def step(
       carried in locals, ``2 * rhoC`` is hoisted (the same double).
     * VBA quirk D-17: the divisor of the mean velocity is the caller's ``vav_div``.
     * The dead ``useUndamped`` branch (VBA lines 803-818) is not ported.
+    * Stage 5: compiled with ``numba.njit(cache=True)`` (no fastmath), body unchanged;
+      with ``NUMBA_DISABLE_JIT=1`` it is this Python function. Inside the compiled
+      function ``numpy.errstate`` does not apply: ``rho_c = 0`` is rejected by the
+      caller's set-up (``response.peak_response_jc``, D-9) and an overflow propagates
+      nan/inf to the structure state, where the end-of-run check raises (D-23).
     """
     two_rho_c = 2 * rho_c
     if even:

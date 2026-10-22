@@ -270,7 +270,7 @@ def peak_response_jc(
     TypeError
         ``EI < 0`` (D-12).
     FloatingPointError
-        ``rhoC = 0`` or an overflow in the fluid, mid-run under ``numpy.errstate(raise)``;
+        ``rhoC = 0`` (checked once at the set-up, Stage 5) or an overflow in the fluid;
         nothing is swallowed where the VBA's ``On Error GoTo ErrFound`` returned an empty
         array (D-9).
 
@@ -334,11 +334,17 @@ def peak_response_jc(
             gap,
             output_type,
         )
+    rho_c = fluid_densty * celerity
+    if rho_c == 0:
+        # D-9: the MoC divides by rhoC at every sub-step. The legacy raised
+        # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
+        # does not apply, so the check is made once here, before the first update.
+        raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
     junction = JunctionCoupling(
         pipe_seg_qty,
         pivot_seg_qty,
         dt,
-        fluid_densty * celerity,
+        rho_c,
         fluid_area,
         decay,
         vav_denominator,
