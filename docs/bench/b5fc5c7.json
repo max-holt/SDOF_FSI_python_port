@@ -1,0 +1,1082 @@
+{
+ "git_sha": "b5fc5c75752460d123c578c133adf7dcb14bee99",
+ "git_short_sha": "b5fc5c7",
+ "git_dirty": false,
+ "date": "2026-10-22T00:44:44+00:00",
+ "python": "3.13.16",
+ "numpy": "2.5.4",
+ "numba": "absent",
+ "numba_disable_jit": null,
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+ "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+ "repeats": 3,
+ "profile": true,
+ "cases": [
+  {
+   "id": "lumped_r20",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    1.975671,
+    2.046853,
+    2.041957
+   ],
+   "median_s": 2.041957,
+   "substeps": 1005523,
+   "s_per_substep": 2.030741e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "profile": {
+    "total_s": 5.294109,
+    "total_calls": 13458934,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 6.4e-05,
+      "cumtime_s": 5.294072
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:424(get_peak_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 3.30483,
+      "cumtime_s": 5.294008
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:80(min_unsigned)",
+      "ncalls": 1005524,
+      "primitive_calls": 1005524,
+      "tottime_s": 0.688136,
+      "cumtime_s": 0.996594
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 8256030,
+      "primitive_calls": 8256030,
+      "tottime_s": 0.814887,
+      "cumtime_s": 0.814887
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:67(sign)",
+      "ncalls": 2890149,
+      "primitive_calls": 2890149,
+      "tottime_s": 0.318768,
+      "cumtime_s": 0.318768
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:109(max)",
+      "ncalls": 1005524,
+      "primitive_calls": 1005524,
+      "tottime_s": 0.120298,
+      "cumtime_s": 0.120298
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:114(ubound)",
+      "ncalls": 201117,
+      "primitive_calls": 201117,
+      "tottime_s": 0.035149,
+      "cumtime_s": 0.035149
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:100(min)",
+      "ncalls": 100548,
+      "primitive_calls": 100548,
+      "tottime_s": 0.011377,
+      "cumtime_s": 0.011377
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:222(solve_poly)",
+      "ncalls": 12,
+      "primitive_calls": 12,
+      "tottime_s": 0.000243,
+      "cumtime_s": 0.000298
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:123(vba_2d)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000168,
+      "cumtime_s": 0.000198
+     },
+     {
+      "function": "~:0(<built-in method numpy.zeros>)",
+      "ncalls": 3,
+      "primitive_calls": 3,
+      "tottime_s": 0.000107,
+      "cumtime_s": 0.000107
+     },
+     {
+      "function": "~:0(<method 'disable' of '_lsprof.Profiler' objects>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 3.7e-05,
+      "cumtime_s": 3.7e-05
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:488(__exit__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.3e-05,
+      "cumtime_s": 1.8e-05
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:472(__enter__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 7e-06,
+      "cumtime_s": 1.1e-05
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:28(clng)",
+      "ncalls": 5,
+      "primitive_calls": 5,
+      "tottime_s": 4e-06,
+      "cumtime_s": 7e-06
+     }
+    ]
+   },
+   "ratio_to_reference": 1.0
+  },
+  {
+   "id": "lumped_r80",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    1.984634,
+    2.138498,
+    1.792323
+   ],
+   "median_s": 1.984634,
+   "substeps": 1007364,
+   "s_per_substep": 1.970126e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "profile": {
+    "total_s": 5.496922,
+    "total_calls": 13523746,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000134,
+      "cumtime_s": 5.496891
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:424(get_peak_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 3.415971,
+      "cumtime_s": 5.496758
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:80(min_unsigned)",
+      "ncalls": 1007365,
+      "primitive_calls": 1007365,
+      "tottime_s": 0.703575,
+      "cumtime_s": 1.025386
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 8248795,
+      "primitive_calls": 8248795,
+      "tottime_s": 0.864254,
+      "cumtime_s": 0.864254
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:67(sign)",
+      "ncalls": 2958100,
+      "primitive_calls": 2958100,
+      "tottime_s": 0.338626,
+      "cumtime_s": 0.338626
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:109(max)",
+      "ncalls": 1007365,
+      "primitive_calls": 1007365,
+      "tottime_s": 0.125147,
+      "cumtime_s": 0.125147
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:114(ubound)",
+      "ncalls": 201439,
+      "primitive_calls": 201439,
+      "tottime_s": 0.037124,
+      "cumtime_s": 0.037124
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:100(min)",
+      "ncalls": 100640,
+      "primitive_calls": 100640,
+      "tottime_s": 0.011442,
+      "cumtime_s": 0.011442
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:123(vba_2d)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000238,
+      "cumtime_s": 0.000288
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:222(solve_poly)",
+      "ncalls": 12,
+      "primitive_calls": 12,
+      "tottime_s": 0.000174,
+      "cumtime_s": 0.000213
+     },
+     {
+      "function": "~:0(<built-in method numpy.zeros>)",
+      "ncalls": 3,
+      "primitive_calls": 3,
+      "tottime_s": 0.00013,
+      "cumtime_s": 0.00013
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:123(get_dimension)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 3.4e-05,
+      "cumtime_s": 3.6e-05
+     },
+     {
+      "function": "~:0(<method 'disable' of '_lsprof.Profiler' objects>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 3.1e-05,
+      "cumtime_s": 3.1e-05
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:488(__exit__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.1e-05,
+      "cumtime_s": 1.5e-05
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:472(__enter__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 9e-06,
+      "cumtime_s": 1.3e-05
+     }
+    ]
+   },
+   "ratio_to_reference": 0.9719
+  },
+  {
+   "id": "response_r20",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.769482,
+    0.726049,
+    0.781635
+   ],
+   "median_s": 0.769482,
+   "substeps": 1005523,
+   "s_per_substep": 7.65255e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "profile": {
+    "total_s": 2.891593,
+    "total_calls": 10392817,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.2e-05,
+      "cumtime_s": 2.891561
+     },
+     {
+      "function": "src/surge_sdof/response.py:111(peak_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2.1e-05,
+      "cumtime_s": 2.891513
+     },
+     {
+      "function": "src/surge_sdof/response.py:382(_integrate)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.026867,
+      "cumtime_s": 2.891139
+     },
+     {
+      "function": "src/surge_sdof/structure.py:385(step)",
+      "ncalls": 1005523,
+      "primitive_calls": 1005523,
+      "tottime_s": 0.781479,
+      "cumtime_s": 1.0369
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 7250506,
+      "primitive_calls": 7250506,
+      "tottime_s": 0.617029,
+      "cumtime_s": 0.617029
+     },
+     {
+      "function": "src/surge_sdof/loads.py:108(unbalance_force)",
+      "ncalls": 25140,
+      "primitive_calls": 25140,
+      "tottime_s": 0.261032,
+      "cumtime_s": 0.385366
+     },
+     {
+      "function": "~:0(<method 'append' of 'list' objects>)",
+      "ncalls": 1005523,
+      "primitive_calls": 1005523,
+      "tottime_s": 0.109452,
+      "cumtime_s": 0.109452
+     },
+     {
+      "function": "src/surge_sdof/coupling.py:58(coupling_force)",
+      "ncalls": 1005523,
+      "primitive_calls": 1005523,
+      "tottime_s": 0.08044,
+      "cumtime_s": 0.08044
+     },
+     {
+      "function": "~:0(<built-in method builtins.min>)",
+      "ncalls": 100548,
+      "primitive_calls": 100548,
+      "tottime_s": 0.013877,
+      "cumtime_s": 0.013877
+     },
+     {
+      "function": "~:0(<method 'tolist' of 'numpy.ndarray' objects>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000893,
+      "cumtime_s": 0.000893
+     },
+     {
+      "function": "src/surge_sdof/structure.py:123(solve_portal_height)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1e-05,
+      "cumtime_s": 0.000334
+     },
+     {
+      "function": "src/surge_sdof/structure.py:87(solve_poly)",
+      "ncalls": 12,
+      "primitive_calls": 12,
+      "tottime_s": 0.000268,
+      "cumtime_s": 0.000324
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:123(vba_2d)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 4.6e-05,
+      "cumtime_s": 9.4e-05
+     },
+     {
+      "function": "~:0(<built-in method numpy.zeros>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 4.8e-05,
+      "cumtime_s": 4.8e-05
+     },
+     {
+      "function": "tools/bench.py:179(peak_response_summary)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2e-06,
+      "cumtime_s": 3.7e-05
+     }
+    ]
+   },
+   "ratio_to_reference": 0.3768
+  },
+  {
+   "id": "response_r80",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.817546,
+    0.69758,
+    0.720358
+   ],
+   "median_s": 0.720358,
+   "substeps": 1007364,
+   "s_per_substep": 7.15092e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "profile": {
+    "total_s": 2.976581,
+    "total_calls": 10389402,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1e-05,
+      "cumtime_s": 2.976553
+     },
+     {
+      "function": "src/surge_sdof/response.py:111(peak_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2e-05,
+      "cumtime_s": 2.97651
+     },
+     {
+      "function": "src/surge_sdof/response.py:382(_integrate)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.053588,
+      "cumtime_s": 2.976228
+     },
+     {
+      "function": "src/surge_sdof/structure.py:385(step)",
+      "ncalls": 1007364,
+      "primitive_calls": 1007364,
+      "tottime_s": 0.806088,
+      "cumtime_s": 1.070467
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 7241430,
+      "primitive_calls": 7241430,
+      "tottime_s": 0.635885,
+      "cumtime_s": 0.635885
+     },
+     {
+      "function": "src/surge_sdof/loads.py:108(unbalance_force)",
+      "ncalls": 25186,
+      "primitive_calls": 25186,
+      "tottime_s": 0.272169,
+      "cumtime_s": 0.401089
+     },
+     {
+      "function": "~:0(<method 'append' of 'list' objects>)",
+      "ncalls": 1007364,
+      "primitive_calls": 1007364,
+      "tottime_s": 0.113749,
+      "cumtime_s": 0.113749
+     },
+     {
+      "function": "src/surge_sdof/coupling.py:58(coupling_force)",
+      "ncalls": 1007364,
+      "primitive_calls": 1007364,
+      "tottime_s": 0.079606,
+      "cumtime_s": 0.079606
+     },
+     {
+      "function": "~:0(<built-in method builtins.min>)",
+      "ncalls": 100640,
+      "primitive_calls": 100640,
+      "tottime_s": 0.01392,
+      "cumtime_s": 0.01392
+     },
+     {
+      "function": "~:0(<method 'tolist' of 'numpy.ndarray' objects>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.001128,
+      "cumtime_s": 0.001128
+     },
+     {
+      "function": "src/surge_sdof/structure.py:123(solve_portal_height)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.6e-05,
+      "cumtime_s": 0.000242
+     },
+     {
+      "function": "src/surge_sdof/structure.py:87(solve_poly)",
+      "ncalls": 12,
+      "primitive_calls": 12,
+      "tottime_s": 0.000185,
+      "cumtime_s": 0.000226
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:123(vba_2d)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 4.9e-05,
+      "cumtime_s": 0.000105
+     },
+     {
+      "function": "~:0(<built-in method numpy.zeros>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 5.5e-05,
+      "cumtime_s": 5.5e-05
+     },
+     {
+      "function": "tools/bench.py:179(peak_response_summary)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2e-06,
+      "cumtime_s": 3.2e-05
+     }
+    ]
+   },
+   "ratio_to_reference": 0.3528
+  },
+  {
+   "id": "jc_r96_n2000",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.legacy_port.get_peak_response_jc",
+   "times_s": [
+    98.447741,
+    100.003302,
+    99.689921
+   ],
+   "median_s": 99.689921,
+   "substeps": 80982,
+   "s_per_substep": 0.001231013324,
+   "cells": 666,
+   "cell_updates_per_s": 541018,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "profile": {
+    "total_s": 126.781659,
+    "total_calls": 109466023,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 6e-05,
+      "cumtime_s": 126.781617
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:775(get_peak_response_jc)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 108.609004,
+      "cumtime_s": 126.781556
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:183(interp_fraction_a)",
+      "ncalls": 53853030,
+      "primitive_calls": 53853030,
+      "tottime_s": 8.974799,
+      "cumtime_s": 8.974799
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:202(interp_fraction_b)",
+      "ncalls": 53934012,
+      "primitive_calls": 53934012,
+      "tottime_s": 8.565172,
+      "cumtime_s": 8.565172
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:56(mod_dbl)",
+      "ncalls": 80982,
+      "primitive_calls": 80982,
+      "tottime_s": 0.065106,
+      "cumtime_s": 0.30322
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:37(vba_floor)",
+      "ncalls": 80983,
+      "primitive_calls": 80983,
+      "tottime_s": 0.078253,
+      "cumtime_s": 0.238118
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:80(min_unsigned)",
+      "ncalls": 80983,
+      "primitive_calls": 80983,
+      "tottime_s": 0.137883,
+      "cumtime_s": 0.197907
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:28(clng)",
+      "ncalls": 161971,
+      "primitive_calls": 161971,
+      "tottime_s": 0.074238,
+      "cumtime_s": 0.137838
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 682911,
+      "primitive_calls": 682911,
+      "tottime_s": 0.105869,
+      "cumtime_s": 0.105869
+     },
+     {
+      "function": "~:0(<built-in method builtins.round>)",
+      "ncalls": 161971,
+      "primitive_calls": 161971,
+      "tottime_s": 0.063601,
+      "cumtime_s": 0.063601
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:67(sign)",
+      "ncalls": 242946,
+      "primitive_calls": 242946,
+      "tottime_s": 0.050052,
+      "cumtime_s": 0.050052
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:109(max)",
+      "ncalls": 80983,
+      "primitive_calls": 80983,
+      "tottime_s": 0.024652,
+      "cumtime_s": 0.024652
+     },
+     {
+      "function": "~:0(<built-in method builtins.max>)",
+      "ncalls": 80983,
+      "primitive_calls": 80983,
+      "tottime_s": 0.022035,
+      "cumtime_s": 0.022035
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:114(ubound)",
+      "ncalls": 16184,
+      "primitive_calls": 16184,
+      "tottime_s": 0.009316,
+      "cumtime_s": 0.009316
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:100(min)",
+      "ncalls": 8050,
+      "primitive_calls": 8050,
+      "tottime_s": 0.001226,
+      "cumtime_s": 0.001226
+     }
+    ]
+   },
+   "ratio_to_reference": 48.8208
+  },
+  {
+   "id": "response_jc_r96_n2000",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase'}",
+   "times_s": [
+    50.795038,
+    52.054162,
+    51.227682
+   ],
+   "median_s": 51.227682,
+   "substeps": 80982,
+   "s_per_substep": 0.000632581087,
+   "cells": 666,
+   "cell_updates_per_s": 1052829,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "profile": {
+    "total_s": 51.89399,
+    "total_calls": 937340,
+    "top": [
+     {
+      "function": "tools/bench.py:172(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2.3e-05,
+      "cumtime_s": 51.893952
+     },
+     {
+      "function": "src/surge_sdof/response.py:215(peak_response_jc)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 4.9e-05,
+      "cumtime_s": 51.893871
+     },
+     {
+      "function": "src/surge_sdof/response.py:382(_integrate)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.157345,
+      "cumtime_s": 51.892947
+     },
+     {
+      "function": "src/surge_sdof/coupling.py:147(coupling_force)",
+      "ncalls": 80982,
+      "primitive_calls": 80982,
+      "tottime_s": 0.112133,
+      "cumtime_s": 51.455611
+     },
+     {
+      "function": "src/surge_sdof/moc.py:280(step)",
+      "ncalls": 80982,
+      "primitive_calls": 80982,
+      "tottime_s": 51.343478,
+      "cumtime_s": 51.343478
+     },
+     {
+      "function": "src/surge_sdof/structure.py:385(step)",
+      "ncalls": 80982,
+      "primitive_calls": 80982,
+      "tottime_s": 0.165053,
+      "cumtime_s": 0.201487
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 601928,
+      "primitive_calls": 601928,
+      "tottime_s": 0.069231,
+      "cumtime_s": 0.069231
+     },
+     {
+      "function": "src/surge_sdof/loads.py:108(unbalance_force)",
+      "ncalls": 2026,
+      "primitive_calls": 2026,
+      "tottime_s": 0.030191,
+      "cumtime_s": 0.045743
+     },
+     {
+      "function": "~:0(<method 'append' of 'list' objects>)",
+      "ncalls": 80982,
+      "primitive_calls": 80982,
+      "tottime_s": 0.013041,
+      "cumtime_s": 0.013041
+     },
+     {
+      "function": "~:0(<built-in method builtins.min>)",
+      "ncalls": 8050,
+      "primitive_calls": 8050,
+      "tottime_s": 0.002391,
+      "cumtime_s": 0.002391
+     },
+     {
+      "function": "src/surge_sdof/coupling.py:126(__init__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 6e-06,
+      "cumtime_s": 0.000501
+     },
+     {
+      "function": "src/surge_sdof/moc.py:200(interp_fractions)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000274,
+      "cumtime_s": 0.00049
+     },
+     {
+      "function": "src/surge_sdof/structure.py:123(solve_portal_height)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2.9e-05,
+      "cumtime_s": 0.000303
+     },
+     {
+      "function": "src/surge_sdof/structure.py:87(solve_poly)",
+      "ncalls": 12,
+      "primitive_calls": 12,
+      "tottime_s": 0.000225,
+      "cumtime_s": 0.000274
+     },
+     {
+      "function": "src/surge_sdof/moc.py:133(interp_fraction_a)",
+      "ncalls": 665,
+      "primitive_calls": 665,
+      "tottime_s": 0.000113,
+      "cumtime_s": 0.000113
+     }
+    ]
+   },
+   "ratio_to_reference": 25.0875
+  },
+  {
+   "id": "pressure_example",
+   "description": "Example sheet GetPressureResponse (Example!C3:C123)",
+   "times_s": [
+    0.007161,
+    0.006396,
+    0.006257
+   ],
+   "median_s": 0.006396,
+   "substeps": null,
+   "s_per_substep": null,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": {
+    "first": 10312.473102362614,
+    "max": 6192617.475685546,
+    "last": 210322.47206994976,
+    "len": 121
+   },
+   "profile": {
+    "total_s": 0.010627,
+    "total_calls": 14693,
+    "top": [
+     {
+      "function": "tools/bench.py:186(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1.3e-05,
+      "cumtime_s": 0.010605
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:240(get_pressure_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.008383,
+      "cumtime_s": 0.010593
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:37(vba_floor)",
+      "ncalls": 363,
+      "primitive_calls": 363,
+      "tottime_s": 0.000265,
+      "cumtime_s": 0.000666
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:100(min)",
+      "ncalls": 4059,
+      "primitive_calls": 4059,
+      "tottime_s": 0.000451,
+      "cumtime_s": 0.000451
+     },
+     {
+      "function": "src/surge_sdof/legacy_port.py:109(max)",
+      "ncalls": 3647,
+      "primitive_calls": 3647,
+      "tottime_s": 0.000422,
+      "cumtime_s": 0.000422
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:28(clng)",
+      "ncalls": 849,
+      "primitive_calls": 849,
+      "tottime_s": 0.000293,
+      "cumtime_s": 0.000422
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 3405,
+      "primitive_calls": 3405,
+      "tottime_s": 0.000367,
+      "cumtime_s": 0.000367
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:56(mod_dbl)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 6.3e-05,
+      "cumtime_s": 0.000287
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:114(ubound)",
+      "ncalls": 1018,
+      "primitive_calls": 1018,
+      "tottime_s": 0.000141,
+      "cumtime_s": 0.000141
+     },
+     {
+      "function": "~:0(<built-in method builtins.round>)",
+      "ncalls": 849,
+      "primitive_calls": 849,
+      "tottime_s": 0.000129,
+      "cumtime_s": 0.000129
+     },
+     {
+      "function": "~:0(<built-in method builtins.max>)",
+      "ncalls": 363,
+      "primitive_calls": 363,
+      "tottime_s": 4.8e-05,
+      "cumtime_s": 4.8e-05
+     },
+     {
+      "function": "~:0(<method 'disable' of '_lsprof.Profiler' objects>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 2.2e-05,
+      "cumtime_s": 2.2e-05
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:488(__exit__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 6e-06,
+      "cumtime_s": 9e-06
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:123(vba_2d)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 7e-06,
+      "cumtime_s": 9e-06
+     },
+     {
+      "function": ".venv/lib/python3.13/site-packages/numpy/_core/_ufunc_config.py:472(__enter__)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 7e-06,
+      "cumtime_s": 8e-06
+     }
+    ]
+   },
+   "ratio_to_reference": 0.0031
+  },
+  {
+   "id": "response_pressure_example",
+   "description": "Example sheet GetPressureResponse via surge_sdof.pressure.pressure_response",
+   "times_s": [
+    0.004706,
+    0.007509,
+    0.007571
+   ],
+   "median_s": 0.007509,
+   "substeps": null,
+   "s_per_substep": null,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": {
+    "first": 10312.473102362614,
+    "max": 6192617.475685546,
+    "last": 210322.47206994976,
+    "len": 121
+   },
+   "profile": {
+    "total_s": 0.013678,
+    "total_calls": 14282,
+    "top": [
+     {
+      "function": "tools/bench.py:186(<lambda>)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 1e-05,
+      "cumtime_s": 0.013648
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:419(pressure_response)",
+      "ncalls": 1,
+      "primitive_calls": 1,
+      "tottime_s": 0.000438,
+      "cumtime_s": 0.013638
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:315(half_step_a_from_b)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 0.00459,
+      "cumtime_s": 0.005394
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:388(half_step_b_from_a)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 0.004591,
+      "cumtime_s": 0.005379
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:229(valve_closure)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 0.000391,
+      "cumtime_s": 0.001663
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:37(vba_floor)",
+      "ncalls": 363,
+      "primitive_calls": 363,
+      "tottime_s": 0.000433,
+      "cumtime_s": 0.00106
+     },
+     {
+      "function": "src/surge_sdof/_vba_semantics.py:25(vba_min)",
+      "ncalls": 4059,
+      "primitive_calls": 4059,
+      "tottime_s": 0.000664,
+      "cumtime_s": 0.000664
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:28(clng)",
+      "ncalls": 849,
+      "primitive_calls": 849,
+      "tottime_s": 0.00047,
+      "cumtime_s": 0.000657
+     },
+     {
+      "function": "src/surge_sdof/_vba_semantics.py:33(vba_max)",
+      "ncalls": 3647,
+      "primitive_calls": 3647,
+      "tottime_s": 0.000581,
+      "cumtime_s": 0.000581
+     },
+     {
+      "function": "~:0(<built-in method builtins.abs>)",
+      "ncalls": 3405,
+      "primitive_calls": 3405,
+      "tottime_s": 0.000513,
+      "cumtime_s": 0.000513
+     },
+     {
+      "function": "src/surge_sdof/vba_compat.py:56(mod_dbl)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 9.9e-05,
+      "cumtime_s": 0.000441
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:347(pump_boundary)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 0.000285,
+      "cumtime_s": 0.000349
+     },
+     {
+      "function": "src/surge_sdof/pressure.py:283(valve_boundary)",
+      "ncalls": 121,
+      "primitive_calls": 121,
+      "tottime_s": 0.00026,
+      "cumtime_s": 0.000296
+     },
+     {
+      "function": "~:0(<built-in method builtins.round>)",
+      "ncalls": 849,
+      "primitive_calls": 849,
+      "tottime_s": 0.000187,
+      "cumtime_s": 0.000187
+     },
+     {
+      "function": "~:0(<built-in method builtins.max>)",
+      "ncalls": 363,
+      "primitive_calls": 363,
+      "tottime_s": 6.4e-05,
+      "cumtime_s": 6.4e-05
+     }
+    ]
+   },
+   "ratio_to_reference": 0.0037
+  }
+ ]
+}
