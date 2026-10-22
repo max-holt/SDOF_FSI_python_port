@@ -1,6 +1,11 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2 (the model animation) done 2026-10-22: `src/surge_sdof/viz/animate.py` (plotly two-panel
+animation of a `Trace`, `viz` extra), `tools/animate.py` (`--golden` / `--step`), `tests/test_viz.py`
+(22 tests, both modes), `docs/viz/` (three CDN pages: Example lumped / JC, golden row 96); no
+solver file touched; see "Session V.2 — done". Next: the owner's local bench reference run, then
+Session 5b.
 Session V.1 (trace hook for visualisation) done 2026-10-22: `trace_every` on both peak solvers,
 `PeakResponse.trace` (`trace.Trace`), `loads.elbow_forces`; untraced path bitwise (differential
 suite, bench within noise), traced run bitwise equal to the untraced one; see "Session V.1 —
@@ -22,6 +27,57 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2 — done (2026-10-22)
+Commits: `c9d1e11` (scope and plan), then the module / CLI / tests / extra, the three pages with
+the docs, and this note. `src/surge_sdof/` solver modules, `legacy/`, `tests/fixtures/` untouched;
+no test deleted, skipped or loosened; the only new dependencies are the owner's `viz` extra
+(plotly 7.1.0, pandas 3.0.6, installed in `.venv` with `uv pip install`), imported lazily inside
+`surge_sdof.viz` so the solver package stays numpy + numba.
+- Built as planned (plan section below, all eight items). `build_figure(result, case_name,
+  max_frames=400, nominal_size=None)` returns `(fig, AnimationInfo)`; the info carries every
+  scaling the title prints (`exaggeration`, `p_ref`, `p_scale`, `k_p`, `v_scale`, `frame_stride`,
+  `n_frames`, `capped`, the `ULayout`). `write_html` is the only writer and uses the CDN.
+- Checked visually (headless Chromium screenshots of the Example JC / lumped and row 96 pages at
+  rest and at the peak frame): the U with the ext cells above the dashed `h` mark, the legs
+  bending with the ramp fractions, circle sizes following the pressure, the colour bar in m/s,
+  the two force lines with the phase bands, the peak marker and the cursor, slider labels in s.
+- Tests: `tests/test_viz.py`, 22 tests: the figure builds for `r020_lumped_L3_f2` (full history,
+  stride 5000) and `r096_jc_L24_f3` (first 500 samples of its history, stride 100, the same
+  1333-cell grid) with 12 frames; frame-0 offsets exactly zero (circles at `x_nominal`, size
+  nominal, colour 0, `p = p_ref`); lumped size and colour constant across frames while the circles
+  move; JC sizes inside `[0.15, 2] x nominal`, the largest over the trace exactly 2x; frame count
+  <= cap for `max_frames` 3 / 7 / 12 / 50 / 400 with the last traced frame always kept; the last
+  frame's cursor `t` == the last traced `t` (and the slider's last label, the time-axis end); the
+  exaggeration draws the peak as 10 % of the run and the peak frame's offsets are `x * fraction *
+  exaggeration`; U geometry (pivots at the corners, run `(N - 2 piv) 2 c dt`, leg `piv 2 c dt`,
+  anchors at the top, uniform spacing on the run, `h` from `solve_portal_height`); the lumped
+  layout is the grid the case would have; the D-4 display fallback; the scalar table and phase
+  bands; `is_capped`; the CDN page is under 1 MB; no trace raises. Green under Numba (3 s) and
+  `NUMBA_DISABLE_JIT=1` (24 s); fast suite 856 passed; `-m slow` 150 passed (8 min 27 s) before
+  the `src/` commit.
+- Pages: `docs/viz/example_jc_step.html` (0.65 MB, 350 frames, trace_every 2) and
+  `example_lumped_step.html` (0.35 MB, 336 frames) from the Example-sheet inputs via `--golden`;
+  `golden_r096_jc.html` from row 96 at `--max-frames 150` (4.7 MB; 400 frames would be 10.5 MB
+  with 1333 cells x 4 float32 arrays per frame). Row 96 facts the page shows: peak |x| 3.62 mm at
+  t = 6.66 s, exaggeration x665, p_scale 12.4 kPa, max |v| 2.59 mm/s, N = 666, pivot 87, run
+  24.05 m, leg 4.25 m (h = 4.05 m), never enters free decay.
+- Judgement calls to flag: (1) the U is 1 m per m of `cell_position` with no per-segment
+  rescaling, so the drawn leg is `pivotSegQTY` cells (the rounded `h` plus the `extQTY` fixed
+  cells above the anchor) and the run is `N - 2 pivotSegQTY` cells (about `L` plus two cells);
+  the owner's "leg length = portal-frame height" is shown as the dashed `h` mark rather than by
+  stretching the leg, so cell spacing stays uniform. (2) Colour is `v_cells` with `cmin/cmax =
+  -+max|v|` rather than the normalised `v / max|v|`: the same picture, and the hover and colour
+  bar then read in m/s. (3) `k_p = p_scale / max(p - p_ref)` makes the largest circle exactly 2x
+  nominal; a size floor of 0.15x nominal keeps deep troughs visible (the Example JC case reaches
+  it). (4) `--step` takes `--size` as the internal diameter in mm (area `pi d^2 / 4`) and defaults
+  every other input to the `curve_10in` parameters (10-inch pipe: EI, mass per length, celerity,
+  1265 Hz, 40 sub-steps), since the repository has no pipe-schedule table; `histories.py` in 5b
+  can replace it. (5) The CLI's default `trace_every` targets about 2000 traced frames (Panel 2
+  resolution inside the memory guard); `--trace-every` overrides. (6) The synthetic `t = 0`
+  frame is labelled transit unless the run has no transit sub-step. (7) `is_capped` reads the
+  first free-decay sample from the trace and compares `forced + free_decay_samples` with
+  `2 outMax`; a run whose decay is shorter than one stride is reported uncapped.
 
 ## Session V.2 — scope and plan (recorded 2026-10-22 before touching `src/`)
 Owner's instruction: the model animation that consumes `trace.Trace` (two panels, shared slider,
@@ -927,6 +983,19 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**Local bench reference run, then Session 5b.** (1) The owner's reference bench on local
+hardware (the absolute row for the paper): `.venv/bin/python tools/bench.py --profile` from the
+repository root on a quiet machine (about an hour; `--skip-full-python` brings it to ~10 min at
+the cost of the full-JC pure-Python row), then commit `docs/bench/<sha>.json` and
+`docs/bench/README.md`. No bench was run in V.2: nothing on the solver path changed (the viz
+package is read-only on a `PeakResponse`). (2) Session 5b as queued below: `histories.py` (which
+replaces the `--step` stand-in of `tools/animate.py`), F-3, the `unbalance_force` speed lever,
+the cache guard. V.2 leaves the owner three things to look at: the judgement calls in "Session
+V.2 — done" (the U geometry above all), the `docs/viz/golden_r096_jc.html` frame cap (150; a
+400-frame page is 10.5 MB), and whether `docs/viz/` pages should be regenerated by a target
+(`make viz`) rather than by hand.
+
+Previous next action (V.1 → V.2, kept for the record):
 **Session V.2 (owner to specify: the visualiser that consumes `trace.Trace`).** V.1 hands it a
 self-describing `Trace` per run (`PeakResponse.trace`): per frame `t, sub_step, sample, phase,
 x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`, JC `p_cells` / `v_cells` on the
