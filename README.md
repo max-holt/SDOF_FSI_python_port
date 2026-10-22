@@ -27,7 +27,9 @@ python -m venv .venv
 ```
 
 The `dev` extra adds pytest, ruff and hypothesis (and openpyxl / oletools, used only by
-`tools/extract_fixtures.py` to regenerate the fixtures from the source workbook). The project's
+`tools/extract_fixtures.py` to regenerate the fixtures from the source workbook). The `viz` extra
+(`pip install -e ".[viz]"`: plotly, pandas) is needed only for the model animation
+(`surge_sdof.viz`, `tools/animate.py`). The project's
 commands invoke the interpreter as `.venv/bin/python`; adapt the path if your environment differs.
 
 The inner loops (`structure.step_scalars`, `moc.step`, `response._integrate_kernel`) are
@@ -132,6 +134,27 @@ identical result digests or the exit code is 1. Run it at the end of every Stage
 and commit `docs/bench/`. Expect about an hour (the full JC cases in pure Python are ~15 min
 each; `--skip-full-python` leaves them out and brings the run to about 10 minutes).
 
+## Animation
+
+```
+.venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_step.html
+.venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --max-frames 150 --out docs/viz/golden_r096_jc.html
+.venv/bin/python tools/animate.py --step --amplitude 5 --size 254 --length 12 --nat-freq 3 --mu 0.005 --solver jc --out docs/viz/step.html
+```
+
+Session V.2: `surge_sdof.viz.animate.build_figure(result)` (the `viz` extra) turns a run made
+with `trace_every > 0` into a two-panel plotly animation: the fluid column laid on the U with
+every cell a circle displaced by the mass motion times its moving fraction, sized by its
+pressure and coloured by its velocity (constant for the lumped model), and the applied unbalance
+`F_A(t) - F_B(t - L/c)` with the friction force against time, phases shaded, a cursor at the
+frame time; shared slider and play / pause. `tools/animate.py` reruns a fixture case
+(`--golden`, a `curve_10in` case id or `example_lumped` / `example_jc`) or a plain step
+(`--step`, amplitude in bar on the area of a `--size` mm pipe) and writes a standalone page with
+plotly.js from the CDN (`--max-frames`, default 400, caps the frames; the stride and every
+scaling are printed and put in the title). `docs/viz/` holds three such pages; the full-library
+HTML is never committed. `docs/architecture.md` "Session V.2 — the animation" has the geometry
+and scaling rules.
+
 ## Where the behaviour is documented
 
 * `DEVIATIONS.md`: every place the Python differs from, or deliberately preserves a quirk of,
@@ -140,7 +163,7 @@ each; `--skip-full-python` leaves them out and brings the run to about 10 minute
   duplicated-code map the Stage 4 restructure followed, the blind spots of the Excel golden
   suite.
 * `docs/architecture.md`: the Stage 4 module layout, fixed interfaces, exactness arguments,
-  the data flow of one sub-step, the Stage 5 kernels and the Session V.1 trace.
+  the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace and the Session V.2 animation.
 * `NOTES.md`: session hand-off (current stage, results, open issues, next action).
 * `CLAUDE.md`: the working rules (stage discipline, hard rules, commands).
 
@@ -150,6 +173,6 @@ each; `--skip-full-python` leaves them out and brings the run to about 10 minute
 src/surge_sdof/      the package (see above)
 legacy/vba/          the VBA source of truth (never edited)
 tests/               pytest suites; tests/fixtures/ holds the Excel-generated data (never edited)
-tools/               bench.py, golden_report.py, extract_fixtures.py
-docs/                architecture.md, port_review.md, bench/
+tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py
+docs/                architecture.md, port_review.md, bench/, viz/ (animation pages)
 ```
