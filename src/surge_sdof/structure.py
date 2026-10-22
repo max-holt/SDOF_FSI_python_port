@@ -333,8 +333,8 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
 
     Notes
     -----
-    The VBA helpers' ladders (``minUnsigned`` lines 51-59, ``max`` 11-17, ``sign``
-    19-33) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
+    The VBA helpers' ladders (``max`` lines 11-17, ``minUnsigned`` 19-33, ``sign``
+    51-59) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
     cases; ``step`` inlines the same code.
     """
     ax = abs(x)
