@@ -41,8 +41,8 @@ Python. The `Makefile` wraps the common commands: `make test`, `make test-nojit`
 
 | Python | VBA | What it returns |
 |---|---|---|
-| `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio=1, gap=0, output_type=0)` | `GetPeakResponse` | `PeakResponse`: the five maxima (static-equivalent force N, displacement m, velocity m/s, acceleration m/s², applied force N) and, for `output_type` 1-3, the per-sample history |
-| `surge_sdof.response.peak_response_jc(..., fluid_densty, fluid_area, ..., *, vav_denominator="fixed", parity="running")` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; the keyword flags select the two approved fixes (DEVIATIONS D-17, D-19); the values `"legacy"` / `"per_phase"` reproduce the VBA bitwise |
+| `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio=1, gap=0, output_type=0, trace_every=0)` | `GetPeakResponse` | `PeakResponse`: the five maxima (static-equivalent force N, displacement m, velocity m/s, acceleration m/s², applied force N) and, for `output_type` 1-3, the per-sample history; with `trace_every=k > 0` also `.trace`, a `surge_sdof.trace.Trace` of every `k`-th sub-step (state, elbow forces, friction force, stick flag; the maxima and history are unchanged bitwise) |
+| `surge_sdof.response.peak_response_jc(..., fluid_densty, fluid_area, ..., trace_every=0, *, vav_denominator="fixed", parity="running")` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; the keyword flags select the two approved fixes (DEVIATIONS D-17, D-19); the values `"legacy"` / `"per_phase"` reproduce the VBA bitwise; a JC trace adds the junction force and the interleaved pressure / velocity column per frame with the grid geometry |
 | `surge_sdof.pressure.pressure_response(valve_pattern, closure_time, celerity, density, time_step, pressure_drop_from_pump, flow_rate, pipe_area, valve_cv, length_to_pump, pump_ramp_pressure)` | `GetPressureResponse` | 0-based array of the valve pressure (Pa) after each loop iteration of two time steps |
 
 Units are consistent SI for the two peak solvers (the VBA fixes m and s only through the
@@ -139,8 +139,8 @@ each; `--skip-full-python` leaves them out and brings the run to about 10 minute
 * `docs/port_review.md`: the Stage 1 close-out review: the table of VBA constants, the
   duplicated-code map the Stage 4 restructure followed, the blind spots of the Excel golden
   suite.
-* `docs/architecture.md`: the Stage 4 module layout, fixed interfaces, exactness arguments and
-  the data flow of one sub-step.
+* `docs/architecture.md`: the Stage 4 module layout, fixed interfaces, exactness arguments,
+  the data flow of one sub-step, the Stage 5 kernels and the Session V.1 trace.
 * `NOTES.md`: session hand-off (current stage, results, open issues, next action).
 * `CLAUDE.md`: the working rules (stage discipline, hard rules, commands).
 

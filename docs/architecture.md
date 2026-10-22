@@ -4,8 +4,9 @@ One line per module: what it is responsible for, and what it must not know about
 The structure was fixed at the start of Stage 4 and filled in module by module (4.1:
 `structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped path; 4.2: `moc`, the
 JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change; 5: the three
-inner loops compiled with Numba, see "Stage 5 — compiled kernels"). This document describes
-the code as it stands after Stage 5. `legacy_port.py` stays the reference
+inner loops compiled with Numba, see "Stage 5 — compiled kernels"; Session V.1: the
+sub-step trace for visualisation, see "Session V.1 — the trace"). This document describes
+the code as it stands after Session V.1. `legacy_port.py` stays the reference
 implementation until Stage 6 and every new module is proved against it by
 `tests/test_differential.py`. Every public function and dataclass of the six live modules
 carries a numpy-style docstring with the unit of each physical argument and return and the
@@ -21,6 +22,7 @@ src/surge_sdof/
   coupling.py          # coupling force from the moc state (interp fractions, low-pass dF)
   loads.py             # elbow-to-elbow unbalance force from a history: transit delay, phase scheduling
   response.py          # public API: peak_response(...) and peak_response_jc(...); returns a dataclass; one private _integrate loop
+  trace.py             # Session V.1: the Trace dataclass of a traced run (trace_every > 0) and its allocation / assembly helpers
   pressure.py          # pressure_response (valve/pump MoC) as a standalone driver; get_pressure_response is a thin alias
 ```
 
@@ -30,10 +32,11 @@ src/surge_sdof/
 | `_vba_semantics.py` | The live home for VBA comparison semantics: `vba_min`/`vba_max` (the module-level VBA `min`/`max`, lines 3-17: on a tie or with NaN the **second** argument is returned, with its type and sign of zero; Python's built-ins return the first). One copy, used by `pressure.py`, surviving the Stage 6 removal of `legacy_port.py` (whose `min`/`max` are the same functions). | any solver quantity |
 | `legacy_port.py` | Line-for-line Stage 1 transcription of the VBA; the oracle for the differential tests. Frozen (no edits, no imports *from* it in new modules except in tests). | the new modules |
 | `structure.py` | The SDOF pipe proxy: `solve_portal_height` (seed + 11 `solve_poly` passes), `lumped_params` (mass, stiffness, damping, `fricAcc`), `restoring_force(x, k, gap, ratio)` (bilinear support gap), and `step(state, f_applied, params, dt)` — exactly the VBA update (explicit `aNew` from the old state, trapezoidal `v` and `x`, stick/slip Coulomb friction) on Python floats with the clamp/sign ladders inlined. Stage 5: the arithmetic is `step_scalars(x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt)`, compiled with `numba.njit(cache=True)`; `step` unpacks the tuple and the `SdofParams` for it. One kernel, called from one loop. | where `f_applied` comes from (force histories, transit delay, fluid coupling), sample/phase bookkeeping, max trackers, output types |
-| `loads.py` | The elbow-to-elbow unbalance force `forceA − forceB` from a force history: `transit_delay` (`unballanceStepQTY`), the `kOverlap` sub-sample offset and the three-phase scheduling (delay phase with `forceA` held, ramp phase with both forces interpolated, no force in free decay), walked column-major over 2-D histories exactly as the VBA. Yields one list of per-sub-step values per sample. | the structure state, stiffness or damping, fluid coupling, what the caller does with each sample (result histories, free decay) |
+| `loads.py` | The elbow-to-elbow unbalance force `forceA − forceB` from a force history: `transit_delay` (`unballanceStepQTY`), the `kOverlap` sub-sample offset and the three-phase scheduling (delay phase with `forceA` held, ramp phase with both forces interpolated, no force in free decay), walked column-major over 2-D histories exactly as the VBA. Yields one list of per-sub-step values per sample. Session V.1: the index walk is one private per-sample `_schedule` generator; `unbalance_force` (inner `k` loops unchanged) and `elbow_forces` (the two forces apart, with the sample's phase, for the trace) consume it. | the structure state, stiffness or damping, fluid coupling, what the caller does with each sample (result histories, free decay) |
 | `coupling.py` | The force the fluid column exerts on the structure: `Coupling.coupling_force(state, step_index) -> float`. `NoCoupling` returns `0.0`. `JunctionCoupling` (Stage 4.2) owns the column arrays, the tabulated interp fractions and the low-pass `dF`: each call feeds the state's acceleration (`a * dt`) into the moving cells, advances the column one sub-step with `moc.step` on the half-grid `step_index % 2` selects, and returns the new `dF` as a Python float. The parity source (running counter, F-2, or the VBA per-phase index) is the loop's choice; the coupling only takes `step_index % 2`. Stage 5: `coupling_force` is the Python-level interface; the compiled loop reads `KIND` (0 / 1) and the junction's arrays and scalars instead and performs the same update, `_integrate` writes `d_f` back. | the force history / unbalance schedule, output types, the SDOF update itself, phase boundaries |
 | `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 compiles it whole with `numba.njit(cache=True)`, body unchanged. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
-| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). | the internals of `step`, the MoC arrays, how `loads` interpolates |
+| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). Session V.1: both solvers take `trace_every: int = 0`; with `k > 0` the kernel records every `k`-th sub-step into preallocated arrays and the result carries `PeakResponse.trace`. | the internals of `step`, the MoC arrays, how `loads` interpolates |
+| `trace.py` | Session V.1. `Trace`, the frozen dataclass of a traced run (per-frame arrays `t, sub_step, sample, phase, x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`; JC only `p_cells`, `v_cells` and the column geometry; one-off `solver`, `trace_every`, `dt`, `step_qty`, `out_max`, `params`, `inputs`), the frame-array column constants the kernel writes (`F_*`, `I_*`), `capacity` (frames to allocate: the forced sub-steps plus free decay up to the history window), `check_memory` (`MAX_TRACE_VALUES`, `ValueError` naming the smallest stride that fits), `allocate`, `interleave` (the staggered grid as `A0 B0 A1 … AN`) and `build` (slices and copies the kernel arrays into a `Trace`). | the solver loop, `loads`, `moc.step` (it only lays out what the kernel copied) |
 | `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
@@ -106,6 +109,15 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   fluid_densty, fluid_area, damping_percent, dynamic_fric, nat_freq, dt, gap,
   restrain_freq_ratio) -> SdofParams` (Stage 4.2).
 * `response.peak_response_jc(..., *, vav_denominator, parity) -> PeakResponse` (Stage 4.2).
+* `response.peak_response(..., trace_every=0)` and `response.peak_response_jc(...,
+  trace_every=0, *, ...)` (Session V.1): `trace_every` is a non-negative int (`operator
+  .index`); `k > 0` records every `k`-th sub-step as `PeakResponse.trace`, a `trace.Trace`
+  (see "Session V.1 — the trace"); 0 leaves `trace` None. The `PeakResponse` values are the
+  same bitwise either way.
+* `loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty)` (Session
+  V.1) is a generator like `unbalance_force`: one `(phase, forceA list, forceB list)` per
+  sample, `phase` 0 for the delay samples and 1 for the ramp samples, `forceA[k] -
+  forceB[k]` bitwise the `unbalance_force` value.
 * `pressure.pressure_response(valve_pattern, closure_time, celerity, density, time_step,
   pressure_drop_from_pump, flow_rate, pipe_area, valve_cv, length_to_pump,
   pump_ramp_pressure) -> np.ndarray` (Stage 4.3): the 0-based valve pressure history,
@@ -117,15 +129,18 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
 * `response.PeakResponse` fields: `max_static_equivalent_force`, `max_displacement`,
   `max_velocity`, `max_acceleration`, `max_applied_force`, `history` (None for
   `output_type = 0`; otherwise a 0-based array of length `outMax * 2`, element `t − 1` =
-  state at the end of sample `t`), `output_type`, `free_decay_samples`.
+  state at the end of sample `t`), `output_type`, `free_decay_samples`, and (Session V.1,
+  trailing, default None) `trace`.
 * Private, not an interface: `response._integrate(forces, params, dt, step_qty, coupling,
   out_max, output_type, legacy_parity=False)` (the Python orchestrator),
   `response._integrate_kernel(flat, offsets, mass, stiffness, damping, fric_acc, gap,
   ratio2, dt, step_qty, out_max, output_type, legacy_parity, history, kind, p_a, v_a, p_b,
-  v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay, vav_div, fluid_area, d_f) -> (x_max,
-  v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f)` (the compiled loop),
-  `response._record(history, output_type, index, x, v, a)` (the per-sample history write,
-  called once per sample) and `response._decay_test(x, x_zero)`.
+  v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay, vav_div, fluid_area, d_f, trace_every,
+  flat_a, flat_b, delay_substeps, tr_f, tr_i, tr_p, tr_v) -> (x_max, v_max, a_max, f_max,
+  x, v, a, tot_ind, forced_samples, d_f, n_frames)` (the compiled loop; the last eight
+  arguments and `n_frames` are Session V.1), `response._trace_frame(...)` (the compiled
+  per-frame write), `response._record(history, output_type, index, x, v, a)` (the
+  per-sample history write, called once per sample) and `response._decay_test(x, x_zero)`.
 
 ## Exactness notes
 
@@ -197,6 +212,63 @@ the Stage 4 code; what changed is the calling convention:
   `lumped_params` / `jc_params`, `grid_size`, `interp_fractions`, `decay_factor`) and
   `loads.unbalance_force`, which is now the dominant cost of a compiled lumped run (the
   generator is Python; Stage 5b candidate).
+
+## Session V.1 — the trace
+
+`peak_response(..., trace_every=k)` and `peak_response_jc(..., trace_every=k)` with `k > 0`
+return a `PeakResponse` whose `trace` is a `trace.Trace`: every `k`-th sub-step of the run,
+recorded inside `_integrate_kernel` and meant for visualisation (Session V.2). The module
+docstring of `trace.py` is the reference; the design points:
+
+* **Frame convention.** Frame `i` is the end of sub-step `i * k`, `sub_step` being the
+  kernel's running counter `n` (the index whose parity drives the MoC half-grids). `t = (sub_step
+  + 1) * dt`; `x, v, a` the state after the sub-step; `f_a`, `f_b`, `f_unbalance = f_a − f_b`
+  the forces applied during it (zero in free decay); `d_f` the junction force the sub-step used
+  (`moc.step` runs before the SDOF update; zeros for lumped); `p_cells`, `v_cells` the column
+  after it. `sample` is `totInd − 1` (the `history` index); `phase` is 0 while the delay samples
+  of `loads.elbow_forces` last (transit), 1 to the end of the schedule (history), 2 in free
+  decay. Frame 0 is the end of sub-step 0, where a column at rest with `a = 0` is still the
+  initial column bitwise.
+* **`f_friction` and `stick`.** `f_friction = mass · dv_friction / dt` with `dv_friction = v_new
+  − (v_old + (a_old + a_new) · dt / 2)`: the velocity the Coulomb branch of `step_scalars`
+  added or removed, recomputed in the recording branch from the same doubles the kernel formed
+  (`half_dt = dt / 2`, `v + av`), so `structure.py` is untouched. Slip gives `∓fric_acc`
+  (exactly `0.0` with `dynamicFric = 0`, and in the D-20 dead zone), stick (`|v_old| <
+  fric_acc`, the `stick` flag) gives the momentum the stick removed, the holding force.
+* **Window and capacity.** Phase 3's length is unknown before the run, so the trace follows
+  the history's own cap: free decay is traced while `totInd <= outMax · 2` (the `_record`
+  guard), later sub-steps are integrated but not traced. `trace.capacity` allocates once for
+  `forced sub-steps + max(0, outMax · 2 − forced samples) · stepQTY` sub-steps at the stride; the
+  kernel returns the frames written and `trace.build` slices. `trace.check_memory` raises
+  `ValueError` before allocating when `capacity · (8 float columns + 4 int columns + 2 ·
+  n_cells)` 8-byte values would exceed `MAX_TRACE_VALUES` (50e6, 400 MB; this contains the
+  `n_frames · n_cells` of each column array), naming the smallest stride that fits.
+* **Kernel hook.** `_integrate` flattens `loads.elbow_forces` like the unbalance values
+  (`flat_a`, `flat_b`, and `delay_substeps` for the phase label), allocates `tr_f (cap, 8)`
+  float64, `tr_i (cap, 4)` int64 and `tr_p`, `tr_v (cap, n_cells)` (column layout
+  interleaved `A0 B0 A1 … AN`, `n_cells = 2N + 1`; `(0, 0)` for lumped or untraced). Per
+  sub-step the kernel tests `rec = trace_every > 0 and n % trace_every == 0 and frame < cap`
+  (phase 3 also `tot_ind <= out_max · 2`), saves `v_old, a_old` before `step_scalars` when
+  `rec`, and calls the compiled `_trace_frame` after it, which writes the row and, for `kind`
+  1, copies the four column arrays. The recording reads the state and writes the trace arrays
+  only; the state arithmetic is the same whether or not it runs, so the traced run's
+  `PeakResponse` equals the untraced one bitwise (`tests/test_trace.py`, both solvers, strides
+  1 / 3 / 7, output types, both flag sets). With `trace_every == 0` the branch is never entered
+  and the arrays are empty; the untraced path costs one predictable branch per sub-step (bench
+  `docs/bench/`, Session V.1 row: within noise of `b9597a3`). Works under
+  `NUMBA_DISABLE_JIT=1` (plain Python; the one extra boolean test per sub-step).
+* **One-off fields** make a `Trace` self-describing: `solver`, `trace_every`, `dt`, `step_qty`,
+  `out_max`, `params` (`SdofParams`), `inputs` (the case inputs as received, `force_history`
+  as the 2-D array, the JC flags), and for JC `pipe_seg_qty`, `pivot_seg_qty`, `ext_qty`,
+  `n_cells`, `cell_kind` (0 = A node, 1 = B cell), `cell_position` (`j · c · dt` m from the
+  first A node; a cell is `2 c dt` long and the column runs `extQTY` end cells, the leg to
+  the pivot, the span, the other leg, `extQTY` end cells, `moc.grid_size`) and
+  `moving_fraction` (`frac_a` / `frac_b` interleaved, the weights `moc.step` applies to
+  `a dt`). A JC call that takes the short-pipe fallback returns a lumped trace (`solver ==
+  "peak_response"`, JC fields None).
+* **Numba cache.** `_trace_frame` and the `trace.F_* / I_*` constants are compiled into
+  `_integrate_kernel`; after editing `trace.py` run `make clean-cache` (the `cache=True`
+  staleness note above applies).
 
 ## Lint policy
 
