@@ -65,8 +65,26 @@ DAMPING_A = 0.25
 def grid_size(
     physical_length: float, portal_frame_height: float, celerity: float, dt: float
 ) -> tuple[int, int]:
-    """``(pipeSegQTY, pivotSegQTY)``: cells between the elbows (even by construction) and
-    cells from each end to the portal-frame pivot."""
+    """``(pipeSegQTY, pivotSegQTY)`` of the MoC grid (VBA lines 733-734).
+
+    Parameters
+    ----------
+    physical_length : float
+        Length between elbows, m.
+    portal_frame_height : float
+        From ``structure.solve_portal_height``, m.
+    celerity : float
+        Pressure-wave speed, m/s.
+    dt : float
+        Sub-step, s; a cell is ``2 * celerity * dt`` long.
+
+    Returns
+    -------
+    tuple of int
+        ``pipeSegQTY`` (cells between the elbows, even by construction) and
+        ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
+        height in cells; ``CLng`` rounds half to even).
+    """
     pivot_seg_qty = EXT_QTY + clng(portal_frame_height / (2 * celerity * dt))
     pipe_seg_qty = 2 + clng(physical_length / (4 * celerity * dt) + pivot_seg_qty) * 2
     return pipe_seg_qty, pivot_seg_qty
@@ -74,23 +92,63 @@ def grid_size(
 
 # VBA line 736
 def is_short_pipe(pipe_seg_qty: int, pivot_seg_qty: int) -> bool:
-    """``pipeSegQTY - 2 * pivotSegQTY <= 2``: the span cannot hold the MoC grid and
-    ``GetPeakResponseJC`` falls back to the lumped solver."""
+    """``pipeSegQTY - 2 * pivotSegQTY <= 2`` (VBA line 736): the span cannot hold the MoC
+    grid and ``GetPeakResponseJC`` falls back to the lumped solver.
+
+    Parameters
+    ----------
+    pipe_seg_qty, pivot_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    bool
+    """
     return pipe_seg_qty - 2 * pivot_seg_qty <= 2
 
 
 # VBA line 731
 def decay_factor(celerity: float, dt: float, physical_length: float) -> float:
-    """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)``: the end-cell pressure
-    decays by this factor per even update (a half-life of one pipe transit)."""
+    """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)`` (VBA line 731).
+
+    Parameters
+    ----------
+    celerity : float
+        Pressure-wave speed, m/s.
+    dt : float
+        Sub-step, s.
+    physical_length : float
+        Length between elbows, m.
+
+    Returns
+    -------
+    float
+        Dimensionless factor by which the end-node pressure decays per even update (a
+        half-life of one pipe transit).
+    """
     return 2 ** ((celerity * dt) / physical_length)
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def interp_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """Cell-centred weighting of the mass acceleration at A node ``n``. Literal copy of
-    ``legacy_port.interp_fraction_a`` so that this module does not import the frozen
-    legacy module."""
+    """Cell-centred weighting of the mass acceleration at A node ``n`` (VBA line 105).
+
+    Literal copy of ``legacy_port.interp_fraction_a`` so this module does not import the
+    frozen legacy module.
+
+    Parameters
+    ----------
+    n : int
+        A node index, ``0 .. pipeSegQTY``.
+    pivot_seg_qty, pipe_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    float
+        0 in the ``extQTY`` end cells, a squared ramp up to the pivot, 1 between the
+        pivots; dimensionless.
+    """
     if n < EXT_QTY:
         return 0.0
     elif n < pivot_seg_qty:
@@ -105,10 +163,28 @@ def interp_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
 
 # VBA line 121: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """Node-centred weighting of the mass acceleration at B cell ``n``. Literal copy of
-    ``legacy_port.interp_fraction_b``; the first test is ``n < 3`` where
-    ``interp_fraction_a`` uses ``n < extQTY`` (D-4), so ``pivotSegQTY = 4`` divides by
-    zero at ``n = 3``."""
+    """Node-centred weighting of the mass acceleration at B cell ``n`` (VBA line 121).
+
+    Literal copy of ``legacy_port.interp_fraction_b``.
+
+    Parameters
+    ----------
+    n : int
+        B cell index, ``0 .. pipeSegQTY - 1``.
+    pivot_seg_qty, pipe_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    float
+        Dimensionless weight, as ``interp_fraction_a`` but node-centred.
+
+    Notes
+    -----
+    VBA quirk D-4 preserved: the first test is ``n < 3`` where ``interp_fraction_a`` uses
+    ``n < extQTY`` (4), so ``n = 3`` takes the ramp branch and ``pivotSegQTY = 4``
+    divides by zero.
+    """
     if n < 3:  # VBA quirk D-4 preserved
         return 0.0
     elif n < pivot_seg_qty:
@@ -122,11 +198,27 @@ def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
 
 
 def interp_fractions(pipe_seg_qty: int, pivot_seg_qty: int) -> tuple[np.ndarray, np.ndarray]:
-    """The two profiles tabulated once per grid: ``frac_a[n]`` for the A nodes
-    ``n = 1 .. N-1`` (elements 0 and N are never used by ``step`` and are 0) and
-    ``frac_b[n]`` for the B cells ``n = 0 .. N-1``. With ``pivotSegQTY = 4`` this raises
-    ``ZeroDivisionError`` (D-4) here, at set-up, where the legacy solver raised it in
-    its first MoC update."""
+    """The two profiles tabulated once per grid.
+
+    Parameters
+    ----------
+    pipe_seg_qty, pivot_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    frac_a : numpy.ndarray
+        Length ``N + 1``; ``frac_a[n]`` for the A nodes ``n = 1 .. N-1`` (elements 0 and
+        ``N`` are never used by ``step`` and are 0).
+    frac_b : numpy.ndarray
+        Length ``N``; ``frac_b[n]`` for the B cells ``n = 0 .. N-1``.
+
+    Raises
+    ------
+    ZeroDivisionError
+        ``pivotSegQTY = 4`` (D-4), here at set-up where the legacy solver raised it in its
+        first MoC update.
+    """
     frac_a = np.zeros(pipe_seg_qty + 1)
     frac_b = np.zeros(pipe_seg_qty)
     for n in range(1, pipe_seg_qty):
@@ -137,8 +229,19 @@ def interp_fractions(pipe_seg_qty: int, pivot_seg_qty: int) -> tuple[np.ndarray,
 
 
 def new_column(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """``(p_a, v_a, p_b, v_b)`` at rest: the VBA ``arrayA(0 To 1, 0 To N)`` and
-    ``arrayB(0 To 1, 0 To N-1)`` zeroed, as four contiguous arrays."""
+    """``(p_a, v_a, p_b, v_b)`` at rest.
+
+    Parameters
+    ----------
+    pipe_seg_qty : int
+        ``N``.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The VBA ``arrayA(0 To 1, 0 To N)`` and ``arrayB(0 To 1, 0 To N-1)`` zeroed, as
+        four contiguous float64 arrays: pressures in Pa (``rhoC * v``), velocities in m/s.
+    """
     return (
         np.zeros(pipe_seg_qty + 1),
         np.zeros(pipe_seg_qty + 1),
@@ -148,9 +251,25 @@ def new_column(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, n
 
 
 def vav_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
-    """Divisor of the mean-velocity sum (``2N + 1`` terms): ``2 * pipeSegQTY - 1`` for
-    ``"legacy"`` (VBA line 802, D-17) or ``2 * pipeSegQTY + 1`` for ``"fixed"``
-    (approved fix F-1)."""
+    """Divisor of the mean-velocity sum (``2N + 1`` terms).
+
+    Parameters
+    ----------
+    pipe_seg_qty : int
+        ``N``.
+    vav_denominator : {"legacy", "fixed"}
+        ``"legacy"``: ``2 * pipeSegQTY - 1`` (VBA line 802, quirk D-17); ``"fixed"``:
+        ``2 * pipeSegQTY + 1`` (approved fix F-1).
+
+    Returns
+    -------
+    int
+
+    Raises
+    ------
+    ValueError
+        Any other string.
+    """
     if vav_denominator == "legacy":
         return 2 * pipe_seg_qty - 1
     if vav_denominator == "fixed":
@@ -177,14 +296,48 @@ def step(
 ) -> float:
     """One MoC sub-step in place (VBA lines 795-847) and the new junction force ``dF``.
 
-    ``even`` selects the half-grid: even sub-steps update the A nodes from the B cells
-    (mean-velocity subtraction, decaying end nodes, then the B velocities get the mass
-    acceleration), odd sub-steps update the B cells from the A nodes (then the A
-    velocities get the mass acceleration). ``a_dt`` is the structure's acceleration times
-    ``dt`` (VBA ``a * dt``); ``n_seg`` is ``pipeSegQTY``, ``pivot`` is ``pivotSegQTY``,
-    ``rho_c`` is ``fluidDensty * celerity``, ``decay`` is ``dacayFactor``, ``vav_div`` the
-    divisor from ``vav_divisor``. Returns ``dampingA * dF + (1 - dampingA) * fluidArea *
-    (pressure difference across the two pivots)``.
+    Parameters
+    ----------
+    even : bool
+        Half-grid to update. Even sub-steps update the A nodes from the B cells
+        (mean-velocity subtraction, decaying end nodes, then the B velocities receive
+        the mass acceleration); odd sub-steps update the B cells from the A nodes (then
+        the A velocities receive the mass acceleration).
+    a_dt : float
+        Structure acceleration times the sub-step, ``a * dt``, m/s.
+    p_a, v_a : numpy.ndarray
+        Pressure (Pa) and velocity (m/s) on the A nodes ``0 .. N``; updated in place.
+    p_b, v_b : numpy.ndarray
+        Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``; updated in place.
+    frac_a, frac_b : numpy.ndarray
+        From ``interp_fractions``, dimensionless.
+    n_seg : int
+        ``pipeSegQTY``.
+    pivot : int
+        ``pivotSegQTY``.
+    rho_c : float
+        ``fluidDensty * celerity``, Pa·s/m.
+    decay : float
+        ``dacayFactor``, dimensionless.
+    vav_div : int
+        From ``vav_divisor``.
+    fluid_area : float
+        Internal cross-sectional area, m².
+    d_f : float
+        Junction force after the previous sub-step, N.
+
+    Returns
+    -------
+    float
+        ``dampingA * dF + (1 - dampingA) * fluidArea * (pressure difference across the
+        two pivots)``, N (Pa·m²).
+
+    Notes
+    -----
+    * Every expression keeps the VBA's operation order; the previous cell's values are
+      carried in locals, ``2 * rhoC`` is hoisted (the same double).
+    * VBA quirk D-17: the divisor of the mean velocity is the caller's ``vav_div``.
+    * The dead ``useUndamped`` branch (VBA lines 803-818) is not ported.
     """
     two_rho_c = 2 * rho_c
     if even:

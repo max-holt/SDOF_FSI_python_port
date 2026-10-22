@@ -56,7 +56,32 @@ __all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
 
 @dataclass(frozen=True)
 class PeakResponse:
-    """Result of ``peak_response``; the five maxima are the VBA ``resultArray(0 To 4)``."""
+    """Result of ``peak_response`` / ``peak_response_jc``.
+
+    The five maxima are the VBA ``resultArray(0 To 4)`` of ``outputType = 0``.
+
+    Attributes
+    ----------
+    max_static_equivalent_force : float
+        ``|effective_displacement(xMax)| * stiffness``, N (VBA line 611).
+    max_displacement : float
+        ``xMax``, m.
+    max_velocity : float
+        ``vMax``, m/s.
+    max_acceleration : float
+        ``aMax``, m/s².
+    max_applied_force : float
+        ``FMax``, the largest ``|forceA - forceB|``, N.
+    history : numpy.ndarray or None
+        For ``output_type`` 1 / 2 / 3 the displacement (m) / velocity (m/s) /
+        acceleration (m/s²) at the end of each sample, 0-based, length ``outMax * 2``
+        (element ``t - 1`` is sample ``t``; unfilled trailing elements are 0). None for
+        ``output_type = 0``. The VBA pad element 0 (D-16) is not present.
+    output_type : int
+        The requested output type.
+    free_decay_samples : int
+        Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``, D-21).
+    """
 
     max_static_equivalent_force: float
     max_displacement: float
@@ -71,7 +96,7 @@ class PeakResponse:
     """Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``)."""
 
     def summary(self) -> np.ndarray:
-        """The five maxima as the VBA ``resultArray(0 To 4)``."""
+        """The five maxima as the VBA ``resultArray(0 To 4)`` (N, m, m/s, m/s², N)."""
         return np.array(
             [
                 self.max_static_equivalent_force,
@@ -98,15 +123,63 @@ def peak_response(
     gap: float = 0,
     output_type: int = 0,
 ) -> PeakResponse:
-    """Peak displacement response of the lumped SDOF proxy (``GetPeakResponse``).
+    """Peak response of the lumped SDOF proxy to a force history (``GetPeakResponse``).
 
-    Parameters as ``legacy_port.get_peak_response`` (consistent units except
-    ``dynamic_fric``, which assumes m and s): ``force_history`` is a 1-D history or a
-    2-D one walked column-major; ``step_qty`` sub-steps per sample; ``sample_freq`` in
-    Hz; ``physical_length`` between elbows; ``flexural_rigidity_ei``; ``celerity`` of the
-    force along the pipe; ``mass_per_unit_len``; ``damping_percent`` of critical;
-    ``dynamic_fric`` Coulomb coefficient; ``nat_freq`` in Hz; ``restrain_freq_ratio``
-    (gap closed / gap open); ``gap``; ``output_type`` 0 summary, 1/2/3 history.
+    Units are consistent SI (the VBA states "consistent units except ``dynamicFric``",
+    whose ``9.81`` fixes m and s).
+
+    Parameters
+    ----------
+    force_history : array_like
+        Force-time history at one location, N; 1-D, or 2-D walked column-major (D-10).
+    step_qty : int
+        Sub-steps per sample.
+    sample_freq : float
+        Sample rate of the history, Hz.
+    physical_length : float
+        Length between elbows, m.
+    flexural_rigidity_ei : float
+        ``E * I``, N·m².
+    celerity : float
+        Propagation speed of the force along the pipe, m/s.
+    mass_per_unit_len : float
+        Mass per unit length, kg/m.
+    damping_percent : float
+        Damping as a percentage of critical, %.
+    dynamic_fric : float
+        Coulomb friction coefficient, dimensionless.
+    nat_freq : float
+        Natural frequency with the gaps open, Hz.
+    restrain_freq_ratio : float, optional
+        Natural frequency with the gaps closed over that with them open, dimensionless
+        (default 1).
+    gap : float, optional
+        Support gap at the centre of mass, m (default 0).
+    output_type : int, optional
+        0: the five maxima only; 1 / 2 / 3: also the displacement / velocity /
+        acceleration history (default 0).
+
+    Returns
+    -------
+    PeakResponse
+
+    Raises
+    ------
+    ZeroDivisionError
+        ``step_qty = 1`` (D-7) or ``mass = 0``.
+    IndexError
+        A single-row 2-D history (D-8).
+    TypeError
+        ``EI < 0`` or ``L * massPerUnitLen < 0`` (complex portal-frame seed, D-12).
+    FloatingPointError
+        Overflow: at the free-decay test or once at the end of the run (D-23).
+
+    Notes
+    -----
+    Value-identical to ``legacy_port.get_peak_response`` (bitwise on the sweep and the
+    golden inputs, ``tests/test_differential.py``). Preserved VBA quirks: the force ramp
+    plateau D-18, the friction dead zone D-20 and the free-decay threshold D-21; the
+    history has no VBA pad element (D-16).
     """
     step_qty = int(step_qty)
     sample_freq = float(sample_freq)
@@ -159,15 +232,54 @@ def peak_response_jc(
     vav_denominator: str = "fixed",
     parity: str = "running",
 ) -> PeakResponse:
-    """Peak displacement response with junction-coupling FSI (``GetPeakResponseJC``).
+    """Peak response with junction-coupling FSI (``GetPeakResponseJC``).
 
-    Parameters as ``peak_response`` plus ``fluid_densty`` and ``fluid_area`` (the
-    internal cross-section; the core fluid is removed from the rigid mass and a 1-D MoC
-    column inside the span feeds the pressure-difference force ``dF`` back). Spans too
-    short for the MoC grid fall back to ``peak_response`` with the same arguments.
-    ``vav_denominator`` ("legacy" | "fixed") and ``parity`` ("per_phase" | "running")
-    select the approved fixes F-1 and F-2 (module docstring); the defaults are the
-    fixes, the legacy values reproduce ``legacy_port.get_peak_response_jc`` bitwise.
+    Parameters
+    ----------
+    force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio, gap, output_type
+        As ``peak_response``; ``mass_per_unit_len`` (kg/m) includes the fluid and
+        ``nat_freq`` (Hz) is modelled with the fluid mass included.
+    fluid_densty : float
+        Fluid density, kg/m³ (VBA spelling kept).
+    fluid_area : float
+        Internal cross-sectional (pressure) area of the pipe, m². The core fluid is
+        removed from the rigid mass and a 1-D MoC column inside the span feeds the
+        pressure-difference force ``dF`` (N) back.
+    vav_denominator : {"fixed", "legacy"}, keyword-only
+        Divisor of the MoC mean-velocity sum: the number of terms ``2N + 1`` (approved
+        fix F-1, default) or the VBA's ``2N - 1`` (D-17).
+    parity : {"running", "per_phase"}, keyword-only
+        MoC half-grid alternation: one running sub-step counter for the whole run
+        (approved fix F-2, default) or the VBA per-phase index ``k + (totInd - 1) *
+        stepQTY`` that can double-step a half-grid at a phase boundary (D-19).
+
+    Returns
+    -------
+    PeakResponse
+        Spans too short for the MoC grid (``moc.is_short_pipe``) return
+        ``peak_response`` with the same arguments, as the VBA does (lines 736-740).
+
+    Raises
+    ------
+    ValueError
+        Unknown ``parity`` or ``vav_denominator``.
+    ZeroDivisionError
+        ``step_qty = 1`` (D-7); ``pivotSegQTY = 4`` at the set-up (D-4).
+    IndexError
+        A single-row 2-D history (D-8).
+    TypeError
+        ``EI < 0`` (D-12).
+    FloatingPointError
+        ``rhoC = 0`` or an overflow in the fluid, mid-run under ``numpy.errstate(raise)``;
+        nothing is swallowed where the VBA's ``On Error GoTo ErrFound`` returned an empty
+        array (D-9).
+
+    Notes
+    -----
+    With ``vav_denominator="legacy", parity="per_phase"`` the result is bitwise identical
+    to ``legacy_port.get_peak_response_jc`` on the differential sweep; with the defaults
+    the change is at rounding level on the golden cases (NOTES.md "Stage 4.2 — F-1/F-2
+    before/after").
     """
     if parity not in ("per_phase", "running"):
         raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")

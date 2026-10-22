@@ -36,10 +36,25 @@ __all__ = ["as_history_2d", "transit_delay", "overlap_substeps", "unbalance_forc
 
 
 def as_history_2d(history) -> np.ndarray:
-    """The force history as a 0-based 2-D float array ``(rows, cols)``.
+    """The history as a 0-based 2-D float array ``(rows, cols)``.
 
-    A 1-D input is one column (the VBA ``AddDimension(arr, 1, 1)`` path); a 2-D input is
-    walked column-major (first index fastest, D-10) by ``unbalance_force``.
+    Parameters
+    ----------
+    history : array_like
+        Force history, N, 1-D or 2-D (``pressure.py`` reuses this for the dimensionless
+        valve pattern).
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1-D input becomes one column (the VBA ``AddDimension(arr, 1, 1)`` path); a 2-D
+        input is returned as is and walked column-major, first index fastest, by the
+        callers (VBA quirk D-10, Excel range semantics).
+
+    Raises
+    ------
+    ValueError
+        For more than two dimensions.
     """
     arr = np.asarray(history, dtype=float)
     if arr.ndim < 2:
@@ -51,14 +66,42 @@ def as_history_2d(history) -> np.ndarray:
 
 # VBA line 375
 def transit_delay(physical_length: float, celerity: float, sample_freq: float) -> float:
-    """``unballanceStepQTY``: the elbow-to-elbow transit time in samples."""
+    """``unballanceStepQTY`` (VBA line 375): the elbow-to-elbow transit time in samples.
+
+    Parameters
+    ----------
+    physical_length : float
+        Length between elbows, m.
+    celerity : float
+        Propagation speed of the force along the pipe, m/s.
+    sample_freq : float
+        Sample rate of the force history, Hz.
+
+    Returns
+    -------
+    float
+        ``physicalLength / (celerity / sampleFreq)``, samples (fractional).
+    """
     return float(physical_length) / (float(celerity) / float(sample_freq))
 
 
 # VBA line 380
 def overlap_substeps(unballance_step_qty: float, step_qty: int) -> int:
-    """``kOverlap = CLng((unballanceStepQTY - floor(unballanceStepQTY)) * stepQTY)``:
-    the fractional part of the delay in sub-steps, 0 .. ``stepQTY``."""
+    """``kOverlap`` (VBA line 380): the fractional part of the transit delay in sub-steps.
+
+    Parameters
+    ----------
+    unballance_step_qty : float
+        Transit delay from ``transit_delay``, samples.
+    step_qty : int
+        Sub-steps per sample.
+
+    Returns
+    -------
+    int
+        ``CLng((unballanceStepQTY - floor(unballanceStepQTY)) * stepQTY)``, 0 .. ``stepQTY``
+        (``CLng`` rounds half to even; ``floor`` is the fixed VBA floor, D-1).
+    """
     return clng((unballance_step_qty - vba_floor(unballance_step_qty)) * step_qty)
 
 
@@ -67,9 +110,41 @@ def unbalance_force(
 ) -> Iterator[list[float]]:
     """Yield, per sample, the list of per-sub-step ``forceA - forceB`` values.
 
-    Phase 1 (delay) yields ``totInd`` samples, the last one truncated at the VBA
-    ``Exit For``; phase 2 (ramp) yields one full sample per history element, in
-    column-major order. Phase 3 (free decay) has no unbalance force and is not yielded.
+    Parameters
+    ----------
+    history : array_like
+        Force history at one location, N, 1-D or 2-D (column-major, D-10).
+    sample_freq : float
+        Sample rate of the history, Hz.
+    physical_length : float
+        Length between elbows, m.
+    celerity : float
+        Propagation speed of the force along the pipe, m/s.
+    step_qty : int
+        Sub-steps per sample.
+
+    Yields
+    ------
+    list of float
+        The unbalance force ``forceA - forceB``, N, for each sub-step of one sample.
+        Phase 1 (delay) yields ``totInd`` samples, the last one truncated at the VBA
+        ``Exit For``; phase 2 (ramp) yields one full sample per history element. Phase 3
+        (free decay) has no unbalance force and is not yielded.
+
+    Raises
+    ------
+    ZeroDivisionError
+        ``step_qty = 1`` (VBA quirk D-7: the ramp ``k / (stepQTY - 1)``).
+    IndexError
+        A single-row history (VBA quirk D-8: ``iB`` is left one past ``UBound(1)``).
+
+    Notes
+    -----
+    * VBA quirk D-18 preserved: the ramp reaches the next sample at ``k = stepQTY - 1``
+      and the next sample's ``k = 0`` repeats it, so each sample value is held for two
+      consecutive sub-steps.
+    * The ramp fractions are tabulated once per run; the table holds the same doubles
+      the per-step expression produced.
     """
     fh = vba_2d(as_history_2d(history)).tolist()  # fh[i][j] is the VBA forceHistory(i, j)
     u1 = len(fh) - 1  # UBound(forceHistory, 1)

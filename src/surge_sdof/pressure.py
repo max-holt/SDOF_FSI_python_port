@@ -60,7 +60,30 @@ __all__ = [
 
 
 class PressureSetup(NamedTuple):
-    """Run constants of ``GetPressureResponse`` (VBA lines 206-220)."""
+    """Run constants of ``GetPressureResponse`` (VBA lines 206-220).
+
+    Attributes
+    ----------
+    out_max : int
+        ``CLng(closureTime / timeStep)``: the result has ``out_max + 1`` samples, each one
+        loop iteration of two time steps (D-22).
+    pipe_seg_qty : int
+        ``N``: A nodes ``0 .. N``; the pump boundary sits at ``B[N]`` (truncated to
+        ``out_max`` half-cells, D-22).
+    factor : float
+        Pattern samples per time step, ``rows * cols * timeStep / closureTime``,
+        dimensionless.
+    rho_c : float
+        Acoustic impedance ``density * celerity``, Pa·s/m.
+    velocity_initial : float
+        Initial flow velocity, m/s, negative (flow towards the valve).
+    valve_loss : float
+        Valve loss coefficient fully open, Pa/(m/s)².
+    valve_dp_initial : float
+        Pressure drop over the open valve at the initial flow, Pa.
+    pipe_loss : float
+        Friction loss per half-cell at the initial flow, Pa.
+    """
 
     out_max: int
     """``CLng(closureTime / timeStep)``: the result has ``out_max + 1`` samples."""
@@ -80,8 +103,25 @@ class PressureSetup(NamedTuple):
 
 # VBA line 207
 def grid_size(out_max: int, length_to_pump: float, celerity: float, time_step: float) -> int:
-    """``pipeSegQTY = 1 + CLng(min(outMax, L / (c * dt)) / 2)``: the pipe is truncated to
-    what a wave can traverse in ``closureTime`` (D-22)."""
+    """``pipeSegQTY = 1 + CLng(min(outMax, L / (c * dt)) / 2)`` (VBA line 207).
+
+    Parameters
+    ----------
+    out_max : int
+        From ``setup``.
+    length_to_pump : float
+        Pipe length from the valve to the pump, m.
+    celerity : float
+        Pressure-wave speed, m/s.
+    time_step : float
+        Simulation time step, s (a half-cell is ``c * dt`` long).
+
+    Returns
+    -------
+    int
+        The pipe is truncated to what a wave can traverse in ``closureTime`` (VBA quirk
+        D-22); ``min`` is the VBA ``min`` (second argument on a tie).
+    """
     return 1 + clng(vba_min(out_max, length_to_pump / (celerity * time_step)) / 2)
 
 
@@ -99,7 +139,37 @@ def setup(
     valve_cv: float,
     length_to_pump: float,
 ) -> PressureSetup:
-    """The run constants, in the VBA's expressions and units (m³/h, mm², bar → SI)."""
+    """The run constants, in the VBA's expressions and units.
+
+    Parameters
+    ----------
+    pattern_rows, pattern_cols : int
+        Shape of the 0-based valve pattern (``UBound(valvePattern, 1/2)``).
+    closure_time : float
+        Valve closure time, s.
+    celerity : float
+        Effective pressure-wave speed of fluid and pipe, m/s.
+    density : float
+        Fluid density, kg/m³.
+    time_step : float
+        Simulation time step, s.
+    pressure_drop_from_pump : float
+        Total pressure drop from pump to valve at ``flow_rate``, bar.
+    flow_rate : float
+        Initial flow rate, m³/h.
+    pipe_area : float
+        Flowing cross-sectional area, mm².
+    valve_cv : float
+        Valve flow coefficient, US gpm × sqrt(SG / psi) (converted here with the factor
+        0.865 to m³/h at 1 bar).
+    length_to_pump : float
+        Pipe length from the valve to the pump, m.
+
+    Returns
+    -------
+    PressureSetup
+        SI internally: velocities m/s, pressures Pa, ``pipe_loss`` per half-cell.
+    """
     out_max = clng(closure_time / time_step)
     pipe_seg_qty = grid_size(out_max, length_to_pump, celerity, time_step)
     factor = pattern_rows * pattern_cols * time_step / closure_time
@@ -124,10 +194,23 @@ def setup(
 
 # VBA lines 222-229
 def initial_column(s: PressureSetup):
-    """Steady-state column: pressures rising from the valve towards the pump by
-    ``pipeLoss`` per half-cell, velocities falling with it. Returns ``(p_a, v_a, p_b,
-    v_b, vel_at_pump)``; the arrays have ``N + 1`` elements (``B[N]`` is the pump
-    boundary) and ``vel_at_pump`` is the initial ``B`` velocity there."""
+    """Steady-state column (VBA lines 222-229).
+
+    Pressures rise from the valve towards the pump by ``pipeLoss`` per half-cell and
+    velocities fall with it.
+
+    Parameters
+    ----------
+    s : PressureSetup
+
+    Returns
+    -------
+    p_a, v_a, p_b, v_b : numpy.ndarray
+        Pressure (Pa) and velocity (m/s) on the A nodes and B cells; all four have
+        ``N + 1`` elements (``B[N]`` is the pump boundary).
+    vel_at_pump : float
+        The initial B velocity at the pump, m/s (negative).
+    """
     n = s.pipe_seg_qty
     p_a = np.zeros(n + 1)
     v_a = np.zeros(n + 1)
@@ -144,11 +227,33 @@ def initial_column(s: PressureSetup):
 
 # VBA lines 244-265
 def valve_closure(pattern: np.ndarray, tot_ind: int, factor: float) -> float:
-    """Valve closure (0 open .. 1 closed) at loop iteration ``tot_ind``: the pattern,
-    walked column-major (first index fastest), stretched evenly over ``closureTime`` and
-    linearly interpolated between consecutive samples; held at its last value beyond
-    the end. ``pattern`` is 0-based ``(rows, cols)``; the index arithmetic is the VBA's
-    1-based one (``floor``, ``modDbl``, the ``i >= U1 And j < U2`` wrap, D-10)."""
+    """Valve closure at loop iteration ``tot_ind`` (VBA lines 244-265).
+
+    The pattern, walked column-major (first index fastest), is stretched evenly over
+    ``closureTime`` and linearly interpolated between consecutive samples; beyond the
+    end it is held at its last value.
+
+    Parameters
+    ----------
+    pattern : numpy.ndarray
+        0-based ``(rows, cols)`` closure pattern, 0 (open) to 1 (closed), dimensionless.
+    tot_ind : int
+        Loop iteration (two time steps each).
+    factor : float
+        ``PressureSetup.factor``, pattern samples per time step.
+
+    Returns
+    -------
+    float
+        Closure, 0 .. 1.
+
+    Notes
+    -----
+    The index arithmetic is the VBA's 1-based one (``floor``, ``modDbl``, the
+    ``i >= U1 And j < U2`` wrap and the ``j > U2`` hold, D-10); with the fixed ``floor``
+    a multi-column pattern equals its column-major flattening exactly (D-11, fixed). The
+    VBA assigns a Double to the Long ``i`` (implicit ``CLng``), written out explicitly.
+    """
     n1, n2 = pattern.shape
     position = tot_ind * factor * 2
     # VBA assigns a Double (modDbl + 1) to the Long i: implicit CLng.
@@ -176,10 +281,25 @@ def valve_closure(pattern: np.ndarray, tot_ind: int, factor: float) -> float:
 
 # VBA lines 267-273
 def valve_boundary(closure: float, p_a, v_a, p_b, v_b, s: PressureSetup) -> None:
-    """A node 0 from the closure: open valve (``closure < 0.999999999``) - velocity from
-    the characteristic, pressure the smaller of the valve loss at that velocity and the
-    characteristic pressure (floored at the B cell); closed valve - zero velocity, pressure
-    from the stopped B cell."""
+    """A node 0 from the closure (VBA lines 267-273), in place.
+
+    Open valve (``closure < 0.999999999``): velocity from the characteristic, pressure
+    the smaller of the valve loss at that velocity and the characteristic pressure
+    (floored at the B cell). Closed valve: zero velocity, pressure from the stopped B
+    cell.
+
+    Parameters
+    ----------
+    closure : float
+        From ``valve_closure``, 0 .. 1.
+    p_a, v_a, p_b, v_b : numpy.ndarray
+        Column arrays, Pa and m/s; ``p_a[0]`` and ``v_a[0]`` are written.
+    s : PressureSetup
+
+    Notes
+    -----
+    ``vba_min`` / ``vba_max`` keep the VBA tie rule (second argument on a tie or NaN).
+    """
     if closure < 0.999999999:
         v_a[0] = (v_a[0] + v_b[0]) / 2 + (p_a[0] - p_b[0]) / (2 * s.rho_c)
         p_a[0] = vba_min(
@@ -193,9 +313,22 @@ def valve_boundary(closure: float, p_a, v_a, p_b, v_b, s: PressureSetup) -> None
 
 # VBA lines 275-285
 def half_step_a_from_b(p_a, v_a, p_b, v_b, i_max: int, s: PressureSetup) -> None:
-    """A nodes ``1..i_max`` from the neighbouring B cells (``i_max = min(N, totInd)``).
-    Friction ``loss`` is clamped at ``0.9 * v`` (VBA quirk D-6: the other half-loop
-    clamps at ``0.9 * rhoC * v``)."""
+    """A nodes ``1 .. i_max`` from the neighbouring B cells (VBA lines 275-285), in place.
+
+    Parameters
+    ----------
+    p_a, v_a, p_b, v_b : numpy.ndarray
+        Column arrays, Pa and m/s; ``p_a[1..i_max]`` and ``v_a[1..i_max]`` are written.
+    i_max : int
+        ``min(N, totInd)``: the wave front has reached this many cells.
+    s : PressureSetup
+
+    Notes
+    -----
+    VBA quirk D-6 preserved: the friction term is clamped at ``0.9 * v`` here and at
+    ``0.9 * rhoC * v`` in ``half_step_b_from_a``. The Stage 4.3 sweep shows both clamps
+    saturate (DEVIATIONS.md D-6).
+    """
     rho_c = s.rho_c
     pipe_loss = s.pipe_loss
     for i in range(1, i_max + 1):
@@ -221,8 +354,23 @@ def pump_boundary(
     pressure_drop_from_pump: float,
     s: PressureSetup,
 ) -> None:
-    """``B[N]`` from the velocity at the last A node: the pump pressure ramps from
-    operating to shut-in as the (reverse-flow-clipped) velocity falls to zero."""
+    """``B[N]`` from the velocity at the last A node (VBA lines 287-288), in place.
+
+    The pump pressure ramps from operating to shut-in as the reverse-flow-clipped
+    velocity ``min(0, v_a[N])`` falls to zero.
+
+    Parameters
+    ----------
+    p_a, v_a, p_b, v_b : numpy.ndarray
+        Column arrays, Pa and m/s; ``p_b[N]`` and ``v_b[N]`` are written.
+    vel_at_pump : float
+        Initial velocity at the pump from ``initial_column``, m/s.
+    pump_ramp_pressure : float
+        Pump pressure rise from operating to shut-in, bar.
+    pressure_drop_from_pump : float
+        Total pressure drop from pump to valve at the initial flow, bar.
+    s : PressureSetup
+    """
     n = s.pipe_seg_qty
     p_b[n] = vba_max(
         0,
@@ -238,8 +386,22 @@ def pump_boundary(
 
 # VBA lines 290-300
 def half_step_b_from_a(p_a, v_a, p_b, v_b, i_max: int, s: PressureSetup) -> None:
-    """B cells ``0..i_max`` from the neighbouring A nodes (``i_max = min(N - 1, totInd)``).
-    Friction ``loss`` is clamped at ``0.9 * rhoC * v`` (VBA quirk D-6)."""
+    """B cells ``0 .. i_max`` from the neighbouring A nodes (VBA lines 290-300), in place.
+
+    Parameters
+    ----------
+    p_a, v_a, p_b, v_b : numpy.ndarray
+        Column arrays, Pa and m/s; ``p_b[0..i_max]`` and ``v_b[0..i_max]`` are written.
+    i_max : int
+        ``min(N - 1, totInd)``.
+    s : PressureSetup
+
+    Notes
+    -----
+    VBA quirk D-6 preserved: the friction clamp is ``0.9 * rhoC * v`` here (``0.9 * v``
+    in ``half_step_a_from_b``); it saturates where the local initial velocity passes
+    through zero along the pipe (DEVIATIONS.md D-6).
+    """
     rho_c = s.rho_c
     pipe_loss = s.pipe_loss
     for i in range(0, i_max + 1):
@@ -269,15 +431,51 @@ def pressure_response(
 ) -> np.ndarray:
     """Pressure at the valve while it closes (``GetPressureResponse``).
 
-    Parameters as ``legacy_port.get_pressure_response``: ``valve_pattern`` closure
-    history 0 (open) to 1 (closed), 1-D or 2-D walked column-major, spread evenly over
-    ``closure_time`` (s); ``celerity`` (m/s); ``density`` (kg/m³); ``time_step`` (s);
-    ``pressure_drop_from_pump`` pump-to-valve drop at ``flow_rate`` (bar); ``flow_rate``
-    (m³/h); ``pipe_area`` (mm²); ``valve_cv`` (US gpm basis); ``length_to_pump`` (m);
-    ``pump_ramp_pressure`` operating-to-shut-in rise (bar).
+    Parameters
+    ----------
+    valve_pattern : array_like
+        Closure history, 0 (open) to 1 (closed), dimensionless; 1-D, or 2-D walked
+        column-major (D-10). Spread evenly over ``closure_time``.
+    closure_time : float
+        Valve closure time, s.
+    celerity : float
+        Effective pressure-wave speed of fluid and pipe, m/s.
+    density : float
+        Fluid density, kg/m³.
+    time_step : float
+        Simulation time step, s.
+    pressure_drop_from_pump : float
+        Total pressure drop from pump to valve at ``flow_rate``, bar.
+    flow_rate : float
+        Initial flow rate, m³/h.
+    pipe_area : float
+        Flowing cross-sectional area, mm².
+    valve_cv : float
+        Valve flow coefficient, US gpm × sqrt(SG / psi).
+    length_to_pump : float
+        Pipe length from the valve to the pump, m.
+    pump_ramp_pressure : float
+        Pump pressure rise from operating to shut-in, bar.
 
-    Returns the 0-based ``resultArray(0 To outMax)``: the valve pressure (Pa) after each
-    loop iteration of two time steps, ``outMax + 1`` samples (D-22).
+    Returns
+    -------
+    numpy.ndarray
+        The 0-based ``resultArray(0 To outMax)``: the valve pressure, Pa, after each loop
+        iteration of two time steps, i.e. ``outMax + 1`` samples at ``2 * timeStep``
+        spacing covering ``2 * closureTime`` (VBA quirk D-22).
+
+    Raises
+    ------
+    ZeroDivisionError, FloatingPointError
+        ``density = 0``, ``time_step = 0``, ``rhoC = 0`` or an overflow in the column,
+        under ``numpy.errstate(raise)`` as the legacy port.
+
+    Notes
+    -----
+    Bitwise identical to ``legacy_port.get_pressure_response`` on the Example-sheet case
+    and 49 of 50 sweep cases (the 50th overflows identically); the Example case matches
+    Excel at 1e-12. Preserved quirks: D-6 (clamp asymmetry), D-10 / D-11 (pattern walk),
+    D-22 (horizon and pipe truncation).
     """
     pattern = loads.as_history_2d(valve_pattern)
     with np.errstate(divide="raise", invalid="raise", over="raise"):
@@ -327,7 +525,7 @@ def get_pressure_response(
     length_to_pump,
     pump_ramp_pressure,
 ):
-    """Legacy-signature alias of ``pressure_response`` (same arguments, same result)."""
+    """Legacy-signature alias of ``pressure_response`` (same arguments, same result, Pa)."""
     return pressure_response(
         valve_pattern,
         closure_time,
