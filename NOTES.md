@@ -1,6 +1,10 @@
 # NOTES — session handoff
 
 ## Current stage
+Stage 4.4 (hygiene, no behaviour change) done 2026-10-22: SIM/C4 lint rules, numpy-style docstrings
+with units and DEVIATIONS ids on the six live modules, `docs/architecture.md` as built with the
+per-sub-step data flow, `README.md`, DEVIATIONS legacy-only markers; differential suite bitwise
+throughout; see "Stage 4.4 — done". Next: Stage 5 (Numba).
 Stage 4.3 (refactor, pressure driver) done 2026-10-21: `src/surge_sdof/pressure.py` (`pressure_response`, `get_pressure_response` alias) and `_vba_semantics.py`, differential sweep 49/50 bitwise + 1 identical raise, Example case bitwise and at 1e-12 vs Excel; see "Stage 4.3 — done" (bench row and port review recorded there).
 Stage 4.2 (refactor, JC path) done 2026-10-21: `src/surge_sdof/moc.py`, `coupling.JunctionCoupling`,
 `structure.jc_params`, `response.peak_response_jc` (shared `_integrate`), approved fixes F-1 and
@@ -56,6 +60,48 @@ Judgement calls (flag if you disagree):
   state is not finite (nan/inf are absorbing in the update). Recorded as D-23 with a pin test.
 - `NoCoupling` adds `0.0` to the unbalance force and supplies `0.0` in free decay: identical to
   the literal `(forceA − forceB)` / `−R` except for the sign of an exact zero.
+
+## Stage 4.4 — scope and plan (recorded 2026-10-22 before touching `src/`)
+Owner's instruction: hygiene, no behaviour changes. (1) dead code in the Stage 4 modules; (2)
+numpy-style docstrings with units and DEVIATIONS ids; (3) `docs/architecture.md` as built with a
+data-flow paragraph per path; (4) `README.md`; (5) DEVIATIONS sorted, pinning tests checked,
+legacy-only rows marked; (6) ruff with SIM and C4. Gates before each commit: fast suite, `-m slow`,
+differential bitwise; `port-reviewer` on the final diff; next action Stage 5.
+Plan as executed: one commit per item in the order 6+1 (lint rules and the one duplication), 2,
+3, 4, 5, then bench, review, NOTES.
+
+## Stage 4.4 — done (2026-10-22)
+- Dead-code census (every public and private name of `structure`, `loads`, `coupling`, `moc`,
+  `response`, `pressure` grepped over src, tests, tools): **nothing uncalled**.
+  `structure.restoring_force`, `JunctionCoupling.column()` and the `pressure.get_pressure_response`
+  alias are used only by the suite or the bench but are part of the fixed interfaces (the alias was
+  an owner amendment in 4.3) and stay. No duplicated phase exists in the new modules; the one
+  duplication, the per-sample history-write switch repeated in the forced and free-decay phases
+  of `response._integrate`, is now `_record` (called once per sample, so no bench cost).
+- Lint: `pyproject.toml` selects SIM and C4; `legacy_port.py` and `vba_compat.py` are exempt
+  (per-file ignores). Findings fixed: SIM300 in `structure.py` (`0 > excess` → `excess < 0`,
+  identical for every double incl. NaN), SIM300 in `test_quirks.py`, 17 C408 `dict()` literals in
+  tests and `tools/bench.py`. `ruff check . && ruff format --check .` clean.
+- Docstrings: numpy-style on every public function and dataclass of the six modules (43
+  docstrings replaced or added by an AST-positioned script; the code AST with docstrings stripped
+  is identical before and after). Units on every physical argument and return (m, s, N, kg/m,
+  Pa, Pa·s/m, m³/h, mm², bar, …); each preserved quirk names its DEVIATIONS id.
+- `docs/architecture.md`: title "as built", `response.py` row names `_integrate` / `_record` /
+  `_decay_test`, new "Data flow for one sub-step" (lumped, JC, and a line for pressure), private
+  helpers listed as non-interfaces, Stage 4.4 exactness note, lint policy section.
+- `README.md`: package, install, the three entry points with units, the Example-sheet lumped
+  worked example (Python vs Excel: 2.5e-14 / 2.5e-14 / 2.8e-14 / 2.5e-14 / 0), the fast / slow /
+  jc_slow suites, `tools/bench.py`, pointers to DEVIATIONS.md, docs/port_review.md,
+  docs/architecture.md, NOTES.md.
+- DEVIATIONS.md: already sorted (D-1 .. D-23); every pinning-test reference resolves to a
+  collected test (checked by script against `pytest --collect-only` over all markers, 0 missing).
+  Rows whose VBA behaviour is now reachable only through `legacy_port.py` are marked in the
+  Python-location column: D-3, D-5, D-12 (lumped garbage array), D-14 (mid-run raise of the
+  lumped numpy state) and D-16. D-17 / D-19 stay reachable through the legacy flags.
+- Gates: fast suite 732 passed and `-m slow` 150 passed before each `src/` commit; the
+  differential suite (part of both) stayed bitwise.
+- Bench (`tools/bench.py`, this container): `docs/bench/3912479.json`, README row (Intel Xeon @ 2.10 GHz, pure Python; a port-review agent was reading files concurrently, so timings are indicative only). Every case's result digest reads `same` and the four refactored/literal digest pairs are equal (exit 0). Medians: (a) lumped r20 2.055 s, (b) 2.131 s, (e) `peak_response` r20 0.740 s [0.36 of (a)], (f) 0.679 s [0.33], (c) legacy JC n2000 98.3 s, (g) `peak_response_jc` 51.1 s [1.05 M cells/s], (d) pressure 6.20 ms, (h) 4.55 ms. Within noise of 6fa4595 (0.90x-1.18x vs prev), as expected for a no-behaviour-change session.
+- Port review (`port-reviewer` on the Stage 4.4 diff, diff + VBA only): **no correctness findings**. It verified the `excess < 0` rewrite against VBA lines 11-17 for every double incl. NaN and signed zero, `_record` against the base version and the VBA guards (450, 597-598), that no test, fixture or frozen module changed (per-file `def test_` counts and skip/xfail/tolerance marker counts identical), that every `dict()` literal conversion kept key order (the seeded sweeps are unchanged), that the README example reproduces digit for digit, and the VBA line references and D-ids of the new docstrings. One documentation note: the `effective_displacement` Notes had the VBA line labels of `max`/`minUnsigned`/`sign` swapped; fixed in the follow-up commit (`max` 11-17, `minUnsigned` 19-33, `sign` 51-59).
 
 ## Stage 4.3 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction: `pressure.py` as a standalone driver against the architecture row; differential
@@ -488,7 +534,17 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-Stage 4.3 is done; Stage 4 now covers every entry point (`response.peak_response`, `response.peak_response_jc`,
+**Stage 5 (Numba).** `moc.step` and the `pressure.py` half-loops are already scalar loops over
+contiguous float64 arrays with no Python objects, written for `@njit`; `structure.step` and
+`response._integrate` are Python-float code that can follow. Judge `**` vs C `pow` (D-15: Numba
+lowers integer-literal `**` to multiplication) against the recorded tolerances (golden 5e-12,
+Example 1e-12) rather than expecting bit-identity, and record any last-bit change in
+DEVIATIONS.md with a pinning test. Acceptance: the three `jc_slow` cases (5e-12), `-m slow`,
+the fast suite, and `tools/bench.py` with `docs/bench/` committed. Keep `NUMBA_DISABLE_JIT=1`
+runs green (CLAUDE.md). numba is permitted but not yet in `pyproject.toml`; add it as an
+optional dependency when Stage 5 starts.
+
+Previous next action (Stage 4.3 → 4.4, kept for the record): Stage 4.3 is done; Stage 4 now covers every entry point (`response.peak_response`, `response.peak_response_jc`,
 `pressure.pressure_response`) with `legacy_port.py` still the frozen reference. Owner to name the next stage:
 the candidates recorded so far are Stage 4.4 (owner's label for applying approved fixes; F-1/F-2 were already
 applied in 4.2, so 4.4 would be whatever the owner adds, e.g. the D-6 clamp question and the `velInitLocal`
