@@ -21,6 +21,7 @@ Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an is
 - Golden suite only: `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"`
 - Lint/format: `ruff check . && ruff format .`
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 .venv/bin/python -m pytest -q`
+- Numba cache (`cache=True`) does not notice when a callee in another module changed: after editing `moc.py` or `structure.py`, a bare `pytest` can test a stale compiled `response._integrate_kernel`. Run `make test-both` (wipes `src/**/__pycache__/*.nb[ic]` first) or `make clean-cache` before trusting a result.
 - Benchmark: `tools/bench.py` — run at the end of every Stage 4/5 session and commit docs/bench/.
 
 ## Known VBA gotchas
