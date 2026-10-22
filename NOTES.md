@@ -132,7 +132,7 @@ skipped or loosened (the one test edit is the probe mechanism of
   `legacy_port` golden runs 155 s, 75 differential pairs 173 s); the 75 `peak_response` runs
   under Numba are ~0.2 s each, almost all of it the Python `loads.unbalance_force` generator.
 - Suites: fast suite 738 passed under Numba (26 s) and under `NUMBA_DISABLE_JIT=1` (34 s); `-m
-  slow` under Numba 150 passed before each `src/` commit; `-m slow` under `NUMBA_DISABLE_JIT=1` once at the end (running at this commit; result in the close-out commit below).
+  slow` under Numba 150 passed before each `src/` commit; `-m slow` under `NUMBA_DISABLE_JIT=1` once at the end: **150 passed** in 11 min 32 s (this container; the pure-Python kernel reads the flat unbalance array per sub-step, so the refactored lumped cases are ~1.3 s each instead of 0.7 s in Stage 4, see the bench row).
 - Properties (`tests/test_properties.py`, hypothesis, derandomized, 30 examples each, 1-2 s in
   both modes): huge gap ≡ gap 0 with ratio 1 bitwise (both solvers, all output types);
   power-of-two load scaling bitwise over the common samples and the summary when the phase-3
