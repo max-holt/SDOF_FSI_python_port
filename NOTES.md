@@ -166,8 +166,14 @@ skipped or loosened (the one test edit is the probe mechanism of
   warm in the process). Peak RSS of an `outputType = 1` run on the full history under Numba:
   lumped r20 210 MB, JC r96 191 MB (includes the compiler's footprint). Profile (python mode):
   `moc.step` is 99 % of (g); in Numba mode the lumped case is ~75 % `loads.unbalance_force`
-  (Python generator), see Next action. A full run including the pure-Python full JC cases is
-  appended to the README if it completes (see the end of this section).
+  (Python generator), see Next action. **The full run (pure-Python full JC cases included) was
+  attempted twice and lost twice to container restarts, both times inside the python-mode full
+  JC case (~15 min each); nothing of it is written until the end.** The two partial logs agree
+  with the committed record to within noise (literal (c) 173-178 s, Numba (g) 0.166-0.179 s, full
+  JC 1.8-2.2 s). The pure-Python full-JC row therefore comes from the owner's local reference
+  run; the Stage 4.2 measurement of the same cases (969 / 856 / 800 s at 2.80 GHz, sequential
+  in parallel processes) is in the JC golden table of `docs/bench/README.md`. Stage 5b item: let
+  the bench write partial JSON per worker so a killed run keeps its finished sections.
 - Port review (`port-reviewer` on `git diff b5fc5c7`, diff + VBA only, ran concurrently with the
   first part of the bench): **no correctness findings**. It checked `_integrate_kernel`
   operation-for-operation against the Stage 4 loop (coupling before the step with the previous
