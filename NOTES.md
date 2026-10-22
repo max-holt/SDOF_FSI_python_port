@@ -1,7 +1,10 @@
 # NOTES — session handoff
 
 ## Current stage
-Session V.1 (trace hook for visualisation) in progress 2026-10-22: see "Session V.1 — scope and plan".
+Session V.1 (trace hook for visualisation) done 2026-10-22: `trace_every` on both peak solvers,
+`PeakResponse.trace` (`trace.Trace`), `loads.elbow_forces`; untraced path bitwise (differential
+suite, bench within noise), traced run bitwise equal to the untraced one; see "Session V.1 —
+done". Next: V.2.
 Stage 5 (speed: Numba) done 2026-10-22: `structure.step_scalars`, `moc.step` and
 `response._integrate_kernel` compiled with `numba.njit(cache=True)` (no fastmath), same source in
 both modes (`make test-both`), differential sweeps **bitwise** under Numba (216/216), the three
@@ -19,6 +22,57 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.1 — done (2026-10-22)
+Commits: `ab398a6` (scope), `e8314da` (`loads.py`: shared `_schedule`, `elbow_forces`), `2b0d105`
+(`trace.py`, `response.py` hook, `tests/test_trace.py`), `f2f4211` (docs), then bench and this
+note. `legacy/`, `tests/fixtures/`, `legacy_port.py`, `vba_compat.py`, `structure.py`, `moc.py`
+untouched; no test deleted, skipped or loosened; no new dependency.
+- API as planned: `peak_response(..., trace_every=0)`, `peak_response_jc(..., trace_every=0, *,
+  ...)`, `PeakResponse.trace: Trace | None = None` (trailing, defaulted). `trace.Trace` fields
+  and the frame convention are in `trace.py`'s module docstring and `docs/architecture.md`
+  "Session V.1 — the trace". Two naming drifts from the plan, both non-numeric: the guard
+  constant is `trace.MAX_TRACE_VALUES` (not `MAX_TRACE_FLOATS`) because it counts int64 columns
+  too; the kernel's per-frame arrays are `tr_f (cap, 8)`, `tr_i (cap, 4)`, `tr_p`, `tr_v`.
+- Decision 5 measured: the shared per-sample `_schedule` generator costs nothing measurable on
+  the untraced lumped case (`bench --only response_r20 --repeats 5`, before → after: Numba
+  0.285 → 0.258 s, Python 1.038 → 1.038 s), so `elbow_forces` shares the walk (no duplication).
+- Tests: `tests/test_trace.py`, 96 tests (53 `elbow_forces` + 43 trace), green under Numba and
+  `NUMBA_DISABLE_JIT=1`; fast suite 834 passed in both modes; `-m slow` under Numba 150 passed
+  before each of the two `src/` commits. Pinned: traced == untraced bitwise (4 lumped sweep
+  cases × strides 1/3/7 × output types 0 + history type; 4 JC small cases × 3 strides × types
+  0/3; both flag sets), stride / length / time / sample / phase arithmetic against the
+  `elbow_forces` schedule and `free_decay_samples`, the free-decay cap (a 6-sample step at 1 Hz:
+  decay 44/47 samples against a 6-sample window; frames at sample ends equal the history),
+  `f_unbalance == flat[sub_step]` and `f_a - f_b == f_unbalance` bitwise, `f_friction == 0` and
+  no stick with `dynamicFric = 0`, `stick == (|v_prev| < fric_acc)` and the slip value
+  `-+ mass fric_acc / dt` (rtol 1e-9) at stride 1, JC geometry vs `moc.grid_size` /
+  `interp_fractions`, frame 0 column == `moc.new_column`, a fresh `JunctionCoupling` driven with
+  the traced `a` reproduces `d_f` and both column rows bitwise at every frame (stride 1,
+  running parity), the memory guard (constant monkeypatched small: raises, the named stride
+  runs, one less raises; lumped guarded too), the short-pipe fallback trace is lumped.
+- Port review (`port-reviewer`, `git diff 8d0f363`, diff + VBA only): **no correctness
+  findings**. It checked `_schedule` against VBA 394-567 and the pre-diff walk (phase-1
+  `Exit For`, D-8 post-loop `iB`/`jB`, the phase-2 advance between the two `k` loops), the
+  kernel's untouched state updates / parity / trackers / `_record` / decay test, the
+  recording branch (reads only; `frame < cap` guards every unchecked write), the capacity
+  arithmetic, `f_friction` against `step_scalars` 464/486/491, the interleave, and ran the
+  differential fast set after a recompile (550 passed). One pre-existing note, recorded under
+  Open issues (D-8 wording).
+- Bench (`tools/bench.py --skip-full-python`, `docs/bench/f2f4211.json`, README "Stage 5 runs"
+  section; Intel Xeon @ 2.80 GHz, in-session (a) 3.235 s): ratios to (a) vs `b9597a3` — Numba
+  (e) 0.090 (was 0.081), (f) 0.082 (0.090), (g) 0.044 (0.047), full JC 0.554 / 0.510 / 0.476
+  (0.555 / 0.541 / 0.505); pure Python (e) 0.342 (0.347), (f) 0.345 (0.322), (g) 23.9 (25.8).
+  Every change is inside the run-to-run spread of the two records (the lumped Numba cases move
+  ±10 % between runs; e/f swapped sign), so the untraced path has no measurable cost. All eight
+  digest pairs equal, every case `same` as `b9597a3`, full JC vs Excel 8.6e-13 / 2.1e-14 /
+  8.4e-15 unchanged, compile 2.86 s, peak RSS 191 MB.
+- Judgement calls to flag: (1) frame = end of sub-step `i * k` (not the state before it), so
+  frame 0 is at `t = dt`, not 0; (2) the JC column is interleaved `A0 B0 A1 … AN` with
+  `cell_kind`, rather than four separate per-grid arrays; (3) free decay is traced only inside
+  the history window (`totInd <= outMax * 2`), as the history is; (4) `inputs` of a fallback
+  trace are the lumped call's (the `fluid_*` keys are absent) and `solver` says
+  `"peak_response"`.
 
 ## Session V.1 — scope and plan (recorded 2026-10-22 before touching `src/`)
 Owner's instruction: a trace hook in the two peak solvers for visualisation. No behaviour
@@ -768,6 +822,12 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- Port review of V.1 (pre-existing, not introduced): `loads._schedule` (as the Stage 4
+  `unbalance_force` did) reads `fh[ib][jb]` before the first phase-2 `k` loop, where the VBA
+  (line 491) and `legacy_port.py` 639 only read `forceHistory(iB, jB)` inside that loop. In the
+  D-8 configuration with `kOverlap = stepQTY` (first loop skipped) the VBA runs on after the
+  clamped advance while the Stage 4 modules raise `IndexError`. DEVIATIONS D-8 describes the
+  edge in prose but its Python column says "Identical"; a sentence there is for the owner.
 - **F-1 to raise with the lead author**: the approved `vAv` divisor fix is numerically inert for
   the solver outputs (rounding level on the golden cases and the sweep) because `dF` depends on
   pressures, which depend on velocity differences only, and `vAv` shifts every velocity uniformly.
@@ -800,6 +860,16 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**Session V.2 (owner to specify: the visualiser that consumes `trace.Trace`).** V.1 hands it a
+self-describing `Trace` per run (`PeakResponse.trace`): per frame `t, sub_step, sample, phase,
+x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`, JC `p_cells` / `v_cells` on the
+interleaved staggered grid with `cell_position` / `cell_kind` / `moving_fraction`, and the
+one-off `params`, `inputs`, grid sizes. Open points for V.2 to decide against its needs: the
+frame convention (end of sub-step `i * k`, `t = (sub_step + 1) dt`), the interleaved column
+layout, and the free-decay window cap (frames stop where the history stops). The Stage 5b
+items below stay queued.
+
+Previous next action (Stage 5 → 5b, kept for the record):
 **Stage 5b.** (1) Owner's reference bench on local hardware (the absolute row for the paper):
 `.venv/bin/python tools/bench.py --profile` from the repository root on a quiet machine (about an
 hour; `--skip-full-python` leaves the three full JC cases out of the pure-Python mode and brings it
