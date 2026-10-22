@@ -11,6 +11,8 @@ dependencies = ["numpy", "numba"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools"]
+# Session V.2: the model animation (surge_sdof.viz, tools/animate.py) only.
+viz = ["plotly", "pandas"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
