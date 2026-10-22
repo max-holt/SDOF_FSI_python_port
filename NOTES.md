@@ -23,6 +23,73 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Session V.2 — scope and plan (recorded 2026-10-22 before touching `src/`)
+Owner's instruction: the model animation that consumes `trace.Trace` (two panels, shared slider,
+standalone CDN HTML). No solver change: `src/surge_sdof/viz/animate.py` only reads a
+`PeakResponse` (its `trace` and `free_decay_samples`); the fast suite, `-m slow` and the
+differential suite are untouched by construction (nothing under `response`, `moc`, `loads`,
+`structure`, `trace` is edited). Decisions taken here (flag if you disagree):
+
+1. **Dependencies.** `viz = ["plotly", "pandas"]` optional extra in `pyproject.toml` (owner's
+   list); installed in `.venv` with `uv pip install`. `surge_sdof.viz` imports them lazily so the
+   solver package stays numpy + numba only; `tests/test_viz.py` uses `pytest.importorskip("plotly")`
+   (the extra, not a failing test, is what would skip it).
+2. **Geometry (`u_layout`).** The column is laid on a U at 1 m per m of `cell_position`, no
+   per-segment rescaling: leg 1 is `x = 0`, `y = s1 - s` for `s <= s1` (anchor end at the top,
+   pivot A node `2 * pivotSegQTY` at the corner `y = 0`), the run is `y = 0`, `x = s - s1` up to
+   the second pivot `s2 = (N - pivotSegQTY) * 2 c dt`, leg 2 is `x = s2 - s1`, `y = s - s2`. So
+   the drawn leg is `pivotSegQTY * 2 c dt` = the cell-rounded portal-frame height plus the
+   `extQTY` fixed cells, which continue the leg above the anchor; a dashed line at `y = h`
+   (`structure.solve_portal_height`) marks the height from the case set-up, and the run is
+   `(N - 2 pivotSegQTY) * 2 c dt`, about `L` plus two cells (`moc.grid_size`). JC runs use the
+   trace's own `cell_position` / `cell_kind` / `moving_fraction` / `pivot_seg_qty`; lumped runs
+   rebuild the same grid from the case inputs (`solve_portal_height`, `moc.grid_size`,
+   `moc.interp_fractions`) with `dt = 1 / (sample_freq * step_qty)`. A lumped case whose grid
+   has `pivotSegQTY = 4` (D-4 divide by zero in `interp_fraction_b`) gets `frac_b` with the
+   `n < extQTY` test instead, display only; a short-pipe grid is drawn as it is.
+3. **Frames.** Frame 0 is synthetic, `t = 0`: `x = 0`, `p = 0` (the column at rest,
+   `moc.new_column`), `v = 0`, forces 0, phase transit. Then every `frame_stride`-th traced
+   frame with the last traced frame always included: `frame_stride = ceil(n_trace / (max_frames
+   - 2))`, so `1 + ceil(n_trace / frame_stride) + 1 <= max_frames` (default 400); the stride is
+   printed and put in the title with `trace_every`. The figure title says "trace capped by the
+   history window" when `forced_samples + free_decay_samples > 2 * out_max` (the run decayed
+   past the traced window).
+4. **Panel 1 scalings.** `exaggeration = 0.1 * run_length / max|x|` over the trace (1 when
+   `max|x| = 0`), printed in the title; `x_circle = x_nominal + x(t) * moving_fraction *
+   exaggeration`. `p_ref = 0` (initial pressure), `p_scale = max|p - p_ref|` over the trace,
+   `k_p = p_scale / max(p - p_ref)` so the largest circle over the run is exactly `2 x` nominal
+   (`k_p = 1` when no pressure rises above `p_ref`), size floor `0.15 x` nominal so a deep
+   trough does not vanish. Colour `v / max|v|` on a blue–grey–red diverging scale with `cmin =
+   -1`, `cmax = 1`, colour bar "relative fluid velocity (JC arrays)" with the tick labels in m/s.
+   Lumped: constant nominal size and the scale's grey midpoint, no colour bar. Hover: cell index,
+   kind (A node / B cell), position (m), fraction, and p (Pa) / v (m/s) for JC. Display arrays
+   are float32 (plotly typed arrays; the HTML is 5.3 bytes per value instead of ~18 as text).
+5. **Panel 2.** `f_unbalance` and `f_friction` (`Trace.f_friction`, owner's definition) against
+   `t` over every traced frame plus the `t = 0` row (a pandas table `scalars_table` holds the
+   per-frame scalars), 2 px lines, a legend; the cursor is a two-point trace updated per frame;
+   phase bands are `vrect` shapes from the phase changes in `t` (transit / history / free
+   decay), the time of peak `|x|` a `vline` with its value; the frame's `t` and phase go in the
+   title (frames carry a `layout.title`). Shared slider and play / pause (`updatemenus`).
+6. **CLI `tools/animate.py`.** `--golden <case_id>` reruns a fixture case (curve ids such as
+   `r096_jc_L24_f3`, or the Example ids `example_lumped` / `example_jc`) through the Stage 4
+   solver with `trace_every` (default: the stride that gives about 2000 traced frames so Panel 2
+   keeps its resolution inside the memory guard; `--trace-every` overrides); `--step` builds a
+   plain step history: `--amplitude` bar on the fluid area of `--size` (internal diameter, mm),
+   `--length` m, `--nat-freq` Hz, `--mu` (dynamicFric), `--solver lumped|jc`, the other inputs
+   defaulting to the `curve_10in` parameters (`--sample-freq`, `--step-qty`, `--duration`,
+   `--celerity`, `--mass-per-len`, `--ei`, `--density` override); the first sample is 0 so the
+   step is a step. `--out docs/viz/<name>.html`, `--max-frames`. `write_html(include_plotlyjs=
+   "cdn")` only; the full-library HTML is never written by the tool.
+7. **Tests (`tests/test_viz.py`).** The figure builds for `r020_lumped_L3_f2` and
+   `r096_jc_L24_f3` (traced at a coarse stride, `max_frames` small); offsets at the synthetic
+   frame 0 are exactly zero; size and colour constant across lumped frames; the frame count
+   respects the cap for several `max_frames`; the last frame's cursor `t` equals the last traced
+   `t`; the U layout puts the pivots at the corners and the run length at `(N - 2 piv) 2 c dt`.
+8. **Deliverables.** `docs/viz/example_jc_step.html`, `docs/viz/example_lumped_step.html`
+   (Example-sheet inputs via `--golden`), `docs/viz/golden_r096_jc.html` (row 96; a lower
+   `--max-frames` if the 1333-cell column makes the file too large to commit, the choice
+   recorded), `docs/architecture.md` row for `viz/animate.py`, README section, NOTES.
+
 ## Session V.1 — done (2026-10-22)
 Commits: `ab398a6` (scope), `e8314da` (`loads.py`: shared `_schedule`, `elbow_forces`), `2b0d105`
 (`trace.py`, `response.py` hook, `tests/test_trace.py`), `f2f4211` (docs), then bench and this
