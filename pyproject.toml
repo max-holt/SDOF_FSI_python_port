@@ -7,10 +7,10 @@ name = "surge_sdof"
 version = "0.0.0"
 description = "Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response with junction-coupling FSI"
 requires-python = ">=3.10"
-dependencies = ["numpy"]
+dependencies = ["numpy", "numba"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "openpyxl", "oletools"]
+dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

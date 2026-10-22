@@ -14,6 +14,73 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Stage 5 — scope and plan (recorded 2026-10-22 before touching `src/`)
+Owner's instruction: speed (Numba). Step 0 done first: `tools/bench.py --profile` on the pure-Python
+Stage 4.4 code (`docs/bench/b5fc5c7.json`, commit 3948a7f) so the latest bench entry is the
+pre-Numba profile. Approved at plan review (decisions A-D and amendments, 2026-10-22):
+
+1. `numba` in `pyproject` dependencies, `hypothesis` in `dev`. `@numba.njit(cache=True)` (no
+   fastmath, never object-mode `@jit`) on: `structure.step_scalars(x, v, a, f_applied, mass,
+   stiffness, damping, fric_acc, gap, ratio2, dt) -> (x, v, a)` with `structure.step(state,
+   f_applied, params, dt)` kept as the interface as a one-line unpacking wrapper (**C**);
+   `moc.step` whole, body unchanged; `response._integrate_kernel` (sample loop, max trackers,
+   `_record`, `_decay_test`, free decay) with `_integrate` as the Python orchestrator: it
+   concatenates the `loads.unbalance_force` per-sample lists once into a flat float64 array plus
+   int64 sample offsets, unpacks `SdofParams` and the coupling (kind 0 = none with empty arrays,
+   kind 1 = junction with its arrays and scalars), calls the kernel, writes `d_f` back, casts the
+   maxima to Python floats, builds `PeakResponse`. Kernel signatures take floats, ints, bools and
+   numpy arrays only. The Python-level `Coupling` interface (`NoCoupling`, `JunctionCoupling
+   .coupling_force`, `column()`) stays for callers. `f = float(flat[i])` and `d_f =
+   float(moc.step(...))` keep the SDOF state on Python floats under `NUMBA_DISABLE_JIT=1`
+   (no-ops under Numba). `pressure.py` stays un-JIT'd (milliseconds; not a bottleneck).
+   **A**: `numpy.errstate` has no effect in compiled code and `rhoC = 0` would raise
+   `ZeroDivisionError` under Numba but `FloatingPointError` in Python mode, so `peak_response_jc`
+   checks `rho_c == 0` once at set-up and raises `FloatingPointError` there (precedent D-4); a
+   fluid overflow under Numba propagates nan/inf and the end-of-run finiteness check raises
+   (D-23 style). D-9 / D-14 / D-23 wording updated.
+   **B**: `test_running_parity_is_continuous_across_phase_boundaries` monkeypatches `moc.step`,
+   which a compiled loop cannot see; the probe is changed to run the pure-Python form of the
+   same kernel (`_integrate_kernel.py_func`, or the function itself with JIT disabled), every
+   assertion unchanged, one docstring line saying so and why.
+2. Both modes green: `pytest -q` and `NUMBA_DISABLE_JIT=1 pytest -q`. `Makefile` targets `test`,
+   `test-nojit`, `test-both` (numba cache wipe first: `cache=True` does not track callee changes
+   in other modules), `slow`, `lint`, `bench`, `clean-cache`. **D**: minimal
+   `.github/workflows/ci.yml`: lint + fast suite in both modes with the cache wipe; slow/jc_slow
+   stay manual.
+3. Differential tolerance: measure the max relative Numba-vs-`legacy_port` difference on the
+   lumped sweep, the JC sweep (legacy flags), the small JC replays and the Example cases before
+   touching any tolerance; rtol 1e-12 stays if <= 1e-13, otherwise stop and show the expression
+   and both values (no arithmetic restructuring, no fastmath). Note: none of the three JIT'd
+   functions contains `**` (powers live in the set-up, which stays Python), so the D-15 lowering
+   concern does not apply to them; FMA contraction (LLVM does not contract without fastmath) and
+   `x / 2` -> `x * 0.5` (exact) are what remain to watch.
+4. Golden: `pytest -m "slow or jc_slow" --durations=0` under Numba for the Numba-affected set
+   only (75 lumped golden, 75 lumped differential, 3 `peak_response_jc` golden); the 3
+   literal-port JC cases are unchanged pure Python with recorded results and are not re-run
+   (owner amendment, saves 80 min). Report time per case and max relative error; same stop rule.
+5. Bench: `tools/bench.py` as a driver: literal cases in-process; refactored cases in a child
+   with a fresh `NUMBA_CACHE_DIR` (first call = true compile time, reported separately from the
+   steady-state median) and a child with `NUMBA_DISABLE_JIT=1`; a child running `outputType=1` on
+   the full history (lumped r20, JC r96) reporting peak RSS; the 3 full JC golden cases via
+   `peak_response_jc` (legacy flags) added to the case set; numba and llvmlite versions in the
+   JSON; README gets per run a three-row table literal / refactored (pure Python) / Numba in
+   seconds and ratios to the in-session (a), compile times and peak RSS; the pre-Stage-5 history
+   table stays above. Print the local command and the files to commit for the owner's reference
+   run.
+6. `tests/test_properties.py` (hypothesis, `derandomize=True`, `deadline=None`, ~30 examples,
+   small cases): gap 1e9 == gap 0 with ratio 1 bitwise; linear scaling with `dynamicFric = 0` and
+   the gap never engaged (power-of-two factor: bitwise over the samples both runs compute, and
+   the summary when `free_decay_samples` agree; arbitrary factor: forced-phase history at rtol
+   1e-9; the absolute D-21 threshold makes phase-3 length amplitude-dependent); all maxima finite
+   and >= 0, history finite; JC with `fluidArea = 0` equals lumped within 1e-12.
+7. `port-reviewer` on the final diff; `docs/architecture.md` Stage 5 section (kernel signature,
+   modes, cache, pressure.py un-JIT'd with the reason); README install and `make` targets;
+   DEVIATIONS rows; NOTES done section; next action Stage 5b.
+Commits: scope (this), one per module (structure, moc, response+coupling), Makefile/CI, bench,
+properties, docs. Gates: fast suite in both modes before each commit, `-m slow` under Numba before
+each `src/` commit, `-m slow` under `NUMBA_DISABLE_JIT=1` once at the end. Untouched: `legacy/`,
+`tests/fixtures/`, `legacy_port.py`, `vba_compat.py`; no test deleted, skipped or loosened.
+
 ## Stage 4.1 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction: refactor, first seam. Target layout for all of Stage 4 is in
 `docs/architecture.md` (one line per module, responsibilities and what each must not know).
