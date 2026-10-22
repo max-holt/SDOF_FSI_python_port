@@ -1,6 +1,7 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.1 (trace hook for visualisation) in progress 2026-10-22: see "Session V.1 — scope and plan".
 Stage 5 (speed: Numba) done 2026-10-22: `structure.step_scalars`, `moc.step` and
 `response._integrate_kernel` compiled with `numba.njit(cache=True)` (no fastmath), same source in
 both modes (`make test-both`), differential sweeps **bitwise** under Numba (216/216), the three
@@ -18,6 +19,92 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.1 — scope and plan (recorded 2026-10-22 before touching `src/`)
+Owner's instruction: a trace hook in the two peak solvers for visualisation. No behaviour
+change: the untraced path stays bitwise (differential suite), the traced path returns the same
+`PeakResponse` values bitwise (pinned by a test), and the untraced cost is checked with
+`tools/bench.py`. Decisions taken here (flag if you disagree):
+
+1. **API.** `peak_response(..., trace_every: int = 0)` and `peak_response_jc(..., trace_every=0)`
+   (keyword, validated `int >= 0`). `PeakResponse` gains a trailing defaulted field
+   `trace: Trace | None = None` (frozen dataclass, existing callers unchanged). The JC short-pipe
+   fallback passes `trace_every` through, so such a trace is a lumped trace (`trace.solver ==
+   "peak_response"`, JC fields None).
+2. **`trace.py`** (new module) holds the `Trace` dataclass and the one-off geometry helpers.
+   Frame convention: frame `i` is the **end of sub-step `i * trace_every`** (`sub_step` is the
+   running 0-based counter `n` of `_integrate_kernel`, the same index whose parity drives the
+   MoC); `t = (sub_step + 1) * dt`; `x, v, a` are the state after that sub-step; `f_a`, `f_b`,
+   `f_unbalance` the forces applied during it (0 in free decay); `d_f` the junction force the
+   sub-step used (`moc.step` runs before the SDOF step; 0.0 for lumped); `p_cells`/`v_cells`
+   the column after the sub-step. `sample` is the 0-based sample index (`totInd - 1`, the
+   history index); `phase` 0 = transit (delay, phase 1 of the VBA), 1 = history (ramp), 2 =
+   free decay. Frame 0 is therefore the end of sub-step 0, where a column at rest with `a = 0`
+   is still bitwise the initial column.
+   `f_friction = mass * dv_friction / dt` with `dv_friction = v_new - (v_old + (a_old + a_new)
+   * (dt / 2))`, recomputed in the trace branch from the same doubles `step_scalars` formed
+   (`half_dt = dt / 2`, `v + av`), so `structure.step_scalars` is untouched: slip gives
+   `-+fric_acc` (0.0 exactly with `dynamicFric = 0`), stick (`|v_old| < fric_acc`, D-20 dead
+   zone excluded) gives the holding value `av - (v_old + av)`, i.e. the momentum the stick
+   removed; `stick` is that test. Column layout for the JC fields: the staggered grid
+   **interleaved** `A0 B0 A1 B1 … A(N)`, `n_cells = 2N + 1`, with `cell_kind` (0 = A node, 1 = B
+   cell), `cell_position = j * celerity * dt` (m from the first A node; a cell is `2 c dt` long
+   and the column runs ext cells, leg to the pivot, span, leg, ext cells, `moc.grid_size`) and
+   `moving_fraction` = `frac_a` / `frac_b` interleaved the same way (the values `moc.step`
+   uses; `frac_a[0]` and `frac_a[N]` are the unused zeros). One-off fields: `solver`,
+   `trace_every`, `dt`, `step_qty`, `out_max`, `params` (`SdofParams`), `inputs` (the case
+   inputs as the solver received them, `force_history` as the 2-D array), `pivot_seg_qty`,
+   `pipe_seg_qty`, `ext_qty`, `n_cells` (None / 0 for lumped).
+3. **Capacity and the free-decay cap.** Phase 3's length is unknown before the run, so the
+   trace follows the history's own cap: sub-steps are traced while `totInd <= outMax * 2` (the
+   `_record` guard); later free-decay sub-steps are integrated but not traced, as the history
+   drops them. Capacity = `ceil((forced_substeps + max(0, outMax*2 - forced_samples) *
+   stepQTY) / trace_every)` frames, allocated once; the kernel returns the frames written and
+   the orchestrator slices. Memory guard before allocation: `ValueError` when `capacity *
+   (8 scalar columns + 2 * n_cells)` floats would exceed `MAX_TRACE_FLOATS = 50e6`, the message
+   naming the smallest stride that fits (this is the owner's `n_frames * n_cells` guard plus the
+   per-frame scalars, so the lumped path is guarded too).
+4. **Kernel.** `_integrate_kernel` takes `trace_every`, `flat_a`, `flat_b` (per-sub-step
+   elbow forces, empty when untraced), `delay_substeps` (phase 0 -> 1 boundary), and four
+   preallocated arrays: `tr_f (cap, 8) float64` (x, v, a, f_a, f_b, f_unbalance, f_friction,
+   d_f), `tr_i (cap, 4) int64` (sub_step, sample, phase, stick), `tr_p`, `tr_v` `(cap, n_cells)`
+   (`(0, 0)` when untraced or lumped). Per sub-step one test `rec = trace_every > 0 and n %
+   trace_every == 0`; `rec` saves `v_old, a_old` before `step_scalars` and calls the `njit`
+   helper `_trace_frame` after it. With `trace_every == 0` the branch is never entered; the
+   state arithmetic is untouched in both cases. Returns `n_frames` as an 11th element. Works
+   under `NUMBA_DISABLE_JIT=1` (plain Python, one extra boolean test per sub-step there).
+5. **`loads.py`.** The index walk becomes a private per-sample schedule generator shared by
+   `unbalance_force` (inner `k` loops and the yielded lists unchanged, so bitwise by
+   construction: same operands, same operations) and the new `elbow_forces(...)`, which yields
+   `(phase, force_a_list, force_b_list)` per sample for the trace; `fa - fb` of its lists equals
+   `unbalance_force` bitwise (test on the sweep, the Example case and the golden history). The
+   per-sample generator hop is the only cost to the untraced lumped path; measured with
+   `tools/bench.py --only response_r20` before and after. If it is measurable (outside the
+   run-to-run noise of the two medians), `elbow_forces` duplicates the walk instead and the
+   equality test is the guard.
+6. **Tests** (`tests/test_trace.py`): `trace_every` validation; length and stride arithmetic
+   (`n_frames == ceil(T / k)`, `sub_step == k * arange`, `t == (sub_step + 1) * dt`, `sample`
+   vs the offsets) for several strides and both solvers incl. a case that enters free decay and
+   one that hits the cap; the `PeakResponse` of a traced run bitwise equal to the untraced one
+   (summary, history, `free_decay_samples`; strides 1, 3, 7, both solvers, output types 0-3);
+   phase labels change exactly at the sub-steps `elbow_forces` says; `f_unbalance == flat[sub_step]`
+   and `f_a - f_b == f_unbalance` bitwise, 0 in free decay; `f_friction == 0` and `stick` all
+   False with `dynamicFric = 0`, `stick == (|v_prev| < fric_acc)` and the slip value `-+mass *
+   fric_acc / dt` at stride 1 with friction; `d_f == 0` for lumped; JC: `p_cells[0]`/`v_cells[0]`
+   equal the interleaved `moc.new_column`; at stride 1 a fresh `JunctionCoupling` driven with
+   `(0, 0, a[i-1])` and `step_index = i` reproduces `d_f` and both column rows bitwise at every
+   frame (`parity="running"`); geometry fields (`n_cells`, `cell_kind`, positions, fractions vs
+   `moc.interp_fractions`); memory guard (`MAX_TRACE_FLOATS` monkeypatched small: raises,
+   message names a stride that then runs); the fallback trace is lumped. Both modes.
+7. **Docs, bench, review.** `docs/architecture.md`: `trace.py` row, interface lines, a "Trace"
+   section; README entry-point table mentions `trace_every`. `tools/bench.py --skip-full-python`
+   after the `src/` commits, `docs/bench/<sha>.json` + README section committed; the check is
+   the ratio of every refactored case to the in-session (a) against `b9597a3` within noise.
+   `port-reviewer` on `git diff 8d0f363`, findings applied. NOTES done section, next action V.2.
+Commits: this scope; `loads.py`; `trace.py` + `response.py` + tests; docs; bench; review fixes if
+any; NOTES. Gates: `make test-both` before every commit, `-m slow` under Numba before each
+`src/` commit. Untouched: `legacy/`, `tests/fixtures/`, `legacy_port.py`, `vba_compat.py`,
+`structure.py`, `moc.py`; no test deleted, skipped or loosened; no new dependency.
 
 ## Stage 5 — scope and plan (recorded 2026-10-22 before touching `src/`)
 Owner's instruction: speed (Numba). Step 0 done first: `tools/bench.py --profile` on the pure-Python
