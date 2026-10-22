@@ -1,6 +1,11 @@
 # NOTES — session handoff
 
 ## Current stage
+Stage 5 (speed: Numba) done 2026-10-22: `structure.step_scalars`, `moc.step` and
+`response._integrate_kernel` compiled with `numba.njit(cache=True)` (no fastmath), same source in
+both modes (`make test-both`), differential sweeps **bitwise** under Numba (216/216), the three
+full JC golden cases in ~1 s each (were 13-30 min), hypothesis properties, three-mode bench; see
+"Stage 5 — done". Next: Stage 5b.
 Stage 4.4 (hygiene, no behaviour change) done 2026-10-22: SIM/C4 lint rules, numpy-style docstrings
 with units and DEVIATIONS ids on the six live modules, `docs/architecture.md` as built with the
 per-sub-step data flow, `README.md`, DEVIATIONS legacy-only markers; differential suite bitwise
@@ -34,8 +39,10 @@ pre-Numba profile. Approved at plan review (decisions A-D and amendments, 2026-1
    float(moc.step(...))` keep the SDOF state on Python floats under `NUMBA_DISABLE_JIT=1`
    (no-ops under Numba). `pressure.py` stays un-JIT'd (milliseconds; not a bottleneck).
    **A**: `numpy.errstate` has no effect in compiled code and `rhoC = 0` would raise
-   `ZeroDivisionError` under Numba but `FloatingPointError` in Python mode, so `peak_response_jc`
-   checks `rho_c == 0` once at set-up and raises `FloatingPointError` there (precedent D-4); a
+   `ZeroDivisionError` under Numba but `FloatingPointError` in Python mode under the Stage 4
+   `errstate` block (which is removed with the kernel; without it Python mode would give `inf`
+   and a numpy `RuntimeWarning`), so `peak_response_jc` checks `rho_c == 0` once at set-up and
+   raises `FloatingPointError` there (precedent D-4); a
    fluid overflow under Numba propagates nan/inf and the end-of-run finiteness check raises
    (D-23 style). D-9 / D-14 / D-23 wording updated.
    **B**: `test_running_parity_is_continuous_across_phase_boundaries` monkeypatches `moc.step`,
@@ -80,6 +87,105 @@ Commits: scope (this), one per module (structure, moc, response+coupling), Makef
 properties, docs. Gates: fast suite in both modes before each commit, `-m slow` under Numba before
 each `src/` commit, `-m slow` under `NUMBA_DISABLE_JIT=1` once at the end. Untouched: `legacy/`,
 `tests/fixtures/`, `legacy_port.py`, `vba_compat.py`; no test deleted, skipped or loosened.
+
+## Stage 5 — done (2026-10-22)
+Commits: `3948a7f` (step 0 bench baseline `b5fc5c7.json`), `83d12d1` (scope, numba dependency,
+hypothesis dev extra), `8789870` (`structure.step_scalars`), `eb35a9e` (`moc.step` compiled;
+`rhoC = 0` at the set-up, D-9), `b6e8a51` (`response._integrate_kernel`, coupling `KIND`, test
+probe B, D-14/D-23), `f771210` (Makefile, CI), then bench, properties, docs (see git log).
+`legacy/`, `tests/fixtures/`, `legacy_port.py`, `vba_compat.py` untouched; no test deleted,
+skipped or loosened (the one test edit is the probe mechanism of
+`test_running_parity_is_continuous_across_phase_boundaries`, assertions unchanged, decision B).
+- Environment: numba 0.68.0, llvmlite 0.50.0, hypothesis 6.170.5 (`uv pip install --python
+  .venv/bin/python -e ".[dev]"`); numpy 2.5.4, Python 3.13.16.
+- Kernels: `structure.step_scalars(x, v, a, f, mass, k, c, fric_acc, gap, ratio2, dt)` (the old
+  `step` body; `step` is the unpacking wrapper), `moc.step` (body unchanged),
+  `response._integrate_kernel` (the old `_integrate` loop on a flat float64 unbalance array +
+  int64 sample offsets, `SdofParams` as six floats, coupling as `KIND` + arrays + scalars;
+  `float()` casts keep Python-float state in `NUMBA_DISABLE_JIT=1` mode). `_integrate` is the
+  Python orchestrator. `pressure.py` not compiled (milliseconds). Kernel compile (fresh cache,
+  first call of the Example lumped case) about 1.0-1.4 s in this container; `cache=True` makes
+  later processes load it.
+- Error semantics (decision A): `rhoC = 0` → `FloatingPointError` at the `peak_response_jc`
+  set-up (after the fallback decision; a short pipe with `rhoC = 0` still takes the lumped path
+  as in VBA); fluid overflow → nan/inf propagate, `FloatingPointError` at the end of the run
+  (D-23). The `np.errstate` block around the JC loop is gone (no effect in compiled code).
+  DEVIATIONS D-9, D-14, D-23 reworded.
+- **Step 3, differential tolerance: measured max relative difference Numba vs `legacy_port` = 0.**
+  Scratch script over the lumped sweep (50 cases × {type 0, history type} = 100), the JC sweep
+  (50 × 2 = 100, legacy flags), the four JC small cases × types 0-3 (16) and the two Example
+  cases (types 0-3): **216/216 comparisons bitwise**; Example vs Excel 2.8e-14 (lumped) and
+  2.6e-15 (JC) as before. rtol 1e-12 unchanged. Reason: none of the three kernels contains `**`
+  (D-15 does not arise), LLVM does not form FMAs without fastmath, `x / 2` → `x * 0.5` is exact.
+- **Step 4, golden under Numba** (`pytest -m "slow or jc_slow" --durations=0`, the three
+  literal-port JC cases deselected per the owner's amendment): **153 passed in 5 min 33 s**. The
+  three full JC cases through `peak_response_jc` (legacy flags) vs Excel:
+
+  | row | f (Hz) | N | time (s), Numba | time (s), pure Python (293e507) | max rel err | per output (static-eq / x / v / a / F) |
+  |---|---|---|---|---|---|---|
+  | 96 | 3 | 666 | 1.19 (incl. compile) | 969 | 8.6e-13 | 7.5e-13 / 7.5e-13 / 8.6e-13 / 2.0e-13 / 0 |
+  | 97 | 7.5 | 592 | 0.88 | 856 | 2.1e-14 | 2.1e-14 / 2.1e-14 / 1.8e-14 / 1.5e-14 / 0 |
+  | 98 | 22 | 546 | 0.93 | 800 | 8.4e-15 | 8.4e-15 / 8.4e-15 / 2.7e-15 / 6.5e-15 / 0 |
+
+  Errors identical to the recorded pure-Python values, as the bitwise sweep predicts. The rest of
+  the 5.5 min is the legacy pure-Python side of the lumped golden and differential cases (75
+  `legacy_port` golden runs 155 s, 75 differential pairs 173 s); the 75 `peak_response` runs
+  under Numba are ~0.2 s each, almost all of it the Python `loads.unbalance_force` generator.
+- Suites: fast suite 738 passed under Numba (26 s) and under `NUMBA_DISABLE_JIT=1` (34 s); `-m
+  slow` under Numba 150 passed before each `src/` commit; `-m slow` under `NUMBA_DISABLE_JIT=1` once at the end (running at this commit; result in the close-out commit below).
+- Properties (`tests/test_properties.py`, hypothesis, derandomized, 30 examples each, 1-2 s in
+  both modes): huge gap ≡ gap 0 with ratio 1 bitwise (both solvers, all output types);
+  power-of-two load scaling bitwise over the common samples and the summary when the phase-3
+  lengths agree; arbitrary scaling linear over the forced phase at 1e-9; maxima finite and ≥ 0,
+  histories finite, gaps engaged in ~65 % of examples; JC with `fluidArea = 0` ≡ lumped within
+  1e-12 (summary, history, `free_decay_samples`), MoC path in ~85 % of examples. Two model facts
+  the properties surfaced and record as events rather than failures: (1) when the transit delay
+  is below half a sub-step (`CLng(unb · stepQTY) = 0`, `kOverlap = 0`) `forceA ≡ forceB` and the
+  response is identically zero (quantised delay, VBA behaviour); (2) the free-decay length is
+  amplitude-dependent through the absolute D-21 threshold `x · xZero > 0.01`, so the summary
+  maxima of a scaled load are only bitwise-scaled when both runs integrate the same number of
+  phase-3 samples (14 % of examples differ).
+- Bench (`tools/bench.py --profile --skip-full-python`, three modes, `docs/bench/b9597a3.json`,
+  README "Stage 5 runs" section). The container was restarted mid-stage (a first full run was
+  lost in the python-mode full JC case; its literal and Numba medians, at 2.10 GHz, are quoted
+  in brackets below), and the new container is a slower Intel Xeon @ 2.80 GHz: every pure-Python
+  case runs at ~0.55x of `b5fc5c7`, so only the in-session ratios are comparable. Digests: all
+  eight refactored/literal pairs equal in both modes, every case `same` as `b5fc5c7`.
+
+  | implementation | (a) lumped r20 | (b) lumped r80 | (c) jc r96 n2000 | (d) pressure | jc r96 full | jc r97 full | jc r98 full |
+  |---|---|---|---|---|---|---|---|
+  | literal | 3.839 s [1.00] (2.20) | 3.877 s [1.01] | 178.4 s [46.5] (100.0) | 11.5 ms | - | - | - |
+  | refactored, pure Python | 1.332 s [0.35] (0.73) | 1.237 s [0.32] | 99.1 s [25.8] (51.8) | 8.3 ms | - (skipped; ~15 min each) | - | - |
+  | Numba, steady state | 0.309 s [0.081] (0.200) | 0.344 s [0.090] | **0.179 s [0.047]** (0.083) | 8.5 ms | 2.13 s [0.56] (1.23) | 2.08 s (1.07) | 1.94 s (0.80) |
+
+  Speed-ups vs the literal port: lumped 12x (3.8x vs the pure-Python refactor), truncated JC
+  **1000x** (550x vs the refactor); MoC cell-updates/s 0.30 M → 0.54 M → **300 M**. Full JC golden
+  cases ~2 s each (969 / 856 / 800 s in pure Python at 293e507), max rel err vs Excel 8.6e-13 /
+  2.1e-14 / 8.4e-15 (unchanged). Compile: 3.36 s for `_integrate_kernel` + callees in a fresh
+  `NUMBA_CACHE_DIR` (1.25 s on the 2.10 GHz container); first calls per case 0.17-2.2 s (cache
+  warm in the process). Peak RSS of an `outputType = 1` run on the full history under Numba:
+  lumped r20 210 MB, JC r96 191 MB (includes the compiler's footprint). Profile (python mode):
+  `moc.step` is 99 % of (g); in Numba mode the lumped case is ~75 % `loads.unbalance_force`
+  (Python generator), see Next action. A full run including the pure-Python full JC cases is
+  appended to the README if it completes (see the end of this section).
+- Port review (`port-reviewer` on `git diff b5fc5c7`, diff + VBA only, ran concurrently with the
+  first part of the bench): **no correctness findings**. It checked `_integrate_kernel`
+  operation-for-operation against the Stage 4 loop (coupling before the step with the previous
+  `a`, `d_f + f` order, the `n + off` parity in all three phases incl. the phase-3 `+ 1`, the
+  trackers, `_record`, the `tot_ind <= out_max * 2` guard, `x_zero = 0.0` vs the old int `0`),
+  `step_scalars` as the old `step` body verbatim, `moc.step` decorator-only, the flattening
+  (truncated last delay sample kept; D-7/D-8 still raised, now inside `list(forces)`), per-file
+  `def test_` counts identical to the baseline, no fixture / legacy / frozen-module change, the
+  D-9/D-14/D-23 wording, and ran its own short bitwise check (random JC case with the legacy
+  flags and a lumped case, output types 0-3, two gap/ratio settings, a 2-D history) in both
+  modes: all bitwise. Three non-correctness notes, applied: (1) the decision-A sentence in the
+  plan above now says the Python-mode `FloatingPointError` came from the Stage 4 `errstate`
+  block; (2) D-14/D-23 now say a fluid overflow *normally* reaches the structure state and raises
+  at the end (an overflow at a far node in a run that ends before it reaches the pivots would
+  return finite values silently, where Stage 4 raised at the first overflowing op; non-physical
+  inputs only); (3) a bare `pytest` after editing `moc.py` can test a stale compiled
+  `_integrate_kernel` (Numba's documented cache limitation): `make test-both` wipes the cache,
+  README and architecture.md say so; a CLAUDE.md line is for the owner to add.
 
 ## Stage 4.1 — scope and plan (recorded 2026-10-21 before touching `src/`)
 Owner's instruction: refactor, first seam. Target layout for all of Stage 4 is in
@@ -601,6 +707,19 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**Stage 5b.** (1) Owner's reference bench on local hardware (the absolute row for the paper):
+`.venv/bin/python tools/bench.py --profile` from the repository root on a quiet machine (about an
+hour; `--skip-full-python` leaves the three full JC cases out of the pure-Python mode and brings it
+to ~10 min, at the cost of that row), then commit `docs/bench/<sha>.json` and `docs/bench/README.md`.
+(2) F-3, JC fidelity (full vs simplified) sweep; `coupling.py` is the only module the decision may
+touch (approved-fixes note). (3) Speed, next lever: `loads.unbalance_force` is now ~75 % of a
+compiled lumped run (0.55 s of 0.62 s profiled on row 20; the kernel itself is tens of ms) and the
+flat-array hand-off would let a compiled walk write straight into the array; the set-up and
+`pressure.py` are milliseconds and not worth compiling. (4) Optional: a `cache=True` staleness guard
+in CI beyond the wipe (`make clean-cache`), and the `jc_slow` marker text in `pyproject.toml` still
+says "hours each in pure Python" (true for the literal-port cases only).
+
+Previous next action (Stage 4.4 → 5, kept for the record):
 **Stage 5 (Numba).** `moc.step` and the `pressure.py` half-loops are already scalar loops over
 contiguous float64 arrays with no Python objects, written for `@njit`; `structure.step` and
 `response._integrate` are Python-float code that can follow. Judge `**` vs C `pow` (D-15: Numba
