@@ -32,6 +32,8 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+import numba
+
 __all__ = [
     "VBA_PI",
     "State",
@@ -43,6 +45,7 @@ __all__ = [
     "effective_displacement",
     "restoring_force",
     "step",
+    "step_scalars",
 ]
 
 # VBA ``Const pi = 3.14159265358979`` (15 digits; differs from math.pi by 3e-15 and a
@@ -386,7 +389,9 @@ def step(state: State, f_applied: float, params: SdofParams, dt: float) -> State
     """One VBA sub-step (lines 424-432) of the SDOF proxy.
 
     Explicit ``aNew`` from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``, and
-    stick (``|v| < fricAcc``) / slip Coulomb friction.
+    stick (``|v| < fricAcc``) / slip Coulomb friction. The arithmetic is
+    ``step_scalars``; this is the interface that unpacks the state tuple and the
+    ``SdofParams`` for it (Stage 5).
 
     Parameters
     ----------
@@ -417,6 +422,45 @@ def step(state: State, f_applied: float, params: SdofParams, dt: float) -> State
     """
     x, v, a = state
     mass, stiffness, damping, fric_acc, gap, ratio2 = params
+    return step_scalars(x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt)
+
+
+@numba.njit(cache=True)
+def step_scalars(
+    x: float,
+    v: float,
+    a: float,
+    f_applied: float,
+    mass: float,
+    stiffness: float,
+    damping: float,
+    fric_acc: float,
+    gap: float,
+    ratio2: float,
+    dt: float,
+) -> State:
+    """The SDOF sub-step of ``step`` on scalars only (Stage 5 Numba kernel).
+
+    Compiled with ``numba.njit(cache=True)`` (no fastmath); with
+    ``NUMBA_DISABLE_JIT=1`` it is this Python function. Called per sub-step from
+    ``response._integrate_kernel``; ``step`` is the tuple/``SdofParams`` interface.
+
+    Parameters
+    ----------
+    x, v, a : float
+        State at the end of the previous sub-step: m, m/s, m/s².
+    f_applied : float
+        Applied force, N (see ``step``).
+    mass, stiffness, damping, fric_acc, gap, ratio2 : float
+        The ``SdofParams`` fields, in order (kg, N/m, N·s/m, m/s, m, dimensionless).
+    dt : float
+        Sub-step, s.
+
+    Returns
+    -------
+    tuple of float
+        ``(x, v, a)`` at the end of this sub-step: m, m/s, m/s².
+    """
     half_dt = dt / 2
 
     # aNew = (F - (minUnsigned(gap, x) + max(0, Abs(x) - gap) * sign(x) * ratio^2)
