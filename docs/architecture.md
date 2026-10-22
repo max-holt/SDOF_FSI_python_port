@@ -1,11 +1,14 @@
-# Architecture — Stage 4 target layout
+# Architecture — Stage 4 layout, as built
 
 One line per module: what it is responsible for, and what it must not know about.
-The target structure is fixed for the whole of Stage 4; sessions fill it in module by
-module (4.1: `structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped
-path; 4.2: `moc`, the JC coupling; 4.3: `pressure`, `_vba_semantics`). `legacy_port.py` stays the reference
+The structure was fixed at the start of Stage 4 and filled in module by module (4.1:
+`structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped path; 4.2: `moc`, the
+JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change). This
+document describes the code as it stands after Stage 4.4. `legacy_port.py` stays the reference
 implementation until Stage 6 and every new module is proved against it by
-`tests/test_differential.py`.
+`tests/test_differential.py`. Every public function and dataclass of the six live modules
+carries a numpy-style docstring with the unit of each physical argument and return and the
+DEVIATIONS id of each VBA quirk it preserves.
 
 ```
 src/surge_sdof/
@@ -16,7 +19,7 @@ src/surge_sdof/
   structure.py         # SDOF: portal-frame proxy, restoring force with gap, Coulomb friction, time-step kernel
   coupling.py          # coupling force from the moc state (interp fractions, low-pass dF)
   loads.py             # elbow-to-elbow unbalance force from a history: transit delay, phase scheduling
-  response.py          # public API: peak_response(...) and peak_response_jc(...); returns a dataclass
+  response.py          # public API: peak_response(...) and peak_response_jc(...); returns a dataclass; one private _integrate loop
   pressure.py          # pressure_response (valve/pump MoC) as a standalone driver; get_pressure_response is a thin alias
 ```
 
@@ -29,8 +32,54 @@ src/surge_sdof/
 | `loads.py` | The elbow-to-elbow unbalance force `forceA − forceB` from a force history: `transit_delay` (`unballanceStepQTY`), the `kOverlap` sub-sample offset and the three-phase scheduling (delay phase with `forceA` held, ramp phase with both forces interpolated, no force in free decay), walked column-major over 2-D histories exactly as the VBA. Yields one list of per-sub-step values per sample. | the structure state, stiffness or damping, fluid coupling, what the caller does with each sample (result histories, free decay) |
 | `coupling.py` | The force the fluid column exerts on the structure: `Coupling.coupling_force(state, step_index) -> float`. `NoCoupling` returns `0.0`. `JunctionCoupling` (Stage 4.2) owns the column arrays, the tabulated interp fractions and the low-pass `dF`: each call feeds the state's acceleration (`a * dt`) into the moving cells, advances the column one sub-step with `moc.step` on the half-grid `step_index % 2` selects, and returns the new `dF` as a Python float. The parity source (running counter, F-2, or the VBA per-phase index) is the loop's choice; the coupling only takes `step_index % 2`. | the force history / unbalance schedule, output types, the SDOF update itself, phase boundaries |
 | `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 `@njit`s it whole. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
-| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop (sample loop, max trackers, result history, free-decay phase, output-type switch). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.grid_size` and the short-pipe fallback to `peak_response`; the loop runs under `np.errstate(raise)` because the MoC arrays are numpy. `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). | the internals of `step`, the MoC arrays, how `loads` interpolates |
+| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check, static-equivalent force). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; the loop runs under `np.errstate(raise)` because the MoC arrays are numpy. `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). | the internals of `step`, the MoC arrays, how `loads` interpolates |
 | `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
+
+## Data flow for one sub-step
+
+**Lumped path** (`peak_response`). Set-up once per run: `loads.as_history_2d` shapes the
+history, `loads.transit_delay` gives `unballanceStepQTY` (samples) and with it `outMax`,
+`structure.solve_portal_height` and `structure.lumped_params` give the `SdofParams`
+(mass kg, stiffness N/m, damping N·s/m, `fric_acc` m/s, gap m, `ratio2`), and
+`loads.unbalance_force` is created as a generator. Per sample, `_integrate` pulls the next
+`list` of per-sub-step `forceA − forceB` values (N) from the generator. Per sub-step it calls
+`coupling.coupling_force(state, n + off)` first (`NoCoupling`: `0.0`), adds the sub-step's
+unbalance value `f`, and passes the sum as `f_applied` to `structure.step(state, f_applied,
+params, dt)`, which computes `aNew` from the *old* `(x, v)`, the trapezoidal `v_new` with the
+stick/slip friction ladder, and the trapezoidal `x`. `_integrate` then updates the four max
+trackers (`|a|`, `|v|`, `|x|`, `|f|`) and increments the running counter `n`. At the end of
+the sample `_record` stores `x`, `v` or `a` in the 0-based history for `output_type` 1-3.
+When the generator is exhausted (phase 1 delay and phase 2 ramp both done) the free-decay
+phase repeats the same sub-step with `f_applied = coupling_force(...)` alone, `stepQTY`
+sub-steps per sample, while `x * xZero > 0.01` (D-21). Finally the static-equivalent force is
+`|structure.effective_displacement(xMax)| * stiffness` and the `PeakResponse` is built.
+
+**JC path** (`peak_response_jc`). The same loop and the same `structure.step`; the set-up adds
+`structure.jc_params` (rigid mass), `moc.decay_factor`, `moc.grid_size` (and the short-pipe
+fallback, which returns `peak_response` outright), and a `JunctionCoupling` that owns the
+four column arrays (`p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`;
+Pa and m/s), the tabulated interp fractions and `dF`. Per sub-step, before `structure.step`,
+`JunctionCoupling.coupling_force(state, step_index)` takes the previous sub-step's
+acceleration `a`, forms `a * dt` (m/s) and calls `moc.step(even=step_index % 2 == 0, …)`,
+which updates one half-grid in place. Even: the mean velocity `vAv` over the `2N + 1`
+velocities divided by `vav_div` (2N+1 by default, 2N−1 with `vav_denominator="legacy"`,
+D-17), the decaying end nodes (`p_b / dacayFactor`), the interior A nodes from the two
+neighbouring B characteristics, then every B velocity gains `a dt · frac_b[n] − vAv`; `dF`
+is formed from the A pressures on either side of the two pivots. Odd: the B cells from the
+two neighbouring A characteristics, then the interior A velocities gain `a dt · frac_a[n]`;
+`dF` from the B pressures at the pivots. In both, `dF ← 0.25 dF + 0.75 · fluidArea · Δp`
+(N) is returned as a Python float, added to the sub-step's `f`, and `structure.step` runs
+with the JC `SdofParams`. `step_index` is the running counter `n` (`parity="running"`, F-2)
+or the VBA per-phase index `n + off` (`parity="per_phase"`, D-19); the coupling only reads
+its parity. The loop runs under `np.errstate(raise)` so a zero `rhoC` or a fluid overflow
+raises mid-run (D-9 as a raise).
+
+**Pressure path** (`pressure_response`, for completeness). Independent of the above: `setup`
+once, `initial_column` once, then per loop iteration (two time steps) `valve_closure` →
+`valve_boundary` → `half_step_a_from_b` → `pump_boundary` → `half_step_b_from_a`, and
+`p_a[0]` is the sample (Pa). The module docstring of `pressure.py` has the detail.
+
+## Interfaces
 
 Interfaces fixed in Stage 4.1 so that later sessions write against them:
 
@@ -64,9 +113,15 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   `max_velocity`, `max_acceleration`, `max_applied_force`, `history` (None for
   `output_type = 0`; otherwise a 0-based array of length `outMax * 2`, element `t − 1` =
   state at the end of sample `t`), `output_type`, `free_decay_samples`.
+* Private, not an interface: `response._integrate(forces, params, dt, step_qty, coupling,
+  out_max, output_type, legacy_parity=False)`, `response._record(history, output_type,
+  index, x, v, a)` (the per-sample history write, called once per sample) and
+  `response._decay_test(x, x_zero)`.
 
-Exactness notes (why the restructure is behaviour-preserving; proved by the differential
-suite at rtol 1e-12, observed bitwise):
+## Exactness notes
+
+Why the restructure is behaviour-preserving; proved by the differential suite at rtol 1e-12,
+observed bitwise:
 
 * Python-float vs numpy-scalar arithmetic: both are IEEE double; `**` calls C `pow` on
   both (port_review §3.1-d). The Stage 4.0 experiment already showed bitwise equality.
@@ -86,3 +141,15 @@ suite at rtol 1e-12, observed bitwise):
   array and `min(0, v) / velAtPump` giving `-0.0`. Proved bitwise on the Example case and 49
   of 50 sweep cases; the 50th overflows identically (`FloatingPointError` under
   `np.errstate(raise)`) in both.
+* Stage 4.4 (hygiene): the inlined `max(0, |x| − gap)` test is written `excess < 0` instead
+  of the VBA-shaped `0 > excess` (ruff SIM300); the two are the same comparison for every
+  double, NaN included (both false). The duplicated per-sample history write became
+  `_record`, one assignment of the same float. The differential suite stayed bitwise.
+
+## Lint policy
+
+`pyproject.toml` selects `E, F, W, I, B, UP, NPY, SIM, C4`. `SIM` and `C4` were added in
+Stage 4.4, when the Stage 1 "no simplification" rule ended; the two frozen modules
+`legacy_port.py` and `vba_compat.py` are exempt from them (per-file ignores) so the literal
+transcription stays as written. Any lint-driven edit to a live module must keep the
+differential suite bitwise; a change that cannot is recorded in DEVIATIONS.md instead.
