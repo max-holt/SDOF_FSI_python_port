@@ -13,21 +13,29 @@ The package has two layers:
   (`tests/test_differential.py`) and will be removed in Stage 6.
 * `surge_sdof.response`, `surge_sdof.pressure` and the modules behind them (`structure`, `loads`,
   `coupling`, `moc`, `_vba_semantics`): the Stage 4 restructure, value-identical to the
-  transcription (bitwise on the differential suite) and 1.3-3.5x faster in pure Python
-  (`docs/bench/README.md`). New code uses this layer. `docs/architecture.md` describes it.
+  transcription (bitwise on the differential suite, under Numba as well), 1.3-3.5x faster in pure
+  Python and far faster compiled (`docs/bench/README.md`). New code uses this layer.
+  `docs/architecture.md` describes it.
 
 ## Install
 
-Python 3.10 or later and numpy. From the repository root:
+Python 3.10 or later, numpy and numba. From the repository root:
 
 ```
 python -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```
 
-The `dev` extra adds pytest and ruff (and openpyxl / oletools, used only by
+The `dev` extra adds pytest, ruff and hypothesis (and openpyxl / oletools, used only by
 `tools/extract_fixtures.py` to regenerate the fixtures from the source workbook). The project's
 commands invoke the interpreter as `.venv/bin/python`; adapt the path if your environment differs.
+
+The inner loops (`structure.step_scalars`, `moc.step`, `response._integrate_kernel`) are
+compiled with `numba.njit(cache=True)` on first use (about a second; the compiled code is cached
+under `src/surge_sdof/__pycache__`). Set `NUMBA_DISABLE_JIT=1` to run the same source as plain
+Python. The `Makefile` wraps the common commands: `make test`, `make test-nojit`, `make test-both`
+(both modes after a Numba cache wipe), `make slow`, `make golden`, `make lint`, `make bench`,
+`make clean-cache`.
 
 ## Entry points
 
@@ -95,9 +103,9 @@ PATH may be an isolated tool without numpy. Golden curve cases are excluded by d
 
 | Suite | Command | Content | Time (pure Python) |
 |---|---|---|---|
-| fast | `.venv/bin/python -m pytest -q` | VBA-semantics pins, quirk pins (DEVIATIONS), smoke, structure, the Example-sheet golden cases, the differential suite (new modules vs `legacy_port`, bitwise on seeded sweeps) | about 35 s |
+| fast | `.venv/bin/python -m pytest -q` (`make test`; `make test-both` adds the `NUMBA_DISABLE_JIT=1` run) | VBA-semantics pins, quirk pins (DEVIATIONS), smoke, structure, the Example-sheet golden cases, the differential suite (new modules vs `legacy_port`, bitwise on seeded sweeps), the hypothesis properties (`tests/test_properties.py`) | about 30 s per mode |
 | slow | `.venv/bin/python -m pytest -q -m slow` | the 75 lumped `GetPeakResponse` curve cases against Excel at 5e-12, through `legacy_port` and through `response.peak_response` | about 4-10 min |
-| jc_slow | `.venv/bin/python -m pytest -q -m jc_slow` | the 3 junction-coupling curve cases against Excel at 5e-12 (literal port and `peak_response_jc` with the legacy flags) | 13-30 min per case |
+| jc_slow | `.venv/bin/python -m pytest -q -m jc_slow` | the 3 junction-coupling curve cases against Excel at 5e-12 (literal port, 23-30 min per case in pure Python; and `peak_response_jc` with the legacy flags, seconds under Numba) | see left |
 | golden only | `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"` | the Excel comparisons alone; `tools/golden_report.py` tabulates the cached errors | |
 
 Run the fast suite before every commit and `-m slow` before any commit touching `src/`
@@ -106,16 +114,23 @@ Run the fast suite before every commit and `-m slow` before any commit touching 
 ## Benchmark
 
 ```
-.venv/bin/python tools/bench.py            # 3 timed runs per case
-.venv/bin/python tools/bench.py --profile  # plus one cProfile run per case
+.venv/bin/python tools/bench.py            # 3 timed runs per case, three modes (literal / Python / Numba)
+.venv/bin/python tools/bench.py --profile  # plus one cProfile run per pure-Python case
+.venv/bin/python tools/bench.py --skip-full-python  # leave the full JC cases out of the pure-Python mode
 .venv/bin/python tools/bench.py --only response_r20 --only response_pressure_example  # subset, nothing written
 ```
 
-Eight fixed cases from the golden fixtures (two lumped rows, a truncated JC row and the
-Example-sheet pressure call, each through the literal port and through the Stage 4 modules).
-It writes `docs/bench/<sha>.json` and appends a row to `docs/bench/README.md`; the paired
-cases must produce identical result digests or the exit code is 1. Run it at the end of every
-Stage 4/5 session and commit `docs/bench/`. Expect about 8 minutes.
+Fixed cases from the golden fixtures (two lumped rows, a truncated JC row and the Example-sheet
+pressure call through the literal port and through the Stage 4 modules, plus the three full JC
+golden rows through `peak_response_jc`), each refactored case timed twice in child processes:
+as plain Python (`NUMBA_DISABLE_JIT=1`) and compiled (fresh `NUMBA_CACHE_DIR`, so the compile
+time and the first call are measured separately from the steady state). Two more children record
+the peak RSS of an `outputType = 1` run on the full history. It writes `docs/bench/<sha>.json`
+and appends a three-row section (literal / refactored / Numba, in seconds and as ratios to the
+in-session literal lumped case) to `docs/bench/README.md`; the paired cases must produce
+identical result digests or the exit code is 1. Run it at the end of every Stage 4/5 session
+and commit `docs/bench/`. Expect about an hour (the full JC cases in pure Python are ~15 min
+each; `--skip-full-python` leaves them out and brings the run to about 10 minutes).
 
 ## Where the behaviour is documented
 

@@ -1,10 +1,11 @@
-# Architecture — Stage 4 layout, as built
+# Architecture — Stage 4 layout, as built (Stage 5: compiled kernels)
 
 One line per module: what it is responsible for, and what it must not know about.
 The structure was fixed at the start of Stage 4 and filled in module by module (4.1:
 `structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped path; 4.2: `moc`, the
-JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change). This
-document describes the code as it stands after Stage 4.4. `legacy_port.py` stays the reference
+JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change; 5: the three
+inner loops compiled with Numba, see "Stage 5 — compiled kernels"). This document describes
+the code as it stands after Stage 5. `legacy_port.py` stays the reference
 implementation until Stage 6 and every new module is proved against it by
 `tests/test_differential.py`. Every public function and dataclass of the six live modules
 carries a numpy-style docstring with the unit of each physical argument and return and the
@@ -28,12 +29,12 @@ src/surge_sdof/
 | `vba_compat.py` | VBA runtime semantics (`CLng`, `floor`, `modDbl`, `sign`, `min/maxUnsigned`, padded 1-based arrays). **Frozen**: no edits; new modules may import from it, but any VBA semantic it lacks goes into `_vba_semantics.py`. | any solver quantity |
 | `_vba_semantics.py` | The live home for VBA comparison semantics: `vba_min`/`vba_max` (the module-level VBA `min`/`max`, lines 3-17: on a tie or with NaN the **second** argument is returned, with its type and sign of zero; Python's built-ins return the first). One copy, used by `pressure.py`, surviving the Stage 6 removal of `legacy_port.py` (whose `min`/`max` are the same functions). | any solver quantity |
 | `legacy_port.py` | Line-for-line Stage 1 transcription of the VBA; the oracle for the differential tests. Frozen (no edits, no imports *from* it in new modules except in tests). | the new modules |
-| `structure.py` | The SDOF pipe proxy: `solve_portal_height` (seed + 11 `solve_poly` passes), `lumped_params` (mass, stiffness, damping, `fricAcc`), `restoring_force(x, k, gap, ratio)` (bilinear support gap), and `step(state, f_applied, params, dt)` — exactly the VBA update (explicit `aNew` from the old state, trapezoidal `v` and `x`, stick/slip Coulomb friction) on Python floats with the clamp/sign ladders inlined. One function, called from one loop. | where `f_applied` comes from (force histories, transit delay, fluid coupling), sample/phase bookkeeping, max trackers, output types |
+| `structure.py` | The SDOF pipe proxy: `solve_portal_height` (seed + 11 `solve_poly` passes), `lumped_params` (mass, stiffness, damping, `fricAcc`), `restoring_force(x, k, gap, ratio)` (bilinear support gap), and `step(state, f_applied, params, dt)` — exactly the VBA update (explicit `aNew` from the old state, trapezoidal `v` and `x`, stick/slip Coulomb friction) on Python floats with the clamp/sign ladders inlined. Stage 5: the arithmetic is `step_scalars(x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt)`, compiled with `numba.njit(cache=True)`; `step` unpacks the tuple and the `SdofParams` for it. One kernel, called from one loop. | where `f_applied` comes from (force histories, transit delay, fluid coupling), sample/phase bookkeeping, max trackers, output types |
 | `loads.py` | The elbow-to-elbow unbalance force `forceA − forceB` from a force history: `transit_delay` (`unballanceStepQTY`), the `kOverlap` sub-sample offset and the three-phase scheduling (delay phase with `forceA` held, ramp phase with both forces interpolated, no force in free decay), walked column-major over 2-D histories exactly as the VBA. Yields one list of per-sub-step values per sample. | the structure state, stiffness or damping, fluid coupling, what the caller does with each sample (result histories, free decay) |
-| `coupling.py` | The force the fluid column exerts on the structure: `Coupling.coupling_force(state, step_index) -> float`. `NoCoupling` returns `0.0`. `JunctionCoupling` (Stage 4.2) owns the column arrays, the tabulated interp fractions and the low-pass `dF`: each call feeds the state's acceleration (`a * dt`) into the moving cells, advances the column one sub-step with `moc.step` on the half-grid `step_index % 2` selects, and returns the new `dF` as a Python float. The parity source (running counter, F-2, or the VBA per-phase index) is the loop's choice; the coupling only takes `step_index % 2`. | the force history / unbalance schedule, output types, the SDOF update itself, phase boundaries |
-| `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 `@njit`s it whole. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
-| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check, static-equivalent force). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; the loop runs under `np.errstate(raise)` because the MoC arrays are numpy. `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). | the internals of `step`, the MoC arrays, how `loads` interpolates |
-| `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
+| `coupling.py` | The force the fluid column exerts on the structure: `Coupling.coupling_force(state, step_index) -> float`. `NoCoupling` returns `0.0`. `JunctionCoupling` (Stage 4.2) owns the column arrays, the tabulated interp fractions and the low-pass `dF`: each call feeds the state's acceleration (`a * dt`) into the moving cells, advances the column one sub-step with `moc.step` on the half-grid `step_index % 2` selects, and returns the new `dF` as a Python float. The parity source (running counter, F-2, or the VBA per-phase index) is the loop's choice; the coupling only takes `step_index % 2`. Stage 5: `coupling_force` is the Python-level interface; the compiled loop reads `KIND` (0 / 1) and the junction's arrays and scalars instead and performs the same update, `_integrate` writes `d_f` back. | the force history / unbalance schedule, output types, the SDOF update itself, phase boundaries |
+| `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 compiles it whole with `numba.njit(cache=True)`, body unchanged. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
+| `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). | the internals of `step`, the MoC arrays, how `loads` interpolates |
+| `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
 
@@ -85,13 +86,17 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
 
 * `structure.State = (x, v, a)` tuple of Python floats; `structure.SdofParams` named tuple
   `(mass, stiffness, damping, fric_acc, gap, ratio2)`; `structure.step(state, f_applied,
-  params, dt) -> State`.
+  params, dt) -> State`; `structure.step_scalars(x, v, a, f_applied, mass, stiffness,
+  damping, fric_acc, gap, ratio2, dt) -> (x, v, a)` (Stage 5, the compiled kernel `step`
+  wraps).
 * `loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)` is a
   generator: one `list[float]` per sample (the per-sub-step `forceA − forceB` values, in
   order, the last delay-phase sample truncated at the VBA `Exit For`).
 * `coupling.Coupling.coupling_force(state, step_index) -> float`; `step_index` is a
   running sub-step counter over the whole run (0 at the first sub-step), or, with
   `peak_response_jc(parity="per_phase")`, the VBA per-phase index (D-19; Stage 4.2).
+  `Coupling.KIND` (Stage 5): 0 for `NoCoupling`, 1 for `JunctionCoupling`, read by
+  `response._integrate` to unpack the coupling for the compiled loop.
 * `coupling.JunctionCoupling(pipe_seg_qty, pivot_seg_qty, dt, rho_c, fluid_area, decay,
   vav_denominator)` (Stage 4.2).
 * `moc.step(even, a_dt, p_a, v_a, p_b, v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay,
@@ -114,9 +119,13 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   `output_type = 0`; otherwise a 0-based array of length `outMax * 2`, element `t − 1` =
   state at the end of sample `t`), `output_type`, `free_decay_samples`.
 * Private, not an interface: `response._integrate(forces, params, dt, step_qty, coupling,
-  out_max, output_type, legacy_parity=False)`, `response._record(history, output_type,
-  index, x, v, a)` (the per-sample history write, called once per sample) and
-  `response._decay_test(x, x_zero)`.
+  out_max, output_type, legacy_parity=False)` (the Python orchestrator),
+  `response._integrate_kernel(flat, offsets, mass, stiffness, damping, fric_acc, gap,
+  ratio2, dt, step_qty, out_max, output_type, legacy_parity, history, kind, p_a, v_a, p_b,
+  v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay, vav_div, fluid_area, d_f) -> (x_max,
+  v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f)` (the compiled loop),
+  `response._record(history, output_type, index, x, v, a)` (the per-sample history write,
+  called once per sample) and `response._decay_test(x, x_zero)`.
 
 ## Exactness notes
 
@@ -145,6 +154,49 @@ observed bitwise:
   of the VBA-shaped `0 > excess` (ruff SIM300); the two are the same comparison for every
   double, NaN included (both false). The duplicated per-sample history write became
   `_record`, one assignment of the same float. The differential suite stayed bitwise.
+
+## Stage 5 — compiled kernels
+
+Three functions carry `@numba.njit(cache=True)`: `structure.step_scalars`, `moc.step` and
+`response._integrate_kernel`. No `fastmath`, never object-mode `@jit`. Their bodies are
+the Stage 4 code; what changed is the calling convention:
+
+* **Signatures take floats, ints, bools and 1-D float64 arrays only.** `response._integrate`
+  (plain Python) does the unpacking once per run: the `loads.unbalance_force` per-sample
+  lists are concatenated into one flat float64 array plus an int64 offsets array (sample
+  `s` is `flat[offsets[s]:offsets[s + 1]]`, so the truncated last delay-phase sample keeps
+  its length); `SdofParams` becomes six floats; the coupling becomes `KIND` plus, for the
+  junction, its six arrays and seven scalars (`NoCoupling` passes empty arrays and zeros
+  that the kernel never reads). The kernel returns the four maxima, the final state,
+  `tot_ind`, the forced-sample count and `dF`; `_integrate` writes `dF` back to the
+  `JunctionCoupling` (its arrays were updated in place), casts to Python floats and builds
+  the `PeakResponse`. The Python-level `Coupling.coupling_force` interface stays for
+  callers and tests.
+* **Both modes, one source.** With `NUMBA_DISABLE_JIT=1` `numba.njit` returns the
+  undecorated function and the same code runs as Python. `float(flat[i])` and
+  `float(moc.step(...))` in the kernel are no-ops under Numba and keep the SDOF state on
+  Python floats in Python mode, so the Stage 4 overflow semantics (D-23) are unchanged
+  there. `make test-both` runs the fast suite in both modes after wiping the on-disk Numba
+  cache, because `cache=True` does not notice when a callee in another module changed
+  (`moc.step` or `step_scalars` inside `_integrate_kernel`).
+* **Error semantics inside the kernel.** `numpy.errstate` has no effect in compiled code.
+  `rhoC = 0` is therefore rejected once at the `peak_response_jc` set-up with
+  `FloatingPointError` (D-9; it used to raise from the first MoC update); a fluid overflow
+  normally propagates nan/inf into the structure state and the end-of-run finiteness check
+  raises `FloatingPointError` (D-23, as the lumped path already did; an overflow confined to
+  far nodes until the run ends would pass silently, non-physical inputs only). `mass = 0` raises
+  `ZeroDivisionError` in both modes (Numba's Python error model).
+* **Exactness.** None of the three kernels contains `**` (the powers live in the set-up,
+  which stays Python), so the D-15 lowering of integer-literal powers does not arise. LLVM
+  does not contract multiply-adds into FMAs without fastmath, and `x / 2` as `x * 0.5`
+  is exact. Measured on the full differential sweep under Numba (lumped sweep 100
+  comparisons, JC sweep 100, JC small 16, Example cases): 216/216 bitwise equal to
+  `legacy_port`; the differential rtol 1e-12 is unchanged (NOTES.md "Stage 5 — done").
+* **Not compiled.** `pressure.pressure_response` (milliseconds per run, not a bottleneck;
+  it keeps its numpy-scalar `errstate` semantics), the set-up (`solve_portal_height`,
+  `lumped_params` / `jc_params`, `grid_size`, `interp_fractions`, `decay_factor`) and
+  `loads.unbalance_force`, which is now the dominant cost of a compiled lumped run (the
+  generator is Python; Stage 5b candidate).
 
 ## Lint policy
 
