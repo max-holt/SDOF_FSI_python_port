@@ -1145,7 +1145,12 @@ def test_fixed_vav_divides_by_the_number_of_terms():
 
 
 def _half_grid_sequence(monkeypatch, force, kw, **flags):
-    """The sequence of half-grids (True = even/A) ``moc.step`` is asked to update."""
+    """The sequence of half-grids (True = even/A) ``moc.step`` is asked to update.
+
+    Stage 5: the probe runs the pure-Python form of the same ``_integrate_kernel``
+    (``py_func`` of the dispatcher, or the function itself when the JIT is disabled)
+    because a compiled loop resolves ``moc.step`` at compile time and cannot see the
+    recording patch; the source is the same, only the patch becomes visible."""
     evens = []
     original = moc.step
 
@@ -1153,6 +1158,8 @@ def _half_grid_sequence(monkeypatch, force, kw, **flags):
         evens.append(bool(even))
         return original(even, *args)
 
+    kernel = response._integrate_kernel
+    monkeypatch.setattr(response, "_integrate_kernel", getattr(kernel, "py_func", kernel))
     monkeypatch.setattr(coupling.moc, "step", recording_step)
     res = response.peak_response_jc(force, **kw, output_type=1, **flags)
     return evens, res

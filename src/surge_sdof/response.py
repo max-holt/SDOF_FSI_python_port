@@ -17,6 +17,16 @@ running sub-step counter for the whole run, so the even/odd alternation never
 double-steps a half-grid at a phase boundary). The parity flag is applied by
 ``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
 
+Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
+``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
+``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
+sample offsets, unpacks ``SdofParams`` and the coupling (``Coupling.KIND``: 0 = none, 1 =
+junction with its column arrays and scalars), runs the kernel, writes ``dF`` back to the
+coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
+arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
+into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
+and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
+
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
 
@@ -32,23 +42,26 @@ Differences from ``legacy_port.get_peak_response`` (all proved value-identical b
 
 Differences of ``peak_response_jc`` from ``legacy_port.get_peak_response_jc`` (proved
 value-identical with the legacy flags by ``tests/test_differential.py``): the same
-return type and float state; the MoC arrays are numpy, so the loop runs under
-``np.errstate(raise)`` and ``rhoC = 0`` or an overflow in the fluid raises
-``FloatingPointError`` mid-run as the legacy did (D-9: nothing is swallowed); a
-``pivotSegQTY`` of 4 raises ``ZeroDivisionError`` at the set-up (D-4) rather than in the
-first MoC update.
+return type and float state; ``rhoC = 0`` raises ``FloatingPointError`` once at the set-up
+(Stage 5; the legacy raised it from numpy at the first MoC update) and an overflow in the
+fluid raises ``FloatingPointError`` at the end of the run as D-23 (inside the compiled
+kernel ``np.errstate`` does not apply; nan/inf propagate to the structure state), so
+nothing is swallowed (D-9); a ``pivotSegQTY`` of 4 raises ``ZeroDivisionError`` at the
+set-up (D-4) rather than in the first MoC update.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 
+import numba
 import numpy as np
 
 from surge_sdof import loads, moc, structure
 from surge_sdof.coupling import Coupling, JunctionCoupling, NoCoupling
-from surge_sdof.structure import SdofParams, step
+from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.vba_compat import clng
 
 __all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
@@ -350,19 +363,19 @@ def peak_response_jc(
         vav_denominator,
     )
     forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
-    with np.errstate(divide="raise", invalid="raise", over="raise"):
-        return _integrate(
-            forces,
-            params,
-            dt,
-            step_qty,
-            junction,
-            out_max,
-            output_type,
-            legacy_parity=(parity == "per_phase"),
-        )
+    return _integrate(
+        forces,
+        params,
+        dt,
+        step_qty,
+        junction,
+        out_max,
+        output_type,
+        legacy_parity=(parity == "per_phase"),
+    )
 
 
+@numba.njit(cache=True)
 def _decay_test(x: float, x_zero: float) -> float:
     """``x * xZero`` of the free-decay test; VBA raises error 6 if the product
     overflows (the numpy state of the legacy port did the same), so this does too."""
@@ -372,6 +385,7 @@ def _decay_test(x: float, x_zero: float) -> float:
     return p
 
 
+@numba.njit(cache=True)
 def _record(
     history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
 ) -> None:
@@ -399,29 +413,162 @@ def _integrate(
     (one list of per-sub-step unbalance values per sample), then free decay while
     ``x * xZero > 0.01``; max trackers; result history per sample.
 
-    ``step_index`` passed to the coupling is the running sub-step counter ``n`` (0 at the
-    first sub-step), or with ``legacy_parity`` the VBA per-phase index
+    Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens ``forces`` once,
+    unpacks ``params`` and ``coupling`` (``Coupling.KIND`` 0 or 1; the junction's arrays
+    are updated in place and its ``d_f`` written back), builds the ``PeakResponse``.
+
+    ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
+    ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
     ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
     with ``off`` fixed per sample (D-19, approved fix F-2)."""
     dt = float(dt)
-    coupling_force = coupling.coupling_force
-    x = v = a = 0.0
-    x_max = v_max = a_max = f_max = 0.0
-    state = (x, v, a)
+    samples = list(forces)
+    offsets = np.zeros(len(samples) + 1, dtype=np.int64)
+    for i, sample in enumerate(samples):
+        offsets[i + 1] = offsets[i] + len(sample)
+    flat = np.fromiter(
+        itertools.chain.from_iterable(samples), dtype=np.float64, count=int(offsets[-1])
+    )
+    history = np.zeros(out_max * 2 if output_type > 0 else 0)
+    kind = coupling.KIND
+    if kind == JunctionCoupling.KIND:
+        jc: JunctionCoupling = coupling
+        column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)
+        scalars = (jc.n_seg, jc.pivot, jc.rho_c, jc.decay, jc.vav_div, jc.fluid_area, jc.d_f)
+    elif kind == NoCoupling.KIND:
+        empty = np.zeros(0)
+        column = (empty, empty, empty, empty, empty, empty)
+        scalars = (0, 0, 0.0, 1.0, 1, 0.0, 0.0)
+    else:
+        raise TypeError(f"unknown coupling kind {kind!r}")
+
+    x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f = _integrate_kernel(
+        flat,
+        offsets,
+        params.mass,
+        params.stiffness,
+        params.damping,
+        params.fric_acc,
+        params.gap,
+        params.ratio2,
+        dt,
+        int(step_qty),
+        int(out_max),
+        int(output_type),
+        bool(legacy_parity),
+        history,
+        int(kind),
+        *column,
+        *scalars,
+    )
+    if kind == JunctionCoupling.KIND:
+        jc.d_f = float(d_f)
+
+    if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
+        raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
+
+    # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
+    static_equivalent = (
+        abs(structure.effective_displacement(x_max, params.gap, params.ratio2)) * params.stiffness
+    )
+    return PeakResponse(
+        max_static_equivalent_force=float(static_equivalent),
+        max_displacement=float(x_max),
+        max_velocity=float(v_max),
+        max_acceleration=float(a_max),
+        max_applied_force=float(f_max),
+        history=history if output_type > 0 else None,
+        output_type=output_type,
+        free_decay_samples=int(tot_ind - forced_samples),
+    )
+
+
+@numba.njit(cache=True)
+def _integrate_kernel(
+    flat: np.ndarray,
+    offsets: np.ndarray,
+    mass: float,
+    stiffness: float,
+    damping: float,
+    fric_acc: float,
+    gap: float,
+    ratio2: float,
+    dt: float,
+    step_qty: int,
+    out_max: int,
+    output_type: int,
+    legacy_parity: bool,
+    history: np.ndarray,
+    kind: int,
+    p_a: np.ndarray,
+    v_a: np.ndarray,
+    p_b: np.ndarray,
+    v_b: np.ndarray,
+    frac_a: np.ndarray,
+    frac_b: np.ndarray,
+    n_seg: int,
+    pivot: int,
+    rho_c: float,
+    decay: float,
+    vav_div: int,
+    fluid_area: float,
+    d_f: float,
+):
+    """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
+
+    ``flat[offsets[s]:offsets[s + 1]]`` holds sample ``s``'s per-sub-step unbalance
+    values. ``kind`` 1 advances the MoC column (``moc.step`` on the half-grid selected by
+    the parity of ``n + off``) before each SDOF sub-step and adds ``dF``; ``kind`` 0 adds
+    ``0.0`` (the ``NoCoupling`` of Stage 4). Returns ``(x_max, v_max, a_max, f_max, x, v,
+    a, tot_ind, forced_samples, d_f)``; ``history`` is filled in place for
+    ``output_type`` 1-3.
+    """
+    x = 0.0
+    v = 0.0
+    a = 0.0
+    x_max = 0.0
+    v_max = 0.0
+    a_max = 0.0
+    f_max = 0.0
     n = 0  # running sub-step counter
     off = 0  # step_index = n + off
     tot_ind = 0
-    history = np.zeros(out_max * 2) if output_type > 0 else None
+    n_samples = offsets.shape[0] - 1
 
     # ------------------------------------------------- phases 1-2: forced response
-    for sample in forces:
+    for s in range(n_samples):
         tot_ind += 1
         if legacy_parity:
             off = (tot_ind - 1) * step_qty - n
-        for f in sample:
-            state = step(state, coupling_force(state, n + off) + f, params, dt)
+        for i in range(offsets[s], offsets[s + 1]):
+            f = float(flat[i])
+            if kind == 1:
+                d_f = float(
+                    moc.step(
+                        (n + off) % 2 == 0,
+                        a * dt,
+                        p_a,
+                        v_a,
+                        p_b,
+                        v_b,
+                        frac_a,
+                        frac_b,
+                        n_seg,
+                        pivot,
+                        rho_c,
+                        decay,
+                        vav_div,
+                        fluid_area,
+                        d_f,
+                    )
+                )
+                f_applied = d_f + f
+            else:
+                f_applied = 0.0 + f
+            x, v, a = step_scalars(
+                x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
+            )
             n += 1
-            x, v, a = state
             if abs(a) > a_max:
                 a_max = abs(a)
             if abs(v) > v_max:
@@ -441,9 +588,33 @@ def _integrate(
         if legacy_parity:
             off = (tot_ind - 1) * step_qty + 1 - n
         for _k in range(step_qty):
-            state = step(state, coupling_force(state, n + off), params, dt)
+            if kind == 1:
+                d_f = float(
+                    moc.step(
+                        (n + off) % 2 == 0,
+                        a * dt,
+                        p_a,
+                        v_a,
+                        p_b,
+                        v_b,
+                        frac_a,
+                        frac_b,
+                        n_seg,
+                        pivot,
+                        rho_c,
+                        decay,
+                        vav_div,
+                        fluid_area,
+                        d_f,
+                    )
+                )
+                f_applied = d_f
+            else:
+                f_applied = 0.0
+            x, v, a = step_scalars(
+                x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
+            )
             n += 1
-            x, v, a = state
             if abs(a) > a_max:
                 a_max = abs(a)
             if abs(v) > v_max:
@@ -451,24 +622,8 @@ def _integrate(
             if abs(x) > x_max:
                 x_max = abs(x)
             if _decay_test(x, x_zero) <= 0.01:
-                x_zero = 0
+                x_zero = 0.0
         if output_type > 0 and tot_ind <= out_max * 2:
             _record(history, output_type, tot_ind - 1, x, v, a)
 
-    if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
-        raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
-
-    # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
-    static_equivalent = (
-        abs(structure.effective_displacement(x_max, params.gap, params.ratio2)) * params.stiffness
-    )
-    return PeakResponse(
-        max_static_equivalent_force=static_equivalent,
-        max_displacement=x_max,
-        max_velocity=v_max,
-        max_acceleration=a_max,
-        max_applied_force=f_max,
-        history=history,
-        output_type=output_type,
-        free_decay_samples=tot_ind - forced_samples,
-    )
+    return (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f)

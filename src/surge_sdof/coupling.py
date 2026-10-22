@@ -1,11 +1,17 @@
 """The force the fluid column exerts on the structure.
 
 ``peak_response`` and ``peak_response_jc`` share one integration loop and differ only in
-the coupling object they pass to it. Per sub-step the loop calls
-``coupling_force(state, step_index)`` *before* the SDOF update, with the state at the end
-of the previous sub-step (the VBA MoC block sits at the top of each ``k`` loop and reads
-the current ``a``), and adds the result to the unbalance force (phases 1-2) or uses it
-alone (free decay).
+the coupling object they pass to it. Per sub-step the loop evaluates the coupling force
+*before* the SDOF update, with the state at the end of the previous sub-step (the VBA MoC
+block sits at the top of each ``k`` loop and reads the current ``a``), and adds the result
+to the unbalance force (phases 1-2) or uses it alone (free decay).
+
+``coupling_force(state, step_index)`` is the Python-level interface (callers, tests). The
+compiled loop of Stage 5 (``response._integrate_kernel``) cannot call Python objects, so
+``response._integrate`` unpacks the coupling instead: ``KIND`` (0 = ``NoCoupling``, 1 =
+``JunctionCoupling``) and, for the junction, its column arrays and scalars; the kernel
+then performs exactly what ``coupling_force`` does (``moc.step`` on the half-grid
+``step_index % 2`` selects, ``dF`` as a float) and ``_integrate`` writes ``d_f`` back.
 
 ``step_index`` is a running sub-step counter over the whole run (0 at the first
 sub-step); ``JunctionCoupling`` uses its parity for the MoC alternation (approved fix
@@ -30,7 +36,10 @@ __all__ = ["Coupling", "NoCoupling", "JunctionCoupling"]
 
 
 class Coupling(Protocol):
-    """What ``response._integrate`` needs from a coupling: one call per sub-step."""
+    """What ``response._integrate`` needs from a coupling: one call per sub-step at the
+    Python level, and ``KIND`` for the compiled loop (see the module docstring)."""
+
+    KIND: int
 
     def coupling_force(self, state: State, step_index: int) -> float:
         """Force on the structure from the fluid at this sub-step (``dF`` in the VBA).
@@ -54,6 +63,7 @@ class NoCoupling:
     """The lumped solver (``GetPeakResponse``): no fluid feedback, ``dF = 0``."""
 
     __slots__ = ()
+    KIND = 0
 
     def coupling_force(self, state: State, step_index: int) -> float:
         """Always ``0.0`` N (``0.0 + F`` differs from the VBA's ``F`` only in the sign of an
@@ -103,9 +113,12 @@ class JunctionCoupling:
     ``a * dt`` from the state's acceleration. The parity source (running counter, F-2, or
     the VBA per-phase index, D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the
     constructor raises ``ZeroDivisionError`` (D-4, at set-up rather than in the first
-    MoC update).
+    MoC update). The compiled loop (Stage 5) reads the attributes listed in ``__slots__``
+    directly and performs the same update; after the run ``d_f`` and the arrays hold the
+    final column state either way.
     """
 
+    KIND = 1
     __slots__ = (
         "n_seg",
         "pivot",
