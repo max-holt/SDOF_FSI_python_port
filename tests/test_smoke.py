@@ -16,18 +16,18 @@ def test_package_imports():
 
 
 # ---------------------------------------------------------------- GetPressureResponse
-PRESSURE_KW = dict(
-    closure_time=1.0,  # s
-    celerity=1000.0,  # m/s
-    density=1000.0,  # kg/m3
-    time_step=0.005,  # s
-    pressure_drop_from_pump=0.5,  # bar
-    flow_rate=100.0,  # m3/h
-    pipe_area=7850.0,  # mm^2 (DN100)
-    valve_cv=500.0,
-    length_to_pump=500.0,  # m
-    pump_ramp_pressure=2.0,  # bar
-)
+PRESSURE_KW = {
+    "closure_time": 1.0,  # s
+    "celerity": 1000.0,  # m/s
+    "density": 1000.0,  # kg/m3
+    "time_step": 0.005,  # s
+    "pressure_drop_from_pump": 0.5,  # bar
+    "flow_rate": 100.0,  # m3/h
+    "pipe_area": 7850.0,  # mm^2 (DN100)
+    "valve_cv": 500.0,
+    "length_to_pump": 500.0,  # m
+    "pump_ramp_pressure": 2.0,  # bar
+}
 
 
 def linear_closure(n=100):
@@ -72,17 +72,17 @@ def test_pressure_response_pattern_lengths(n):
 
 
 # -------------------------------------------------------------------- GetPeakResponse
-PEAK_KW = dict(
-    step_qty=10,
-    sample_freq=100.0,  # Hz
-    physical_length=10.0,  # m
-    flexural_rigidity_ei=2e5,  # N m^2
-    celerity=1000.0,  # m/s
-    mass_per_unit_len=10.0,  # kg/m
-    damping_percent=2.0,
-    dynamic_fric=0.3,
-    nat_freq=5.0,  # Hz
-)
+PEAK_KW = {
+    "step_qty": 10,
+    "sample_freq": 100.0,  # Hz
+    "physical_length": 10.0,  # m
+    "flexural_rigidity_ei": 2e5,  # N m^2
+    "celerity": 1000.0,  # m/s
+    "mass_per_unit_len": 10.0,  # kg/m
+    "damping_percent": 2.0,
+    "dynamic_fric": 0.3,
+    "nat_freq": 5.0,  # Hz
+}
 
 
 def step_force(n=100, amplitude=1000.0):

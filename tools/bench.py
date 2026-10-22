@@ -94,18 +94,18 @@ TOP_N = 15
 # Example!B3:B7 and J33:J42 of tests/fixtures/source/surge_force_data.xlsm, as cached by
 # Excel. pipe_area is the formula PI()*(J39^2/4) with J39 = 200 (mm).
 EXAMPLE_VALVE_PATTERN = np.array([0.0, 0.2, 0.5, 0.8, 1.0]).reshape(-1, 1)
-EXAMPLE_PRESSURE_KW = dict(
-    closure_time=1.2,
-    celerity=1400.0,
-    density=1000.0,
-    time_step=0.01,
-    pressure_drop_from_pump=0.0001,
-    flow_rate=500.0,
-    pipe_area=math.pi * (200.0**2 / 4),
-    valve_cv=1800.0,
-    length_to_pump=400.0,
-    pump_ramp_pressure=2.0,
-)
+EXAMPLE_PRESSURE_KW = {
+    "closure_time": 1.2,
+    "celerity": 1400.0,
+    "density": 1000.0,
+    "time_step": 0.01,
+    "pressure_drop_from_pump": 0.0001,
+    "flow_rate": 500.0,
+    "pipe_area": math.pi * (200.0**2 / 4),
+    "valve_cv": 1800.0,
+    "length_to_pump": 400.0,
+    "pump_ramp_pressure": 2.0,
+}
 JC_TRUNCATE = 2000
 REFERENCE_CASE = "lumped_r20"  # case (a): always run, every case is also a ratio to it
 # (refactored case, literal-port case) whose result digests must be identical in a run
@@ -129,7 +129,7 @@ def check_digest_pairs(run) -> bool:
     return ok
 
 
-LEGACY_FLAGS = dict(vav_denominator="legacy", parity="per_phase")
+LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase"}
 
 
 def substep_count(n_samples, kw):

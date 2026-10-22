@@ -31,9 +31,14 @@ target-version = "py310"
 extend-exclude = ["legacy"]
 
 [tool.ruff.lint]
-# Stage 1 is a literal port: no "simplification" rule families (SIM, PLR, C4) by design.
-select = ["E", "F", "W", "I", "B", "UP", "NPY"]
+# SIM and C4 were added in Stage 4.4 (the Stage 1 "no simplification" exclusion is over).
+# The two frozen Stage 1 modules keep the literal transcription and are exempt from them.
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "SIM", "C4"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/surge_sdof/legacy_port.py" = ["SIM", "C4"]
+"src/surge_sdof/vba_compat.py" = ["SIM", "C4"]
 
 [tool.ruff.format]
 quote-style = "double"

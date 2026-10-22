@@ -254,6 +254,19 @@ def _decay_test(x: float, x_zero: float) -> float:
     return p
 
 
+def _record(
+    history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
+) -> None:
+    """Store the end-of-sample state in ``history[index]``: ``x`` for ``output_type`` 1,
+    ``v`` for 2, ``a`` for 3 (the VBA ``Select Case outputType`` after each sample)."""
+    if output_type == 1:
+        history[index] = x
+    elif output_type == 2:
+        history[index] = v
+    elif output_type == 3:
+        history[index] = a
+
+
 def _integrate(
     forces,
     params: SdofParams,
@@ -300,12 +313,7 @@ def _integrate(
             if abs(f) > f_max:
                 f_max = abs(f)
         if output_type > 0:
-            if output_type == 1:
-                history[tot_ind - 1] = x
-            elif output_type == 2:
-                history[tot_ind - 1] = v
-            elif output_type == 3:
-                history[tot_ind - 1] = a
+            _record(history, output_type, tot_ind - 1, x, v, a)
 
     # ---------------------------------------------------------- phase 3: free decay
     forced_samples = tot_ind
@@ -327,12 +335,7 @@ def _integrate(
             if _decay_test(x, x_zero) <= 0.01:
                 x_zero = 0
         if output_type > 0 and tot_ind <= out_max * 2:
-            if output_type == 1:
-                history[tot_ind - 1] = x
-            elif output_type == 2:
-                history[tot_ind - 1] = v
-            elif output_type == 3:
-                history[tot_ind - 1] = a
+            _record(history, output_type, tot_ind - 1, x, v, a)
 
     if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
         raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23

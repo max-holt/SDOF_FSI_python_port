@@ -203,18 +203,18 @@ def _make_case(rng, idx) -> SweepCase:
     amplitude = rng.uniform(0.05, 1.0) * stiffness_approx
     flat = np.array(_piecewise_levels(rng, n, amplitude))
     force = flat if cols == 1 else flat.reshape(n // cols, cols, order="F")
-    kw = dict(
-        step_qty=step_qty,
-        sample_freq=sample_freq,
-        physical_length=physical_length,
-        flexural_rigidity_ei=flexural_rigidity_ei,
-        celerity=celerity,
-        mass_per_unit_len=mass_per_unit_len,
-        damping_percent=damping_percent,
-        dynamic_fric=dynamic_fric,
-        nat_freq=nat_freq,
-        restrain_freq_ratio=restrain_freq_ratio,
-    )
+    kw = {
+        "step_qty": step_qty,
+        "sample_freq": sample_freq,
+        "physical_length": physical_length,
+        "flexural_rigidity_ei": flexural_rigidity_ei,
+        "celerity": celerity,
+        "mass_per_unit_len": mass_per_unit_len,
+        "damping_percent": damping_percent,
+        "dynamic_fric": dynamic_fric,
+        "nat_freq": nat_freq,
+        "restrain_freq_ratio": restrain_freq_ratio,
+    }
     x_max_free = float(lp.get_peak_response(force, **kw, gap=1e9, output_type=0)[1])
     kw["gap"] = rng.uniform(0.1, 0.5) * x_max_free
     return SweepCase(
@@ -603,19 +603,19 @@ def trace_legacy_jc(force, arrays=False, **kw) -> LegacyTrace:
 
 # Small JC cases (grids of 14-18 cells, 100 samples): the smoke-test parameters at the
 # three spans of ``test_smoke.py`` plus the Example-sheet JC case.
-JC_SMALL_KW = dict(
-    step_qty=10,
-    sample_freq=100.0,
-    physical_length=10.0,
-    flexural_rigidity_ei=2e5,
-    celerity=1000.0,
-    mass_per_unit_len=10.0,
-    damping_percent=2.0,
-    dynamic_fric=0.3,
-    nat_freq=5.0,
-    fluid_densty=1000.0,
-    fluid_area=0.005,
-)
+JC_SMALL_KW = {
+    "step_qty": 10,
+    "sample_freq": 100.0,
+    "physical_length": 10.0,
+    "flexural_rigidity_ei": 2e5,
+    "celerity": 1000.0,
+    "mass_per_unit_len": 10.0,
+    "damping_percent": 2.0,
+    "dynamic_fric": 0.3,
+    "nat_freq": 5.0,
+    "fluid_densty": 1000.0,
+    "fluid_area": 0.005,
+}
 
 
 def _step_force(n=100, amplitude=1000.0):
@@ -809,7 +809,7 @@ def test_no_coupling_is_unchanged():
 
 # ------------------------------------------------------------------ response.py (JC)
 
-LEGACY_FLAGS = dict(vav_denominator="legacy", parity="per_phase")
+LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase"}
 
 
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
@@ -989,20 +989,20 @@ def _draw_jc_case(rng):
     amplitude = rng.uniform(0.05, 1.0) * stiffness_approx
     flat = np.array(_piecewise_levels(rng, n, amplitude))
     force = flat if cols == 1 else flat.reshape(n // cols, cols, order="F")
-    kw = dict(
-        step_qty=step_qty,
-        sample_freq=sample_freq,
-        physical_length=physical_length,
-        flexural_rigidity_ei=flexural_rigidity_ei,
-        celerity=celerity,
-        mass_per_unit_len=mass_per_unit_len,
-        fluid_densty=fluid_densty,
-        fluid_area=fluid_area,
-        damping_percent=damping_percent,
-        dynamic_fric=dynamic_fric,
-        nat_freq=nat_freq,
-        restrain_freq_ratio=restrain_freq_ratio,
-    )
+    kw = {
+        "step_qty": step_qty,
+        "sample_freq": sample_freq,
+        "physical_length": physical_length,
+        "flexural_rigidity_ei": flexural_rigidity_ei,
+        "celerity": celerity,
+        "mass_per_unit_len": mass_per_unit_len,
+        "fluid_densty": fluid_densty,
+        "fluid_area": fluid_area,
+        "damping_percent": damping_percent,
+        "dynamic_fric": dynamic_fric,
+        "nat_freq": nat_freq,
+        "restrain_freq_ratio": restrain_freq_ratio,
+    }
     return force, kw, rng.choice([1, 2, 3]), pipe_seg_qty, pivot_seg_qty
 
 
@@ -1096,7 +1096,7 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
 
 # ------------------------------------------------------------------ approved fixes F-1, F-2
 
-FIXED_FLAGS = dict(vav_denominator="fixed", parity="running")
+FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running"}
 
 
 def test_peak_response_jc_defaults_are_the_approved_fixes():
@@ -1399,18 +1399,18 @@ def _make_pressure_case(rng, idx) -> PressureCase:
     celerity = rng.uniform(900.0, 1500.0)
     length_to_pump = rng.uniform(5.0, 2000.0)
     pipe_id = rng.uniform(50.0, 600.0)  # mm
-    kw = dict(
-        closure_time=closure_time,
-        celerity=celerity,
-        density=rng.choice([850.0, 1000.0, 1100.0]),
-        time_step=time_step,
-        pressure_drop_from_pump=0.0 if rng.random() < 0.2 else rng.uniform(0.01, 2.0),
-        flow_rate=10 ** rng.uniform(0.3, 3.3),
-        pipe_area=math.pi * pipe_id**2 / 4,
-        valve_cv=rng.uniform(100.0, 5000.0),
-        length_to_pump=length_to_pump,
-        pump_ramp_pressure=0.0 if rng.random() < 0.3 else rng.uniform(0.5, 5.0),
-    )
+    kw = {
+        "closure_time": closure_time,
+        "celerity": celerity,
+        "density": rng.choice([850.0, 1000.0, 1100.0]),
+        "time_step": time_step,
+        "pressure_drop_from_pump": 0.0 if rng.random() < 0.2 else rng.uniform(0.01, 2.0),
+        "flow_rate": 10 ** rng.uniform(0.3, 3.3),
+        "pipe_area": math.pi * pipe_id**2 / 4,
+        "valve_cv": rng.uniform(100.0, 5000.0),
+        "length_to_pump": length_to_pump,
+        "pump_ramp_pressure": 0.0 if rng.random() < 0.3 else rng.uniform(0.5, 5.0),
+    }
     out_max = round(closure_time / time_step)
     return PressureCase(
         id=f"p{idx:02d}_c{cols}_{shape}_{'closed' if end == 1.0 else 'partial'}",
@@ -1536,7 +1536,7 @@ def test_get_pressure_response_is_a_thin_alias():
 
 def test_pressure_response_raises_where_the_legacy_does():
     _case, pattern, kw = _example_pressure()
-    for bad in (dict(density=0.0), dict(time_step=0.0)):
+    for bad in ({"density": 0.0}, {"time_step": 0.0}):
         with pytest.raises((ZeroDivisionError, FloatingPointError)):
             lp.get_pressure_response(pattern, **dict(kw, **bad))
         with pytest.raises((ZeroDivisionError, FloatingPointError)):

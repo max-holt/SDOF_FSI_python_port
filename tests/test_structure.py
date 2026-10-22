@@ -25,17 +25,17 @@ from surge_sdof import legacy_port as lp
 
 PI_VBA = 3.14159265358979
 
-BASE_KW = dict(
-    step_qty=10,
-    sample_freq=100.0,
-    physical_length=10.0,
-    flexural_rigidity_ei=2e5,
-    celerity=1000.0,
-    mass_per_unit_len=10.0,
-    damping_percent=2.0,
-    dynamic_fric=0.3,
-    nat_freq=5.0,
-)
+BASE_KW = {
+    "step_qty": 10,
+    "sample_freq": 100.0,
+    "physical_length": 10.0,
+    "flexural_rigidity_ei": 2e5,
+    "celerity": 1000.0,
+    "mass_per_unit_len": 10.0,
+    "damping_percent": 2.0,
+    "dynamic_fric": 0.3,
+    "nat_freq": 5.0,
+}
 
 
 def step_force(n=100, amplitude=1000.0):
@@ -74,17 +74,17 @@ def test_engaged_gap_changes_the_answer(func):
 
 def static_case():
     """Long pipe so the first (unbalance) block is a long constant-force phase."""
-    kw = dict(
-        step_qty=100,  # fine step: see module docstring
-        sample_freq=100.0,
-        physical_length=4003.0,  # unballanceStepQTY = 400.3 samples
-        flexural_rigidity_ei=1e-6,  # portal frame height negligible: mass = L * m'
-        celerity=1000.0,
-        mass_per_unit_len=10.0,
-        damping_percent=0.0,
-        dynamic_fric=0.0,
-        nat_freq=2.5,  # period = 40 samples
-    )
+    kw = {
+        "step_qty": 100,  # fine step: see module docstring
+        "sample_freq": 100.0,
+        "physical_length": 4003.0,  # unballanceStepQTY = 400.3 samples
+        "flexural_rigidity_ei": 1e-6,  # portal frame height negligible: mass = L * m'
+        "celerity": 1000.0,
+        "mass_per_unit_len": 10.0,
+        "damping_percent": 0.0,
+        "dynamic_fric": 0.0,
+        "nat_freq": 2.5,  # period = 40 samples
+    }
     amplitude = 1e5
     force = step_force(100, amplitude)
     stiffness = (2 * PI_VBA * kw["nat_freq"]) ** 2 * kw["physical_length"] * kw["mass_per_unit_len"]
@@ -146,18 +146,18 @@ def test_2d_inputs_are_walked_column_major():
     assert not np.array_equal(a, c)
 
 
-PRESSURE_KW = dict(
-    closure_time=1.0,
-    celerity=1000.0,
-    density=1000.0,
-    time_step=0.005,  # factor * 2 = 1: loop index totInd is the pattern position p
-    pressure_drop_from_pump=0.5,
-    flow_rate=100.0,
-    pipe_area=7850.0,
-    valve_cv=500.0,
-    length_to_pump=500.0,
-    pump_ramp_pressure=2.0,
-)
+PRESSURE_KW = {
+    "closure_time": 1.0,
+    "celerity": 1000.0,
+    "density": 1000.0,
+    "time_step": 0.005,  # factor * 2 = 1: loop index totInd is the pattern position p
+    "pressure_drop_from_pump": 0.5,
+    "flow_rate": 100.0,
+    "pipe_area": 7850.0,
+    "valve_cv": 500.0,
+    "length_to_pump": 500.0,
+    "pump_ramp_pressure": 2.0,
+}
 
 
 def test_pressure_response_multicolumn_pattern_matches_single_column():

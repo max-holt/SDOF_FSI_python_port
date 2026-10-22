@@ -20,17 +20,17 @@ import pytest
 from surge_sdof import legacy_port as lp
 from surge_sdof.vba_compat import clng
 
-PEAK_KW = dict(
-    step_qty=10,
-    sample_freq=100.0,  # Hz
-    physical_length=10.0,  # m -> unballanceStepQTY = 1.0 sample
-    flexural_rigidity_ei=2e5,  # N m^2
-    celerity=1000.0,  # m/s
-    mass_per_unit_len=10.0,  # kg/m
-    damping_percent=2.0,
-    dynamic_fric=0.3,
-    nat_freq=5.0,  # Hz
-)
+PEAK_KW = {
+    "step_qty": 10,
+    "sample_freq": 100.0,  # Hz
+    "physical_length": 10.0,  # m -> unballanceStepQTY = 1.0 sample
+    "flexural_rigidity_ei": 2e5,  # N m^2
+    "celerity": 1000.0,  # m/s
+    "mass_per_unit_len": 10.0,  # kg/m
+    "damping_percent": 2.0,
+    "dynamic_fric": 0.3,
+    "nat_freq": 5.0,  # Hz
+}
 JC_KW = dict(PEAK_KW, fluid_densty=1000.0, fluid_area=0.005)
 LUMPED_ONLY = {k: v for k, v in JC_KW.items() if not k.startswith("fluid")}
 
@@ -150,7 +150,7 @@ def test_d14_pure_python_setup_overflow_is_silent():
 
 def test_d14_float_vs_numpy_overflow_semantics():
     with np.errstate(over="raise"):
-        assert 1e308 * 10.0 == np.inf  # Python float: inf, no exception
+        assert np.inf == 1e308 * 10.0  # Python float: inf, no exception
         with pytest.raises(FloatingPointError):
             np.float64(1e308) * 10.0  # numpy scalar: raises under errstate
         with pytest.raises(OverflowError):

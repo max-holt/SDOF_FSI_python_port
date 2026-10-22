@@ -201,7 +201,7 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
         clamp = x if gap > 0 else -x  # x * sign(gap)
     # max(0, Abs(x) - gap) * sign(x)
     excess = ax - gap
-    if 0 > excess:
+    if excess < 0:
         excess = 0.0
     if x > 0:
         beyond = excess
@@ -243,7 +243,7 @@ def step(state: State, f_applied: float, params: SdofParams, dt: float) -> State
     else:
         clamp = x if gap > 0 else -x
     excess = ax - gap
-    if 0 > excess:
+    if excess < 0:
         excess = 0.0
     if x > 0:
         beyond = excess
