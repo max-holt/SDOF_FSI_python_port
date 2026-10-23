@@ -1,6 +1,11 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2b (animation fixes from the lead author's review) done 2026-10-23: expansion-loop
+layout mapped by moving fraction with elbow arcs, friction on a right axis with aligned zero
+lines, speed buttons, `--t-start` / `--lead-in`, four regenerated pages; only `viz/`, the tool,
+tests and docs changed; see "Session V.2b — done" (elbow-cell report there). Next: the owner's
+local bench reference run, then Session 5b.
 Session V.2 (the model animation) done 2026-10-22: `src/surge_sdof/viz/animate.py` (plotly two-panel
 animation of a `Trace`, `viz` extra), `tools/animate.py` (`--golden` / `--step`), `tests/test_viz.py`
 (22 tests, both modes), `docs/viz/` (three CDN pages: Example lumped / JC, golden row 96); no
@@ -27,6 +32,66 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2b — done (2026-10-23)
+Lead author's review items 1-5, all applied; `src/` outside `viz/` untouched, no solver change,
+no test deleted, skipped or loosened, no new dependency.
+- **Elbow-cell report (item 4, printed before any change, Example JC case, frame of peak |x|:
+  frame 1108, t = 1.38625 s, x = -1.7229 m).** The V.2 corners were the pivot A nodes with their
+  neighbours: B6 (idx 13, s = 19.5 m, fraction 0.444, p = -1.525e6 Pa, v = +0.119 m/s), A7 (idx
+  14, 21.0 m, 1.0, -1.320e6, +0.115), B7 (idx 15, 22.5 m, 1.0, -1.020e6, +0.365) and B10 (idx 21,
+  31.5 m, 1.0, +8.07e5, +0.362), A11 (idx 22, 33.0 m, 1.0, +1.109e6, +0.111), B11 (idx 23, 34.5 m,
+  1.0, +1.409e6, +0.361). The four elbows of the loop mapping: inlet/leg B4 (idx 9, 13.5 m,
+  fraction 0, p = -1.501e6, v = -0.068) | A5 (idx 10, 15.0 m, 0.028, -1.554e6, -0.015); leg/run
+  B6 | A7 (above); run/leg B11 (idx 23, 34.5 m, 1.0, +1.409e6, +0.361) | A12 (idx 24, 36.0 m,
+  0.25, +1.570e6, +0.002); leg/outlet A13 (idx 26, 39.0 m, 0.028, +1.538e6, -0.025) | B13 (idx
+  27, 40.5 m, 0, +1.483e6, -0.079). **Every pair is two distinct cells at distinct positions
+  (1.5 m apart along the column), with distinct fractions, pressures and velocities**, so the
+  arc was drawn as instructed (pinned by `test_example_jc_elbow_cells_are_distinct`). Two
+  profile facts the mapping exposes, for the owner: (a) the node-centred B ramp starts at exactly
+  0 at `n = extQTY` (B4 / B13 are the elbow cells) while D-4's `n < 3` test gives B3 (idx 7) the
+  fraction 0.111 one place *before* that zero, so B3 and A4 (0.028) are drawn on the inlet tail;
+  (b) the B ramp is one cell longer on the inlet side (B6 = 0.444 has no mirror: B11 = 1.0), so
+  the legs differ by one cell: pipe heights 5.54 / 4.04 m for the Example grid (h = 7.69 m) and
+  3.99 / 3.97 m for row 96 (h = 4.05 m).
+- Item 1: `f_friction` on a secondary y-axis (right), `f_unbalance` on the left, both ranges
+  `±1.06 max|f|` so the zero lines coincide (test `test_zero_lines_coincide`); legend labels
+  "…, left axis" / "…, right axis"; phase bands and cursor stay on the primary.
+- Item 2: `loop_layout` replaces `u_layout` (`LoopLayout` replaces `ULayout`): segments from
+  the fraction profile (`_segments`: the fraction-1 block is the run, the last fraction-0 cell
+  before it and the first after it the upper elbows), uniform spacing by `cell_position` along
+  the centreline, inlet leftwards / outlet rightwards at the pipe height, legs vertical, panel
+  title "Expansion loop: inlet, leg, run, return leg, outlet"; a light centreline is drawn under
+  the circles (trace 0; the circles are trace 1, the cursor trace 4). Pinned: every fraction-0
+  cell at its pipe height and every fraction-1 cell at `y = 0`, exactly, for the lumped golden,
+  JC golden and Example JC layouts (`test_loop_layout_geometry`).
+- Item 3: speed buttons 0.25x / 0.5x / 1x / 2x / 4x (1x = 40 ms a frame) plus pause, the slider
+  below; `--max-frames` (default 400) was already there and stays.
+- Item 4: quarter arcs of radius 1.5 spacings at the four elbows, arc-length parametrised, each
+  starting or ending exactly at an elbow cell so the straights keep their cells (the Example leg
+  2 is short, so the radius drops to 1.72 m there: `0.45 x leg / (pi / 2)`); the nominal circle
+  is capped at 0.8 of the on-screen cell spacing, estimated from the now fixed 1200 x 900 px
+  figure, with a 3 px floor (row 96's spacing is ~0.8 px on screen, so its page is a 3 px tube;
+  the cap only bites there). Elbow pairs at distinct 2-D positions pinned for all three layouts.
+- Item 5: `build_figure(..., t_start)` and `--t-start` drop the traced frames before `t_start`
+  (and the synthetic rest frame; the time axis starts at `t_start`); `--step` has `--lead-in`
+  (0.1 s of zero samples, at least one) and `--area` (m², overrides `--size`).
+  `docs/viz/example_jc_step.html` is now the built-in step with the Example-sheet parameters
+  (`--amplitude 1600 --area 0.05`, i.e. 8 MN, the sheet's first level, at t = 0.1 s, 2.4 s hold:
+  peak |x| 1.742 m at t = 0.186 s); `example_jc_sheet.html` is the untrimmed sheet history
+  (as the old `example_jc_step.html` was); `example_lumped_step.html` (sheet history, lumped)
+  and `golden_r096_jc.html` (150 frames, 4.75 MB) regenerated with the new layout.
+- Tests: `tests/test_viz.py` 28 tests (22 kept, the U geometry test replaced by the loop
+  test x 3 layouts, plus elbow cells, zero lines, speed buttons, `t_start`), green under Numba
+  and `NUMBA_DISABLE_JIT=1` (5 s / 31 s); fast suite 862 passed; `-m slow` 150 passed (10 min)
+  before the `src/` commit. Visual
+  check: headless Chromium screenshots of the Example JC and row 96 pages at the peak frame.
+- Judgement calls to flag: (1) the arc starts/ends at the elbow cell rather than being centred
+  on it, so the elbow cell itself keeps `y = pipe height` / `y = 0` (the owner's assertion) and
+  the leg is `leg length - (pi - 2) r` tall; (2) the size cap is an estimate (plotly sizes
+  markers in px, the axis scale depends on the fixed figure size); (3) `example_lumped_step.html`
+  keeps the sheet history (the instruction named only the JC page); (4) with `t_start > 0`
+  there is no rest frame, the first frame is the first kept traced frame.
 
 ## Session V.2 — done (2026-10-22)
 Commits: `c9d1e11` (scope and plan), then the module / CLI / tests / extra, the three pages with
@@ -983,7 +1048,7 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-**Local bench reference run, then Session 5b.** (1) The owner's reference bench on local
+**Local bench reference run, then Session 5b.** (unchanged by V.2b) (1) The owner's reference bench on local
 hardware (the absolute row for the paper): `.venv/bin/python tools/bench.py --profile` from the
 repository root on a quiet machine (about an hour; `--skip-full-python` brings it to ~10 min at
 the cost of the full-JC pure-Python row), then commit `docs/bench/<sha>.json` and
