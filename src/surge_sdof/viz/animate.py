@@ -3,25 +3,30 @@
 ``build_figure(result)`` takes the ``PeakResponse`` of a run made with ``trace_every > 0``
 and returns a plotly figure with frames, a slider and play / pause:
 
-* **Panel 1** lays the fluid column on a U (``u_layout``): the ``ext_qty`` fixed cells and
-  the pivot ramp cells on each vertical leg, the run horizontal between the pivots, 1 m per
-  m of ``cell_position``. Per frame each cell is a circle whose horizontal position is the
+* **Panel 1** lays the fluid column on an expansion loop (``loop_layout``): inlet pipe,
+  leg down, run, return leg up, outlet pipe, the cells mapped by their moving fraction
+  (fraction 0 at each end = the horizontal inlet / outlet, 0 < fraction < 1 = the legs,
+  fraction 1 = the run along ``y = 0``), uniform spacing by ``cell_position`` along the
+  centreline, the four elbows on short arcs. Per frame each cell is a circle whose horizontal position is the
   nominal one plus ``x(t) * moving_fraction * exaggeration`` (the lumped-mass displacement
   scaled by the cell's reference-velocity correction fraction), whose size is scaled from
   the nominal by the cell pressure (largest circle of the run 2x nominal) and whose colour
   is the cell velocity on a diverging scale centred at zero. A lumped run uses the same U
   and fraction profile (rebuilt from the case inputs with ``moc.grid_size`` /
   ``moc.interp_fractions``) with constant size and the scale's grey midpoint.
-* **Panel 2** plots the applied unbalance ``f_unbalance = F_A(t) - F_B(t - L/c)`` and the
-  friction force ``f_friction`` against time over the whole trace, shades the phases
-  (transit / history / free decay), marks the time of peak ``|x|`` and carries a cursor at
-  the frame time.
+* **Panel 2** plots the applied unbalance ``f_unbalance = F_A(t) - F_B(t - L/c)`` (left
+  axis) and the friction force ``f_friction`` (right axis) against time over the whole
+  trace, both axes symmetric so the zero lines coincide, shades the phases (transit /
+  history / free decay), marks the time of peak ``|x|`` and carries a cursor at the frame
+  time.
 
 Frame 0 is synthetic (``t = 0``: ``x = 0``, the column at rest, no forces) so playback
 starts from rest; frame ``j >= 1`` is the traced frame ``(j - 1) * frame_stride``, the last
 traced frame always included, ``frame_stride`` chosen so there are at most ``max_frames``
-frames (``select_frames``). All the scalings are printed in the title and returned in an
-``AnimationInfo``. ``write_html`` writes the standalone page with plotly.js from the CDN.
+frames (``select_frames``). ``t_start > 0`` trims the leading frames (and the synthetic
+one). Playback speed buttons (0.25x .. 4x of ``frame_duration_ms``) and pause sit under the
+slider. All the scalings are printed in the title and returned in an ``AnimationInfo``.
+``write_html`` writes the standalone page with plotly.js from the CDN.
 plotly and pandas (the ``viz`` extra) are imported inside the functions that need them.
 """
 
@@ -39,9 +44,9 @@ from surge_sdof.trace import PHASE_FREE_DECAY, PHASE_HISTORY, PHASE_TRANSIT, Tra
 __all__ = [
     "MAX_FRAMES",
     "PHASE_NAMES",
-    "ULayout",
+    "LoopLayout",
     "AnimationInfo",
-    "u_layout",
+    "loop_layout",
     "lumped_grid",
     "layout_from_trace",
     "select_frames",
@@ -53,6 +58,19 @@ __all__ = [
 
 MAX_FRAMES = 400
 """Default cap on the number of animation frames (the synthetic ``t = 0`` frame included)."""
+FRAME_DURATION_MS = 40
+"""Playback frame duration at 1x."""
+SPEEDS = (0.25, 0.5, 1.0, 2.0, 4.0)
+CORNER_RADIUS_CELLS = 1.5
+"""Elbow arc radius in cell spacings (``cell_position`` steps)."""
+SIZE_CAP_SPACING = 0.8
+"""Nominal circle diameter is capped at this fraction of the on-screen cell spacing."""
+SIZE_CAP_FLOOR_PX = 3.0
+"""... but never below this many px (a 1333-cell column has sub-pixel spacing)."""
+FIG_WIDTH, FIG_HEIGHT = 1200, 900
+MARGIN = {"l": 80, "r": 170, "t": 150, "b": 110}
+ROW_HEIGHTS = [0.62, 0.38]
+VERTICAL_SPACING = 0.14
 
 PHASE_NAMES = {PHASE_TRANSIT: "transit", PHASE_HISTORY: "history", PHASE_FREE_DECAY: "free decay"}
 
@@ -73,13 +91,13 @@ PEAK_FRACTION = 0.1
 """The exaggeration makes the peak displacement this fraction of the run length."""
 MAX_SIZE_RATIO = 2.0
 """The largest circle of the run is this many times the nominal size."""
-BAND_LABEL_FRACTION = 0.03
+BAND_LABEL_FRACTION = 0.06
 """A phase band is labelled only when it spans at least this fraction of the time axis."""
 
 
 @dataclass(frozen=True)
-class ULayout:
-    """The column laid on the U (see the module docstring).
+class LoopLayout:
+    """The column laid on the expansion loop (see the module docstring and ``loop_layout``).
 
     Attributes
     ----------
@@ -90,13 +108,29 @@ class ULayout:
     cell_length : float
         ``2 * celerity * dt``, m (a cell; ``cell_position`` steps by half of it).
     portal_height : float
-        ``structure.solve_portal_height`` of the case, m (the dashed line on the legs).
+        ``structure.solve_portal_height`` of the case, m (printed, not used for the layout).
+    spacing : float
+        Distance between consecutive cells along the centreline, m (``celerity * dt``).
+    corner_radius : float
+        Elbow arc radius, m (``CORNER_RADIUS_CELLS`` spacings, reduced when a leg is too
+        short for two arcs).
+    inlet_end, run_start, run_end, outlet_start : int
+        Cell indices: the last fraction-0 cell of the inlet (the inlet / leg elbow), the
+        first and last fraction-1 cells (the leg / run elbows), the first fraction-0 cell
+        of the outlet (the leg / outlet elbow).
+    elbow_pairs : tuple of (int, int)
+        The two cells either side of each of the four elbows, in centreline order.
     x_nominal, y_nominal : numpy.ndarray
-        Circle centres at rest, m: leg 1 at ``x = 0`` from ``y = leg_length`` (anchor end)
-        down to the first pivot at the origin, the run along ``y = 0``, leg 2 at ``x =
-        run_length`` up to ``y = leg_length``.
-    run_length, leg_length : float
-        ``(N - 2 piv) * cell_length`` and ``piv * cell_length``, m.
+        Circle centres at rest, m: the run along ``y = 0`` from ``x = 0`` (``run_start``)
+        to ``x = run_length`` (``run_end``); leg 1 at ``x = -corner_radius``, leg 2 at
+        ``x = run_length + corner_radius``; the inlet at ``y = leg_height`` ending at
+        ``x = -2 corner_radius`` and extending left, the outlet at ``y = leg_height_2``
+        from ``x = run_length + 2 corner_radius`` extending right.
+    run_length : float
+        ``cell_position[run_end] - cell_position[run_start]``, m.
+    leg_height, leg_height_2 : float
+        Height of the inlet and outlet pipes above the run, m: the centreline length
+        between the elbow cells less the two arcs plus two radii.
     """
 
     cell_position: np.ndarray
@@ -107,10 +141,18 @@ class ULayout:
     ext_qty: int
     cell_length: float
     portal_height: float
+    spacing: float
+    corner_radius: float
+    inlet_end: int
+    run_start: int
+    run_end: int
+    outlet_start: int
+    elbow_pairs: tuple
     x_nominal: np.ndarray
     y_nominal: np.ndarray
     run_length: float
-    leg_length: float
+    leg_height: float
+    leg_height_2: float
 
     @property
     def n_cells(self) -> int:
@@ -143,7 +185,7 @@ class AnimationInfo:
         Circle diameter at rest, px.
     capped : bool
         The run decayed past the traced history window (``is_capped``).
-    layout : ULayout
+    layout : LoopLayout
     """
 
     solver: str
@@ -159,13 +201,29 @@ class AnimationInfo:
     v_scale: float
     nominal_size: float
     capped: bool
-    layout: ULayout
+    layout: LoopLayout
 
 
 # ------------------------------------------------------------------ geometry
 
 
-def u_layout(
+def _segments(moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
+    """``(inlet_end, run_start, run_end, outlet_start)`` from the fraction profile: the
+    fraction-1 block is the run; the last fraction-0 cell before it and the first after it
+    are the upper elbows (the node-centred B ramp starts at exactly 0 at ``n = extQTY``,
+    D-4's ``n < 3`` cell sits one place earlier on the inlet)."""
+    ones = np.flatnonzero(moving_fraction == 1.0)
+    if ones.size == 0:
+        raise ValueError("no fraction-1 cell: the profile has no run")
+    run_start, run_end = int(ones[0]), int(ones[-1])
+    before = np.flatnonzero(moving_fraction[:run_start] == 0.0)
+    after = np.flatnonzero(moving_fraction[run_end + 1 :] == 0.0)
+    if before.size == 0 or after.size == 0:
+        raise ValueError("no fraction-0 cell at an end: the profile has no inlet or outlet")
+    return int(before[-1]), run_start, run_end, run_end + 1 + int(after[0])
+
+
+def loop_layout(
     cell_position: np.ndarray,
     cell_kind: np.ndarray,
     moving_fraction: np.ndarray,
@@ -174,14 +232,19 @@ def u_layout(
     ext_qty: int,
     cell_length: float,
     portal_height: float,
-) -> ULayout:
-    """Lay the interleaved column on the U at 1 m per m of ``cell_position``.
+    corner_radius_cells: float = CORNER_RADIUS_CELLS,
+) -> LoopLayout:
+    """Lay the interleaved column on the expansion loop, uniformly by ``cell_position``.
 
-    The pivots are the A nodes ``pivot_seg_qty`` and ``pipe_seg_qty - pivot_seg_qty``
-    (interleaved indices ``2 piv`` and ``2 (N - piv)``), at ``s1 = piv * cell_length`` and
-    ``s2 = (N - piv) * cell_length`` along the column. Leg 1 (``s <= s1``): ``x = 0``,
-    ``y = s1 - s``; run: ``y = 0``, ``x = s - s1``; leg 2 (``s >= s2``): ``x = s2 - s1``,
-    ``y = s - s2``. The ``ext_qty`` fixed cells sit at the far (anchor) ends of the legs.
+    The centreline runs: inlet (horizontal, leftwards from the first elbow, ``y =
+    leg_height``), a quarter arc, leg 1 (down, ``x = -r``), a quarter arc into the run
+    (``y = 0`` from ``x = 0`` to ``x = run_length``), a quarter arc, leg 2 (up, ``x =
+    run_length + r``), a quarter arc, outlet (horizontal, rightwards, ``y = leg_height_2``).
+    Each arc has radius ``r`` and starts or ends exactly at an elbow cell (``_segments``),
+    so every inlet / outlet cell is at its pipe height and every run cell at ``y = 0``; a
+    cell ``s`` along the column is at centreline length ``s`` (the arcs are arc-length
+    parametrised). ``r`` is ``corner_radius_cells`` spacings, reduced when a leg is shorter
+    than two arcs.
 
     Parameters
     ----------
@@ -192,30 +255,78 @@ def u_layout(
         ``2 * celerity * dt``, m.
     portal_height : float
         m.
+    corner_radius_cells : float
+        Arc radius in cell spacings.
 
     Returns
     -------
-    ULayout
+    LoopLayout
     """
     s = np.asarray(cell_position, dtype=np.float64)
-    s1 = pivot_seg_qty * cell_length
-    s2 = (pipe_seg_qty - pivot_seg_qty) * cell_length
-    run_length = s2 - s1
-    x = np.where(s <= s1, 0.0, np.where(s >= s2, run_length, s - s1))
-    y = np.where(s <= s1, s1 - s, np.where(s >= s2, s - s2, 0.0))
-    return ULayout(
+    frac = np.asarray(moving_fraction, dtype=np.float64)
+    inlet_end, run_start, run_end, outlet_start = _segments(frac)
+    spacing = float(s[1] - s[0]) if s.shape[0] > 1 else float(cell_length) / 2
+    r = corner_radius_cells * spacing
+    leg1 = float(s[run_start] - s[inlet_end])
+    leg2 = float(s[outlet_start] - s[run_end])
+    # two quarter arcs (pi r / 2 each) must fit in each leg's centreline length
+    r = min(r, 0.45 * min(leg1, leg2) / (math.pi / 2))
+    q = math.pi * r / 2
+    s1, s2, s3, s4 = s[inlet_end], s[run_start], s[run_end], s[outlet_start]
+    run_length = float(s3 - s2)
+    height1 = leg1 - 2 * q + 2 * r
+    height2 = leg2 - 2 * q + 2 * r
+    x = np.empty_like(s)
+    y = np.empty_like(s)
+    for i, si in enumerate(s):
+        if si <= s1:  # inlet
+            x[i], y[i] = -2 * r - (s1 - si), height1
+        elif si <= s1 + q:  # arc inlet -> leg 1 (centre (-2r, h1 - r), 90 deg -> 0 deg)
+            th = math.pi / 2 - (si - s1) / r
+            x[i], y[i] = -2 * r + r * math.cos(th), height1 - r + r * math.sin(th)
+        elif si <= s2 - q:  # leg 1 down
+            x[i], y[i] = -r, height1 - r - (si - s1 - q)
+        elif si < s2:  # arc leg 1 -> run (centre (0, r), 180 deg -> 270 deg)
+            th = math.pi + (si - (s2 - q)) / r
+            x[i], y[i] = r * math.cos(th), r + r * math.sin(th)
+        elif si <= s3:  # run
+            x[i], y[i] = si - s2, 0.0
+        elif si <= s3 + q:  # arc run -> leg 2 (centre (R, r), 270 deg -> 360 deg)
+            th = 1.5 * math.pi + (si - s3) / r
+            x[i], y[i] = run_length + r * math.cos(th), r + r * math.sin(th)
+        elif si <= s4 - q:  # leg 2 up
+            x[i], y[i] = run_length + r, r + (si - s3 - q)
+        elif si < s4:  # arc leg 2 -> outlet (centre (R + 2r, h2 - r), 180 deg -> 90 deg)
+            th = math.pi - (si - (s4 - q)) / r
+            x[i], y[i] = run_length + 2 * r + r * math.cos(th), height2 - r + r * math.sin(th)
+        else:  # outlet
+            x[i], y[i] = run_length + 2 * r + (si - s4), height2
+    return LoopLayout(
         cell_position=s,
         cell_kind=np.asarray(cell_kind),
-        moving_fraction=np.asarray(moving_fraction, dtype=np.float64),
+        moving_fraction=frac,
         pivot_seg_qty=int(pivot_seg_qty),
         pipe_seg_qty=int(pipe_seg_qty),
         ext_qty=int(ext_qty),
         cell_length=float(cell_length),
         portal_height=float(portal_height),
+        spacing=spacing,
+        corner_radius=float(r),
+        inlet_end=inlet_end,
+        run_start=run_start,
+        run_end=run_end,
+        outlet_start=outlet_start,
+        elbow_pairs=(
+            (inlet_end, inlet_end + 1),
+            (run_start - 1, run_start),
+            (run_end, run_end + 1),
+            (outlet_start - 1, outlet_start),
+        ),
         x_nominal=x,
         y_nominal=y,
-        run_length=float(run_length),
-        leg_length=float(s1),
+        run_length=run_length,
+        leg_height=float(height1),
+        leg_height_2=float(height2),
     )
 
 
@@ -279,8 +390,9 @@ def lumped_grid(
     )
 
 
-def layout_from_trace(trace: Trace) -> ULayout:
-    """The ``ULayout`` of a trace: a JC trace's own grid, or ``lumped_grid`` for a lumped one.
+def layout_from_trace(trace: Trace) -> LoopLayout:
+    """The ``LoopLayout`` of a trace: a JC trace's own grid, or ``lumped_grid`` for a lumped
+    one.
 
     Parameters
     ----------
@@ -288,7 +400,7 @@ def layout_from_trace(trace: Trace) -> ULayout:
 
     Returns
     -------
-    ULayout
+    LoopLayout
     """
     inputs = trace.inputs
     cell_length = 2.0 * float(inputs["celerity"]) * float(trace.dt)
@@ -299,7 +411,7 @@ def layout_from_trace(trace: Trace) -> ULayout:
             inputs["mass_per_unit_len"],
             inputs["nat_freq"],
         )
-        return u_layout(
+        return loop_layout(
             trace.cell_position,
             trace.cell_kind,
             trace.moving_fraction,
@@ -310,7 +422,7 @@ def layout_from_trace(trace: Trace) -> ULayout:
             h,
         )
     position, kind, fraction, n_seg, pivot, h = lumped_grid(inputs, trace.dt)
-    return u_layout(position, kind, fraction, pivot, n_seg, moc.EXT_QTY, cell_length, h)
+    return loop_layout(position, kind, fraction, pivot, n_seg, moc.EXT_QTY, cell_length, h)
 
 
 # ------------------------------------------------------------------ frames and scalars
@@ -426,12 +538,21 @@ def _fmt(value: float, digits: int = 3) -> str:
 # ------------------------------------------------------------------ the figure
 
 
+def _px_per_m(x_range: float, y_range: float) -> float:
+    """Estimated on-screen scale of Panel 1 for the fixed figure size (``constrain =
+    "domain"`` with equal aspect: the smaller of the two axis scales)."""
+    plot_w = FIG_WIDTH - MARGIN["l"] - MARGIN["r"]
+    plot_h = (FIG_HEIGHT - MARGIN["t"] - MARGIN["b"]) * ROW_HEIGHTS[0] * (1 - VERTICAL_SPACING)
+    return min(plot_w / x_range, plot_h / y_range)
+
+
 def build_figure(
     result: PeakResponse,
     case_name: str = "",
     max_frames: int = MAX_FRAMES,
     nominal_size: float | None = None,
-    frame_duration_ms: int = 60,
+    frame_duration_ms: int = FRAME_DURATION_MS,
+    t_start: float = 0.0,
 ):
     """Build the two-panel animation of a traced run.
 
@@ -444,9 +565,14 @@ def build_figure(
     max_frames : int
         Cap on the animation frames (``select_frames``), default ``MAX_FRAMES``.
     nominal_size : float or None
-        Circle diameter at rest, px; None picks ``clip(1800 / n_cells, 5, 12)``.
+        Circle diameter at rest, px; None picks ``clip(1800 / n_cells, 5, 12)``. Either way
+        it is capped at ``SIZE_CAP_SPACING`` of the on-screen cell spacing (estimated for
+        the fixed figure size), but not below ``SIZE_CAP_FLOOR_PX``.
     frame_duration_ms : int
-        Playback frame duration.
+        Playback frame duration at 1x; the speed buttons scale it.
+    t_start : float
+        Traced frames before this time (s) are left out; with ``t_start > 0`` there is no
+        synthetic rest frame.
 
     Returns
     -------
@@ -456,7 +582,7 @@ def build_figure(
     Raises
     ------
     ValueError
-        The result has no trace.
+        The result has no trace, or ``t_start`` leaves no frame.
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -467,11 +593,16 @@ def build_figure(
     layout = layout_from_trace(trace)
     jc = trace.p_cells is not None
     n_cells = layout.n_cells
-    if nominal_size is None:
-        nominal_size = _auto_nominal_size(n_cells)
-    nominal_size = float(nominal_size)
+    x_nom = layout.x_nominal
+    frac = layout.moving_fraction
 
-    idx, frame_stride = select_frames(trace.n_frames, max_frames)
+    # frames to animate
+    kept = np.flatnonzero(trace.t >= t_start)
+    if kept.size == 0:
+        raise ValueError(f"t_start = {t_start} leaves no traced frame (last t {trace.t[-1]})")
+    with_rest = t_start <= 0.0
+    sel, frame_stride = select_frames(kept.size, max_frames - (1 if with_rest else 0) + 1)
+    idx = kept[sel]
     table = scalars_table(trace)
     capped = is_capped(result)
 
@@ -494,10 +625,19 @@ def build_figure(
     else:
         p_scale, k_p, v_scale = 1.0, 1.0, 1.0
 
-    # --- per-frame circle arrays (float32: plotly typed arrays, 4 bytes a value)
-    frac = layout.moving_fraction
-    x_nom = layout.x_nominal
+    # --- panel 1 extent (fixed, so the motion does not rescale it) and the size cap
+    x_lo = float(x_nom.min()) - 0.12 * layout.run_length  # offsets reach 10 % of the run
+    x_hi = float(x_nom.max()) + 0.12 * layout.run_length
+    y_top = max(layout.leg_height, layout.leg_height_2)
+    y_margin = 0.08 * max(y_top, layout.run_length)
+    y_lo1, y_hi1 = -y_margin, y_top + y_margin
+    px_per_m = _px_per_m(x_hi - x_lo, y_hi1 - y_lo1)
+    size_cap = max(SIZE_CAP_FLOOR_PX, SIZE_CAP_SPACING * layout.spacing * px_per_m)
+    if nominal_size is None:
+        nominal_size = _auto_nominal_size(n_cells)
+    nominal_size = float(min(nominal_size, size_cap))
 
+    # --- per-frame circle arrays (float32: plotly typed arrays, 4 bytes a value)
     def circles(i_trace: int | None):
         if i_trace is None:
             x = x_nom.copy()
@@ -516,17 +656,25 @@ def build_figure(
             out["p"] = p.astype(np.float32)
         return out
 
+    segment = np.empty(n_cells, dtype=object)
+    segment[:] = "leg"
+    segment[: layout.inlet_end + 1] = "inlet"
+    segment[layout.run_start : layout.run_end + 1] = "run"
+    segment[layout.outlet_start :] = "outlet"
     kind_name = np.where(layout.cell_kind == 0, "A node", "B cell")
     text = [
-        f"cell {i} ({k}) at {s:.3g} m, fraction {f:.3g}"
-        for i, (k, s, f) in enumerate(zip(kind_name, layout.cell_position, frac, strict=True))
+        f"cell {i} ({k}, {seg}) at {s:.4g} m, fraction {f:.3g}"
+        for i, (k, seg, s, f) in enumerate(
+            zip(kind_name, segment, layout.cell_position, frac, strict=True)
+        )
     ]
     hover = "%{text}"
     if jc:
         hover += "<br>p = %{customdata:.4g} Pa<br>v = %{marker.color:.4g} m/s"
     hover += "<extra></extra>"
 
-    first = circles(None)
+    first_i = None if with_rest else int(idx[0])
+    first = circles(first_i)
     marker = {
         "size": first["size"] if jc else nominal_size,
         "line": {"width": 0.5, "color": "#52514e"},
@@ -554,14 +702,31 @@ def build_figure(
     fig = make_subplots(
         rows=2,
         cols=1,
-        row_heights=[0.62, 0.38],
-        vertical_spacing=0.14,
+        row_heights=ROW_HEIGHTS,
+        vertical_spacing=VERTICAL_SPACING,
+        specs=[[{}], [{"secondary_y": True}]],
         subplot_titles=(
-            "Fluid column on the U (circle x: mass displacement x fraction; "
+            "Expansion loop: inlet, leg, run, return leg, outlet (circle x: mass displacement "
+            "x fraction; "
             + ("size: pressure; colour: velocity)" if jc else "constant size and colour)"),
-            "Applied unbalance F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c) and friction force",
+            "Applied unbalance F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c) (left) and friction force (right)",
         ),
     )
+    # the centreline at rest, under the circles
+    fig.add_trace(
+        go.Scatter(
+            x=x_nom,
+            y=layout.y_nominal,
+            mode="lines",
+            line={"color": "#dcdbd6", "width": 1},
+            hoverinfo="skip",
+            showlegend=False,
+            name="centreline",
+        ),
+        row=1,
+        col=1,
+    )
+    circle_index = len(fig.data)
     fig.add_trace(
         go.Scatter(
             x=first["x"],
@@ -577,49 +742,38 @@ def build_figure(
         row=1,
         col=1,
     )
-    # portal-frame height and the anchors (dashed): the ext cells continue the leg above it
-    for x0 in (0.0, layout.run_length):
-        fig.add_shape(
-            type="line",
-            x0=x0 - 0.04 * layout.run_length,
-            x1=x0 + 0.04 * layout.run_length,
-            y0=layout.portal_height,
-            y1=layout.portal_height,
-            line={"color": "#52514e", "width": 1, "dash": "dash"},
-            row=1,
-            col=1,
-        )
     fig.add_annotation(
-        x=0.0,
-        y=layout.portal_height,
-        text=f"h = {layout.portal_height:.3g} m",
+        x=x_lo,
+        y=y_top,
+        text=f"pipe height {layout.leg_height:.3g} m (h = {layout.portal_height:.3g} m)",
         showarrow=False,
-        xanchor="right",
-        xshift=-6,
+        xanchor="left",
+        yanchor="bottom",
         font={"size": 11, "color": "#52514e"},
         row=1,
         col=1,
     )
 
-    # --- panel 2: the two force lines, phase bands, peak marker, cursor
+    # --- panel 2: unbalance (left axis) and friction (right axis), symmetric ranges
     t_all = table["t"].to_numpy()
     fu = table["f_unbalance"].to_numpy()
     ff = table["f_friction"].to_numpy()
-    y_lo = float(min(fu.min(), ff.min(), 0.0))
-    y_hi = float(max(fu.max(), ff.max(), 0.0))
-    pad = 0.06 * (y_hi - y_lo or 1.0)
-    y_lo, y_hi = y_lo - pad, y_hi + pad
+    fu_max = float(np.max(np.abs(fu))) or 1.0
+    ff_max = float(np.max(np.abs(ff))) or 1.0
+    fu_lim = 1.06 * fu_max
+    ff_lim = 1.06 * ff_max
     fig.add_trace(
         go.Scatter(
             x=t_all,
             y=fu,
             mode="lines",
             line={"color": COLOUR_UNBALANCE, "width": 2},
-            name="F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c)",
+            name="F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c), left axis",
             hovertemplate="t = %{x:.4g} s<br>unbalance = %{y:.4g} N<extra></extra>",
         ),
         row=2,
         col=1,
+        secondary_y=False,
     )
     fig.add_trace(
         go.Scatter(
@@ -627,17 +781,19 @@ def build_figure(
             y=ff,
             mode="lines",
             line={"color": COLOUR_FRICTION, "width": 2},
-            name="friction force",
+            name="friction force, right axis",
             hovertemplate="t = %{x:.4g} s<br>friction = %{y:.4g} N<extra></extra>",
         ),
         row=2,
         col=1,
+        secondary_y=True,
     )
     cursor_index = len(fig.data)
+    t_first = 0.0 if with_rest else float(trace.t[idx[0]])
     fig.add_trace(
         go.Scatter(
-            x=np.array([0.0, 0.0]),
-            y=np.array([y_lo, y_hi]),
+            x=np.array([t_first, t_first]),
+            y=np.array([-fu_lim, fu_lim]),
             mode="lines",
             line={"color": COLOUR_CURSOR, "width": 1.5},
             name="current time",
@@ -646,20 +802,22 @@ def build_figure(
         ),
         row=2,
         col=1,
+        secondary_y=False,
     )
-    t_span = float(t_all[-1] - t_all[0]) or 1.0
+    t_axis0 = float(t_all[0]) if with_rest else float(t_start)
+    t_span = float(t_all[-1] - t_axis0) or 1.0
     for t0, t1, phase in _phase_bands(table):
+        if t1 < t_axis0:
+            continue
         band = {
-            "x0": t0,
+            "x0": max(t0, t_axis0),
             "x1": t1,
             "fillcolor": PHASE_FILL[phase],
             "opacity": 0.6,
             "layer": "below",
             "line_width": 0,
         }
-        if (
-            t1 - t0
-        ) / t_span >= BAND_LABEL_FRACTION:  # a label needs room; the title names the phase
+        if (t1 - max(t0, t_axis0)) / t_span >= BAND_LABEL_FRACTION:  # the title names the phase
             band.update(
                 annotation_text=PHASE_NAMES[phase],
                 annotation_position="top left",
@@ -677,6 +835,8 @@ def build_figure(
     )
 
     # --- frames: the circles and the cursor; the title carries the frame time and phase
+    n_frames = len(idx) + (1 if with_rest else 0)
+
     def title_text(t: float, phase: int) -> str:
         head = f"{case_name} — {trace.solver}" if case_name else trace.solver
         lines = [
@@ -690,7 +850,8 @@ def build_figure(
                 else "constant size and colour (lumped model)"
             ),
             f"trace_every = {trace.trace_every} sub-steps, frame stride {frame_stride}, "
-            f"{len(idx) + 1} frames, dt = {trace.dt:.3g} s"
+            f"{n_frames} frames, dt = {trace.dt:.3g} s, nominal circle {nominal_size:.3g} px"
+            + (f", frames from t = {t_start:g} s" if not with_rest else "")
             + ("; <b>trace capped by the history window</b>" if capped else ""),
         ]
         return "<br>".join(lines)
@@ -698,7 +859,7 @@ def build_figure(
     frames = []
     slider_steps = []
     phase0 = _synthetic_phase(trace)
-    frame_specs = [(None, 0.0, phase0)] + [
+    frame_specs = ([(None, 0.0, phase0)] if with_rest else []) + [
         (int(i), float(trace.t[i]), int(trace.phase[i])) for i in idx
     ]
     for j, (i_trace, t, phase) in enumerate(frame_specs):
@@ -714,7 +875,7 @@ def build_figure(
                     go.Scatter(**circle_update),
                     go.Scatter(x=np.array([t, t], dtype=np.float32)),
                 ],
-                traces=[0, cursor_index],
+                traces=[circle_index, cursor_index],
                 name=name,
                 layout=go.Layout(title={"text": title_text(t, phase)}),
             )
@@ -734,21 +895,15 @@ def build_figure(
             }
         )
     fig.frames = frames
+    t_title0, phase_title0 = frame_specs[0][1], frame_specs[0][2]
 
     # --- layout
-    x_margin = 0.12 * layout.run_length  # offsets reach 10 % of the run
-    y_margin = 0.08 * max(layout.leg_length, layout.run_length)
     fig.update_xaxes(
-        title_text="m",
-        range=[-x_margin, layout.run_length + x_margin],
-        constrain="domain",
-        zeroline=False,
-        row=1,
-        col=1,
+        title_text="m", range=[x_lo, x_hi], constrain="domain", zeroline=False, row=1, col=1
     )
     fig.update_yaxes(
         title_text="m",
-        range=[-y_margin, layout.leg_length + y_margin],
+        range=[y_lo1, y_hi1],
         scaleanchor="x",
         scaleratio=1,
         constrain="domain",
@@ -756,13 +911,56 @@ def build_figure(
         row=1,
         col=1,
     )
-    fig.update_xaxes(title_text="t (s)", range=[float(t_all[0]), float(t_all[-1])], row=2, col=1)
-    fig.update_yaxes(title_text="force (N)", range=[y_lo, y_hi], row=2, col=1)
+    fig.update_xaxes(title_text="t (s)", range=[t_axis0, float(t_all[-1])], row=2, col=1)
+    fig.update_yaxes(
+        title_text="unbalance (N)", range=[-fu_lim, fu_lim], row=2, col=1, secondary_y=False
+    )
+    fig.update_yaxes(
+        title_text="friction (N)",
+        range=[-ff_lim, ff_lim],
+        showgrid=False,
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    speed_buttons = [
+        {
+            "label": f"▶ {speed:g}x",
+            "method": "animate",
+            "args": [
+                None,
+                {
+                    "frame": {"duration": frame_duration_ms / speed, "redraw": True},
+                    "fromcurrent": True,
+                    "transition": {"duration": 0},
+                },
+            ],
+        }
+        for speed in SPEEDS
+    ]
+    pause_button = {
+        "label": "❚❚ pause",
+        "method": "animate",
+        "args": [
+            [None],
+            {
+                "frame": {"duration": 0, "redraw": False},
+                "mode": "immediate",
+                "transition": {"duration": 0},
+            },
+        ],
+    }
     fig.update_layout(
-        title={"text": title_text(0.0, phase0), "x": 0.0, "xanchor": "left", "font": {"size": 13}},
+        title={
+            "text": title_text(t_title0, phase_title0),
+            "x": 0.0,
+            "xanchor": "left",
+            "font": {"size": 13},
+        },
         template="plotly_white",
-        height=900,
-        margin={"t": 150, "b": 90},
+        width=FIG_WIDTH,
+        height=FIG_HEIGHT,
+        margin=MARGIN,
         legend={"orientation": "h", "y": 0.36, "x": 0.0, "xanchor": "left", "yanchor": "bottom"},
         hovermode="closest",
         updatemenus=[
@@ -770,45 +968,21 @@ def build_figure(
                 "type": "buttons",
                 "showactive": False,
                 "x": 0.0,
-                "y": -0.06,
+                "y": -0.07,
                 "xanchor": "left",
                 "yanchor": "top",
                 "direction": "left",
-                "buttons": [
-                    {
-                        "label": "▶ play",
-                        "method": "animate",
-                        "args": [
-                            None,
-                            {
-                                "frame": {"duration": frame_duration_ms, "redraw": True},
-                                "fromcurrent": True,
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                    },
-                    {
-                        "label": "❚❚ pause",
-                        "method": "animate",
-                        "args": [
-                            [None],
-                            {
-                                "frame": {"duration": 0, "redraw": False},
-                                "mode": "immediate",
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                    },
-                ],
+                "pad": {"r": 4},
+                "buttons": speed_buttons + [pause_button],
             }
         ],
         sliders=[
             {
                 "active": 0,
                 "steps": slider_steps,
-                "x": 0.14,
-                "len": 0.86,
-                "y": -0.06,
+                "x": 0.0,
+                "len": 1.0,
+                "y": -0.17,
                 "yanchor": "top",
                 "pad": {"t": 0},
                 "currentvalue": {"prefix": "t = ", "suffix": " s", "visible": True},

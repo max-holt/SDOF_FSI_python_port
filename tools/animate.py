@@ -4,21 +4,24 @@
 ``r096_jc_L24_f3`` or an Example-sheet id, ``example_lumped`` / ``example_jc``) through the
 Stage 4 solver with ``trace_every`` and animates it. ``--step`` builds a plain step force
 history instead: ``--amplitude`` bar on the fluid area of a pipe of ``--size`` mm internal
-diameter, held for ``--duration`` s after one zero sample, with ``--length``, ``--nat-freq``,
-``--mu`` (dynamicFric) and ``--solver lumped | jc``; the remaining inputs default to the
-``curve_10in`` parameters (``--sample-freq``, ``--step-qty``, ``--celerity``,
-``--mass-per-len``, ``--ei``, ``--density``, ``--damping`` override them). A proper history
-generator (``histories.py``) arrives in Session 5b.
+diameter (or ``--area`` m² directly), zero for the ``--lead-in`` (0.1 s) then held for
+``--duration`` s, with ``--length``, ``--nat-freq``, ``--mu`` (dynamicFric) and ``--solver
+lumped | jc``; the remaining inputs default to the ``curve_10in`` parameters
+(``--sample-freq``, ``--step-qty``, ``--celerity``, ``--mass-per-len``, ``--ei``,
+``--density``, ``--damping`` override them). A proper history generator (``histories.py``)
+arrives in Session 5b.
 
 ``--trace-every`` defaults to the stride that gives about ``--trace-frames`` (2000) traced
 frames, so Panel 2 keeps its resolution inside the trace memory guard; ``--max-frames``
-(400) caps the animation frames. The page is written with plotly.js from the CDN.
+(400) caps the animation frames; ``--t-start`` trims the leading frames. The page is written
+with plotly.js from the CDN.
 
 Examples::
 
-    .venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_step.html
-    .venv/bin/python tools/animate.py --step --amplitude 5 --size 254 --length 12 \\
-        --nat-freq 3 --mu 0.005 --solver jc --out docs/viz/step_jc.html
+    .venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_sheet.html
+    .venv/bin/python tools/animate.py --step --amplitude 1600 --area 0.05 --length 6 \\
+        --nat-freq 2 --mu 0.0001 --sample-freq 10 --step-qty 80 --celerity 1200 \\
+        --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc --out docs/viz/example_jc_step.html
 """
 
 from __future__ import annotations
@@ -59,12 +62,14 @@ def golden_case(case_id: str):
 
 
 def step_case(args):
-    """A plain step: one zero sample, then ``amplitude`` bar x fluid area for ``duration`` s."""
+    """A plain step: zero for ``lead_in`` s (at least one sample), then ``amplitude`` bar x
+    fluid area for ``duration`` s."""
     params = tg.load_params()
-    area = math.pi * (args.size / 1000.0) ** 2 / 4.0
-    n = max(2, int(round(args.duration * args.sample_freq)))
-    force = np.full((n, 1), args.amplitude * 1e5 * area)
-    force[0, 0] = 0.0
+    area = args.area if args.area else math.pi * (args.size / 1000.0) ** 2 / 4.0
+    n_lead = max(1, int(round(args.lead_in * args.sample_freq)))
+    n_hold = max(1, int(round(args.duration * args.sample_freq)))
+    force = np.full((n_lead + n_hold, 1), args.amplitude * 1e5 * area)
+    force[:n_lead, 0] = 0.0
     kw = {
         "step_qty": args.step_qty,
         "sample_freq": args.sample_freq,
@@ -112,9 +117,14 @@ def parse_args(argv):
         "--max-frames", type=int, default=animate.MAX_FRAMES, help="animation frame cap (400)"
     )
     ap.add_argument("--nominal-size", type=float, help="circle diameter at rest, px (auto)")
+    ap.add_argument("--t-start", type=float, default=0.0, help="drop frames before this time, s")
     ap.add_argument("--solver", choices=("lumped", "jc"), default="jc", help="--step only")
     ap.add_argument("--amplitude", type=float, default=5.0, help="--step: bar")
     ap.add_argument("--size", type=float, default=254.0, help="--step: internal diameter, mm")
+    ap.add_argument("--area", type=float, help="--step: fluid area, m² (overrides --size)")
+    ap.add_argument(
+        "--lead-in", type=float, default=0.1, help="--step: zero force before the step, s"
+    )
     ap.add_argument("--length", type=float, default=12.0, help="--step: span between elbows, m")
     ap.add_argument("--nat-freq", type=float, default=3.0, help="--step: Hz")
     ap.add_argument("--mu", type=float, default=0.005, help="--step: dynamicFric")
@@ -138,13 +148,19 @@ def main(argv=None):
     else:
         force, kw, solver = step_case(args)
         name = args.name or (
-            f"step {args.amplitude:g} bar, {args.size:g} mm, L = {args.length:g} m, "
+            f"step {args.amplitude:g} bar at t = {args.lead_in:g} s, "
+            + (f"area {args.area:g} m², " if args.area else f"{args.size:g} mm, ")
+            + f"L = {args.length:g} m, "
             f"{args.nat_freq:g} Hz, mu = {args.mu:g} ({solver})"
         )
     trace_every = args.trace_every or default_trace_every(force, kw, args.trace_frames)
     result = run(force, kw, solver, trace_every)
     fig, info = animate.build_figure(
-        result, case_name=name, max_frames=args.max_frames, nominal_size=args.nominal_size
+        result,
+        case_name=name,
+        max_frames=args.max_frames,
+        nominal_size=args.nominal_size,
+        t_start=args.t_start,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     animate.write_html(fig, args.out)
@@ -156,7 +172,9 @@ def main(argv=None):
         f"t = {info.t_peak:.4g} s); p_scale {info.p_scale:.4g} Pa, k_p {info.k_p:.4g}, "
         f"v_scale {info.v_scale:.4g} m/s; grid N = {layout.pipe_seg_qty}, pivot "
         f"{layout.pivot_seg_qty}, {layout.n_cells} cells, run {layout.run_length:.4g} m, "
-        f"leg {layout.leg_length:.4g} m (h = {layout.portal_height:.4g} m)"
+        f"pipe heights {layout.leg_height:.4g} / {layout.leg_height_2:.4g} m (h = "
+        f"{layout.portal_height:.4g} m), elbow radius {layout.corner_radius:.3g} m, nominal "
+        f"circle {info.nominal_size:.3g} px"
         + ("; trace capped by the history window" if info.capped else "")
     )
     print(f"wrote {args.out} ({args.out.stat().st_size / 1e6:.2f} MB, plotly.js from the CDN)")

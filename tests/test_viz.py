@@ -46,9 +46,18 @@ def figure(case_id, max_frames):
     return animate.build_figure(golden_result(case_id), case_name=case_id, max_frames=max_frames)
 
 
+CIRCLES, CURSOR = 1, 4  # trace indices: centreline 0, circles 1, unbalance 2, friction 3
+
+
 def _circle_frames(fig):
     """Per animation frame: the circle x array and the cursor x array."""
     return [(f.data[0], f.data[1]) for f in fig.frames]
+
+
+def _example_jc_result():
+    case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
+    force = np.asarray(case["force_history"], dtype=float)
+    return response.peak_response_jc(force, **case["kwargs"], trace_every=4)
 
 
 def _frame_t(frame) -> float:
@@ -62,7 +71,8 @@ def test_figure_builds_with_few_frames(case_id):
     assert len(fig.frames) == info.n_frames
     assert len(fig.layout.sliders[0].steps) == info.n_frames
     n_cells = info.layout.n_cells
-    assert len(fig.data[0].x) == n_cells == len(fig.data[0].y)
+    assert len(fig.data[CIRCLES].x) == n_cells == len(fig.data[CIRCLES].y)
+    assert tuple(f.traces for f in fig.frames)[0] == (CIRCLES, CURSOR)
     for circles, cursor in _circle_frames(fig):
         assert len(circles.x) == n_cells
         assert len(cursor.x) == 2 and cursor.x[0] == cursor.x[1]
@@ -88,9 +98,12 @@ def test_synthetic_frame_0_is_at_rest(case_id):
 
 def test_lumped_size_and_colour_are_constant():
     fig, info = figure(LUMPED_ID, 12)
-    assert fig.data[0].marker.size == info.nominal_size
-    assert fig.data[0].marker.color == animate.COLOUR_MID
-    assert fig.data[0].marker.colorbar is None or fig.data[0].marker.colorbar.title.text is None
+    assert fig.data[CIRCLES].marker.size == info.nominal_size
+    assert fig.data[CIRCLES].marker.color == animate.COLOUR_MID
+    assert (
+        fig.data[CIRCLES].marker.colorbar is None
+        or fig.data[CIRCLES].marker.colorbar.title.text is None
+    )
     for circles, _cursor in _circle_frames(fig):
         assert circles.marker is None or (
             circles.marker.size is None and circles.marker.color is None
@@ -113,8 +126,9 @@ def test_jc_size_and_colour_follow_the_scalings():
     full = info.nominal_size * (1 + info.k_p * (tr.p_cells - info.p_ref) / info.p_scale)
     assert full.max() == pytest.approx(animate.MAX_SIZE_RATIO * info.nominal_size)
     assert info.v_scale == np.abs(tr.v_cells).max()
-    assert fig.data[0].marker.cmin == -info.v_scale and fig.data[0].marker.cmax == info.v_scale
-    assert fig.data[0].marker.colorbar.title.text == "relative fluid velocity (JC arrays)"
+    assert fig.data[CIRCLES].marker.cmin == -info.v_scale
+    assert fig.data[CIRCLES].marker.cmax == info.v_scale
+    assert fig.data[CIRCLES].marker.colorbar.title.text == "relative fluid velocity (JC arrays)"
 
 
 @pytest.mark.parametrize("max_frames", [3, 7, 12, 50, 400])
@@ -172,33 +186,111 @@ def test_exaggeration_draws_the_peak_as_a_tenth_of_the_run():
             assert np.allclose(np.asarray(fig.frames[j].data[0].x), expected, rtol=1e-6, atol=1e-6)
 
 
-def test_u_layout_geometry_jc():
-    tr = golden_result(JC_ID).trace
+@pytest.mark.parametrize("which", ["lumped", "jc", "example_jc"])
+def test_loop_layout_geometry(which):
+    """Fraction-0 cells at their pipe height, fraction-1 cells on the run, uniform spacing
+    along the centreline, four elbows with distinct cells either side."""
+    res = golden_result(LUMPED_ID if which == "lumped" else JC_ID)
+    if which == "example_jc":
+        res = _example_jc_result()
+    tr = res.trace
     layout = animate.layout_from_trace(tr)
-    cell = 2 * tr.inputs["celerity"] * tr.dt
-    piv, n_seg = tr.pivot_seg_qty, tr.pipe_seg_qty
-    assert layout.run_length == pytest.approx((n_seg - 2 * piv) * cell)
-    assert layout.leg_length == pytest.approx(piv * cell)
-    # the pivots (A nodes piv and N - piv) are the corners
-    assert (layout.x_nominal[2 * piv], layout.y_nominal[2 * piv]) == (0.0, 0.0)
-    assert layout.x_nominal[2 * (n_seg - piv)] == pytest.approx(layout.run_length)
-    assert layout.y_nominal[2 * (n_seg - piv)] == 0.0
-    # anchor ends at the top of the legs, ext cells included
-    assert layout.y_nominal[0] == pytest.approx(layout.leg_length)
-    assert layout.y_nominal[-1] == pytest.approx(layout.leg_length)
-    assert np.all(layout.y_nominal[: 2 * piv + 1] >= 0) and np.all(
-        layout.x_nominal[: 2 * piv + 1] == 0
-    )
-    run = slice(2 * piv, 2 * (n_seg - piv) + 1)
-    assert np.all(layout.y_nominal[run] == 0)
-    assert np.allclose(np.diff(layout.x_nominal[run]), cell / 2)
+    frac = layout.moving_fraction
+    x, y = layout.x_nominal, layout.y_nominal
+    zero = frac == 0.0
+    one = frac == 1.0
+    assert zero.any() and one.any()
+    # every fraction-0 cell at the height of its pipe (inlet or outlet), exactly
+    inlet = np.arange(layout.n_cells) <= layout.inlet_end
+    outlet = np.arange(layout.n_cells) >= layout.outlet_start
+    assert np.all(y[zero & inlet] == layout.leg_height)
+    assert np.all(y[zero & outlet] == layout.leg_height_2)
+    assert np.all(y[zero] == np.where(inlet[zero], layout.leg_height, layout.leg_height_2))
+    # every fraction-1 cell on the run, exactly
+    assert np.all(y[one] == 0.0)
+    assert x[layout.run_start] == 0.0 and x[layout.run_end] == pytest.approx(layout.run_length)
+    pos = layout.cell_position
+    assert layout.run_length == pos[layout.run_end] - pos[layout.run_start]
+    # the inlet extends left of leg 1, the outlet right of leg 2
+    assert np.all(x[inlet] < -layout.corner_radius) and np.all(np.diff(x[inlet]) > 0)
+    assert np.all(x[outlet] > layout.run_length + layout.corner_radius)
+    # uniform spacing: consecutive cells one spacing apart on the straights, a little less
+    # across the arcs (the chord of an arc), never coincident
+    d = np.hypot(np.diff(x), np.diff(y))
+    assert d.max() <= layout.spacing * (1 + 1e-9)
+    assert d.min() > 0.9 * layout.spacing
+    # the four elbows: distinct cells at distinct 2-D positions
+    assert len(layout.elbow_pairs) == 4
+    for a, b in layout.elbow_pairs:
+        assert a != b
+        assert (x[a], y[a]) != (x[b], y[b])
+        assert np.hypot(x[a] - x[b], y[a] - y[b]) > 0.9 * layout.spacing
+    assert layout.elbow_pairs[0] == (layout.inlet_end, layout.inlet_end + 1)
+    assert layout.elbow_pairs[1] == (layout.run_start - 1, layout.run_start)
+    assert layout.elbow_pairs[2] == (layout.run_end, layout.run_end + 1)
+    assert layout.elbow_pairs[3] == (layout.outlet_start - 1, layout.outlet_start)
+    assert layout.corner_radius <= animate.CORNER_RADIUS_CELLS * layout.spacing
     assert layout.portal_height == structure.solve_portal_height(
         tr.inputs["physical_length"],
         tr.inputs["flexural_rigidity_ei"],
         tr.inputs["mass_per_unit_len"],
         tr.inputs["nat_freq"],
     )
-    assert np.array_equal(layout.moving_fraction, tr.moving_fraction)
+    if tr.moving_fraction is not None:
+        assert np.array_equal(layout.moving_fraction, tr.moving_fraction)
+
+
+def test_example_jc_elbow_cells_are_distinct():
+    """The item-4 check of Session V.2b, pinned: at each elbow of the Example JC case the two
+    cells are distinct cells at distinct positions and fractions."""
+    layout = animate.layout_from_trace(_example_jc_result().trace)
+    assert layout.elbow_pairs == ((9, 10), (13, 14), (23, 24), (26, 27))
+    for a, b in layout.elbow_pairs:
+        assert layout.cell_position[a] != layout.cell_position[b]
+        assert layout.moving_fraction[a] != layout.moving_fraction[b]
+    assert layout.moving_fraction[9] == 0.0 and layout.moving_fraction[27] == 0.0
+    assert layout.moving_fraction[14] == 1.0 and layout.moving_fraction[23] == 1.0
+
+
+def test_zero_lines_coincide():
+    """Both Panel 2 axes have symmetric ranges, so their zero lines are at the same height."""
+    for case_id in (LUMPED_ID, JC_ID):
+        fig, _info = figure(case_id, 5)
+        lo, hi = fig.layout.yaxis2.range
+        lo3, hi3 = fig.layout.yaxis3.range
+        assert lo == -hi and hi > 0
+        assert lo3 == -hi3 and hi3 > 0
+        assert fig.data[2].yaxis == "y2" and fig.data[3].yaxis == "y3"
+        assert "left axis" in fig.data[2].name and "right axis" in fig.data[3].name
+        tr = golden_result(case_id).trace
+        assert hi == pytest.approx(1.06 * np.abs(tr.f_unbalance).max())
+        assert hi3 == pytest.approx(1.06 * max(np.abs(tr.f_friction).max(), 0.0) or 1.06)
+        cursor = fig.data[CURSOR]
+        assert cursor.yaxis == "y2" and list(cursor.y) == [lo, hi]
+
+
+def test_speed_buttons():
+    fig, _info = figure(LUMPED_ID, 5)
+    buttons = fig.layout.updatemenus[0].buttons
+    assert [b.label for b in buttons] == ["▶ 0.25x", "▶ 0.5x", "▶ 1x", "▶ 2x", "▶ 4x", "❚❚ pause"]
+    durations = [b.args[1]["frame"]["duration"] for b in buttons[:-1]]
+    assert durations == [animate.FRAME_DURATION_MS / sp for sp in animate.SPEEDS]
+    assert fig.layout.sliders[0].steps
+
+
+def test_t_start_trims_leading_frames():
+    res = golden_result(LUMPED_ID)
+    tr = res.trace
+    t0 = float(tr.t[len(tr.t) // 2])
+    fig, info = animate.build_figure(res, max_frames=12, t_start=t0)
+    assert info.n_frames <= 12
+    ts = [_frame_t(f) for f in fig.frames]
+    assert ts[0] == pytest.approx(t0, abs=5e-5) and min(ts) >= t0 - 5e-5
+    assert fig.data[CURSOR].x[0] == t0
+    assert fig.layout.xaxis2.range[0] == t0
+    assert _frame_t(fig.frames[-1]) == pytest.approx(tr.t[-1], abs=5e-5)
+    with pytest.raises(ValueError):
+        animate.build_figure(res, max_frames=12, t_start=tr.t[-1] + 1.0)
 
 
 def test_lumped_layout_is_the_grid_the_case_would_have():
