@@ -1,6 +1,10 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2c (second review round) done 2026-10-23: sharp elbows (arcs removed), friction drawn
+under the load line and translucent, frames that never touch the layout (no flicker, no vanishing
+right-axis line at speed), typed playback speed on the page; pages regenerated; see "Session
+V.2c — done". Next: the owner's local bench reference run, then Session 5b.
 Session V.2b (animation fixes from the lead author's review) done 2026-10-23: expansion-loop
 layout mapped by moving fraction with elbow arcs, friction on a right axis with aligned zero
 lines, speed buttons, `--t-start` / `--lead-in`, four regenerated pages; only `viz/`, the tool,
@@ -32,6 +36,39 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2c — done (2026-10-23)
+Lead author's second review (five items), all applied; only `viz/animate.py`, `tests/test_viz.py`,
+the pages and docs changed.
+1. Friction under the load line: the friction trace is added first (drawn below), 1.5 px,
+   `rgba(235, 104, 52, 0.55)`; the unbalance stays 2 px opaque on top. Pinned (`test_zero_lines_coincide`).
+2 / 3. Flashing and the vanishing friction line at speeds above 1x had one cause: every frame
+   carried a `layout.title` change (the frame time and phase), and a layout change in a frame
+   makes plotly relayout and redraw the whole figure per frame (the `redraw: True` the buttons
+   used as well). Frames now change trace data only: the circles, the cursor, and a new status
+   text trace in Panel 1 (top right) that shows `t` and the phase; every animate call (slider
+   steps, play, the page's buttons) uses `redraw: false`. The title keeps the static scalings.
+   Pinned: no frame has a layout, every slider step has `redraw: False`. (Not verified in a
+   browser from this session: headless Chromium takes a static screenshot only; the mechanism
+   is plotly's documented one, frames without layout + `redraw: false` = no redraw.)
+4. Sharp elbows: the V.2b arcs are removed; the inlet elbow cell sits at `(0, leg_height)`, leg
+   1 is `x = 0`, the run elbow cells at `(0, 0)` / `(run_length, 0)`, leg 2 `x = run_length`,
+   the outlet elbow cell at `(run_length, leg_height_2)`; consecutive cells are exactly one
+   spacing apart everywhere, the two cells across an elbow one spacing from each other along
+   the two segments. `corner_radius` is gone from `LoopLayout`. Pipe heights are now the plain
+   centreline lengths between elbow cells: Example 7.5 / 6.0 m (h = 7.69), row 96 4.03 / 4.00 m
+   (h = 4.05). The 0.8-spacing size cap stays (3 px floor).
+5. Typed speed: plotly has no text input, so `write_html` adds a control row under the figure
+   with `post_script` JS: `playback speed ×[number input]`, play, pause; play calls
+   `Plotly.animate(gd, null, {frame: {duration: base / speed, redraw: false}, fromcurrent,
+   mode: 'immediate'})`, so retyping and pressing play changes the speed mid-run; the figure's
+   own plotly buttons (play 1x / pause, kept for `fig.show()` in a notebook) are removed from
+   the written copy. Pinned (`test_play_pause_and_typed_speed`).
+- Tests 28 in both modes (4 s / 31 s); fast suite 862 passed; `-m slow` 150 passed (10 min)
+  before the `src/` commit. Pages regenerated
+  (`example_jc_sheet`, `example_jc_step`, `example_lumped_step`, `golden_r096_jc`).
+- Judgement call: the per-frame time / phase moved from the title to a text trace inside Panel
+  1 (the only way to update it without a layout change).
 
 ## Session V.2b — done (2026-10-23)
 Lead author's review items 1-5, all applied; `src/` outside `viz/` untouched, no solver change,
