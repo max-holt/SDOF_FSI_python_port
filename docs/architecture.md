@@ -38,7 +38,7 @@ src/surge_sdof/
 | `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 compiles it whole with `numba.njit(cache=True)`, body unchanged. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
 | `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). Session V.1: both solvers take `trace_every: int = 0`; with `k > 0` the kernel records every `k`-th sub-step into preallocated arrays and the result carries `PeakResponse.trace`. | the internals of `step`, the MoC arrays, how `loads` interpolates |
 | `trace.py` | Session V.1. `Trace`, the frozen dataclass of a traced run (per-frame arrays `t, sub_step, sample, phase, x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`; JC only `p_cells`, `v_cells` and the column geometry; one-off `solver`, `trace_every`, `dt`, `step_qty`, `out_max`, `params`, `inputs`), the frame-array column constants the kernel writes (`F_*`, `I_*`), `capacity` (frames to allocate: the forced sub-steps plus free decay up to the history window), `check_memory` (`MAX_TRACE_VALUES`, `ValueError` naming the smallest stride that fits), `allocate`, `interleave` (the staggered grid as `A0 B0 A1 … AN`) and `build` (slices and copies the kernel arrays into a `Trace`). | the solver loop, `loads`, `moc.step` (it only lays out what the kernel copied) |
-| `viz/animate.py` | Session V.2. The model animation of a traced run, read-only on a `PeakResponse`: `u_layout` (the interleaved column on a U at 1 m per m of `cell_position`: the `extQTY` fixed cells and the pivot ramp on each leg, the run between the pivots; a lumped run rebuilds the grid it would have with `moc.grid_size` / `moc.interp_fractions`), `select_frames` (the frame stride for at most `max_frames` frames, the last traced frame kept), `scalars_table` (pandas, the per-frame scalars with a synthetic `t = 0` row), `is_capped`, `build_figure` (Panel 1: circles offset by `x(t) * moving_fraction * exaggeration`, sized by pressure, coloured by velocity; Panel 2: `f_unbalance` and `f_friction` against `t`, phase bands, peak-`\|x\|` marker, cursor; plotly frames, slider, play / pause) and `write_html` (CDN page). Imports plotly / pandas lazily. | the solvers (it never runs one; `tools/animate.py` does), `moc.step`, `loads` |
+| `viz/animate.py` | Session V.2 / V.2b. The model animation of a traced run, read-only on a `PeakResponse`: `loop_layout` (the interleaved column on the expansion loop, mapped by moving fraction: fraction-0 cells at each end are the horizontal inlet / outlet, the ramp cells the vertical legs, fraction-1 cells the run along `y = 0`; uniform spacing by `cell_position` along the centreline, the four elbows on arcs of 1.5 spacings; a lumped run rebuilds the grid it would have with `moc.grid_size` / `moc.interp_fractions`), `select_frames` (the frame stride for at most `max_frames` frames, the last traced frame kept), `scalars_table` (pandas, the per-frame scalars with a synthetic `t = 0` row), `is_capped`, `build_figure` (Panel 1: circles offset by `x(t) * moving_fraction * exaggeration`, sized by pressure, coloured by velocity; Panel 2: `f_unbalance` on the left axis and `f_friction` on the right, both symmetric so the zero lines coincide, phase bands, peak-`\|x\|` marker, cursor; plotly frames, slider, speed buttons 0.25x–4x and pause; `t_start` trims leading frames) and `write_html` (CDN page). Imports plotly / pandas lazily. | the solvers (it never runs one; `tools/animate.py` does), `moc.step`, `loads` |
 | `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
@@ -215,45 +215,62 @@ the Stage 4 code; what changed is the calling convention:
   `loads.unbalance_force`, which is now the dominant cost of a compiled lumped run (the
   generator is Python; Stage 5b candidate).
 
-## Session V.2 — the animation
+## Session V.2 / V.2b — the animation
 
-`surge_sdof.viz.animate.build_figure(result, case_name, max_frames=400)` turns a traced
-`PeakResponse` into a two-panel plotly figure (`tools/animate.py --golden <case_id> | --step …
---out docs/viz/<name>.html` drives it; `docs/viz/` holds three CDN pages: the two Example-sheet
-cases and golden row 96). The lead author's requirements (22 Oct 2026) are met as follows.
+`surge_sdof.viz.animate.build_figure(result, case_name, max_frames=400, t_start=0)` turns a
+traced `PeakResponse` into a two-panel plotly figure (`tools/animate.py --golden <case_id> |
+--step … --out docs/viz/<name>.html` drives it; `docs/viz/` holds four CDN pages). The lead
+author's requirements (22 Oct 2026) and review fixes (V.2b, 23 Oct) are met as follows.
 
-* **Geometry.** The column is laid on a U by `cell_position` at 1 m per m: leg 1 from the
-  anchor end down to the first pivot (A node `pivotSegQTY`, the corner at the origin), the run
-  along `y = 0` to the second pivot (`N - pivotSegQTY`), leg 2 up to the other anchor end. The
-  drawn leg is `pivotSegQTY * 2 c dt`: the cell-rounded portal-frame height plus the `extQTY`
-  fixed cells, which continue the leg above the anchor; a dashed mark at `y = h`
-  (`structure.solve_portal_height`) shows the height from the case set-up. A lumped run uses the
-  same layout and the fraction profile of the grid it would have (`moc.grid_size`,
+* **Geometry (V.2b).** The column is an expansion loop: inlet pipe, leg down, run, return leg
+  up, outlet pipe. Cells are mapped by their moving fraction (`_segments`): the fraction-1
+  block is the run (`y = 0`, `x = 0 .. run_length`); the last fraction-0 cell before it and the
+  first after it are the upper elbows (the node-centred B ramp starts at exactly 0 at `n =
+  extQTY`; the D-4 `n < 3` cell with fraction 0.111 sits one place earlier, on the inlet);
+  the cells before / after them are the horizontal inlet / outlet at the pipe height, extending
+  left of leg 1 and right of leg 2; the cells between are the vertical legs. Spacing is uniform
+  by `cell_position` along the whole centreline, the four elbows are quarter arcs of radius
+  1.5 spacings (less when a leg is too short) that start or end exactly at the elbow cells, so
+  every inlet / outlet cell is at its pipe height and every run cell at `y = 0` (pinned by
+  `tests/test_viz.py`). The pipe height is the leg's centreline length less the two arcs plus
+  two radii; it differs from `h` (`structure.solve_portal_height`, printed in the panel) and
+  the two legs differ by one cell because the VBA B profile ramps one cell longer on the inlet
+  side (Example JC: 5.54 m and 4.04 m for `h = 7.69 m`; row 96: 3.99 m both for `h = 4.05 m`).
+  A lumped run uses the layout of the grid it would have (`moc.grid_size`,
   `moc.interp_fractions`; a `pivotSegQTY = 4` grid, D-4, gets the B profile with the `n <
   extQTY` test, display only).
 * **Frames.** Frame 0 is synthetic (`t = 0`, `x = 0`, the column at rest, no forces) so playback
   starts from rest; the V.1 convention (frame `i` = end of sub-step `i k`, so the first traced
   frame is at `t = dt`) is untouched. The animation shows every `frame_stride`-th traced frame
-  with the last one always included, `frame_stride = ceil(n_trace / (max_frames - 2))`, at most
-  `max_frames` (400) frames. The title prints `trace_every`, the stride, the frame count and
-  "trace capped by the history window" when the run decayed past the traced window
-  (`is_capped`: `forced_samples + free_decay_samples > 2 outMax`).
+  with the last one always included, at most `max_frames` (400) frames; `t_start > 0` leaves
+  out the frames before it (and the rest frame). Speed buttons 0.25x / 0.5x / 1x / 2x / 4x
+  (1x = 40 ms a frame) and pause sit under the panels, the slider below them. The title prints
+  `trace_every`, the stride, the frame count, the nominal circle size and "trace capped by the
+  history window" when the run decayed past the traced window (`is_capped`: `forced_samples +
+  free_decay_samples > 2 outMax`).
 * **Panel 1.** `x_circle = x_nominal + x(t) * moving_fraction * exaggeration` with
   `exaggeration = 0.1 * run_length / max|x|` (printed); `size = nominal * (1 + k_p (p - p_ref) /
   p_scale)` with `p_ref = 0` (the initial column), `p_scale = max|p - p_ref|` over the trace and
-  `k_p` such that the largest circle of the run is exactly 2x nominal (floor 0.15x); colour is
-  `v_cells` exactly as held (relative fluid velocity) on a blue–grey–red diverging scale with
-  `cmin = -max|v|`, `cmax = +max|v|` (the same picture as `v / max|v|` centred at zero), colour
-  bar "relative fluid velocity (JC arrays)" in m/s. Lumped: constant nominal size and the grey
-  midpoint. Hover: cell index, kind, position, fraction, and `p` / `v` for JC. The per-frame
-  arrays are float32 (plotly typed arrays) to keep the HTML small; a 1333-cell column at 400
-  frames is ~10 MB, so `docs/viz/golden_r096_jc.html` was written with `--max-frames 150`
-  (4.7 MB).
-* **Panel 2.** `f_unbalance = F_A(t) - F_B(t - L/c)` and `f_friction` (`Trace.f_friction`, the
-  owner's definition) over the whole trace plus the `t = 0` row (`scalars_table`), the phase
-  bands from the phase changes (transit / history / free decay; a band is labelled when it spans
-  3 % of the axis, the current phase is always in the title), the time of peak `|x|` and a cursor
-  at the frame time. Shared slider and play / pause.
+  `k_p` such that the largest circle of the run is exactly 2x nominal (floor 0.15x); the nominal
+  diameter (`clip(1800 / n_cells, 5, 12)` px) is capped at 0.8 of the on-screen cell spacing
+  (estimated from the fixed 1200 x 900 px figure) but not below 3 px, so a 1333-cell column
+  draws as a 3 px tube. Colour is `v_cells` exactly as held (relative fluid velocity) on a
+  blue–grey–red diverging scale with `cmin = -max|v|`, `cmax = +max|v|` (the same picture as
+  `v / max|v|` centred at zero), colour bar "relative fluid velocity (JC arrays)" in m/s. Lumped:
+  constant nominal size and the grey midpoint. Hover: cell index, kind, segment, position,
+  fraction, and `p` / `v` for JC. The per-frame arrays are float32 (plotly typed arrays) to keep
+  the HTML small; `docs/viz/golden_r096_jc.html` was written with `--max-frames 150` (400 frames
+  of 1333 cells is ~10 MB).
+* **Panel 2.** `f_unbalance = F_A(t) - F_B(t - L/c)` on the left axis and `f_friction`
+  (`Trace.f_friction`, the owner's definition) on the right, both ranges symmetric (`±1.06
+  max|f|`) so the zero lines coincide, legend labels naming the axis; over the whole trace plus
+  the `t = 0` row (`scalars_table`); the phase bands and the cursor on the primary axis (a band
+  is labelled when it spans 6 % of the axis, the current phase is always in the title), the
+  time of peak `|x|` marked.
+* **`--step` (tools/animate.py).** Zero force for `--lead-in` (0.1 s), then `--amplitude` bar on
+  the fluid area (`--size` mm internal diameter or `--area` m²) for `--duration`;
+  `docs/viz/example_jc_step.html` is this step with the Example-sheet parameters (1600 bar on
+  0.05 m² = 8 MN, the sheet's first level), `example_jc_sheet.html` the untrimmed sheet history.
 
 ## Session V.1 — the trace
 

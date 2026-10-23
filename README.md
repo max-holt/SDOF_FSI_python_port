@@ -137,23 +137,27 @@ each; `--skip-full-python` leaves them out and brings the run to about 10 minute
 ## Animation
 
 ```
-.venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_step.html
+.venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_sheet.html
 .venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --max-frames 150 --out docs/viz/golden_r096_jc.html
-.venv/bin/python tools/animate.py --step --amplitude 5 --size 254 --length 12 --nat-freq 3 --mu 0.005 --solver jc --out docs/viz/step.html
+.venv/bin/python tools/animate.py --step --amplitude 1600 --area 0.05 --length 6 --nat-freq 2 --mu 0.0001 \
+    --sample-freq 10 --step-qty 80 --celerity 1200 --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc \
+    --out docs/viz/example_jc_step.html
 ```
 
-Session V.2: `surge_sdof.viz.animate.build_figure(result)` (the `viz` extra) turns a run made
-with `trace_every > 0` into a two-panel plotly animation: the fluid column laid on the U with
-every cell a circle displaced by the mass motion times its moving fraction, sized by its
-pressure and coloured by its velocity (constant for the lumped model), and the applied unbalance
-`F_A(t) - F_B(t - L/c)` with the friction force against time, phases shaded, a cursor at the
-frame time; shared slider and play / pause. `tools/animate.py` reruns a fixture case
-(`--golden`, a `curve_10in` case id or `example_lumped` / `example_jc`) or a plain step
-(`--step`, amplitude in bar on the area of a `--size` mm pipe) and writes a standalone page with
-plotly.js from the CDN (`--max-frames`, default 400, caps the frames; the stride and every
-scaling are printed and put in the title). `docs/viz/` holds three such pages; the full-library
-HTML is never committed. `docs/architecture.md` "Session V.2 — the animation" has the geometry
-and scaling rules.
+Session V.2 / V.2b: `surge_sdof.viz.animate.build_figure(result)` (the `viz` extra) turns a run
+made with `trace_every > 0` into a two-panel plotly animation: the fluid column on the expansion
+loop (inlet, leg, run, return leg, outlet; cells mapped by their moving fraction, elbows on short
+arcs) with every cell a circle displaced by the mass motion times its moving fraction, sized by
+its pressure and coloured by its velocity (constant for the lumped model), and the applied
+unbalance `F_A(t) - F_B(t - L/c)` (left axis) with the friction force (right axis, zero lines
+aligned) against time, phases shaded, a cursor at the frame time; slider, speed buttons
+0.25x–4x and pause. `tools/animate.py` reruns a fixture case (`--golden`, a `curve_10in` case id
+or `example_lumped` / `example_jc`) or a plain step (`--step`: zero for `--lead-in` 0.1 s, then
+`--amplitude` bar on the area of a `--size` mm pipe or `--area` m²) and writes a standalone page
+with plotly.js from the CDN (`--max-frames`, default 400, caps the frames; `--t-start` trims the
+lead; the stride and every scaling are printed and put in the title). `docs/viz/` holds four such
+pages; the full-library HTML is never committed. `docs/architecture.md` "Session V.2 / V.2b — the
+animation" has the geometry and scaling rules.
 
 ## Where the behaviour is documented
 
