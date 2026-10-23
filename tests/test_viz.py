@@ -46,7 +46,8 @@ def figure(case_id, max_frames):
     return animate.build_figure(golden_result(case_id), case_name=case_id, max_frames=max_frames)
 
 
-CIRCLES, CURSOR = 1, 4  # trace indices: centreline 0, circles 1, unbalance 2, friction 3
+# trace indices: centreline 0, circles 1, friction 2 (drawn under), unbalance 3, cursor 4, status 5
+CIRCLES, FRICTION, UNBALANCE, CURSOR, STATUS = 1, 2, 3, 4, 5
 
 
 def _circle_frames(fig):
@@ -61,7 +62,8 @@ def _example_jc_result():
 
 
 def _frame_t(frame) -> float:
-    return float(frame.layout.title.text.split("t = ")[1].split(" s")[0])
+    """The frame time from its status text (frames carry no layout)."""
+    return float(frame.data[2].text[0].split("t = ")[1].split(" s")[0])
 
 
 @pytest.mark.parametrize("case_id", [LUMPED_ID, JC_ID])
@@ -72,7 +74,10 @@ def test_figure_builds_with_few_frames(case_id):
     assert len(fig.layout.sliders[0].steps) == info.n_frames
     n_cells = info.layout.n_cells
     assert len(fig.data[CIRCLES].x) == n_cells == len(fig.data[CIRCLES].y)
-    assert tuple(f.traces for f in fig.frames)[0] == (CIRCLES, CURSOR)
+    assert tuple(f.traces for f in fig.frames)[0] == (CIRCLES, CURSOR, STATUS)
+    # no layout change per frame (it would force a redraw and the lines would flicker)
+    assert all(f.layout.title.text is None for f in fig.frames)
+    assert all(step["args"][1]["frame"]["redraw"] is False for step in fig.layout.sliders[0].steps)
     for circles, cursor in _circle_frames(fig):
         assert len(circles.x) == n_cells
         assert len(cursor.x) == 2 and cursor.x[0] == cursor.x[1]
@@ -211,25 +216,31 @@ def test_loop_layout_geometry(which):
     assert x[layout.run_start] == 0.0 and x[layout.run_end] == pytest.approx(layout.run_length)
     pos = layout.cell_position
     assert layout.run_length == pos[layout.run_end] - pos[layout.run_start]
-    # the inlet extends left of leg 1, the outlet right of leg 2
-    assert np.all(x[inlet] < -layout.corner_radius) and np.all(np.diff(x[inlet]) > 0)
-    assert np.all(x[outlet] > layout.run_length + layout.corner_radius)
-    # uniform spacing: consecutive cells one spacing apart on the straights, a little less
-    # across the arcs (the chord of an arc), never coincident
+    # the inlet extends left of leg 1 (the elbow cell at x = 0), the outlet right of leg 2
+    assert np.all(x[inlet] <= 0) and np.all(np.diff(x[inlet]) > 0) and x[layout.inlet_end] == 0
+    assert np.all(x[outlet] >= layout.run_length) and x[layout.outlet_start] == layout.run_length
+    # sharp corners: the legs are vertical at x = 0 and x = run_length
+    leg = ~(inlet | outlet) & ~one
+    assert np.all((x[leg] == 0.0) | (x[leg] == layout.run_length))
+    assert y[layout.inlet_end] == layout.leg_height == pos[layout.run_start] - pos[layout.inlet_end]
+    assert (
+        y[layout.outlet_start]
+        == layout.leg_height_2
+        == pos[layout.outlet_start] - pos[layout.run_end]
+    )
+    # uniform spacing along the whole centreline: consecutive cells exactly one spacing apart
     d = np.hypot(np.diff(x), np.diff(y))
-    assert d.max() <= layout.spacing * (1 + 1e-9)
-    assert d.min() > 0.9 * layout.spacing
-    # the four elbows: distinct cells at distinct 2-D positions
+    assert np.allclose(d, layout.spacing, rtol=1e-12, atol=0)
+    # the four elbows: distinct cells at distinct 2-D positions, one spacing apart
     assert len(layout.elbow_pairs) == 4
     for a, b in layout.elbow_pairs:
         assert a != b
         assert (x[a], y[a]) != (x[b], y[b])
-        assert np.hypot(x[a] - x[b], y[a] - y[b]) > 0.9 * layout.spacing
+        assert np.hypot(x[a] - x[b], y[a] - y[b]) == pytest.approx(layout.spacing)
     assert layout.elbow_pairs[0] == (layout.inlet_end, layout.inlet_end + 1)
     assert layout.elbow_pairs[1] == (layout.run_start - 1, layout.run_start)
     assert layout.elbow_pairs[2] == (layout.run_end, layout.run_end + 1)
     assert layout.elbow_pairs[3] == (layout.outlet_start - 1, layout.outlet_start)
-    assert layout.corner_radius <= animate.CORNER_RADIUS_CELLS * layout.spacing
     assert layout.portal_height == structure.solve_portal_height(
         tr.inputs["physical_length"],
         tr.inputs["flexural_rigidity_ei"],
@@ -260,8 +271,13 @@ def test_zero_lines_coincide():
         lo3, hi3 = fig.layout.yaxis3.range
         assert lo == -hi and hi > 0
         assert lo3 == -hi3 and hi3 > 0
-        assert fig.data[2].yaxis == "y2" and fig.data[3].yaxis == "y3"
-        assert "left axis" in fig.data[2].name and "right axis" in fig.data[3].name
+        assert fig.data[UNBALANCE].yaxis == "y2" and fig.data[FRICTION].yaxis == "y3"
+        assert "left axis" in fig.data[UNBALANCE].name
+        assert "right axis" in fig.data[FRICTION].name
+        # friction drawn first (under the load line), thinner and translucent
+        assert FRICTION < UNBALANCE
+        assert fig.data[FRICTION].line.width < fig.data[UNBALANCE].line.width
+        assert fig.data[FRICTION].line.color.startswith("rgba(")
         tr = golden_result(case_id).trace
         assert hi == pytest.approx(1.06 * np.abs(tr.f_unbalance).max())
         assert hi3 == pytest.approx(1.06 * max(np.abs(tr.f_friction).max(), 0.0) or 1.06)
@@ -269,13 +285,22 @@ def test_zero_lines_coincide():
         assert cursor.yaxis == "y2" and list(cursor.y) == [lo, hi]
 
 
-def test_speed_buttons():
+def test_play_pause_and_typed_speed(tmp_path):
     fig, _info = figure(LUMPED_ID, 5)
     buttons = fig.layout.updatemenus[0].buttons
-    assert [b.label for b in buttons] == ["▶ 0.25x", "▶ 0.5x", "▶ 1x", "▶ 2x", "▶ 4x", "❚❚ pause"]
-    durations = [b.args[1]["frame"]["duration"] for b in buttons[:-1]]
-    assert durations == [animate.FRAME_DURATION_MS / sp for sp in animate.SPEEDS]
+    assert [b.label for b in buttons] == ["▶ play", "❚❚ pause"]
+    play = buttons[0].args[1]["frame"]
+    assert play == {"duration": animate.FRAME_DURATION_MS, "redraw": False}
     assert fig.layout.sliders[0].steps
+    # the page replaces the buttons with a typed speed (any positive multiplier), play, pause
+    out = tmp_path / "a.html"
+    animate.write_html(fig, out)
+    html = out.read_text()
+    assert '"updatemenus"' not in html
+    assert 'type="number"' in html and "-speed" in html and "-play" in html and "-pause" in html
+    assert f"var base = {animate.FRAME_DURATION_MS}" in html
+    assert "redraw: false" in html and "{plot_id}" not in html
+    assert len(fig.layout.updatemenus) == 1  # the figure itself is unchanged
 
 
 def test_t_start_trims_leading_frames():

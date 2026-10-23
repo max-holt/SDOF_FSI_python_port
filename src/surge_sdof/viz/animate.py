@@ -7,7 +7,7 @@ and returns a plotly figure with frames, a slider and play / pause:
   leg down, run, return leg up, outlet pipe, the cells mapped by their moving fraction
   (fraction 0 at each end = the horizontal inlet / outlet, 0 < fraction < 1 = the legs,
   fraction 1 = the run along ``y = 0``), uniform spacing by ``cell_position`` along the
-  centreline, the four elbows on short arcs. Per frame each cell is a circle whose horizontal position is the
+  centreline, sharp elbows (the model has no bends). Per frame each cell is a circle whose horizontal position is the
   nominal one plus ``x(t) * moving_fraction * exaggeration`` (the lumped-mass displacement
   scaled by the cell's reference-velocity correction fraction), whose size is scaled from
   the nominal by the cell pressure (largest circle of the run 2x nominal) and whose colour
@@ -15,17 +15,20 @@ and returns a plotly figure with frames, a slider and play / pause:
   and fraction profile (rebuilt from the case inputs with ``moc.grid_size`` /
   ``moc.interp_fractions``) with constant size and the scale's grey midpoint.
 * **Panel 2** plots the applied unbalance ``f_unbalance = F_A(t) - F_B(t - L/c)`` (left
-  axis) and the friction force ``f_friction`` (right axis) against time over the whole
-  trace, both axes symmetric so the zero lines coincide, shades the phases (transit /
-  history / free decay), marks the time of peak ``|x|`` and carries a cursor at the frame
-  time.
+  axis) over the friction force ``f_friction`` (right axis, drawn first, thinner and
+  translucent) against time over the whole trace, both axes symmetric so the zero lines
+  coincide, shades the phases (transit / history / free decay), marks the time of peak
+  ``|x|`` and carries a cursor at the frame time.
 
 Frame 0 is synthetic (``t = 0``: ``x = 0``, the column at rest, no forces) so playback
 starts from rest; frame ``j >= 1`` is the traced frame ``(j - 1) * frame_stride``, the last
 traced frame always included, ``frame_stride`` chosen so there are at most ``max_frames``
 frames (``select_frames``). ``t_start > 0`` trims the leading frames (and the synthetic
-one). Playback speed buttons (0.25x .. 4x of ``frame_duration_ms``) and pause sit under the
-slider. All the scalings are printed in the title and returned in an ``AnimationInfo``.
+one). A frame changes only trace data (the circles, the cursor and a status text with the
+frame time and phase), never the layout, so playback runs without redraws. The figure
+carries plotly play (1x) / pause buttons; ``write_html`` replaces them on the page with a
+typed playback speed (any positive multiplier of ``frame_duration_ms``), play and pause.
+All the scalings are printed in the title and returned in an ``AnimationInfo``.
 ``write_html`` writes the standalone page with plotly.js from the CDN.
 plotly and pandas (the ``viz`` extra) are imported inside the functions that need them.
 """
@@ -60,9 +63,6 @@ MAX_FRAMES = 400
 """Default cap on the number of animation frames (the synthetic ``t = 0`` frame included)."""
 FRAME_DURATION_MS = 40
 """Playback frame duration at 1x."""
-SPEEDS = (0.25, 0.5, 1.0, 2.0, 4.0)
-CORNER_RADIUS_CELLS = 1.5
-"""Elbow arc radius in cell spacings (``cell_position`` steps)."""
 SIZE_CAP_SPACING = 0.8
 """Nominal circle diameter is capped at this fraction of the on-screen cell spacing."""
 SIZE_CAP_FLOOR_PX = 3.0
@@ -81,7 +81,7 @@ COLOUR_MID = "#b9b8b2"
 COLOUR_POS = "#d03b3b"
 DIVERGING = [[0.0, COLOUR_NEG], [0.5, COLOUR_MID], [1.0, COLOUR_POS]]
 COLOUR_UNBALANCE = "#2a78d6"
-COLOUR_FRICTION = "#eb6834"
+COLOUR_FRICTION = "rgba(235, 104, 52, 0.55)"
 COLOUR_CURSOR = "#0b0b0b"
 PHASE_FILL = {PHASE_TRANSIT: "#e8e7e3", PHASE_HISTORY: "#f6f6f4", PHASE_FREE_DECAY: "#e8e7e3"}
 
@@ -111,9 +111,6 @@ class LoopLayout:
         ``structure.solve_portal_height`` of the case, m (printed, not used for the layout).
     spacing : float
         Distance between consecutive cells along the centreline, m (``celerity * dt``).
-    corner_radius : float
-        Elbow arc radius, m (``CORNER_RADIUS_CELLS`` spacings, reduced when a leg is too
-        short for two arcs).
     inlet_end, run_start, run_end, outlet_start : int
         Cell indices: the last fraction-0 cell of the inlet (the inlet / leg elbow), the
         first and last fraction-1 cells (the leg / run elbows), the first fraction-0 cell
@@ -122,15 +119,15 @@ class LoopLayout:
         The two cells either side of each of the four elbows, in centreline order.
     x_nominal, y_nominal : numpy.ndarray
         Circle centres at rest, m: the run along ``y = 0`` from ``x = 0`` (``run_start``)
-        to ``x = run_length`` (``run_end``); leg 1 at ``x = -corner_radius``, leg 2 at
-        ``x = run_length + corner_radius``; the inlet at ``y = leg_height`` ending at
-        ``x = -2 corner_radius`` and extending left, the outlet at ``y = leg_height_2``
-        from ``x = run_length + 2 corner_radius`` extending right.
+        to ``x = run_length`` (``run_end``); leg 1 up ``x = 0`` to the inlet elbow cell at
+        ``(0, leg_height)``, the inlet extending left from it at ``y = leg_height``; leg 2
+        up ``x = run_length`` to the outlet elbow cell at ``(run_length, leg_height_2)``,
+        the outlet extending right from it. Sharp corners: the model has no bends.
     run_length : float
         ``cell_position[run_end] - cell_position[run_start]``, m.
     leg_height, leg_height_2 : float
         Height of the inlet and outlet pipes above the run, m: the centreline length
-        between the elbow cells less the two arcs plus two radii.
+        between the elbow cells.
     """
 
     cell_position: np.ndarray
@@ -142,7 +139,6 @@ class LoopLayout:
     cell_length: float
     portal_height: float
     spacing: float
-    corner_radius: float
     inlet_end: int
     run_start: int
     run_end: int
@@ -232,19 +228,17 @@ def loop_layout(
     ext_qty: int,
     cell_length: float,
     portal_height: float,
-    corner_radius_cells: float = CORNER_RADIUS_CELLS,
 ) -> LoopLayout:
     """Lay the interleaved column on the expansion loop, uniformly by ``cell_position``.
 
-    The centreline runs: inlet (horizontal, leftwards from the first elbow, ``y =
-    leg_height``), a quarter arc, leg 1 (down, ``x = -r``), a quarter arc into the run
-    (``y = 0`` from ``x = 0`` to ``x = run_length``), a quarter arc, leg 2 (up, ``x =
-    run_length + r``), a quarter arc, outlet (horizontal, rightwards, ``y = leg_height_2``).
-    Each arc has radius ``r`` and starts or ends exactly at an elbow cell (``_segments``),
-    so every inlet / outlet cell is at its pipe height and every run cell at ``y = 0``; a
-    cell ``s`` along the column is at centreline length ``s`` (the arcs are arc-length
-    parametrised). ``r`` is ``corner_radius_cells`` spacings, reduced when a leg is shorter
-    than two arcs.
+    The centreline runs: inlet (horizontal, leftwards from the inlet elbow cell at ``(0,
+    leg_height)``), leg 1 (down ``x = 0``), the run (``y = 0`` from ``x = 0`` to ``x =
+    run_length``), leg 2 (up ``x = run_length``), outlet (horizontal, rightwards from the
+    outlet elbow cell at ``(run_length, leg_height_2)``). The elbows are sharp corners at
+    the elbow cells (``_segments``): the model has no bends, and the cells either side of
+    a corner are one spacing from the corner cell along its two segments. A cell ``s``
+    along the column is at centreline length ``s``, so every inlet / outlet cell is at its
+    pipe height and every run cell at ``y = 0``.
 
     Parameters
     ----------
@@ -255,8 +249,6 @@ def loop_layout(
         ``2 * celerity * dt``, m.
     portal_height : float
         m.
-    corner_radius_cells : float
-        Arc radius in cell spacings.
 
     Returns
     -------
@@ -266,41 +258,22 @@ def loop_layout(
     frac = np.asarray(moving_fraction, dtype=np.float64)
     inlet_end, run_start, run_end, outlet_start = _segments(frac)
     spacing = float(s[1] - s[0]) if s.shape[0] > 1 else float(cell_length) / 2
-    r = corner_radius_cells * spacing
-    leg1 = float(s[run_start] - s[inlet_end])
-    leg2 = float(s[outlet_start] - s[run_end])
-    # two quarter arcs (pi r / 2 each) must fit in each leg's centreline length
-    r = min(r, 0.45 * min(leg1, leg2) / (math.pi / 2))
-    q = math.pi * r / 2
     s1, s2, s3, s4 = s[inlet_end], s[run_start], s[run_end], s[outlet_start]
     run_length = float(s3 - s2)
-    height1 = leg1 - 2 * q + 2 * r
-    height2 = leg2 - 2 * q + 2 * r
+    height1 = float(s2 - s1)
+    height2 = float(s4 - s3)
     x = np.empty_like(s)
     y = np.empty_like(s)
-    for i, si in enumerate(s):
-        if si <= s1:  # inlet
-            x[i], y[i] = -2 * r - (s1 - si), height1
-        elif si <= s1 + q:  # arc inlet -> leg 1 (centre (-2r, h1 - r), 90 deg -> 0 deg)
-            th = math.pi / 2 - (si - s1) / r
-            x[i], y[i] = -2 * r + r * math.cos(th), height1 - r + r * math.sin(th)
-        elif si <= s2 - q:  # leg 1 down
-            x[i], y[i] = -r, height1 - r - (si - s1 - q)
-        elif si < s2:  # arc leg 1 -> run (centre (0, r), 180 deg -> 270 deg)
-            th = math.pi + (si - (s2 - q)) / r
-            x[i], y[i] = r * math.cos(th), r + r * math.sin(th)
-        elif si <= s3:  # run
-            x[i], y[i] = si - s2, 0.0
-        elif si <= s3 + q:  # arc run -> leg 2 (centre (R, r), 270 deg -> 360 deg)
-            th = 1.5 * math.pi + (si - s3) / r
-            x[i], y[i] = run_length + r * math.cos(th), r + r * math.sin(th)
-        elif si <= s4 - q:  # leg 2 up
-            x[i], y[i] = run_length + r, r + (si - s3 - q)
-        elif si < s4:  # arc leg 2 -> outlet (centre (R + 2r, h2 - r), 180 deg -> 90 deg)
-            th = math.pi - (si - (s4 - q)) / r
-            x[i], y[i] = run_length + 2 * r + r * math.cos(th), height2 - r + r * math.sin(th)
-        else:  # outlet
-            x[i], y[i] = run_length + 2 * r + (si - s4), height2
+    inlet = s <= s1
+    leg1 = (s > s1) & (s <= s2)
+    run = (s > s2) & (s <= s3)
+    leg2 = (s > s3) & (s <= s4)
+    outlet = s > s4
+    x[inlet], y[inlet] = s[inlet] - s1, height1  # leftwards, the elbow cell at x = 0
+    x[leg1], y[leg1] = 0.0, height1 - (s[leg1] - s1)
+    x[run], y[run] = s[run] - s2, 0.0
+    x[leg2], y[leg2] = run_length, s[leg2] - s3
+    x[outlet], y[outlet] = run_length + (s[outlet] - s4), height2
     return LoopLayout(
         cell_position=s,
         cell_kind=np.asarray(cell_kind),
@@ -311,7 +284,6 @@ def loop_layout(
         cell_length=float(cell_length),
         portal_height=float(portal_height),
         spacing=spacing,
-        corner_radius=float(r),
         inlet_end=inlet_end,
         run_start=run_start,
         run_end=run_end,
@@ -325,8 +297,8 @@ def loop_layout(
         x_nominal=x,
         y_nominal=y,
         run_length=run_length,
-        leg_height=float(height1),
-        leg_height_2=float(height2),
+        leg_height=height1,
+        leg_height_2=height2,
     )
 
 
@@ -538,6 +510,12 @@ def _fmt(value: float, digits: int = 3) -> str:
 # ------------------------------------------------------------------ the figure
 
 
+def _status_text(t: float, phase: int) -> str:
+    """The per-frame status shown in Panel 1 (a text trace, so a frame never touches the
+    layout)."""
+    return f"t = {t:.4f} s   phase: {PHASE_NAMES[phase]}"
+
+
 def _px_per_m(x_range: float, y_range: float) -> float:
     """Estimated on-screen scale of Panel 1 for the fixed figure size (``constrain =
     "domain"`` with equal aspect: the smaller of the two axis scales)."""
@@ -569,7 +547,7 @@ def build_figure(
         it is capped at ``SIZE_CAP_SPACING`` of the on-screen cell spacing (estimated for
         the fixed figure size), but not below ``SIZE_CAP_FLOOR_PX``.
     frame_duration_ms : int
-        Playback frame duration at 1x; the speed buttons scale it.
+        Playback frame duration at 1x (the page's typed speed divides it).
     t_start : float
         Traced frames before this time (s) are left out; with ``t_start > 0`` there is no
         synthetic rest frame.
@@ -754,7 +732,8 @@ def build_figure(
         col=1,
     )
 
-    # --- panel 2: unbalance (left axis) and friction (right axis), symmetric ranges
+    # --- panel 2: friction (right axis) drawn first and translucent, under the unbalance
+    # (left axis); symmetric ranges so the zero lines coincide
     t_all = table["t"].to_numpy()
     fu = table["f_unbalance"].to_numpy()
     ff = table["f_friction"].to_numpy()
@@ -762,6 +741,22 @@ def build_figure(
     ff_max = float(np.max(np.abs(ff))) or 1.0
     fu_lim = 1.06 * fu_max
     ff_lim = 1.06 * ff_max
+    friction_index = len(fig.data)
+    fig.add_trace(
+        go.Scatter(
+            x=t_all,
+            y=ff,
+            mode="lines",
+            line={"color": COLOUR_FRICTION, "width": 1.5},
+            name="friction force, right axis",
+            legendrank=2,  # drawn first, listed second
+            hovertemplate="t = %{x:.4g} s<br>friction = %{y:.4g} N<extra></extra>",
+        ),
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    unbalance_index = len(fig.data)
     fig.add_trace(
         go.Scatter(
             x=t_all,
@@ -769,24 +764,12 @@ def build_figure(
             mode="lines",
             line={"color": COLOUR_UNBALANCE, "width": 2},
             name="F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c), left axis",
+            legendrank=1,
             hovertemplate="t = %{x:.4g} s<br>unbalance = %{y:.4g} N<extra></extra>",
         ),
         row=2,
         col=1,
         secondary_y=False,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=t_all,
-            y=ff,
-            mode="lines",
-            line={"color": COLOUR_FRICTION, "width": 2},
-            name="friction force, right axis",
-            hovertemplate="t = %{x:.4g} s<br>friction = %{y:.4g} N<extra></extra>",
-        ),
-        row=2,
-        col=1,
-        secondary_y=True,
     )
     cursor_index = len(fig.data)
     t_first = 0.0 if with_rest else float(trace.t[idx[0]])
@@ -803,6 +786,23 @@ def build_figure(
         row=2,
         col=1,
         secondary_y=False,
+    )
+    status_index = len(fig.data)
+    phase0 = _synthetic_phase(trace)
+    fig.add_trace(
+        go.Scatter(
+            x=[x_hi],
+            y=[y_hi1],
+            mode="text",
+            text=[_status_text(0.0 if with_rest else float(trace.t[idx[0]]), phase0)],
+            textposition="bottom left",
+            textfont={"size": 14, "color": COLOUR_CURSOR},
+            hoverinfo="skip",
+            showlegend=False,
+            name="status",
+        ),
+        row=1,
+        col=1,
     )
     t_axis0 = float(t_all[0]) if with_rest else float(t_start)
     t_span = float(t_all[-1] - t_axis0) or 1.0
@@ -834,13 +834,14 @@ def build_figure(
         col=1,
     )
 
-    # --- frames: the circles and the cursor; the title carries the frame time and phase
+    # --- frames: the circles, the cursor and the status text; no layout change per frame
+    # (a layout change forces a full redraw and the lines flicker)
     n_frames = len(idx) + (1 if with_rest else 0)
 
-    def title_text(t: float, phase: int) -> str:
+    def title_text() -> str:
         head = f"{case_name} — {trace.solver}" if case_name else trace.solver
         lines = [
-            f"<b>{head}</b>   t = {t:.4f} s   phase: {PHASE_NAMES[phase]}",
+            f"<b>{head}</b>",
             f"displacement exaggeration ×{exaggeration:.3g} (peak |x| {abs(x_peak):.3g} m drawn as "
             f"{PEAK_FRACTION:.0%} of the {layout.run_length:.3g} m run); "
             + (
@@ -858,7 +859,6 @@ def build_figure(
 
     frames = []
     slider_steps = []
-    phase0 = _synthetic_phase(trace)
     frame_specs = ([(None, 0.0, phase0)] if with_rest else []) + [
         (int(i), float(trace.t[i]), int(trace.phase[i])) for i in idx
     ]
@@ -874,10 +874,10 @@ def build_figure(
                 data=[
                     go.Scatter(**circle_update),
                     go.Scatter(x=np.array([t, t], dtype=np.float32)),
+                    go.Scatter(text=[_status_text(t, phase)]),
                 ],
-                traces=[circle_index, cursor_index],
+                traces=[circle_index, cursor_index, status_index],
                 name=name,
-                layout=go.Layout(title={"text": title_text(t, phase)}),
             )
         )
         slider_steps.append(
@@ -885,7 +885,7 @@ def build_figure(
                 "args": [
                     [name],
                     {
-                        "frame": {"duration": 0, "redraw": True},
+                        "frame": {"duration": 0, "redraw": False},
                         "mode": "immediate",
                         "transition": {"duration": 0},
                     },
@@ -895,7 +895,6 @@ def build_figure(
             }
         )
     fig.frames = frames
-    t_title0, phase_title0 = frame_specs[0][1], frame_specs[0][2]
 
     # --- layout
     fig.update_xaxes(
@@ -923,21 +922,18 @@ def build_figure(
         col=1,
         secondary_y=True,
     )
-    speed_buttons = [
-        {
-            "label": f"▶ {speed:g}x",
-            "method": "animate",
-            "args": [
-                None,
-                {
-                    "frame": {"duration": frame_duration_ms / speed, "redraw": True},
-                    "fromcurrent": True,
-                    "transition": {"duration": 0},
-                },
-            ],
-        }
-        for speed in SPEEDS
-    ]
+    play_button = {
+        "label": "▶ play",
+        "method": "animate",
+        "args": [
+            None,
+            {
+                "frame": {"duration": frame_duration_ms, "redraw": False},
+                "fromcurrent": True,
+                "transition": {"duration": 0},
+            },
+        ],
+    }
     pause_button = {
         "label": "❚❚ pause",
         "method": "animate",
@@ -952,7 +948,7 @@ def build_figure(
     }
     fig.update_layout(
         title={
-            "text": title_text(t_title0, phase_title0),
+            "text": title_text(),
             "x": 0.0,
             "xanchor": "left",
             "font": {"size": 13},
@@ -973,7 +969,7 @@ def build_figure(
                 "yanchor": "top",
                 "direction": "left",
                 "pad": {"r": 4},
-                "buttons": speed_buttons + [pause_button],
+                "buttons": [play_button, pause_button],
             }
         ],
         sliders=[
@@ -989,6 +985,17 @@ def build_figure(
             }
         ],
     )
+    fig._surge_sdof_animation = {  # read by write_html for the page's speed control
+        "frame_duration_ms": float(frame_duration_ms),
+        "trace_indices": {
+            "centreline": 0,
+            "circles": circle_index,
+            "friction": friction_index,
+            "unbalance": unbalance_index,
+            "cursor": cursor_index,
+            "status": status_index,
+        },
+    }
     info = AnimationInfo(
         solver=trace.solver,
         n_frames=len(frames),
@@ -1008,13 +1015,62 @@ def build_figure(
     return fig, info
 
 
+SPEED_CONTROL_JS = """
+(function () {
+  var gd = document.getElementById('{plot_id}');
+  var base = %(base)s;
+  var row = document.createElement('div');
+  row.style.cssText = 'font: 13px sans-serif; color: #52514e; margin: 4px 0 12px 80px;';
+  row.innerHTML = 'playback speed &times;<input id="{plot_id}-speed" type="number" value="1" '
+    + 'min="0.001" step="any" style="width: 6em; margin: 0 8px 0 2px;">'
+    + '<button id="{plot_id}-play" style="margin-right: 4px;">&#9654; play</button>'
+    + '<button id="{plot_id}-pause">&#10074;&#10074; pause</button>'
+    + ' <span>(1&times; = ' + base + ' ms a frame; retype and press play to change speed while playing)</span>';
+  gd.parentNode.insertBefore(row, gd.nextSibling);
+  function speed() {
+    var v = parseFloat(document.getElementById('{plot_id}-speed').value);
+    return (isFinite(v) && v > 0) ? v : 1;
+  }
+  document.getElementById('{plot_id}-play').onclick = function () {
+    Plotly.animate(gd, null, {
+      frame: {duration: base / speed(), redraw: false},
+      fromcurrent: true, mode: 'immediate', transition: {duration: 0}
+    });
+  };
+  document.getElementById('{plot_id}-pause').onclick = function () {
+    Plotly.animate(gd, [null], {
+      frame: {duration: 0, redraw: false}, mode: 'immediate', transition: {duration: 0}
+    });
+  };
+})();
+"""
+
+
 def write_html(fig, path) -> None:
     """Write the standalone page with plotly.js loaded from the CDN (never the full library,
     which is 3+ MB and must not be committed).
 
+    The page gets a typed playback speed (any positive multiplier of the base frame
+    duration) with play and pause buttons under the figure (``SPEED_CONTROL_JS``, run after
+    the plot is made) in place of the figure's own play / pause buttons, which are removed
+    from the written copy.
+
     Parameters
     ----------
     fig : plotly.graph_objects.Figure
+        From ``build_figure``.
     path : str or pathlib.Path
     """
-    fig.write_html(str(path), include_plotlyjs="cdn", full_html=True, auto_play=False)
+    import plotly.graph_objects as go
+
+    meta = getattr(fig, "_surge_sdof_animation", None)
+    base = meta["frame_duration_ms"] if meta else float(FRAME_DURATION_MS)
+    page = go.Figure(fig)
+    page.layout.updatemenus = []
+    page.write_html(
+        str(path),
+        include_plotlyjs="cdn",
+        full_html=True,
+        auto_play=False,
+        post_script=SPEED_CONTROL_JS % {"base": f"{base:g}"},
+    )

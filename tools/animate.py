@@ -173,8 +173,7 @@ def main(argv=None):
         f"v_scale {info.v_scale:.4g} m/s; grid N = {layout.pipe_seg_qty}, pivot "
         f"{layout.pivot_seg_qty}, {layout.n_cells} cells, run {layout.run_length:.4g} m, "
         f"pipe heights {layout.leg_height:.4g} / {layout.leg_height_2:.4g} m (h = "
-        f"{layout.portal_height:.4g} m), elbow radius {layout.corner_radius:.3g} m, nominal "
-        f"circle {info.nominal_size:.3g} px"
+        f"{layout.portal_height:.4g} m), nominal circle {info.nominal_size:.3g} px"
         + ("; trace capped by the history window" if info.capped else "")
     )
     print(f"wrote {args.out} ({args.out.stat().st_size / 1e6:.2f} MB, plotly.js from the CDN)")
