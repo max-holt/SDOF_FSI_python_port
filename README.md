@@ -138,7 +138,7 @@ each; `--skip-full-python` leaves them out and brings the run to about 10 minute
 
 ```
 .venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_sheet.html
-.venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --max-frames 150 --out docs/viz/golden_r096_jc.html
+.venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --t-start 6 --t-end 7.5 --max-frames 160 --out docs/viz/golden_r096_jc.html
 .venv/bin/python tools/animate.py --step --amplitude 1600 --area 0.05 --length 6 --nat-freq 2 --mu 0.0001 \
     --sample-freq 10 --step-qty 80 --celerity 1200 --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc \
     --out docs/viz/example_jc_step.html
@@ -154,9 +154,10 @@ aligned) against time, phases shaded, a cursor at the frame time; slider, a type
 speed with play and pause on the page. `tools/animate.py` reruns a fixture case (`--golden`, a `curve_10in` case id
 or `example_lumped` / `example_jc`) or a plain step (`--step`: zero for `--lead-in` 0.1 s, then
 `--amplitude` bar on the area of a `--size` mm pipe or `--area` m²) and writes a standalone page
-with plotly.js from the CDN (`--max-frames`, default 400, caps the frames; `--t-start` trims the
-lead; the stride and every scaling are printed and put in the title). `docs/viz/` holds four such
-pages; the full-library HTML is never committed. `docs/architecture.md` "Session V.2 / V.2b / V.2c — the
+with plotly.js from the CDN (`--max-frames`, default 400, caps the frames; `--t-start` / `--t-end` animate a time window
+at full resolution, shaded on the whole-run force panel; the stride and every scaling are
+printed and put in the title). `docs/viz/` holds four such
+pages; the full-library HTML is never committed. `docs/architecture.md` "Session V.2 / V.2b / V.2c / V.2d — the
 animation" has the geometry and scaling rules.
 
 ## Where the behaviour is documented
