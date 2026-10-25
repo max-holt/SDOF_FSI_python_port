@@ -23,8 +23,9 @@ and returns a plotly figure with frames, a slider and play / pause:
 Frame 0 is synthetic (``t = 0``: ``x = 0``, the column at rest, no forces) so playback
 starts from rest; frame ``j >= 1`` is the traced frame ``(j - 1) * frame_stride``, the last
 traced frame always included, ``frame_stride`` chosen so there are at most ``max_frames``
-frames (``select_frames``). ``t_start > 0`` trims the leading frames (and the synthetic
-one). A frame changes only trace data (the circles, the cursor and a status text with the
+frames (``select_frames``). ``t_start`` / ``t_end`` animate a time window only (the synthetic
+rest frame is dropped when ``t_start > 0``); Panel 2 keeps the whole run and shades the
+window, so a long run can be animated at full resolution around its peak. A frame changes only trace data (the circles, the cursor and a status text with the
 frame time and phase), never the layout, so playback runs without redraws. The figure
 carries plotly play (1x) / pause buttons; ``write_html`` replaces them on the page with a
 typed playback speed (any positive multiplier of ``frame_duration_ms``), play and pause.
@@ -83,6 +84,7 @@ DIVERGING = [[0.0, COLOUR_NEG], [0.5, COLOUR_MID], [1.0, COLOUR_POS]]
 COLOUR_UNBALANCE = "#2a78d6"
 COLOUR_FRICTION = "rgba(235, 104, 52, 0.55)"
 COLOUR_CURSOR = "#0b0b0b"
+COLOUR_WINDOW = "#2a78d6"
 PHASE_FILL = {PHASE_TRANSIT: "#e8e7e3", PHASE_HISTORY: "#f6f6f4", PHASE_FREE_DECAY: "#e8e7e3"}
 
 SIZE_FLOOR = 0.15
@@ -531,6 +533,7 @@ def build_figure(
     nominal_size: float | None = None,
     frame_duration_ms: int = FRAME_DURATION_MS,
     t_start: float = 0.0,
+    t_end: float | None = None,
 ):
     """Build the two-panel animation of a traced run.
 
@@ -551,6 +554,9 @@ def build_figure(
     t_start : float
         Traced frames before this time (s) are left out; with ``t_start > 0`` there is no
         synthetic rest frame.
+    t_end : float or None
+        Traced frames after this time (s) are left out (None: to the end of the trace).
+        Panel 2 always shows the whole run; an animated window is shaded on it.
 
     Returns
     -------
@@ -560,7 +566,7 @@ def build_figure(
     Raises
     ------
     ValueError
-        The result has no trace, or ``t_start`` leaves no frame.
+        The result has no trace, or the ``t_start`` / ``t_end`` window holds no frame.
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -575,10 +581,16 @@ def build_figure(
     frac = layout.moving_fraction
 
     # frames to animate
-    kept = np.flatnonzero(trace.t >= t_start)
+    t_last = float(trace.t[-1])
+    t_end_eff = t_last if t_end is None else float(t_end)
+    kept = np.flatnonzero((trace.t >= t_start) & (trace.t <= t_end_eff))
     if kept.size == 0:
-        raise ValueError(f"t_start = {t_start} leaves no traced frame (last t {trace.t[-1]})")
+        raise ValueError(
+            f"the window t_start = {t_start}, t_end = {t_end_eff} holds no traced frame "
+            f"(trace t = {trace.t[0]} .. {t_last})"
+        )
     with_rest = t_start <= 0.0
+    windowed = not with_rest or t_end_eff < t_last
     sel, frame_stride = select_frames(kept.size, max_frames - (1 if with_rest else 0) + 1)
     idx = kept[sel]
     table = scalars_table(trace)
@@ -804,26 +816,40 @@ def build_figure(
         row=1,
         col=1,
     )
-    t_axis0 = float(t_all[0]) if with_rest else float(t_start)
+    t_axis0 = float(t_all[0])
     t_span = float(t_all[-1] - t_axis0) or 1.0
     for t0, t1, phase in _phase_bands(table):
-        if t1 < t_axis0:
-            continue
         band = {
-            "x0": max(t0, t_axis0),
+            "x0": t0,
             "x1": t1,
             "fillcolor": PHASE_FILL[phase],
             "opacity": 0.6,
             "layer": "below",
             "line_width": 0,
         }
-        if (t1 - max(t0, t_axis0)) / t_span >= BAND_LABEL_FRACTION:  # the title names the phase
+        if (t1 - t0) / t_span >= BAND_LABEL_FRACTION:  # the title names the phase
             band.update(
                 annotation_text=PHASE_NAMES[phase],
                 annotation_position="top left",
                 annotation_font={"size": 11, "color": "#52514e"},
             )
         fig.add_vrect(**band, row=2, col=1)
+    t_win0 = float(trace.t[idx[0]]) if not with_rest else 0.0
+    t_win1 = float(trace.t[idx[-1]])
+    if windowed:
+        fig.add_vrect(
+            x0=t_win0,
+            x1=t_win1,
+            fillcolor=COLOUR_WINDOW,
+            opacity=0.25,
+            layer="below",
+            line={"color": COLOUR_WINDOW, "width": 1},
+            annotation_text="animated window",
+            annotation_position="top right",
+            annotation_font={"size": 11, "color": "#52514e"},
+            row=2,
+            col=1,
+        )
     fig.add_vline(
         x=t_peak,
         line={"color": "#52514e", "width": 1, "dash": "dot"},
@@ -852,7 +878,7 @@ def build_figure(
             ),
             f"trace_every = {trace.trace_every} sub-steps, frame stride {frame_stride}, "
             f"{n_frames} frames, dt = {trace.dt:.3g} s, nominal circle {nominal_size:.3g} px"
-            + (f", frames from t = {t_start:g} s" if not with_rest else "")
+            + (f", animated window t = {t_win0:.4g} to {t_win1:.4g} s" if windowed else "")
             + ("; <b>trace capped by the history window</b>" if capped else ""),
         ]
         return "<br>".join(lines)

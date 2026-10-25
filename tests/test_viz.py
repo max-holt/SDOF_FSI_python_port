@@ -303,6 +303,10 @@ def test_play_pause_and_typed_speed(tmp_path):
     assert len(fig.layout.updatemenus) == 1  # the figure itself is unchanged
 
 
+def _window_shapes(fig):
+    return [sh for sh in fig.layout.shapes if sh.fillcolor == animate.COLOUR_WINDOW]
+
+
 def test_t_start_trims_leading_frames():
     res = golden_result(LUMPED_ID)
     tr = res.trace
@@ -312,10 +316,47 @@ def test_t_start_trims_leading_frames():
     ts = [_frame_t(f) for f in fig.frames]
     assert ts[0] == pytest.approx(t0, abs=5e-5) and min(ts) >= t0 - 5e-5
     assert fig.data[CURSOR].x[0] == t0
-    assert fig.layout.xaxis2.range[0] == t0
+    # Panel 2 keeps the whole run; the animated window is shaded
+    assert fig.layout.xaxis2.range[0] == 0.0 and fig.layout.xaxis2.range[1] == tr.t[-1]
+    (win,) = _window_shapes(fig)
+    assert win.x0 == t0 and win.x1 == tr.t[-1]
     assert _frame_t(fig.frames[-1]) == pytest.approx(tr.t[-1], abs=5e-5)
     with pytest.raises(ValueError):
         animate.build_figure(res, max_frames=12, t_start=tr.t[-1] + 1.0)
+
+
+@pytest.mark.parametrize("case_id", [LUMPED_ID, JC_ID])
+def test_time_window_animates_at_full_resolution(case_id):
+    """A ``t_start .. t_end`` window: every frame inside it, stride 1 when the window's
+    traced frames fit the cap, the cursor and status at the window's first frame, the whole
+    run still on Panel 2 with the window shaded; no window, no shading."""
+    res = golden_result(case_id)
+    tr = res.trace
+    i0, i1 = len(tr.t) // 3, len(tr.t) // 3 + 20
+    t0, t1 = float(tr.t[i0]), float(tr.t[i1])
+    fig, info = animate.build_figure(res, max_frames=400, t_start=t0, t_end=t1)
+    assert info.frame_stride == 1 and info.n_frames == i1 - i0 + 1
+    ts = np.array([_frame_t(f) for f in fig.frames])
+    assert np.all(ts >= t0 - 5e-5) and np.all(ts <= t1 + 5e-5)
+    assert np.allclose(ts, tr.t[i0 : i1 + 1], atol=5e-5)
+    assert fig.data[CURSOR].x[0] == t0
+    assert fig.data[STATUS].text[0].startswith(f"t = {t0:.4f} s")
+    assert fig.layout.xaxis2.range == (0.0, tr.t[-1])
+    (win,) = _window_shapes(fig)
+    assert (win.x0, win.x1) == (t0, t1)
+    assert "animated window" in fig.layout.title.text
+    # the cap still holds inside a window
+    fig_c, info_c = animate.build_figure(res, max_frames=8, t_start=t0, t_end=t1)
+    assert info_c.n_frames <= 8 and _frame_t(fig_c.frames[-1]) == pytest.approx(t1, abs=5e-5)
+    # t_end alone keeps the rest frame
+    fig_e, info_e = animate.build_figure(res, max_frames=400, t_end=t1)
+    assert _frame_t(fig_e.frames[0]) == 0.0 and info_e.n_frames == i1 + 2
+    assert _window_shapes(fig_e)[0].x0 == 0.0
+    # no window: no shading
+    fig_f, _ = figure(case_id, 12)
+    assert not _window_shapes(fig_f)
+    with pytest.raises(ValueError):
+        animate.build_figure(res, t_start=t1, t_end=t0)
 
 
 def test_lumped_layout_is_the_grid_the_case_would_have():
