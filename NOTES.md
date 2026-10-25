@@ -1,6 +1,10 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2d done 2026-10-25: `t_end` / `--t-end` time window (Panel 2 keeps the whole run, window
+shaded); the row 96 page is now the 1.5 s window around its peak at 10 ms a frame, answering the
+lead author's "wild jumps" (0.14 s a frame was 0.42 of the 3 Hz period); see "Session V.2d —
+done". Next: the owner's local bench reference run, then Session 5b.
 Session V.2c (second review round) done 2026-10-23: sharp elbows (arcs removed), friction drawn
 under the load line and translucent, frames that never touch the layout (no flicker, no vanishing
 right-axis line at speed), typed playback speed on the page; pages regenerated; see "Session
@@ -36,6 +40,29 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2d — done (2026-10-25)
+Lead author's two questions on `golden_r096_jc.html`, answered and the chosen option implemented.
+- **Why 1333 points**: they are the MoC cells the model integrates (`moc.grid_size`: a cell is
+  `2 c dt` with `dt = 1 / (sampleFreq stepQTY)`; row 96 has 1265 Hz x 40, so dt = 19.8 µs, a
+  49 mm cell, N = 666, 1333 interleaved points 24.5 mm apart; the Example case's 10 Hz x 80
+  gives 3 m cells and 37 points). The count follows from the fixture's sampling rate, not from
+  the animation; every cell is drawn as specified. Display thinning was offered and not taken.
+- **Why the jumps**: one animation frame was 0.139 s (stride 14 x trace_every 504 x dt), 0.42 of
+  the 3 Hz period and ~7 wave transits of the 24 m run (0.019 s each), so the mass was near
+  opposite extremes in consecutive frames; the cause was the 150-frame cap over a 19.9 s run
+  (400 frames would still be 0.05 s a frame). Option taken (owner's choice): animate a time
+  window. `build_figure(..., t_start, t_end)` and `--t-end`: frames inside the window only
+  (stride and cap counted inside it), Panel 2 always the whole run with the window shaded
+  (`COLOUR_WINDOW` vrect, "animated window"; this also changes `t_start` alone, which used to
+  trim the time axis), the title names the window. `golden_r096_jc.html` is now `--t-start 6
+  --t-end 7.5 --max-frames 160`: 151 frames at trace_every 504 (stride 1, 10 ms a frame = 0.03
+  period, half a transit), 4.9 MB. Pinned: `test_time_window_animates_at_full_resolution`
+  (every frame inside the window, stride 1 when the window fits, cursor and status at the
+  window start, whole-run axis, the shading present only when windowed, the cap inside a
+  window, `t_end` alone keeps the rest frame, an empty window raises).
+- Tests 30 in both modes (15 s / 15 s); fast suite 864 passed; `-m slow` 150 passed (4.5 min)
+  before the `src/` commit.
 
 ## Session V.2c — done (2026-10-23)
 Lead author's second review (five items), all applied; only `viz/animate.py`, `tests/test_viz.py`,
