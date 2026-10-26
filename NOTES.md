@@ -62,6 +62,67 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Session W.2 — scope and plan (recorded 2026-10-26 before touching any file)
+Owner's instruction: the single-file JS viewer, trace mode; `docs/viewer/viewer.html` self-contained
+(plotly.js inlined, pako inflate inlined, no external request of any kind), the same two-panel
+picture as `viz/animate.py` with live controls; Playwright tests on the `test_viz_motion.py`
+harness; docs; no `src/` change outside `viz/` and `export.py` (none is planned). Commit per step.
+
+**Conflict found before starting (decision, flagged for the owner).** The instruction asks for
+plotly's *basic* partial bundle copied from the installed package, never from the network. The
+installed `plotly` 7.1.0 ships one file, `package_data/plotly.min.js` = the **full** plotly.js
+4.1.1 (4.82 MB); no partial bundle exists on this machine (npm cache and `/opt/node-tools`
+searched) and `plotly.js-basic-dist-min` is only on npm. Decision: inline the full 4.1.1 bundle
+from the installed package (the only network-free source; the version is asserted and recorded in
+a comment), build the page with `tools/build_viewer.py` whose `--plotly` argument names the bundle
+file, so the swap to the basic bundle is one flag when a copy is available offline. The viewer is
+therefore ~4.9 MB, the size of the committed row 96 plotly page. pako: `pako_inflate.min.js`
+1.0.11 (MIT) from `/opt/node-tools/node_modules/pako`, vendored with its licence comment.
+
+1. **Source + build.** `docs/viewer/viewer.src.html` is the hand-written page (CSS and JS inline,
+   two `<!-- @inline name -->` markers); `tools/build_viewer.py` replaces the markers with the
+   two libraries (version comments: `plotly.js vX` read from the bundle's header, pako from its
+   `package.json`) and writes `docs/viewer/viewer.html`. Both committed; a test rebuilds and
+   asserts byte equality, so the committed page cannot drift from the source. `.gitattributes`
+   marks the built page `-diff`.
+2. **Loader.** File picker and drag-and-drop; gzip detected by the magic bytes (`1f 8b`), not the
+   suffix, inflated with pako; `JSON.parse`; `kind` must be `trace` or `sweep` and
+   `schema_version` must be 1, else a readable error names what was found; a `sweep` file is
+   recognised, its `meta` shown, and the message says sweep mode is Session W.3. Settings
+   (speed, stride, exaggeration override, colour range override) in `localStorage` behind
+   try/catch; the window is per file (default the whole run) and not persisted.
+3. **Trace mode.** The figure is built once per file: the same six traces in the same order as
+   the plotly pages (centreline 0, cells 1, friction 2 on the right axis, unbalance 3, cursor 4,
+   status 5), the same 1200 x 900 layout, margins, domains, colour scale, phase bands, peak line,
+   window shade and scalings (`exaggeration = 0.1 run / max|x|`, `k_p` for 2x nominal, floor
+   0.15, `p_ref = 0`, `cmin/cmax = ±max|v|`, nominal size `clip(1800/n, 5, 12)` capped at 0.8 of
+   the on-screen spacing, never below 3 px). Playback: a `requestAnimationFrame` loop computes
+   the frame due from the elapsed wall time (`40 ms / speed` per shown frame, as the pages'
+   1x; frames are skipped when the render is slower, so the speed holds) and updates the cells,
+   cursor and status by one `Plotly.animate` with an inline frame listing all six traces (the
+   static three with `{}`), `redraw: false`, `mode: immediate`, awaiting the promise before the
+   next call: the V.2f mechanism, stated in a code comment. The static traces, shapes and axes
+   are never rebuilt during playback; the exaggeration and colour overrides redraw the current
+   frame / restyle the colour axis once, outside the loop. Default stride = `animate.select_frames`
+   (`ceil((n_frames - 1) / 398)`), so 1x with the default stride is the pace of the plotly page.
+   Controls: play / pause, typed speed and 0.25x–4x buttons, stride, `t_start` / `t_end`,
+   exaggeration override, colour range override, jump to peak, a frame slider. Header: case id,
+   solver, dt, trace_every, frame count, capped flag, git sha, and the scaling in use.
+4. **Tests** `tests/test_viewer.py` (Playwright; same browser fixture and skip rules as
+   `test_viz_motion.py`): every request the page makes is recorded and anything but the page
+   itself fails the test (zero network requests); the three trace files load through the file
+   input and render six traces on two panels, the sweep file shows the W.3 message; 2 s of play
+   keeps the friction trace and its SVG group count; a window keeps every played frame time inside
+   it; 4x advances more frames than 1x over the same wall time; `schema_version: 99` shows the
+   error; the build reproduces the committed page and the inlined bundle equals the installed
+   `plotly.min.js`; screenshots of the viewer at the peak frame and of the matching plotly page
+   (`docs/viz/example_jc_step.html`, `golden_r096_jc.html`) at its frame nearest the peak go to
+   `tests/.artifacts/` for the owner's review (no pixel comparison).
+5. **Docs.** `docs/viewer/README.md` (open, load, publish by copying the one file, browsers
+   tested: headless Chromium only here), `docs/architecture.md` "Session W.2 — the viewer",
+   `README.md` section, NOTES: next action = the owner's local bench reference run, then 5b, then
+   W.3 (sweep mode).
+
 ## Session W.1 — done (2026-10-26)
 Built as planned (plan section below); commits per step. No solver module changed (`src/` changes:
 `export.py` new, `viz/geometry.py` new with code moved verbatim from `viz/animate.py`, which now
