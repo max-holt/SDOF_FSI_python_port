@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- surge_sdof results viewer (Session W.2, trace mode). This is the SOURCE page; the one-file
+     deliverable docs/viewer/viewer.html is built from it by tools/build_viewer.py, which replaces
+     the two @inline markers below with plotly.js and pako. Everything else is in this file. -->
+<!-- No external request of any kind: the policy below blocks every network fetch at the browser
+     level (scripts and styles are inline, images only data:/blob: for plotly's own export). -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>surge_sdof viewer</title>
+<style>
+  :root {
+    --ink: #2a3f5f; --muted: #52514e; --rule: #dcdbd6; --bg: #ffffff; --panel: #f6f6f4;
+    --accent: #2a78d6; --error: #b3261e; --warn: #9a6700;
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { padding: 14px 16px 40px; min-width: 1240px; }
+  h1 { font-size: 17px; margin: 0 0 6px; font-weight: 600; }
+  h1 small { font-weight: 400; color: var(--muted); margin-left: 8px; }
+  #load { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  #drop { border: 1.5px dashed var(--rule); border-radius: 6px; padding: 8px 14px; color: var(--muted);
+    background: var(--panel); flex: 1; min-width: 320px; }
+  #drop.over { border-color: var(--accent); color: var(--accent); }
+  #message { white-space: pre-wrap; margin: 6px 0 10px; padding: 8px 10px; border-radius: 4px;
+    display: none; }
+  #message.error { display: block; background: #fdecea; color: var(--error); border: 1px solid #f3b9b4; }
+  #message.info { display: block; background: var(--panel); color: var(--muted); border: 1px solid var(--rule); }
+  #meta { display: none; margin: 0 0 8px; padding: 8px 10px; background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 4px; }
+  #meta.on { display: block; }
+  #meta dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; }
+  #meta dt { color: var(--muted); }
+  #meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+  #meta .scaling { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule); }
+  .capped { color: var(--warn); font-weight: 600; }
+  #controls { display: none; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin: 0 0 6px;
+    padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px; }
+  #controls.on { display: flex; }
+  #controls label { color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+  #controls input[type=number], #controls input[type=text] { width: 6.5em; padding: 2px 4px;
+    font: inherit; border: 1px solid #b9b8b2; border-radius: 3px; }
+  #controls button { font: inherit; padding: 3px 9px; border: 1px solid #b9b8b2; border-radius: 3px;
+    background: #fff; cursor: pointer; }
+  #controls button:hover { border-color: var(--accent); }
+  #controls button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #controls .group { display: inline-flex; gap: 4px; align-items: center; }
+  #frame { width: 1200px; display: none; margin: 2px 0 0; }
+  #frame.on { display: block; }
+  #frame input[type=range] { width: 1040px; vertical-align: middle; }
+  #frame span { display: inline-block; min-width: 140px; color: var(--muted);
+    font-variant-numeric: tabular-nums; margin-left: 8px; }
+  #plot { width: 1200px; height: 900px; }
+  .hint { color: var(--muted); }
+</style>
+<!-- @inline plotly -->
+<!-- @inline pako -->
+</head>
+<body>
+<h1>surge_sdof results viewer <small id="version">trace mode (Session W.2)</small></h1>
+<div id="load">
+  <input id="file" type="file" accept=".json,.gz,.json.gz,application/json,application/gzip">
+  <div id="drop">or drop a <code>.json</code> / <code>.json.gz</code> results file here
+    (<code>tools/export.py</code>, <code>docs/data_format.md</code>)</div>
+</div>
+<div id="message"></div>
+<div id="meta"><dl id="meta-list"></dl><div class="scaling" id="scaling"></div></div>
+<div id="controls">
+  <span class="group">
+    <button id="play" title="space">&#9654; play</button>
+    <button id="pause">&#10074;&#10074; pause</button>
+    <button id="peak" title="show the frame of peak |x| (whole run)">jump to peak</button>
+  </span>
+  <label>speed &times;<input id="speed" type="number" min="0.001" step="any" value="1"></label>
+  <span class="group" id="speed-buttons"></span>
+  <label title="animation frames advanced per shown frame; blank = automatic (the plotly pages' stride)">
+    stride <input id="stride" type="number" min="1" step="1" placeholder="auto"></label>
+  <label title="first frame time, s (whole run by default)">t_start <input id="t0" type="number" step="any"></label>
+  <label title="last frame time, s">t_end <input id="t1" type="number" step="any"></label>
+  <label title="displacement multiplier; blank = automatic (peak |x| drawn as 10 % of the run)">
+    exaggeration <input id="exag" type="number" min="0" step="any" placeholder="auto"></label>
+  <label title="colour range ±v, m/s; blank = automatic (max |v| over the run)">
+    colour range &plusmn;<input id="vmax" type="number" min="0" step="any" placeholder="auto"> m/s</label>
+  <span class="hint" id="store-note"></span>
+</div>
+<div id="frame"><input id="slider" type="range" min="0" max="0" step="1" value="0"><span id="readout"></span></div>
+<div id="plot"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- constants (viz/animate.py)
+  // Every scaling, colour and layout number below is the one `surge_sdof.viz.animate.build_figure`
+  // uses, so the viewer and a plotly page of the same run draw the same picture.
+  var BASE_MS = 40;              // FRAME_DURATION_MS: 1x = 40 ms a shown frame, as the pages
+  var MAX_FRAMES = 400;          // the pages' frame cap; the automatic stride is select_frames'
+  var SIZE_CAP_SPACING = 0.8, SIZE_CAP_FLOOR_PX = 3.0;
+  var FIG_W = 1200, FIG_H = 900;
+  var MARGIN = {l: 80, r: 170, t: 150, b: 110};
+  var ROW_HEIGHTS = [0.62, 0.38], VSPACE = 0.14;
+  var PEAK_FRACTION = 0.1, MAX_SIZE_RATIO = 2.0, SIZE_FLOOR = 0.15, BAND_LABEL_FRACTION = 0.06;
+  var PHASE_NAMES = {0: 'transit', 1: 'history', 2: 'free decay'};
+  var PHASE_FILL = {0: '#e8e7e3', 1: '#f6f6f4', 2: '#e8e7e3'};
+  var COLOUR_NEG = '#2a78d6', COLOUR_MID = '#b9b8b2', COLOUR_POS = '#d03b3b';
+  var DIVERGING = [[0.0, COLOUR_NEG], [0.5, COLOUR_MID], [1.0, COLOUR_POS]];
+  var COLOUR_UNBALANCE = '#2a78d6', COLOUR_FRICTION = 'rgba(235, 104, 52, 0.55)';
+  var COLOUR_CURSOR = '#0b0b0b', COLOUR_WINDOW = '#2a78d6', GREY = '#52514e';
+  // trace order, the pages' order (tests/test_viz_motion.py reads the same indices)
+  var CENTRELINE = 0, CELLS = 1, FRICTION = 2, UNBALANCE = 3, CURSOR = 4, STATUS = 5;
+  var ANIMATED = [CELLS, CURSOR, STATUS, CENTRELINE, FRICTION, UNBALANCE];
+  var SPEEDS = [0.25, 0.5, 1, 2, 4];
+  var STORE_KEY = 'surge_sdof.viewer.v1';
+  var SCHEMA_VERSION = 1, KINDS = ['trace', 'sweep'];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var gd = $('plot');
+
+  // ---------------------------------------------------------------- settings (localStorage)
+  // Persisted: speed, the stride / exaggeration / colour-range overrides. The time window is per
+  // file and never stored. Storage can be missing or throw (private mode, file: in some
+  // browsers, a locked-down SharePoint viewer): every access is wrapped and the page runs
+  // without it.
+  var settings = {speed: 1, stride: '', exag: '', vmax: ''};
+  function loadSettings() {
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        for (var k in settings) if (Object.prototype.hasOwnProperty.call(s, k)) settings[k] = s[k];
+      }
+      $('store-note').textContent = 'settings remembered in this browser';
+    } catch (e) {
+      $('store-note').textContent = 'settings not remembered (storage unavailable)';
+    }
+  }
+  function saveSettings() {
+    try { window.localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* no storage */ }
+  }
+
+  // ---------------------------------------------------------------- helpers
+  function fmtG(v, d) {           // Python's %.{d}g, near enough: shortest of fixed / exponent
+    if (v === null || v === undefined || !isFinite(v)) return String(v);
+    if (v === 0) return '0';
+    var s = Number(v).toPrecision(d || 3);
+    if (s.indexOf('e') < 0 && s.indexOf('.') >= 0) s = s.replace(/\.?0+$/, '');
+    return s.replace(/e([+-])(\d)$/, 'e$10$2');
+  }
+  function message(kind, text) {
+    var m = $('message');
+    m.className = kind || '';
+    m.textContent = text || '';
+  }
+  function maxAbs(a) {
+    var m = 0;
+    for (var i = 0; i < a.length; i++) { var x = a[i] < 0 ? -a[i] : a[i]; if (x > m) m = x; }
+    return m;
+  }
+  function argmaxAbs(a) {
+    var m = -1, k = 0;
+    for (var i = 0; i < a.length; i++) { var x = a[i] < 0 ? -a[i] : a[i]; if (x > m) { m = x; k = i; } }
+    return k;
+  }
+  function pxPerM(xRange, yRange) {   // animate._px_per_m
+    var plotW = FIG_W - MARGIN.l - MARGIN.r;
+    var plotH = (FIG_H - MARGIN.t - MARGIN.b) * ROW_HEIGHTS[0] * (1 - VSPACE);
+    return Math.min(plotW / xRange, plotH / yRange);
+  }
+
+  // ---------------------------------------------------------------- loading
+  function readFile(file) {
+    message('info', 'loading ' + file.name + ' (' + fmtG(file.size / 1e6, 3) + ' MB) …');
+    var t0 = performance.now();
+    file.arrayBuffer().then(function (buf) {
+      var bytes = new Uint8Array(buf);
+      var gz = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;  // gzip magic, not the suffix
+      if (gz) {
+        if (typeof pako === 'undefined') throw new Error('gzip file but no inflate library in the page');
+        bytes = pako.inflate(bytes);
+      }
+      var text = new TextDecoder('utf-8').decode(bytes);
+      var obj;
+      try { obj = JSON.parse(text); }
+      catch (e) { throw new Error('not a JSON document' + (gz ? ' after inflating' : '') + ': ' + e.message); }
+      var what = validate(obj);
+      if (what === 'sweep') {
+        showSweep(obj, file.name);
+      } else {
+        openTrace(obj, file.name);
+      }
+      var dt = (performance.now() - t0) / 1000;
+      console.log('loaded ' + file.name + ' in ' + dt.toFixed(2) + ' s');
+    }).catch(function (e) {
+      closeTrace();
+      message('error', 'Could not load ' + file.name + ':\n' + (e && e.message ? e.message : e));
+    });
+  }
+
+  // kind and schema_version first, then the trace structure the panels need
+  function validate(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('the document is not an object');
+    var kind = obj.kind, sv = obj.schema_version;
+    if (KINDS.indexOf(kind) < 0 || sv !== SCHEMA_VERSION) {
+      throw new Error('Unsupported file: kind ' + JSON.stringify(kind === undefined ? null : kind) +
+        ', schema_version ' + JSON.stringify(sv === undefined ? null : sv) +
+        '.\nThis viewer reads kind "trace" or "sweep" at schema_version ' + SCHEMA_VERSION +
+        ' (docs/data_format.md); re-export the file with the matching tools/export.py.');
+    }
+    if (kind === 'trace') {
+      var need = ['meta', 'geometry', 'frames'];
+      for (var i = 0; i < need.length; i++) if (!obj[need[i]]) throw new Error('trace file without "' + need[i] + '"');
+      var n = obj.meta.n_frames;
+      var cols = ['t', 'sub_step', 'sample', 'phase', 'x', 'v', 'a', 'f_a', 'f_b', 'f_unbalance',
+                  'f_friction', 'stick', 'd_f'];
+      for (var j = 0; j < cols.length; j++) {
+        var c = obj.frames[cols[j]];
+        if (!Array.isArray(c) || c.length !== n)
+          throw new Error('frames.' + cols[j] + ' is missing or not ' + n + ' long');
+      }
+      var g = obj.geometry;
+      if (!Array.isArray(g.x_nominal_m) || g.x_nominal_m.length !== g.moving_fraction.length)
+        throw new Error('geometry arrays missing or of unequal length');
+      if (obj.cells) {
+        ['p', 'v'].forEach(function (k) {
+          var b = obj.cells[k];
+          if (!b || !b.shape || b.shape[0] !== n || b.shape[1] !== obj.meta.n_cells ||
+              b.data.length !== n * obj.meta.n_cells)
+            throw new Error('cells.' + k + ' is not an [n_frames, n_cells] block');
+        });
+      }
+    }
+    return kind;
+  }
+
+  function showSweep(obj, name) {
+    closeTrace();
+    var m = obj.meta || {};
+    message('info', 'Sweep file recognised: ' + name + ' (' + m.n_rows + ' rows, source ' + m.source +
+      ', git ' + (m.git_sha ? String(m.git_sha).slice(0, 12) : 'none') + ').\n' +
+      'Sweep mode arrives in Session W.3; this viewer plays trace files (tools/export.py trace …).');
+    setMeta([['kind', 'sweep'], ['rows', m.n_rows], ['source', m.source], ['created', m.created_utc],
+             ['git sha', m.git_sha || 'null']], '');
+  }
+
+  // ---------------------------------------------------------------- trace mode
+  var D = null;   // the open file: columns, typed cell blocks, geometry
+  var S = null;   // the scalings in use
+  var P = {       // playback state (window.viewer exposes it for the tests)
+    cur: 0, iStart: 0, iEnd: 0, stride: 1, strideAuto: 1, running: false, pending: false,
+    wallStart: 0, frameStart: 0, shown: 0, shownT: [], iPeak: 0, raf: 0
+  };
+
+  function closeTrace() {
+    stop();
+    D = null; S = null;
+    try { Plotly.purge(gd); } catch (e) { /* nothing plotted yet */ }
+    $('meta').className = ''; $('controls').className = ''; $('frame').className = '';
+  }
+
+  function openTrace(obj, name) {
+    closeTrace();
+    var f = obj.frames, g = obj.geometry, meta = obj.meta;
+    var n = meta.n_frames, jc = !!obj.cells;
+    var nc = g.x_nominal_m.length;
+    D = {
+      name: name, meta: meta, g: g, n: n, nc: nc, jc: jc,
+      t: Float64Array.from(f.t), x: Float64Array.from(f.x), phase: f.phase,
+      fu: Float64Array.from(f.f_unbalance), ff: Float64Array.from(f.f_friction),
+      xNom: Float64Array.from(g.x_nominal_m), yNom: Float64Array.from(g.y_nominal_m),
+      frac: Float64Array.from(g.moving_fraction),
+      p: jc ? Float64Array.from(obj.cells.p.data) : null,
+      v: jc ? Float64Array.from(obj.cells.v.data) : null
+    };
+    if (jc) { obj.cells.p.data = null; obj.cells.v.data = null; }   // let the JSON arrays go
+
+    // --- scalings over the whole run (animate.build_figure)
+    var iPeak = argmaxAbs(D.x);
+    var xPeak = D.x[iPeak], tPeak = D.t[iPeak];
+    var run = g.run_length_m;
+    S = {
+      iPeak: iPeak, xPeak: xPeak, tPeak: tPeak, run: run,
+      exagAuto: xPeak !== 0 ? PEAK_FRACTION * run / Math.abs(xPeak) : 1.0,
+      pRef: 0.0, pScale: 1.0, kP: 1.0, vAuto: 1.0
+    };
+    if (jc) {
+      var pScale = maxAbs(D.p);           // p_ref = 0: max |p - p_ref|
+      var pRise = 0;
+      for (var i = 0; i < D.p.length; i++) if (D.p[i] > pRise) pRise = D.p[i];
+      S.kP = pRise > 0 ? (MAX_SIZE_RATIO - 1) * pScale / pRise : 1.0;
+      S.pScale = pScale === 0 ? 1.0 : pScale;
+      var vScale = maxAbs(D.v);
+      S.vAuto = vScale === 0 ? 1.0 : vScale;
+    }
+    // panel 1 extent (fixed) and the size cap
+    var xMin = Infinity, xMax = -Infinity;
+    for (var k = 0; k < nc; k++) { if (D.xNom[k] < xMin) xMin = D.xNom[k]; if (D.xNom[k] > xMax) xMax = D.xNom[k]; }
+    S.xLo = xMin - 0.12 * run; S.xHi = xMax + 0.12 * run;
+    S.yTop = Math.max(g.leg_height_m, g.leg_height_2_m);
+    var yMargin = 0.08 * Math.max(S.yTop, run);
+    S.yLo = -yMargin; S.yHi = S.yTop + yMargin;
+    var ppm = pxPerM(S.xHi - S.xLo, S.yHi - S.yLo);
+    var sizeCap = Math.max(SIZE_CAP_FLOOR_PX, SIZE_CAP_SPACING * g.spacing_m * ppm);
+    S.nominal = Math.min(Math.min(Math.max(1800 / nc, 5), 12), sizeCap);
+    S.fuLim = 1.06 * (maxAbs(D.fu) || 1.0);
+    S.ffLim = 1.06 * (maxAbs(D.ff) || 1.0);
+    P.iPeak = iPeak;
+    P.strideAuto = Math.max(1, Math.ceil((n - 1) / (MAX_FRAMES - 2)));   // select_frames on the traced frames
+    applyOverrides();
+
+    buildFigure();
+    setWindowInputs(D.t[0], D.t[n - 1]);
+    applyWindow(true);
+    $('controls').className = 'on'; $('frame').className = 'on';
+    $('slider').max = String(n - 1);
+    $('vmax').disabled = !jc;
+    message('', '');
+    renderMeta();
+    show(0);
+  }
+
+  function applyOverrides() {
+    var e = parseFloat(settings.exag), v = parseFloat(settings.vmax), s = parseInt(settings.stride, 10);
+    S.exag = isFinite(e) && e > 0 ? e : S.exagAuto;
+    S.vScale = isFinite(v) && v > 0 ? v : S.vAuto;
+    P.stride = isFinite(s) && s >= 1 ? s : P.strideAuto;
+  }
+
+  function cellText() {
+    var g = D.g, seg = g.segments, out = [];
+    for (var i = 0; i < D.nc; i++) {
+      var s = 'leg';
+      if (i <= seg.inlet_end) s = 'inlet';
+      else if (i >= seg.run_start && i <= seg.run_end) s = 'run';
+      else if (i >= seg.outlet_start) s = 'outlet';
+      out.push('cell ' + i + ' (' + (g.cell_kind[i] === 0 ? 'A node' : 'B cell') + ', ' + s + ') at ' +
+        fmtG(g.cell_position_m[i], 4) + ' m, fraction ' + fmtG(D.frac[i], 3));
+    }
+    return out;
+  }
+
+  function colourbar() {
+    var ticks = [-1, -0.5, 0, 0.5, 1], vals = [], text = [];
+    for (var i = 0; i < ticks.length; i++) { vals.push(ticks[i] * S.vScale); text.push(fmtG(ticks[i] * S.vScale, 3) + ' m/s'); }
+    return {title: {text: 'relative fluid velocity (JC arrays)', side: 'right'}, tickvals: vals,
+            ticktext: text, len: 0.55, y: 0.78, thickness: 14};
+  }
+
+  // the per-frame arrays of frame i (animate.build_figure's `circles`)
+  function circles(i) {
+    var nc = D.nc, x = new Float64Array(nc), xi = D.x[i] * S.exag;
+    for (var j = 0; j < nc; j++) x[j] = D.xNom[j] + xi * D.frac[j];
+    var out = {x: x};
+    if (D.jc) {
+      var p = D.p.subarray(i * nc, (i + 1) * nc), v = D.v.subarray(i * nc, (i + 1) * nc);
+      var size = new Float64Array(nc), floor = SIZE_FLOOR * S.nominal;
+      for (var k = 0; k < nc; k++) {
+        var s = S.nominal * (1 + S.kP * (p[k] - S.pRef) / S.pScale);
+        size[k] = s > floor ? s : floor;
+      }
+      out.size = size; out.colour = v; out.p = p;
+    }
+    return out;
+  }
+
+  function statusText(i) {
+    return 't = ' + D.t[i].toFixed(4) + ' s   phase: ' + PHASE_NAMES[D.phase[i]];
+  }
+
+  function phaseBands() {
+    var bands = [], t = D.t, ph = D.phase, lo = 0;
+    for (var i = 1; i <= D.n; i++) {
+      if (i === D.n || ph[i] !== ph[lo]) {
+        bands.push([t[lo], i < D.n ? t[i] : t[D.n - 1], ph[lo]]);
+        lo = i;
+      }
+    }
+    return bands;
+  }
+
+  // The figure is built ONCE per file: six traces in the pages' order, the shapes and
+  // annotations. Playback never calls newPlot / react / relayout again (see `show`).
+  function buildFigure() {
+    var g = D.g, jc = D.jc, n = D.n, first = circles(0);
+    var marker = {size: jc ? first.size : S.nominal, line: {width: 0.5, color: GREY}, sizemode: 'diameter'};
+    var hover = '%{text}' + (jc ? '<br>p = %{customdata:.4g} Pa<br>v = %{marker.color:.4g} m/s' : '') + '<extra></extra>';
+    if (jc) {
+      marker.color = first.colour; marker.colorscale = DIVERGING;
+      marker.cmin = -S.vScale; marker.cmax = S.vScale; marker.colorbar = colourbar();
+    } else {
+      marker.color = COLOUR_MID;
+    }
+    var tAll = D.t, tLast = tAll[n - 1];
+    var data = [];
+    data[CENTRELINE] = {type: 'scatter', x: D.xNom, y: D.yNom, mode: 'lines', line: {color: '#dcdbd6', width: 1},
+      hoverinfo: 'skip', showlegend: false, name: 'centreline', xaxis: 'x', yaxis: 'y'};
+    data[CELLS] = {type: 'scatter', x: first.x, y: D.yNom, mode: 'markers', marker: marker, text: cellText(),
+      customdata: jc ? first.p : undefined, hovertemplate: hover, name: 'cells', showlegend: false,
+      xaxis: 'x', yaxis: 'y'};
+    data[FRICTION] = {type: 'scatter', x: tAll, y: D.ff, mode: 'lines', line: {color: COLOUR_FRICTION, width: 1.5},
+      name: 'friction force, right axis', legendrank: 2,
+      hovertemplate: 't = %{x:.4g} s<br>friction = %{y:.4g} N<extra></extra>', xaxis: 'x2', yaxis: 'y3'};
+    data[UNBALANCE] = {type: 'scatter', x: tAll, y: D.fu, mode: 'lines', line: {color: COLOUR_UNBALANCE, width: 2},
+      name: 'F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c), left axis', legendrank: 1,
+      hovertemplate: 't = %{x:.4g} s<br>unbalance = %{y:.4g} N<extra></extra>', xaxis: 'x2', yaxis: 'y2'};
+    data[CURSOR] = {type: 'scatter', x: [tAll[0], tAll[0]], y: [-S.fuLim, S.fuLim], mode: 'lines',
+      line: {color: COLOUR_CURSOR, width: 1.5}, name: 'current time', hoverinfo: 'skip', showlegend: false,
+      xaxis: 'x2', yaxis: 'y2'};
+    data[STATUS] = {type: 'scatter', x: [S.xHi], y: [S.yHi], mode: 'text', text: [statusText(0)],
+      textposition: 'bottom left', textfont: {size: 14, color: COLOUR_CURSOR}, hoverinfo: 'skip',
+      showlegend: false, name: 'status', xaxis: 'x', yaxis: 'y'};
+
+    // make_subplots(rows=2, row_heights=[0.62, 0.38], vertical_spacing=0.14): the domains
+    var h2 = ROW_HEIGHTS[1] * (1 - VSPACE), h1 = ROW_HEIGHTS[0] * (1 - VSPACE);
+    var dom1 = [1 - h1, 1], dom2 = [0, h2], xdom = [0.0, 0.94];
+    var small = {size: 11, color: GREY};
+    var annotations = [
+      {text: 'Expansion loop: inlet, leg, run, return leg, outlet (circle x: mass displacement x fraction; ' +
+        (jc ? 'size: pressure; colour: velocity)' : 'constant size and colour)'),
+        x: 0.47, y: 1.0, xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', showarrow: false, font: {size: 16}},
+      {text: 'Applied unbalance F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c) (left) and friction force (right)',
+        x: 0.47, y: dom2[1], xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', showarrow: false, font: {size: 16}},
+      {text: 'pipe height ' + fmtG(g.leg_height_m, 3) + ' m (h = ' + fmtG(g.portal_height_m, 3) + ' m)',
+        x: S.xLo, y: S.yTop, xref: 'x', yref: 'y', xanchor: 'left', yanchor: 'bottom', showarrow: false, font: small}
+    ];
+    var shapes = [];
+    var tSpan = (tLast - tAll[0]) || 1.0;
+    phaseBands().forEach(function (b) {
+      shapes.push({type: 'rect', x0: b[0], x1: b[1], y0: 0, y1: 1, xref: 'x2', yref: 'y2 domain',
+        fillcolor: PHASE_FILL[b[2]], opacity: 0.6, layer: 'below', line: {width: 0}});
+      if ((b[1] - b[0]) / tSpan >= BAND_LABEL_FRACTION)
+        annotations.push({text: PHASE_NAMES[b[2]], x: b[0], y: 1, xref: 'x2', yref: 'y2 domain',
+          xanchor: 'left', yanchor: 'top', showarrow: false, font: small});
+    });
+    // the animated window (hidden while the window is the whole run; relayout'd on change)
+    S.windowShape = shapes.length;
+    shapes.push({type: 'rect', x0: tAll[0], x1: tLast, y0: 0, y1: 1, xref: 'x2', yref: 'y2 domain',
+      fillcolor: COLOUR_WINDOW, opacity: 0.25, layer: 'below', line: {color: COLOUR_WINDOW, width: 1}, visible: false});
+    S.windowAnnotation = annotations.length;
+    annotations.push({text: 'animated window', x: tLast, y: 1, xref: 'x2', yref: 'y2 domain',
+      xanchor: 'right', yanchor: 'top', showarrow: false, font: small, visible: false});
+    shapes.push({type: 'line', x0: S.tPeak, x1: S.tPeak, y0: 0, y1: 1, xref: 'x2', yref: 'y2 domain',
+      line: {color: GREY, width: 1, dash: 'dot'}});
+    annotations.push({text: 'peak |x| = ' + fmtG(Math.abs(S.xPeak), 3) + ' m at t = ' + fmtG(S.tPeak, 4) + ' s',
+      x: S.tPeak, y: 0, xref: 'x2', yref: 'y2 domain', xanchor: S.tPeak > 0.5 * tLast ? 'right' : 'left',
+      yanchor: 'bottom', showarrow: false, font: small});
+
+    var axis = {automargin: true, gridcolor: '#EBF0F8', linecolor: '#EBF0F8', ticks: '', title: {standoff: 15},
+                zerolinecolor: '#EBF0F8', zerolinewidth: 2};
+    var layout = {
+      template: {layout: {font: {color: '#2a3f5f'}, paper_bgcolor: 'white', plot_bgcolor: 'white',
+        hovermode: 'closest', xaxis: axis, yaxis: axis, title: {x: 0.05},
+        annotationdefaults: {arrowcolor: '#2a3f5f', arrowhead: 0, arrowwidth: 1},
+        shapedefaults: {line: {color: '#2a3f5f'}}}},
+      title: {text: '<b>' + escapeHtml(D.meta.case_id) + ' — ' + escapeHtml(D.meta.solver) + '</b>',
+        x: 0.0, xanchor: 'left', font: {size: 13}},
+      width: FIG_W, height: FIG_H, margin: MARGIN, hovermode: 'closest',
+      legend: {orientation: 'h', y: 0.36, x: 0.0, xanchor: 'left', yanchor: 'bottom'},
+      xaxis: {anchor: 'y', domain: xdom, title: {text: 'm'}, range: [S.xLo, S.xHi], constrain: 'domain', zeroline: false},
+      yaxis: {anchor: 'x', domain: dom1, title: {text: 'm'}, range: [S.yLo, S.yHi], scaleanchor: 'x', scaleratio: 1,
+        constrain: 'domain', zeroline: false},
+      xaxis2: {anchor: 'y2', domain: xdom, title: {text: 't (s)'}, range: [tAll[0], tLast]},
+      yaxis2: {anchor: 'x2', domain: dom2, title: {text: 'unbalance (N)'}, range: [-S.fuLim, S.fuLim]},
+      yaxis3: {anchor: 'x2', overlaying: 'y2', side: 'right', title: {text: 'friction (N)'},
+        range: [-S.ffLim, S.ffLim], showgrid: false},
+      shapes: shapes, annotations: annotations
+    };
+    Plotly.newPlot(gd, data, layout, {displaylogo: false, responsive: false});
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ---------------------------------------------------------------- showing a frame
+  // MECHANISM. A frame changes trace data only: the cells (x, marker size and colour,
+  // customdata), the cursor x and the status text, through ONE Plotly.animate call with an
+  // inline frame, `redraw: false`, `mode: 'immediate'`, no transition. The frame lists all six
+  // traces, the three static ones (centreline, friction, unbalance) with an empty update `{}`:
+  // under `redraw: false` plotly.js rebuilds each cartesian subplot's module layers from the
+  // traces the frame lists and removes the rest, so a frame that left out the overlaying
+  // right-axis subplot emptied it and the friction line vanished on the first frame (Session
+  // V.2e diagnosis, V.2f fix, docs/viz/diagnosis.md). The static traces are never restyled,
+  // the layout never touched, and newPlot runs once per file; the next animate call waits for
+  // the previous promise (an interrupted animate rejects), so playback never queues.
+  function show(i) {
+    if (!D) return Promise.resolve();
+    i = Math.max(0, Math.min(D.n - 1, i | 0));
+    P.cur = i;
+    var c = circles(i);
+    var cells = {x: c.x};
+    if (D.jc) { cells.marker = {size: c.size, color: c.colour}; cells.customdata = c.p; }
+    var frame = {data: [cells, {x: [D.t[i], D.t[i]]}, {text: [statusText(i)]}, {}, {}, {}], traces: ANIMATED};
+    P.pending = true;
+    P.shown += 1;
+    if (P.shownT.length < 20000) P.shownT.push(D.t[i]);
+    $('slider').value = String(i);
+    $('readout').textContent = 'frame ' + i + ' / ' + (D.n - 1) + ', ' + statusText(i);
+    return Plotly.animate(gd, frame, {frame: {duration: 0, redraw: false}, mode: 'immediate',
+                                      transition: {duration: 0}})
+      .then(function () { P.pending = false; }, function () { P.pending = false; });
+  }
+
+  // ---------------------------------------------------------------- playback loop
+  // requestAnimationFrame; the frame due is computed from the elapsed wall time (BASE_MS /
+  // speed per shown frame, `stride` animation frames each), so when a render is slower than
+  // the frame period frames are skipped and the speed holds rather than the clock slipping.
+  function frameMs() { return BASE_MS / speed(); }
+  function speed() {
+    var v = parseFloat(settings.speed);
+    return isFinite(v) && v > 0 ? v : 1;
+  }
+  function play() {
+    if (!D || P.running) return;
+    if (P.cur < P.iStart || P.cur >= P.iEnd) P.cur = P.iStart;
+    P.running = true; P.shownT = [];
+    rebase();
+    $('play').className = 'on';
+    P.raf = requestAnimationFrame(tick);
+  }
+  function rebase() { P.wallStart = performance.now(); P.frameStart = P.cur; }
+  function stop() {
+    P.running = false;
+    if (P.raf) cancelAnimationFrame(P.raf);
+    P.raf = 0;
+    $('play').className = '';
+  }
+  function tick(now) {
+    if (!P.running) return;
+    // `now` is the frame's timestamp and can predate the performance.now() of `rebase`
+    var elapsed = Math.max(0, now - P.wallStart);
+    var due = P.frameStart + Math.floor(elapsed / frameMs()) * P.stride;
+    var i = Math.min(due, P.iEnd);
+    if (i !== P.cur && !P.pending) show(i);
+    if (P.cur >= P.iEnd) { stop(); return; }
+    P.raf = requestAnimationFrame(tick);
+  }
+
+  // ---------------------------------------------------------------- window and controls
+  function setWindowInputs(t0, t1) { $('t0').value = String(t0); $('t1').value = String(t1); }
+  function applyWindow(silent) {
+    if (!D) return;
+    var n = D.n, t = D.t;
+    var t0 = parseFloat($('t0').value), t1 = parseFloat($('t1').value);
+    if (!isFinite(t0)) t0 = t[0];
+    if (!isFinite(t1)) t1 = t[n - 1];
+    var a = 0, b = n - 1;
+    while (a < n && t[a] < t0) a++;
+    while (b >= 0 && t[b] > t1) b--;
+    if (a > b) {
+      message('error', 'the window t_start = ' + t0 + ', t_end = ' + t1 + ' holds no frame (run t = ' +
+        t[0] + ' .. ' + t[n - 1] + ' s)');
+      return;
+    }
+    if (!silent) message('', '');
+    P.iStart = a; P.iEnd = b;
+    var whole = a === 0 && b === n - 1;
+    var upd = {};
+    upd['shapes[' + S.windowShape + '].x0'] = t[a];
+    upd['shapes[' + S.windowShape + '].x1'] = t[b];
+    upd['shapes[' + S.windowShape + '].visible'] = !whole;
+    upd['annotations[' + S.windowAnnotation + '].x'] = t[b];
+    upd['annotations[' + S.windowAnnotation + '].visible'] = !whole;
+    Plotly.relayout(gd, upd);          // once per window change, never in the loop
+    if (P.cur < a || P.cur > b) { show(a); }
+    if (P.running) rebase();
+    renderMeta();
+  }
+
+  function renderMeta() {
+    var m = D.meta, p = m.params;
+    var rows = [
+      ['case', m.case_id], ['solver', m.solver],
+      ['dt', fmtG(p.dt, 6) + ' s (step_qty ' + p.step_qty + ')'],
+      ['trace stride', 'trace_every = ' + p.trace_every + ' sub-steps: ' + m.n_frames + ' frames (rest frame included), ' +
+        fmtG(p.dt * p.trace_every, 4) + ' s a frame, t = 0 .. ' + fmtG(D.t[D.n - 1], 5) + ' s'],
+      ['cells', m.n_cells + (D.jc ? ' (JC arrays)' : ' (lumped: grid of the case, constant size and colour)')],
+      ['capped', p.capped ? 'YES: the run decayed past the traced history window, the trace ends before the run did' : 'no'],
+      ['git sha', m.git_sha || 'null'], ['created', m.created_utc],
+      ['file', D.name]
+    ];
+    setMeta(rows, scalingText());
+    $('capped-row') && ($('capped-row').className = p.capped ? 'capped' : '');
+  }
+  function setMeta(rows, scaling) {
+    var dl = $('meta-list');
+    dl.innerHTML = '';
+    rows.forEach(function (r) {
+      var dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = r[0]; dd.textContent = r[1] === undefined ? '' : String(r[1]);
+      if (r[0] === 'capped') { dd.id = 'capped-row'; }
+      dl.appendChild(dt); dl.appendChild(dd);
+    });
+    $('scaling').textContent = scaling;
+    $('meta').className = 'on';
+  }
+  function scalingText() {
+    var parts = [
+      'displacement exaggeration ×' + fmtG(S.exag, 3) +
+        (S.exag === S.exagAuto ? '' : ' (override; auto ×' + fmtG(S.exagAuto, 3) + ')') +
+        ' (peak |x| ' + fmtG(Math.abs(S.xPeak), 3) + ' m at t = ' + fmtG(S.tPeak, 4) + ' s drawn as 10% of the ' +
+        fmtG(S.run, 3) + ' m run)',
+      D.jc ? 'size = nominal (1 + ' + fmtG(S.kP, 3) + ' (p - ' + fmtG(S.pRef, 3) + ') / ' + fmtG(S.pScale, 3) +
+        ' Pa), largest 2× nominal, floor 0.15×; colour = v / ' + fmtG(S.vScale, 3) + ' m/s' +
+        (S.vScale === S.vAuto ? '' : ' (override; auto ' + fmtG(S.vAuto, 3) + ' m/s)')
+        : 'constant size and colour (lumped model)',
+      'nominal circle ' + fmtG(S.nominal, 3) + ' px',
+      'frame stride ' + P.stride + (P.stride === P.strideAuto ? ' (auto)' : ' (override; auto ' + P.strideAuto + ')') +
+        ', window frames ' + P.iStart + ' .. ' + P.iEnd + ' (t = ' + fmtG(D.t[P.iStart], 5) + ' .. ' +
+        fmtG(D.t[P.iEnd], 5) + ' s), ' + (Math.ceil((P.iEnd - P.iStart) / P.stride) + 1) + ' shown frames (the last frame always shown)',
+      '1× = ' + BASE_MS + ' ms a shown frame'
+    ];
+    return 'scaling in use: ' + parts.join('; ');
+  }
+
+  function restyleColour() {
+    if (!D || !D.jc) return;
+    var cb = colourbar();
+    Plotly.restyle(gd, {'marker.cmin': -S.vScale, 'marker.cmax': S.vScale,
+      'marker.colorbar.tickvals': [cb.tickvals], 'marker.colorbar.ticktext': [cb.ticktext]}, [CELLS]);
+  }
+
+  function wire() {
+    $('file').addEventListener('change', function (e) {
+      if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+    });
+    var drop = $('drop');
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      document.body.addEventListener(ev, function (e) { e.preventDefault(); drop.className = 'over'; });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      document.body.addEventListener(ev, function (e) { e.preventDefault(); drop.className = ''; });
+    });
+    document.body.addEventListener('drop', function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) readFile(f);
+    });
+
+    $('play').onclick = play;
+    $('pause').onclick = stop;
+    $('peak').onclick = function () {
+      if (!D) return;
+      stop();
+      show(P.iPeak);
+      if (P.iPeak < P.iStart || P.iPeak > P.iEnd)
+        message('info', 'the peak (t = ' + fmtG(S.tPeak, 4) + ' s) lies outside the window; play restarts from t_start');
+    };
+    var sp = $('speed');
+    sp.value = String(settings.speed);
+    function setSpeed(v) {
+      settings.speed = v; saveSettings();
+      sp.value = String(v);
+      Array.prototype.forEach.call($('speed-buttons').children, function (b) {
+        b.className = parseFloat(b.dataset.speed) === v ? 'on' : '';
+      });
+      if (P.running) rebase();
+    }
+    sp.addEventListener('change', function () {
+      var v = parseFloat(sp.value);
+      if (isFinite(v) && v > 0) setSpeed(v);
+    });
+    SPEEDS.forEach(function (v) {
+      var b = document.createElement('button');
+      b.textContent = v + '×'; b.dataset.speed = String(v);
+      b.onclick = function () { setSpeed(v); };
+      $('speed-buttons').appendChild(b);
+    });
+    setSpeed(speed());
+
+    var st = $('stride'); st.value = settings.stride;
+    st.addEventListener('change', function () {
+      settings.stride = st.value; saveSettings();
+      if (D) { applyOverrides(); if (P.running) rebase(); renderMeta(); }
+    });
+    $('t0').addEventListener('change', function () { applyWindow(false); });
+    $('t1').addEventListener('change', function () { applyWindow(false); });
+    var ex = $('exag'); ex.value = settings.exag;
+    ex.addEventListener('change', function () {
+      settings.exag = ex.value; saveSettings();
+      if (D) { applyOverrides(); renderMeta(); if (!P.running) show(P.cur); }
+    });
+    var vm = $('vmax'); vm.value = settings.vmax;
+    vm.addEventListener('change', function () {
+      settings.vmax = vm.value; saveSettings();
+      if (D) { applyOverrides(); renderMeta(); restyleColour(); }
+    });
+    $('slider').addEventListener('input', function (e) {
+      if (!D) return;
+      stop();
+      show(parseInt(e.target.value, 10));
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); P.running ? stop() : play(); }
+    });
+  }
+
+  loadSettings();
+  wire();
+
+  // test / console hook (tests/test_viewer.py): read-only unless noted
+  window.viewer = {
+    state: P, scaling: function () { return S; }, data: function () { return D; },
+    show: show, play: play, stop: stop, applyWindow: applyWindow, settings: settings,
+    indices: {CENTRELINE: CENTRELINE, CELLS: CELLS, FRICTION: FRICTION, UNBALANCE: UNBALANCE, CURSOR: CURSOR, STATUS: STATUS},
+    BASE_MS: BASE_MS
+  };
+})();
+</script>
+</body>
+</html>
