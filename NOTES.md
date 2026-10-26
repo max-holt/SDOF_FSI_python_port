@@ -1,6 +1,12 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2e (diagnosis only, 2026-10-26): the lead author's vanishing friction line is reproduced
+in headless Chromium and explained; **two tests in the new `tests/test_viz_motion.py` are
+deliberately red** until the fix is chosen (see "Session V.2e — diagnosis" and
+`docs/viz/diagnosis.md`). No page, `src/` or tool file changed. Next: pick a fix from the
+candidates in diagnosis.md, apply it in `viz/animate.py`, regenerate the four pages, make
+`test_viz_motion.py` green; then the owner's local bench reference run and Session 5b.
 Session V.2d done 2026-10-25: `t_end` / `--t-end` time window (Panel 2 keeps the whole run, window
 shaded); the row 96 page is now the 1.5 s window around its peak at 10 ms a frame, answering the
 lead author's "wild jumps" (0.14 s a frame was 0.42 of the 3 Hz period); see "Session V.2d —
@@ -40,6 +46,37 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2e — diagnosis (2026-10-26)
+Owner's instruction: diagnose, change nothing. Full write-up in `docs/viz/diagnosis.md`.
+- **Finding.** The friction line (Panel 2, right axis) is removed from the SVG by the first
+  animated frame (play or any slider step) and never redrawn; the data model is untouched
+  (`gd.data` still 6 traces, friction 1124 points, `visible: true`, every frame's `traces`
+  list is `[1, 4, 5]` with three data entries, so no frame overwrites any trace). Cause:
+  plotly.js 4.1.1 `Plotly.animate(..., redraw: false)` rebuilds each cartesian subplot's module
+  layers from the frame's listed traces and removes the rest (`g.mlayer` join, `exit().remove()`);
+  the overlaying subplot `x2y3` (friction, on the secondary axis since V.2b) has no listed
+  trace, so its scatter layer goes, friction inside it. Pinned by browser experiments: a frame
+  listing only trace 2 removes the unbalance + cursor layer instead; `redraw: true` restores
+  everything; a frame listing `[1, 2, 4, 5]` with `{}` for trace 2 keeps every layer.
+  V.2b's `redraw: true` was rebuilding the layer each frame (the intermittent loss "at speed"
+  of the second review); V.2c's `redraw: false` made the loss permanent from frame 1. The
+  V.2c note said it was not verified in a browser; it now is.
+- **Row 96 page.** 151 frames, t = 6.0056 to 7.4995 s, uniform 9.96 ms (= 504 x dt, stride 1);
+  Panel 2 trace 1998 points over 0 to 19.879 s; no frame outside `--t-start 6 --t-end 7.5`.
+  As V.2d intended. The friction loss occurs on this page too.
+- **Fix candidates (not applied):** list every trace in each frame with `{}` for the static
+  ones (tested, works); a second cursor on the right axis animated with the first (predicted,
+  untested); `redraw: true` (flicker returns); friction off the overlaying axis (design change).
+- **Test.** `tests/test_viz_motion.py` (Playwright + headless Chromium; `playwright==1.56.0`
+  installed into `.venv` with `uv pip`, not added to `pyproject.toml`; the pages' CDN script
+  is intercepted and served from plotly's bundled `plotly.min.js` 4.1.1, versions asserted
+  equal, so the test is offline). Three tests: play 2 s and compare the trace table and SVG
+  (**red**), one slider step must keep every trace group (**red**), row 96 frames inside the
+  window at stride 1 (green). Screenshots to `tests/.artifacts/` (gitignored). Fast suite:
+  everything else green; `-m slow` not run (no `src/` change).
+- **Open:** the two red tests are the owner's requested state, not a regression to hide;
+  `.venv` now carries `playwright` (+ greenlet, pyee) outside the declared extras.
 
 ## Session V.2d — done (2026-10-25)
 Lead author's two questions on `golden_r096_jc.html`, answered and the chosen option implemented.
@@ -1112,6 +1149,12 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**First: the friction-line fix (V.2e diagnosis).** Choose one of the candidates in
+`docs/viz/diagnosis.md` (listing every trace in each frame's `traces` with `{}` data is the
+one shown to work in the browser), apply it in `src/surge_sdof/viz/animate.py`, regenerate the
+four `docs/viz/` pages, and run `tests/test_viz_motion.py` to green (then `-m slow` before the
+`src/` commit as usual, and leave `test_viz.py`'s "no frame has a layout / redraw False" pins
+in place). Then:
 **Local bench reference run, then Session 5b.** (unchanged by V.2b) (1) The owner's reference bench on local
 hardware (the absolute row for the paper): `.venv/bin/python tools/bench.py --profile` from the
 repository root on a quiet machine (about an hour; `--skip-full-python` brings it to ~10 min at

@@ -8,3 +8,4 @@ dist/
 .venv/
 tests/.golden_cache/
 .hypothesis/
+tests/.artifacts/
