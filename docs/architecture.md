@@ -252,7 +252,12 @@ met as follows.
   the window 6.0–7.5 s around the peak at 151 frames of 10 ms (0.03 period, half a transit). A frame changes trace data only (the circles,
   the cursor and a status text with the frame time and phase in Panel 1), never the layout, and
   every animate call uses `redraw: false`: a per-frame layout change forces a full redraw,
-  which made the lines flicker and drop the right-axis trace at high speed (V.2c). The figure
+  which made the lines flicker and drop the right-axis trace at high speed (V.2c). Every frame
+  lists all six traces, the static ones (centreline, friction, unbalance) with an empty update:
+  under `redraw: false` plotly.js rebuilds each subplot's module layers from the frame's listed
+  traces and removes the rest, which emptied the overlaying friction subplot on the first frame
+  (V.2e diagnosis in `docs/viz/diagnosis.md`, fixed in V.2f; browser tests in
+  `tests/test_viz_motion.py`, Playwright, skipped without a browser). The figure
   carries plotly play (1x = 40 ms a frame) / pause buttons; the written page replaces them with
   a typed playback speed (any positive multiplier), play and pause under the slider
   (`SPEED_CONTROL_JS`, run after the plot is made). The title prints

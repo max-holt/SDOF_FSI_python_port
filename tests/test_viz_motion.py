@@ -268,3 +268,41 @@ def test_golden_r096_frames_inside_window(browser):
     assert stride == 1 and max(gaps) == pytest.approx(trace_gap, rel=1e-3), report
     assert trace_gap == pytest.approx(trace_every * dt, rel=5e-3), report  # title dt is rounded
     assert t0 == 0.0 and t1 > 7.5, report  # Panel 2 keeps the whole run
+
+
+FRICTION_GROUPS_JS = """
+() => {
+  const gd = document.querySelector('.plotly-graph-div');
+  const uid = gd._fullData[FRICTION].uid;
+  const groups = gd.querySelectorAll('g.trace.scatter.trace' + uid);
+  return {groups: groups.length,
+          g_inside: Array.from(groups).reduce((n, g) => n + g.querySelectorAll('g').length, 0),
+          lines: Array.from(groups).reduce((n, g) => n + g.querySelectorAll('path.js-line').length, 0)};
+}
+""".replace("FRICTION", str(FRICTION))
+
+
+@pytest.mark.parametrize("name", ["example_jc_step.html", "golden_r096_jc.html"])
+def test_play_keeps_friction_svg_group_count(browser, name):
+    """Session V.2f: play for 2 s; the number of SVG groups drawn for the friction trace (its
+    ``g.trace`` group, the ``g`` elements inside it and its line path) is the same before and
+    after, and non-zero."""
+    page, errors = load_page(browser, name)
+    before = page.evaluate(FRICTION_GROUPS_JS)
+    slider0 = snapshot(page)["slider_active"]
+    page.click('button[id$="-play"]')
+    page.wait_for_timeout(PLAY_MS)
+    after = page.evaluate(FRICTION_GROUPS_JS)
+    slider1 = snapshot(page)["slider_active"]
+    page.click('button[id$="-pause"]')
+    page.close()
+    # ``errors`` is printed, not asserted: pressing pause (or play again) rejects the pending
+    # ``Plotly.animate`` promise with ``undefined`` (an unhandled rejection the browser reports
+    # as a page error) on every page, old and new; see NOTES.md V.2f.
+    print(
+        f"{name}: friction SVG groups before {before}, after {after}; slider {slider0} -> "
+        f"{slider1}; page errors: {errors}"
+    )
+    assert slider1 > slider0, "the animation did not run"
+    assert before["groups"] == 1 and before["lines"] == 1, before
+    assert after == before, f"friction SVG groups changed on play: {before} -> {after}"

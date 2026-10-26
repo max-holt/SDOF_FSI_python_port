@@ -26,7 +26,9 @@ traced frame always included, ``frame_stride`` chosen so there are at most ``max
 frames (``select_frames``). ``t_start`` / ``t_end`` animate a time window only (the synthetic
 rest frame is dropped when ``t_start > 0``); Panel 2 keeps the whole run and shades the
 window, so a long run can be animated at full resolution around its peak. A frame changes only trace data (the circles, the cursor and a status text with the
-frame time and phase), never the layout, so playback runs without redraws. The figure
+frame time and phase), never the layout, so playback runs without redraws; every frame
+lists all six traces (an empty update for the static ones) so no subplot layer is dropped
+by the ``redraw: false`` transition (Session V.2e / V.2f). The figure
 carries plotly play (1x) / pause buttons; ``write_html`` replaces them on the page with a
 typed playback speed (any positive multiplier of ``frame_duration_ms``), play and pause.
 All the scalings are printed in the title and returned in an ``AnimationInfo``.
@@ -888,6 +890,12 @@ def build_figure(
     frame_specs = ([(None, 0.0, phase0)] if with_rest else []) + [
         (int(i), float(trace.t[i]), int(trace.phase[i])) for i in idx
     ]
+    # Every trace is listed in every frame, the animated three first and then the static ones
+    # (centreline, friction, unbalance) with an empty update: with ``redraw: false`` plotly.js rebuilds each cartesian subplot's
+    # module layers from the frame's listed traces and removes the rest, so a subplot with no
+    # listed trace (the overlaying right axis, home of the friction line) loses its layer on
+    # the first frame (Session V.2e, docs/viz/diagnosis.md).
+    all_traces = [circle_index, cursor_index, status_index, 0, friction_index, unbalance_index]
     for j, (i_trace, t, phase) in enumerate(frame_specs):
         c = circles(i_trace)
         circle_update = {"x": c["x"]}
@@ -901,8 +909,11 @@ def build_figure(
                     go.Scatter(**circle_update),
                     go.Scatter(x=np.array([t, t], dtype=np.float32)),
                     go.Scatter(text=[_status_text(t, phase)]),
+                    {},
+                    {},
+                    {},
                 ],
-                traces=[circle_index, cursor_index, status_index],
+                traces=all_traces,
                 name=name,
             )
         )

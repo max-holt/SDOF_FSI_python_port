@@ -47,7 +47,7 @@ def figure(case_id, max_frames):
 
 
 # trace indices: centreline 0, circles 1, friction 2 (drawn under), unbalance 3, cursor 4, status 5
-CIRCLES, FRICTION, UNBALANCE, CURSOR, STATUS = 1, 2, 3, 4, 5
+CENTRELINE, CIRCLES, FRICTION, UNBALANCE, CURSOR, STATUS = 0, 1, 2, 3, 4, 5
 
 
 def _circle_frames(fig):
@@ -74,7 +74,12 @@ def test_figure_builds_with_few_frames(case_id):
     assert len(fig.layout.sliders[0].steps) == info.n_frames
     n_cells = info.layout.n_cells
     assert len(fig.data[CIRCLES].x) == n_cells == len(fig.data[CIRCLES].y)
-    assert tuple(f.traces for f in fig.frames)[0] == (CIRCLES, CURSOR, STATUS)
+    # every frame lists every trace (the static ones with an empty update) so plotly.js keeps
+    # every subplot layer under ``redraw: false`` (V.2e / V.2f, docs/viz/diagnosis.md)
+    assert {tuple(f.traces) for f in fig.frames} == {
+        (CIRCLES, CURSOR, STATUS, CENTRELINE, FRICTION, UNBALANCE)
+    }
+    assert all(f.data[3].to_plotly_json() == {"type": "scatter"} for f in fig.frames)
     # no layout change per frame (it would force a redraw and the lines would flicker)
     assert all(f.layout.title.text is None for f in fig.frames)
     assert all(step["args"][1]["frame"]["redraw"] is False for step in fig.layout.sliders[0].steps)

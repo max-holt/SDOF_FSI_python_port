@@ -1,5 +1,12 @@
 # Animation pages: browser diagnosis (Session V.2e, 2026-10-26)
 
+**Status (Session V.2f, 2026-10-26): fixed with candidate 1 below.** Every frame lists all six
+traces, `{}` for the static ones (`viz/animate.py`); the four pages are regenerated and
+`tests/test_viz_motion.py` is green (the two V.2e tests unchanged, plus a friction group count
+before / after 2 s of play on two pages). The `pageerror: undefined` of §2 is the rejected
+promise of a `Plotly.animate` interrupted by pause, present on every page; see NOTES.md V.2f.
+The text below is the V.2e diagnosis as written.
+
 Diagnosis only; no page, `src/` or tool file was changed. The evidence comes from
 `tests/test_viz_motion.py` (Playwright, headless Chromium 141, plotly.js 4.1.1 served from the
 installed `plotly` package in place of the CDN tag the pages carry) and from the browser

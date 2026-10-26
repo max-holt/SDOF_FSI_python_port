@@ -10,7 +10,10 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "numba"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools"]
+# playwright (Session V.2f) drives headless Chromium for tests/test_viz_motion.py; pinned to the
+# version matching the pre-installed browser (chromium-1194). The motion tests skip without it
+# or without a browser.
+dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools", "playwright==1.56.0"]
 # Session V.2: the model animation (surge_sdof.viz, tools/animate.py) only.
 viz = ["plotly", "pandas"]
 

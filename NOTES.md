@@ -1,6 +1,13 @@
 # NOTES — session handoff
 
 ## Current stage
+Session V.2f (fix, 2026-10-26) done: every animation frame now lists all six traces (an empty
+update for the centreline, friction and unbalance), the proven candidate 1 of
+`docs/viz/diagnosis.md`; the four pages regenerated; `tests/test_viz_motion.py` green (the two
+V.2e tests unchanged, one new group-count test); `playwright==1.56.0` in the `dev` extra. See
+"Session V.2f — done". **Next action: W.1** (the JS viewer; whole-run playback with live
+windowing moves there, sessions W.1–W.3). Still pending after W: the owner's local bench
+reference run and Session 5b.
 Session V.2e (diagnosis only, 2026-10-26): the lead author's vanishing friction line is reproduced
 in headless Chromium and explained; **two tests in the new `tests/test_viz_motion.py` are
 deliberately red** until the fix is chosen (see "Session V.2e — diagnosis" and
@@ -46,6 +53,39 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session V.2f — done (2026-10-26)
+Owner's instruction: apply the proven fix only (diagnosis.md candidate 1), nothing else on the figure.
+- **Fix (`viz/animate.py`).** Each `go.Frame` lists `traces = [circles, cursor, status,
+  centreline, friction, unbalance]` with `{}` (`{"type": "scatter"}` on the page) for the three
+  static ones; the animated three keep their old positions `data[0..2]`, so `tests/test_viz.py`
+  and the motion test's frame readers were untouched apart from the `traces` pin. `redraw:
+  false` everywhere as before; no layout in any frame; no other figure change. Pinned in
+  `test_figure_builds_with_few_frames` (every frame's `traces`, the empty update).
+- **Pages.** All four regenerated with the README commands (`example_lumped_step` =
+  `--golden example_lumped`); same frame counts (336 / 376 / 350 / 151), +4 % size on the
+  small pages (the three empty entries per frame), 4.92 MB for row 96. (The request said
+  three pages; four are committed and all four carried the bug, so all four were regenerated.)
+- **Browser evidence.** `test_play_keeps_friction_trace` and
+  `test_first_animated_frame_keeps_every_trace_group` green unchanged; new
+  `test_play_keeps_friction_svg_group_count[example_jc_step | golden_r096_jc]`: 2 s of play,
+  the friction trace's `g.trace` group (1), the `g` elements inside it and its line path
+  counted before and after, equal and non-zero.
+- **`pageerror: undefined` (V.2e §2, now explained, not fixed).** It appears on every page,
+  old and new, only when pause (or play again) is pressed during playback: plotly.js rejects
+  the interrupted `Plotly.animate` promise with no reason, the page's buttons do not `.catch`
+  it, and the browser reports the unhandled rejection as a page error. Harmless; the new test
+  prints page errors and does not assert on them. A `.catch(function () {})` on the two
+  button calls in `SPEED_CONTROL_JS` would silence it; not applied (out of this session's scope).
+- **Dependencies.** `playwright==1.56.0` added to the `dev` extra (the version matching
+  `chromium-1194` under `/opt/pw-browsers`); the motion tests `importorskip` playwright and skip
+  when Chromium cannot be launched, so CI without a browser stays green.
+- **Windowing.** `--t-start` / `--t-end` semantics unchanged (frames inside the window only,
+  Panel 2 whole-run with the window shaded). Whole-run playback with live windowing (choose and
+  move the window while playing) is not a plotly-frames feature and moves to the JS viewer
+  (sessions W.1–W.3).
+- Fast suite and lint: see the commit; `-m slow` not run (no solver `src/` change; `viz/animate.py`
+  is read-only on a `PeakResponse`, and the golden tests do not import it).
 
 ## Session V.2e — diagnosis (2026-10-26)
 Owner's instruction: diagnose, change nothing. Full write-up in `docs/viz/diagnosis.md`.
