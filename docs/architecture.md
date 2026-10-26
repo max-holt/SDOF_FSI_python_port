@@ -385,6 +385,51 @@ code cannot drift apart silently. Design points:
   `tools/animate.py` and `tools/export.py` share, plus the fixture readers for the sweep
   reference block and the `cases.csv` → sweep-row mapping.
 
+## Session W.2 — the viewer
+
+`docs/viewer/viewer.html` is the single-file JS viewer that plays a `trace` data file (W.1) as
+the animation of `viz/animate.py`, with the playback decisions the plotly pages bake in (frame
+selection, speed, window) made live in the page. `docs/viewer/README.md` is the user guide.
+Design points:
+
+* **One file, no requests.** plotly.js (4.1.1, the full bundle: the installed package ships no
+  partial one; `tools/build_viewer.py --plotly` swaps a basic bundle in when one is available
+  offline) and pako's inflate-only build (1.0.11, vendored in `tools/viewer/`, pinned by digest)
+  are inlined by `tools/build_viewer.py` from `docs/viewer/viewer.src.html`, the hand-written
+  source; a content-security policy in the page (`default-src 'none'`) refuses every fetch, so
+  disk, SharePoint and a bucket URL behave identically. `tests/test_viewer.py` rebuilds the page
+  and asserts byte equality with the committed one, and fails on any request beyond the page.
+* **Loader.** File picker or drop; gzip by the magic bytes; `kind` / `schema_version` checked
+  first with a readable refusal; the thirteen frame columns, the geometry arrays and the JC
+  blocks checked for length. The JC blocks become `Float64Array`s (row `i` is a zero-copy
+  `subarray`), the JSON arrays released.
+* **Same picture.** The figure is the pages' six traces in the pages' order (centreline 0, cells
+  1, friction 2 on the overlaying right axis, unbalance 3, cursor 4, status 5), the same 1200 x
+  900 layout, margins and subplot domains (`make_subplots` 0.62 / 0.38, spacing 0.14), the same
+  scalings over the whole run (`exaggeration = 0.1 run / max|x|`, `k_p` for a 2x largest circle,
+  floor 0.15x, `±max|v|`, nominal size `clip(1800 / n, 5, 12)` capped at 0.8 of the on-screen
+  spacing and never below 3 px) and the same phase bands, peak line and window shade. The
+  `plotly_white` look is reproduced as a `layout.template` (plotly.js has no named templates).
+* **Playback mechanism (the V.2e lesson).** `newPlot` runs once per file. A frame is one
+  `Plotly.animate` call with an inline frame that updates the cells (x, marker size and colour,
+  customdata), the cursor x and the status text and lists all six traces, the static three with
+  `{}`, under `redraw: false`, `mode: 'immediate'`, no transition: exactly the V.2f frame shape,
+  because under `redraw: false` plotly.js rebuilds each subplot's module layers from the listed
+  traces and drops the rest. The static traces are never restyled during playback and the
+  layout never touched; the window shade is one `relayout` per window change and the colour
+  override one `restyle` of the cells' colour axis, both outside the loop. The loop is a
+  `requestAnimationFrame` callback that computes the frame due from the elapsed wall time
+  (`40 ms / speed` a shown frame, `stride` frames each, elapsed clamped at zero because the rAF
+  timestamp can predate the `performance.now()` of the play press) and waits for the previous
+  animate promise before issuing the next, so a slow render skips frames rather than slowing the
+  clock and an interrupted animate never rejects unhandled.
+* **Controls and settings.** Play / pause, typed speed and 0.25x–4x buttons, stride (auto =
+  `select_frames`' stride, so 1x at auto is the plotly page's pace), `t_start` / `t_end` (Panel
+  2 keeps the whole run), exaggeration and colour range overrides, jump to peak, a frame slider.
+  Speed and the overrides persist in `localStorage` behind try/catch; the window is per file.
+* **Test hook.** `window.viewer` exposes the playback state, the scalings and `show` / `play` /
+  `stop` for `tests/test_viewer.py`; the tests otherwise drive the page through its controls.
+
 ## Lint policy
 
 `pyproject.toml` selects `E, F, W, I, B, UP, NPY, SIM, C4`. `SIM` and `C4` were added in

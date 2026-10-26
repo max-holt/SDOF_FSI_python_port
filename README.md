@@ -182,6 +182,22 @@ is the 2000-frame stride or the coarser one that keeps the JSON under 45 MB (row
 46.9 MB, 20.6 MB gzipped); the size written is printed. `docs/viz/data/` holds the four committed
 files.
 
+## The results viewer
+
+```
+.venv/bin/python tools/build_viewer.py      # docs/viewer/viewer.src.html -> docs/viewer/viewer.html
+```
+
+Session W.2: `docs/viewer/viewer.html` is one self-contained page (plotly.js 4.1.1 and pako's
+inflate inlined, no network request of any kind) that opens a `trace` data file from the picker
+or by drag-and-drop (`.json` or `.json.gz`) and plays the two-panel animation of `viz/animate.py`
+with live controls: play / pause, speed (typed or 0.25x–4x), frame stride, `t_start` / `t_end`
+window, exaggeration and colour range overrides, jump to peak; the header shows the file's meta
+and the scaling in use; settings persist in the browser. Publish it by copying the one file.
+`docs/viewer/README.md` is the user guide (opening, loading, publishing, browsers tested);
+`tests/test_viewer.py` drives it in headless Chromium (skipped without a browser). Sweep mode
+is Session W.3.
+
 ## Where the behaviour is documented
 
 * `DEVIATIONS.md`: every place the Python differs from, or deliberately preserves a quirk of,
@@ -193,6 +209,7 @@ files.
   the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace, the Session V.2 animation
   and the Session W.1 data files.
 * `docs/data_format.md`: the contract of the viewer's `trace` and `sweep` data files.
+* `docs/viewer/README.md`: the single-file results viewer (how to open, load, publish; browsers tested).
 * `NOTES.md`: session hand-off (current stage, results, open issues, next action).
 * `CLAUDE.md`: the working rules (stage discipline, hard rules, commands).
 
@@ -202,6 +219,6 @@ files.
 src/surge_sdof/      the package (see above)
 legacy/vba/          the VBA source of truth (never edited)
 tests/               pytest suites; tests/fixtures/ holds the Excel-generated data (never edited)
-tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading)
-docs/                architecture.md, port_review.md, data_format.md, bench/, viz/ (animation pages), viz/data/ (viewer data files)
+tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading), build_viewer.py, viewer/ (vendored pako)
+docs/                architecture.md, port_review.md, data_format.md, bench/, viz/ (animation pages), viz/data/ (viewer data files), viewer/ (the single-file viewer, its source and README)
 ```

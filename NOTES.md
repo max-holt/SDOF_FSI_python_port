@@ -1,6 +1,14 @@
 # NOTES — session handoff
 
 ## Current stage
+Session W.2 (the single-file JS viewer, trace mode, 2026-10-26) done: `docs/viewer/viewer.html`
+(one 4.88 MB file: plotly.js 4.1.1 full bundle and pako 1.0.11 inflate inlined, CSP blocks every
+request) built by `tools/build_viewer.py` from `docs/viewer/viewer.src.html`; loads the W.1 files
+by picker or drop (gzip by magic bytes), the two panels of `viz/animate.py` with live play /
+speed / stride / window / exaggeration / colour controls; `tests/test_viewer.py` (16 Playwright
+tests, zero-request assertion, screenshots to `tests/.artifacts/`); `docs/viewer/README.md`,
+architecture and README sections. **No `src/` file changed.** See "Session W.2 — done".
+**Next action: the owner's local bench reference run, then Session 5b, then W.3 (sweep mode).**
 Session W.1 (results data format and exporter, 2026-10-26) done: `docs/data_format.md` (the
 contract, parsed by the tests), `src/surge_sdof/export.py` (`to_trace_dict`, `to_sweep_dict`,
 `write_json` / `read_json`), `src/surge_sdof/viz/geometry.py` (the loop geometry moved out of
@@ -61,6 +69,63 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session W.2 — done (2026-10-26)
+Built as planned (plan section below); three commits (page + build, tests, docs). No `src/`
+file changed (not even `viz/` or `export.py`); fast suite 904 passed (888 + 16), lint clean;
+`-m slow` not run (nothing on the solver path changed).
+- **The page.** `docs/viewer/viewer.html`, 4,875,992 bytes = `viewer.src.html` (36 KB, the
+  hand-written CSS + JS) with plotly.js 4.1.1 (4,815,814 bytes, the installed package's
+  `plotly.min.js`, **full bundle**: see the conflict note in the plan) and pako 1.0.11
+  inflate-only (22,682 bytes, vendored at `tools/viewer/`, MIT licence beside it, pinned by
+  sha256 in `tools/build_viewer.py`) inlined; the versions and origins are in a comment at the
+  top of each `<script>`. A `Content-Security-Policy` meta (`default-src 'none'`) refuses every
+  fetch at the browser level, belt and braces to the page making none. `.gitattributes` marks
+  the built page `-diff`. Each rebuild re-commits 4.8 MB (git delta-compresses the unchanged
+  bundle, so the pack grows little); the source file is what to review.
+- **Loader.** Picker or drop; gzip by the `1f 8b` magic; `kind` / `schema_version` refused
+  with a message naming what was found and what is read; the 13 frame columns, geometry and
+  JC blocks length-checked; a `sweep` file is recognised, its meta shown, "sweep mode is W.3".
+  Row 96 (`.json.gz`, 20.6 MB → 47 MB JSON) loads in ~3 s in headless Chromium.
+- **Same picture.** Six traces in the pages' order and axes, the same 1200 x 900 layout
+  (margins, `make_subplots` domains, legend, colour bar, phase bands, peak line, window shade,
+  `plotly_white` as a `layout.template`), the same scalings; the tests cross-check `exag`,
+  `p_scale`, `k_p`, `v_scale`, the peak frame and the automatic stride against the file.
+  Screenshots at the peak frame (viewer and the matching plotly page, nearest frame) in
+  `tests/.artifacts/viewer_*_peak.png` / `plotly_page_*_peak.png`: the same figure; the row 96
+  numbers differ in the third digit because the data file is at stride 1212 and the page at 504.
+- **Mechanism.** One `Plotly.animate` per frame with an inline frame listing all six traces
+  (`{}` for the static ones), `redraw: false`, `mode: immediate` — the V.2f shape; `newPlot`
+  once per file; `relayout` only on a window change, `restyle` only on a colour override; a
+  rAF loop with the frame due from the elapsed wall time (40 ms / speed a shown frame, `stride`
+  frames each), waiting for the previous promise. Stated in the page's `show` comment and in
+  architecture.md. **Bug the tests caught before commit:** the rAF timestamp can predate the
+  `performance.now()` taken on play, so the first tick's elapsed time was negative and the loop
+  showed one frame *before* the window; the elapsed time is clamped at zero.
+- **Tests (`tests/test_viewer.py`, 16).** Build reproduces the committed page byte for byte
+  (plotly bundle inlined verbatim, versions recorded); source names no external resource and
+  carries the CSP; the four W.1 files (three render six traces on `xy` / `x2y2` / `x2y3` with
+  the file's scalings and header, the sweep file the W.3 message); `schema_version: 99` and
+  `kind: "surge"` refused; 2 s of play keeps the friction trace and its SVG group count
+  (example JC and row 96); a 0.5–1.0 s window keeps every shown frame inside and shades Panel 2
+  with the whole run kept; 4x advances ≥ 2x the frames of 1x in 1.5 s (measured 37 vs 150 at
+  stride 1); settings survive a reload; a throwing `localStorage` leaves the page working;
+  every page asserts its request list is `[the page]`. Module ~70 s (row 96 loads thrice).
+- **Judgement calls to flag.** (1) The full plotly bundle (no basic bundle offline; `--plotly`
+  swaps one in). (2) Source + build split rather than editing a 4.9 MB file; the byte-equality
+  test keeps them together. (3) 1x = 40 ms a *shown* frame with the automatic stride =
+  `select_frames`' (so 1x auto is the plotly page's pace), not real time; stride 1 shows every
+  frame of the file. (4) The window is per file and not persisted; speed and the three
+  overrides are. (5) The self-check against the sweep `reference` block (named in the previous
+  next-action note, not in this session's instruction) is left for W.3, where the reference
+  block is loaded. (6) `window.viewer` is a test hook on the page (read-only state, `show` /
+  `play` / `stop`). (7) `tests/test_viewer.py` imports `test_viz_motion` for its browser fixture
+  and page loader rather than copying them. (8) During the browser tests the agent proxy logged
+  Chromium's own background connections (`www.google.com`, `redirector.gvt1.com`: the browser's
+  component updater), none from the page: the per-page request listener and the CSP are the
+  evidence; the shared browser fixture is `test_viz_motion.py`'s and was not changed.
+- **Browsers.** Headless Chromium 141 only (see `docs/viewer/README.md`); the owner should open
+  the page once in the readers' browser (Edge on SharePoint, presumably) and record it there.
 
 ## Session W.2 — scope and plan (recorded 2026-10-26 before touching any file)
 Owner's instruction: the single-file JS viewer, trace mode; `docs/viewer/viewer.html` self-contained
@@ -1311,6 +1376,13 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- W.2: `docs/viewer/viewer.html` carries the **full** plotly.js 4.1.1 (4.8 MB) because the
+  installed package ships no partial bundle and nothing is fetched; when a copy of
+  `plotly.js-basic-dist-min` 4.1.1 is available offline, `tools/build_viewer.py --plotly <file>`
+  rebuilds at ~1 MB (then re-run `tests/test_viewer.py`, which pins the committed bytes to the
+  build with the *installed* bundle: the test's bundle path would need the same switch).
+- W.2: the viewer is tested in headless Chromium only; Edge / Firefox / Safari untested (README
+  lists what to record). The self-check against the sweep `reference` block is deferred to W.3.
 - **W.1, for the owner before 5b writes sweep files:** `docs/data_format.md` defines the sweep
   columns' semantics for the first time. `f_peak_lumped` / `f_peak_jc` are defined as
   `max_applied_force`, which both solvers compute as `max |forceA - forceB|` without the junction
@@ -1361,6 +1433,22 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**Local bench reference run, then Session 5b, then W.3 (sweep mode).** (1) The owner's
+reference bench on local hardware: `.venv/bin/python tools/bench.py --profile` from the
+repository root on a quiet machine (about an hour; `--skip-full-python` ~10 min without the
+full-JC pure-Python row), commit `docs/bench/<sha>.json` and `docs/bench/README.md`; nothing on
+the solver path changed in V.2–W.2, so the Stage 5 numbers stand. (2) Session 5b as queued
+below (`histories.py`, F-3, the `unbalance_force` lever, the cache guard; the sweep writes
+`sweep` files through `surge_sdof.export.to_sweep_dict`, column semantics in the W.1 open
+issue). (3) **W.3, sweep mode in the viewer**: load a `sweep` file (the loader already accepts
+it), a table / scatter of the columns with a row's `regen` command, the self-check of the
+`reference` block against the port's values (and of a `trace` file's `meta.outputs` against the
+matching reference entry when its `case_id` is one), the W.2 page as the base
+(`docs/viewer/viewer.src.html`, rebuild with `tools/build_viewer.py`, extend
+`tests/test_viewer.py`). Open the page once in the readers' browser first and record it in
+`docs/viewer/README.md`.
+
+Previous next action (W.1 → W.2, kept for the record):
 **Session W.2: the single-file JS viewer.** It loads a `trace` or `sweep` file written by
 `tools/export.py` (`docs/data_format.md`; `docs/viz/data/` has four) from disk or a bucket, with
 no Python on the viewing machine, and controls playback live: play / pause / speed, a time
