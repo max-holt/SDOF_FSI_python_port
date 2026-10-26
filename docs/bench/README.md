@@ -52,3 +52,17 @@ Full JC cases vs Excel, max rel err: response_jc_r96_full [numba] 8.6e-13, respo
 Peak RSS, `outputType = 1` on the full history under Numba: rss_response_r20_type1 191 MB, rss_response_jc_r96_full_type1 192 MB.
 Digest pairs (refactored == literal): all equal; profile no.
 
+### 2026-10-26T10:50:14+00:00 · 5bf153b · Intel(R) Xeon(R) Processor @ 2.10GHz · python 3.13.16 · numpy 2.5.4 · numba 0.68.0 · llvmlite 0.50.0
+
+| implementation | (a) lumped r20 | (b) lumped r80 | (c) jc r96 n2000 | (d) pressure example | jc r96 full | jc r97 full | jc r98 full |
+|---|---|---|---|---|---|---|---|
+| literal (`legacy_port`, pure Python) | 3.259 s [1.000] | 2.831 s [0.869] | 140.487 s [43.111] | 13.03 ms [0.004] | - | - | - |
+| refactored (Stage 4 modules, `NUMBA_DISABLE_JIT=1`) | 1.095 s [0.336] | 1.084 s [0.333] | 73.422 s [22.531] | 8.52 ms [0.003] | - | - | - |
+| Numba (Stage 5 `njit`, steady state) | 0.242 s [0.074] | 0.244 s [0.075] | 0.111 s [0.034] | 5.98 ms [0.002] | 1.445 s [0.444] | 1.305 s [0.400] | 1.234 s [0.379] |
+
+Numba compile (first call of the Example lumped case in a fresh `NUMBA_CACHE_DIR`): 2.868 s; first call per case: response_r20 0.293 s, response_r80 0.236 s, response_jc_r96_n2000 0.121 s, response_pressure_example 6.20 ms, response_jc_r96_full 1.380 s, response_jc_r97_full 1.232 s, response_jc_r98_full 1.270 s.
+MoC cell-updates/s: jc_r96_n2000 [literal] 0.38 M, response_jc_r96_n2000 [python] 0.73 M, response_jc_r96_n2000 [numba] 485.53 M, response_jc_r96_full [numba] 463.73 M, response_jc_r97_full [numba] 456.70 M, response_jc_r98_full [numba] 445.36 M.
+Full JC cases vs Excel, max rel err: response_jc_r96_full [numba] 8.6e-13, response_jc_r97_full [numba] 2.1e-14, response_jc_r98_full [numba] 8.4e-15.
+Peak RSS, `outputType = 1` on the full history under Numba: rss_response_r20_type1 191 MB, rss_response_jc_r96_full_type1 192 MB.
+Digest pairs (refactored == literal): all equal; profile no.
+

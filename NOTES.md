@@ -262,7 +262,12 @@ under Numba); port-reviewer on the `src/` diff: no findings (transcription, loop
 guard's documentation, the defaults, DEVIATIONS all checked; it re-evaluated the VBA expressions
 on every non-short grid up to 118 cells with 0 mismatches). One viewer load-timeout flake on the
 20.6 MB golden file was seen once under the full-suite load in commit 1's run (passes alone).
-Bench: see the "Bench" line below.
+Bench (`tools/bench.py --skip-full-python`, `docs/bench/5bf153b.json`, README section
+2026-10-26T10:50): every digest pair refactored == literal equal (the bench uses the legacy
+flags, `fraction_profile="legacy"` included), full JC cases vs Excel 8.6e-13 / 2.1e-14 / 8.4e-15
+as before; timings within noise of the f2f4211 row on a different container CPU (2.10 vs
+2.80 GHz: (a) 3.259 s vs 3.235 s literal; Numba ratios 0.074 / 0.075 / 0.034 vs 0.090 / 0.082 /
+0.044; `interp_fractions` is set-up code, `moc.step` is unchanged).
 
 ## Session W.2 — done (2026-10-26)
 Built as planned (plan section below); three commits (page + build, tests, docs). No `src/`
