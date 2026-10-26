@@ -249,10 +249,11 @@ committed): the Example JC panel shows four cells on each leg and every inlet ce
 height, row 96 two legs of the same length. `example_lumped_step.json` and
 `reference_sweep.json` (Excel values) are unchanged.
 
-**Not done, for the owner.** The four V.2 plotly pages under `docs/viz/*.html` were generated
-with the legacy profile and are not regenerated (not in the F-4 scope); they show the
-one-cell leg difference and the stray inlet cell. `tools/animate.py --golden r096_jc_L24_f3`
-etc. regenerates them with the defaults.
+**Not done, by decision.** The four V.2 plotly pages under `docs/viz/*.html` were generated
+with the legacy profile and show the one-cell leg difference and the stray inlet cell. The
+owner's decision: delete them in W.3 rather than regenerate, since the viewer replaces them
+(W.3 then also retires `tests/test_viz_motion.py` and the plotly-page screenshots of
+`tests/test_viewer.py`; `viz/animate.py` itself stays until the owner says otherwise).
 
 **Gates.** Commit 1: fast suite 955 passed in both modes, `-m slow` passed. Commit 2 (the
 flip): fast suite 1006 passed under Numba, 1005 passed + 1 skipped in pure Python
@@ -1580,8 +1581,9 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
   outlet 10; `A(4)` non-zero, `A(N − 4)` zero). Pinned as transcribed; details and the
   alternative outlet tests in "Session F-4 — done".
 - F-4: `docs/viz/*.html` (the four V.2 plotly pages) still show the legacy profile's layout
-  (one-cell leg difference, stray inlet cell); regenerate with `tools/animate.py` if they are
-  to match the data files.
+  (one-cell leg difference, stray inlet cell). **Owner's decision (2026-10-26): delete them in
+  W.3 rather than regenerate; the viewer replaces them** (`tests/test_viz_motion.py` and the
+  `tests/test_viewer.py` side-by-side screenshots read those pages and go with them).
 - W.2: `docs/viewer/viewer.html` carries the **full** plotly.js 4.1.1 (4.8 MB) because the
   installed package ships no partial bundle and nothing is fetched; when a copy of
   `plotly.js-basic-dist-min` 4.1.1 is available offline, `tools/build_viewer.py --plotly <file>`
@@ -1653,7 +1655,9 @@ it), a table / scatter of the columns with a row's `regen` command, the self-che
 matching reference entry when its `case_id` is one), the W.2 page as the base
 (`docs/viewer/viewer.src.html`, rebuild with `tools/build_viewer.py`, extend
 `tests/test_viewer.py`). Open the page once in the readers' browser first and record it in
-`docs/viewer/README.md`.
+`docs/viewer/README.md`. W.3 also deletes the four V.2 plotly pages `docs/viz/*.html` (owner's
+decision after F-4: they show the legacy profile's layout and the viewer replaces them) with
+the tests that read them.
 
 Previous next action (W.1 → W.2, kept for the record):
 **Session W.2: the single-file JS viewer.** It loads a `trace` or `sweep` file written by
