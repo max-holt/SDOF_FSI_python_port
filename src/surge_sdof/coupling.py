@@ -96,9 +96,9 @@ class JunctionCoupling:
     vav_denominator : {"fixed", "legacy"}, optional
         Divisor of the mean-velocity sum: ``2N + 1`` (approved fix F-1, default) or the
         VBA's ``2N - 1`` (D-17).
-    fraction_profile : {"legacy", "fixed"}, optional
-        The interp-fraction profiles (``moc.interp_fractions``): the VBA originals (D-4,
-        default) or the lead author's corrected functions (approved fix F-4).
+    fraction_profile : {"fixed", "legacy"}, optional
+        The interp-fraction profiles (``moc.interp_fractions``): the lead author's
+        corrected functions (approved fix F-4, default) or the VBA originals (D-4).
 
     Attributes
     ----------
@@ -149,7 +149,7 @@ class JunctionCoupling:
         fluid_area: float,
         decay: float,
         vav_denominator: str = "fixed",
-        fraction_profile: str = "legacy",
+        fraction_profile: str = "fixed",
     ):
         self.n_seg = int(pipe_seg_qty)
         self.pivot = int(pivot_seg_qty)

@@ -283,7 +283,7 @@ def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
 
 
 def interp_fractions(
-    pipe_seg_qty: int, pivot_seg_qty: int, fraction_profile: str = "legacy"
+    pipe_seg_qty: int, pivot_seg_qty: int, fraction_profile: str = "fixed"
 ) -> tuple[np.ndarray, np.ndarray]:
     """The two profiles tabulated once per grid.
 
@@ -291,10 +291,10 @@ def interp_fractions(
     ----------
     pipe_seg_qty, pivot_seg_qty : int
         From ``grid_size``.
-    fraction_profile : {"legacy", "fixed"}, optional
-        ``"legacy"``: the VBA ``interpFractionA/B`` of ``Existing Code.bas`` (D-4
-        included); ``"fixed"``: the lead author's corrected functions (approved fix F-4,
-        ``interp_fraction_a_fixed`` / ``interp_fraction_b_fixed``).
+    fraction_profile : {"fixed", "legacy"}, optional
+        ``"fixed"`` (default): the lead author's corrected functions (approved fix F-4,
+        ``interp_fraction_a_fixed`` / ``interp_fraction_b_fixed``); ``"legacy"``: the VBA
+        ``interpFractionA/B`` of ``Existing Code.bas`` (D-4 included).
 
     Returns
     -------

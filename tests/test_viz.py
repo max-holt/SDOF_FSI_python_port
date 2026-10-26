@@ -55,10 +55,10 @@ def _circle_frames(fig):
     return [(f.data[0], f.data[1]) for f in fig.frames]
 
 
-def _example_jc_result():
+def _example_jc_result(**flags):
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
-    return response.peak_response_jc(force, **case["kwargs"], trace_every=4)
+    return response.peak_response_jc(force, **case["kwargs"], trace_every=4, **flags)
 
 
 def _frame_t(frame) -> float:
@@ -259,13 +259,21 @@ def test_loop_layout_geometry(which):
 def test_example_jc_elbow_cells_are_distinct():
     """The item-4 check of Session V.2b, pinned: at each elbow of the Example JC case the two
     cells are distinct cells at distinct positions and fractions."""
+    # N = 18, pivot = 7. F-4 profile: inlet_end = B(3) at 7, run_start = A(pivot - 1) at
+    # 2 pivot - 2 = 12, run_end = A(N - pivot) at 22, outlet_start = B(N - 5) at 2N - 9 = 27
+    # (legs of 4 cells each). Legacy profile: inlet_end = B(4) at 9, run_start = A(pivot) at
+    # 14, run_end = B(N - pivot) at 23, outlet_start 27 (legs of 4 and 3 cells).
     layout = animate.layout_from_trace(_example_jc_result().trace)
-    assert layout.elbow_pairs == ((9, 10), (13, 14), (23, 24), (26, 27))
+    assert layout.elbow_pairs == ((7, 8), (11, 12), (22, 23), (26, 27))
     for a, b in layout.elbow_pairs:
         assert layout.cell_position[a] != layout.cell_position[b]
         assert layout.moving_fraction[a] != layout.moving_fraction[b]
-    assert layout.moving_fraction[9] == 0.0 and layout.moving_fraction[27] == 0.0
-    assert layout.moving_fraction[14] == 1.0 and layout.moving_fraction[23] == 1.0
+    assert layout.moving_fraction[7] == 0.0 and layout.moving_fraction[27] == 0.0
+    legacy = animate.layout_from_trace(_example_jc_result(fraction_profile="legacy").trace)
+    assert legacy.elbow_pairs == ((9, 10), (13, 14), (23, 24), (26, 27))
+    assert legacy.moving_fraction[9] == 0.0 and legacy.moving_fraction[27] == 0.0
+    assert layout.moving_fraction[12] == 1.0 and layout.moving_fraction[22] == 1.0
+    assert legacy.moving_fraction[14] == 1.0 and legacy.moving_fraction[23] == 1.0
 
 
 def test_zero_lines_coincide():
@@ -383,12 +391,15 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
 
 
 def test_lumped_grid_survives_pivot_seg_qty_4():
-    # D-4: interp_fraction_b divides by zero at pivotSegQTY = 4; the display profile must not
+    # pivotSegQTY = 4 is refused by both profiles (fixed: the pivot > ext guard, F-4;
+    # legacy: interp_fraction_b divides by zero, D-4); the display profile must not
     frac_a, frac_b = animate._interp_fractions_display(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
     assert np.all(frac_b[: moc.EXT_QTY] == 0) and frac_b[10] == 1.0
-    with pytest.raises(ZeroDivisionError):
+    with pytest.raises(ValueError):
         moc.interp_fractions(20, 4)
+    with pytest.raises(ZeroDivisionError):
+        moc.interp_fractions(20, 4, "legacy")
 
 
 def test_scalars_table_and_phase_bands():

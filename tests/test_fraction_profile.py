@@ -58,12 +58,21 @@ def ramp_cells(profile):
 # ------------------------------------------------------------------ the fixed profile
 
 
-def test_default_profile_is_legacy_until_the_flip():
+def test_default_profile_is_fixed():
+    """F-4 is on by default in the tabulation, the coupling and the solver."""
     pipe, pivot = 30, 8
-    assert moc.interp_fractions.__defaults__ == ("legacy",)
+    assert moc.interp_fractions.__defaults__ == ("fixed",)
+    assert inspect.signature(coupling.JunctionCoupling).parameters["fraction_profile"].default == (
+        "fixed"
+    )
+    assert inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default == (
+        "fixed"
+    )
     fa, fb = moc.interp_fractions(pipe, pivot)
-    la, lb = legacy(pipe, pivot)
-    assert np.array_equal(fa, la) and np.array_equal(fb, lb)
+    xa, xb = fixed(pipe, pivot)
+    assert np.array_equal(fa, xa) and np.array_equal(fb, xb)
+    assert td.FIXED_FLAGS["fraction_profile"] == "fixed"
+    assert td.LEGACY_FLAGS["fraction_profile"] == "legacy"
 
 
 def test_unknown_profile_is_rejected():

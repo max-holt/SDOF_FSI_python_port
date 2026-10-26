@@ -674,7 +674,7 @@ def test_interp_fractions_match_the_legacy_helpers():
         for pivot_seg_qty in (5, 6, 7, 27, 50, 87):
             if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
                 continue
-            frac_a, frac_b = moc.interp_fractions(pipe_seg_qty, pivot_seg_qty)
+            frac_a, frac_b = moc.interp_fractions(pipe_seg_qty, pivot_seg_qty, "legacy")
             assert frac_a.shape == (pipe_seg_qty + 1,) and frac_b.shape == (pipe_seg_qty,)
             assert frac_a[0] == frac_a[pipe_seg_qty] == 0.0  # never read by step
             for n in range(1, pipe_seg_qty):
@@ -691,7 +691,7 @@ def test_interp_fractions_minimal_pivot_divides_by_zero_at_setup():
     with pytest.raises(ZeroDivisionError):
         lp.interp_fraction_b(3, 4, 20)
     with pytest.raises(ZeroDivisionError):
-        moc.interp_fractions(20, 4)
+        moc.interp_fractions(20, 4, "legacy")
 
 
 def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
@@ -699,7 +699,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
     from rest, and return the per-sub-step (p_a, v_a, p_b, v_b, d_f) it produces."""
     su = trace.setup
     n_seg, pivot = su["pipe_seg_qty"], su["pivot_seg_qty"]
-    frac_a, frac_b = moc.interp_fractions(n_seg, pivot)
+    frac_a, frac_b = moc.interp_fractions(n_seg, pivot, "legacy")
     p_a, v_a, p_b, v_b = moc.new_column(n_seg)
     vav_div = moc.vav_divisor(n_seg, vav_denominator)
     dt = float(su["dt"])
@@ -775,6 +775,7 @@ def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
         kw["fluid_area"],
         su["dacay_factor"],
         vav_denominator="legacy",
+        fraction_profile="legacy",
     )
     assert jc.rho_c == kw["fluid_densty"] * kw["celerity"]
     d_fs = []
@@ -1096,16 +1097,17 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
 
 # ------------------------------------------------------------------ approved fixes F-1, F-2
 
-FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running", "fraction_profile": "legacy"}
+FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running", "fraction_profile": "fixed"}
 
 
 def test_peak_response_jc_defaults_are_the_approved_fixes():
     params = inspect.signature(response.peak_response_jc).parameters
     assert params["vav_denominator"].default == "fixed"
     assert params["parity"].default == "running"
-    assert inspect.signature(coupling.JunctionCoupling).parameters["vav_denominator"].default == (
-        "fixed"
-    )
+    assert params["fraction_profile"].default == "fixed"
+    jc_params = inspect.signature(coupling.JunctionCoupling).parameters
+    assert jc_params["vav_denominator"].default == "fixed"
+    assert jc_params["fraction_profile"].default == "fixed"
     _id, force, kw = JC_SMALL[0]
     default = response.peak_response_jc(force, **kw)
     explicit = response.peak_response_jc(force, **kw, **FIXED_FLAGS)
@@ -1231,20 +1233,24 @@ def _max_rel_change(summary, base):
 
 @pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
 def test_fixed_flags_change_only_where_expected(idx):
-    """Where the fixes cannot act, the defaults equal the legacy bitwise: no fluid
+    """F-1 and F-2 on the legacy fraction profile (the Stage 4.2 pins; F-4 is pinned
+    below). Where the fixes cannot act, the result equals the legacy bitwise: no fluid
     (dF = 0), the fallback (no MoC), and for F-2 alone a continuous literal parity
     sequence (1 -> 2 boundary continuous and phase 3 not entered). Where F-2 does act
     on a fluid-coupled MoC case (discontinuous 1 -> 2 boundary) the result changes."""
     case = jc_sweep_cases()[idx]
     base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
     res_legacy = jc_sweep_results(idx)[0]
+    legacy_profile = {"fraction_profile": "legacy"}
     f1 = response.peak_response_jc(
-        case.force, **case.kw, vav_denominator="fixed", parity="per_phase"
+        case.force, **case.kw, vav_denominator="fixed", parity="per_phase", **legacy_profile
     ).summary()
     f2 = response.peak_response_jc(
-        case.force, **case.kw, vav_denominator="legacy", parity="running"
+        case.force, **case.kw, vav_denominator="legacy", parity="running", **legacy_profile
     ).summary()
-    both = response.peak_response_jc(case.force, **case.kw).summary()
+    both = response.peak_response_jc(
+        case.force, **case.kw, vav_denominator="fixed", parity="running", **legacy_profile
+    ).summary()
     no_effect = case.fallback or case.kw["fluid_area"] == 0.0
     if no_effect:
         assert np.array_equal(f1, base) and np.array_equal(f2, base) and np.array_equal(both, base)
@@ -1257,6 +1263,32 @@ def test_fixed_flags_change_only_where_expected(idx):
     assert _max_rel_change(f2, base) < 2e-2
     assert _max_rel_change(both, base) < 2e-2
     assert np.array_equal(f1, base) or case.kw["fluid_area"] > 0.0
+
+
+@pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
+def test_fixed_fraction_profile_changes_every_fluid_coupled_moc_case(idx):
+    """F-4 (D-4 fixed): the corrected profile cannot act with no fluid (dF = 0) or in the
+    fallback (no MoC) and equals the legacy bitwise there; on every fluid-coupled MoC case
+    it changes the result (the ramps move by half a cell and the stray B(3) cell goes, so
+    dF differs from the first accelerated sub-step on). Measured on this sweep (NOTES.md
+    "Session F-4 — done"): F-4 alone max 3.6e-2 (j21), median 3.9e-3 over the 25 changed
+    cases; all three fixes max 3.6e-2."""
+    case = jc_sweep_cases()[idx]
+    base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
+    f4 = response.peak_response_jc(
+        case.force, **case.kw, **dict(LEGACY_FLAGS, fraction_profile="fixed")
+    ).summary()
+    defaults = response.peak_response_jc(case.force, **case.kw).summary()
+    explicit = response.peak_response_jc(case.force, **case.kw, **FIXED_FLAGS).summary()
+    assert np.array_equal(defaults, explicit)
+    if case.fallback or case.kw["fluid_area"] == 0.0:
+        assert np.array_equal(f4, base) and np.array_equal(defaults, base)
+    else:
+        assert not np.array_equal(f4, base)
+        assert f4[4] == base[4]  # the applied force does not depend on the fluid
+    # a correction of the weighting profile, not a different answer
+    assert _max_rel_change(f4, base) < 5e-2
+    assert _max_rel_change(defaults, base) < 5e-2
 
 
 # ------------------------------------------------------------------ _vba_semantics.py

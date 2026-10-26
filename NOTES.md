@@ -1,6 +1,19 @@
 # NOTES — session handoff
 
 ## Current stage
+Session F-4 (the lead author's corrected moving-fraction profile, 2026-10-26) done:
+`peak_response_jc(fraction_profile="fixed" | "legacy")`, `moc.interp_fractions(...,
+fraction_profile)` and `coupling.JunctionCoupling` carry the flag; the corrected
+`interpFractionA/B` (`legacy/vba/interpFraction_fix_2026-10-26.bas`, transcribed literally as
+`moc.interp_fraction_a_fixed` / `interp_fraction_b_fixed`) are the **default**; the legacy flags
+(`vav_denominator="legacy", parity="per_phase", fraction_profile="legacy"`) still reproduce
+`legacy_port` bitwise on the sweep and remain the Excel acceptance test (`jc_slow`). DEVIATIONS
+D-4 is "fixed". Measured change vs the legacy result: golden JC cases ≤ 1.0e-3 relative
+(peak velocity −9.7e-4 / −5.9e-4 / +7.4e-4), JC sweep max 3.6e-2, median 3.8e-4 (all 50) /
+3.9e-3 (the 25 fluid-coupled MoC cases). `docs/viz/data/example_jc_step.json` and
+`golden_r096_jc.json.gz` re-exported with the fixed profile. See "Session F-4 — done" (the
+half-cell symmetry offset is recorded there **for the lead author**).
+**Next action unchanged: the owner's local bench reference run, then Session 5b, then W.3.**
 Session W.2 (the single-file JS viewer, trace mode, 2026-10-26) done: `docs/viewer/viewer.html`
 (one 4.88 MB file: plotly.js 4.1.1 full bundle and pako 1.0.11 inflate inlined, CSP blocks every
 request) built by `tools/build_viewer.py` from `docs/viewer/viewer.src.html`; loads the W.1 files
@@ -69,6 +82,187 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session F-4 — done (2026-10-26)
+Scope (owner's instruction, this session): the lead author replaced `interpFractionA` and
+`interpFractionB`; port them behind a flag, test the corrected profile, flip the default,
+record the change, re-export the two JC data files.
+
+**What changed.**
+- `legacy/vba/interpFraction_fix_2026-10-26.bas`: the lead author's compilable text verbatim
+  (header comment: received 2026-10-26). `Existing Code.bas` is frozen and untouched.
+- `moc.interp_fraction_a_fixed` / `interp_fraction_b_fixed`: literal transcriptions (tests on
+  `n + 1` as written). `moc.interp_fractions(N, pivot, fraction_profile="fixed" | "legacy")`
+  tabulates either; `coupling.JunctionCoupling(..., fraction_profile)` and
+  `response.peak_response_jc(..., fraction_profile)` (keyword-only, recorded in the trace
+  `inputs` and so in the data files' `meta.inputs`) pass it down. Defaults: `"fixed"`
+  everywhere (commit 2); commit 1 carried the flag with the legacy default and changed no result.
+- **Added guard (not a transcription):** on the fixed profile `pivotSegQTY <= extQTY` raises
+  `ValueError("... pivot > ext ...")` at set-up. The corrected VBA never reaches the ramp there
+  (`n + 1 < 4.5` already covers `n <= 3`) and would return a clean 0 → 1 step; the owner chose
+  the refusal. `pivotSegQTY = 5` (no ramp cell, a 0 → 1 step) is valid and unguarded. The legacy
+  profile keeps the D-4 `ZeroDivisionError`. `viz/geometry._interp_fractions_display` catches
+  both for the lumped layout.
+- Tests: `tests/test_fraction_profile.py` (52 tests; see the commit messages),
+  `tests/test_differential.py::test_fixed_fraction_profile_changes_every_fluid_coupled_moc_case`
+  (bitwise equal to the legacy with no fluid or in the fallback, changed on every fluid-coupled
+  MoC case, `< 5e-2`), `test_fixed_flags_change_only_where_expected` now runs F-1/F-2 on the
+  legacy profile explicitly so the Stage 4.2 bounds keep their meaning, `FIXED_FLAGS` and
+  `LEGACY_FLAGS` carry the third flag; re-pinned to the new default: `test_viz.py` Example JC
+  elbow pairs `((7, 8), (11, 12), (22, 23), (26, 27))` (legacy `((9, 10), (13, 14), (23, 24),
+  (26, 27))` pinned alongside), `test_export.py` row 96 `max_displacement`
+  0.0036157685826052957 (legacy / Excel 0.0036195012413468937).
+- Docs: DEVIATIONS D-4 "fixed" by F-4; `docs/architecture.md` (`moc.py` row, the animation
+  geometry), `docs/data_format.md` (`meta.inputs` names the third flag), module docstrings.
+
+**The corrected profile (hand-derived from the VBA, pinned by the table test, pivot 8 / pipe 30,
+`extQTY = 4`).**
+
+| n | A(n) | B(n) |
+|---|---|---|
+| 0–3 | 0 | 0 |
+| 4, 5, 6 | 1/64, 9/64, 25/64 | 1/16, 1/4, 9/16 |
+| 7 … | 1 up to n = 22 | 1 up to n = 21 |
+| outlet ramp | n = 23, 24, 25: 25/64, 9/64, 1/64 | n = 22, 23, 24: 9/16, 1/4, 1/16 |
+| then 0 | n = 26–30 | n = 25–29 |
+
+In interleaved position `pos` (A node n at `2n`, B cell n at `2n + 1`) the inlet is one
+quadratic `((pos − 7) / (2 (pivot − 4)))²` from `pos = 8` to `2 pivot − 3`, so B's values sit
+between A's; the run starts at `A(pivot − 1)` (clipped to 1 where the quadratic would give
+`((2 pivot − 9) / (2 pivot − 8))²`). Each leg holds `pivot − 5` ramp cells per profile,
+`2 pivot − 10` interleaved; the legs are equal; the ramps are strictly monotone (the legacy A
+repeated its first value at `n = 4, 5`, the legacy B had `B(3) = 1 / (pivot − 4)²` and
+`B(4) = 0` inside its ramp and an inlet ramp one cell longer than its outlet ramp).
+
+**For the lead author — the half-cell symmetry offset (one cell in ~550; a model-intent
+question, not a transcription one).** Transcribed literally, both corrected profiles mirror
+about interleaved position `N − 1` (`A(n) = A(N − 1 − n)`, `B(n) = B(N − 2 − n)`), the centre
+of the `n = 0 .. pipeSegQTY − 1` nodes of the VBA comment, with A node `N` excluded; the
+geometric centre of the `N + 1` A nodes (and of the `2N + 1` interleaved cells) is position
+`N`, half a MoC cell further. Consequences: the inlet zero block is 8 interleaved cells
+(`A0 .. B3`) and the outlet 10 (`B(N − 5) .. A(N)`); `A(4) = (0.5 / (pivot − 4))²` is non-zero
+while its geometric mirror `A(N − 4)` is 0. The legacy A profile mirrored about position `N`
+exactly. Pinned as transcribed (`tests/test_fraction_profile.py::
+test_fixed_profiles_mirror_about_position_n_minus_1`). If the intent is symmetry about the
+geometric centre, the outlet tests would read `n + 1 > pipeSegQTY − extQTY + 1.5` /
+`> pipeSegQTY + 2 − pivotSegQTY` (A) and `… − extQTY + 0.5` / `… + 1.5 − pivotSegQTY` (B); not
+applied.
+
+**Measured change (output type 0, relative to the legacy-flag result, which equals
+`legacy_port` bitwise and Excel to 8.6e-13).** Golden JC cases, `peak_response_jc`, Numba, one
+run each; outputs static-eq. force / displacement / velocity / acceleration / applied force:
+
+| row | f (Hz) | N | time (s) | F-4 alone vs legacy | F-1+F-2+F-4 (defaults) vs legacy | defaults vs Excel |
+|---|---|---|---|---|---|---|
+| 96 | 3 | 666 | 1.7 | −1.0e-3 / −1.0e-3 / −9.7e-4 / +2.9e-5 / 0 | −1.0e-3 / −1.0e-3 / −9.7e-4 / +2.9e-5 / 0 | −1.0e-3 / −1.0e-3 / −9.7e-4 / +2.9e-5 / 0 |
+| 97 | 7.5 | 592 | 1.4 | −5.8e-4 / −5.8e-4 / −5.9e-4 / +1.6e-4 / 0 | −5.8e-4 / −5.8e-4 / −5.9e-4 / +1.6e-4 / 0 | −5.8e-4 / −5.8e-4 / −5.9e-4 / +1.6e-4 / 0 |
+| 98 | 22 | 546 | 1.2 | −6.3e-4 / −6.3e-4 / +7.4e-4 / +4.5e-4 / 0 | −6.3e-4 / −6.3e-4 / +7.4e-4 / +4.5e-4 / 0 | −6.3e-4 / −6.3e-4 / +7.4e-4 / +4.5e-4 / 0 |
+
+**Peak velocity, F-4 alone vs legacy: row 96 −9.70e-4, row 97 −5.94e-4, row 98 +7.36e-4**
+(F-1/F-2 add nothing visible at this precision; the applied force never depends on the fluid).
+Max relative change on the golden cases 1.03e-3 (row 96, static-equivalent force and
+displacement). With the defaults the golden cases are **not** within the 5e-12 Excel tolerance
+(they are a different model by ~1e-3); `tests/test_golden.py` / the `jc_slow` cases keep the
+legacy flags and remain the Excel acceptance test.
+
+JC differential sweep (50 cases, output type 0, max |relative change| over the five outputs vs
+the legacy flags). F-4 alone = `("legacy", "per_phase", "fixed")`; F-1+F-2 = the previous
+defaults on the legacy profile (the Stage 4.2 table); all three = the new defaults.
+**F-4 alone: max 3.61e-2 (j21), median 3.81e-4 over all 50 cases, 3.90e-3 over the 25 changed
+cases; peak velocity: max 3.61e-2 (j21), median 5.6e-6 (all 50) / 2.0e-3 (changed), 12 up, 13
+down.** All three: max 3.61e-2, median 3.81e-4 / 6.07e-3. The 25 unchanged cases are exactly
+the no-fluid (`fluidArea = 0`, `dF = 0`) and fallback cases; every fluid-coupled MoC case
+changes.
+
+| case | fluidArea | fallback | F-1+F-2 | F-4 alone | all three | F-4 alone, peak velocity (signed) |
+|---|---|---|---|---|---|---|
+| j00_q40_A0.05_N28 | 0.05 | - | 2.2e-03 | 3.1e-02 | 2.7e-02 | -4.9e-03 |
+| j01_q7_A0.05_N28 | 0.05 | - | 3.5e-16 | 1.6e-02 | 1.6e-02 | -6.3e-03 |
+| j02_q7_A0.01_N30 | 0.01 | - | 1.7e-04 | 6.1e-03 | 6.1e-03 | +3.9e-03 |
+| j03_q7_A0.05_N12 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j04_q40_A0.0_N18 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j05_q7_A0.0_N32 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j06_q40_A0.01_N18 | 0.01 | - | 7.9e-04 | 2.3e-03 | 2.3e-03 | +4.1e-04 |
+| j07_q40_A0.0_N28 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j08_q2_A0.0_N36 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j09_q40_A0.0_N22 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j10_q2_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j11_q40_A0.05_N28 | 0.05 | - | 2.6e-16 | 1.3e-02 | 1.3e-02 | -1.1e-05 |
+| j12_q7_A0.05_N36 | 0.05 | - | 0 | 8.0e-03 | 8.0e-03 | +1.9e-04 |
+| j13_q40_A0.01_N20 | 0.01 | - | 2.8e-15 | 2.0e-02 | 2.0e-02 | +6.9e-03 |
+| j14_q7_A0.01_N34 | 0.01 | - | 4.7e-04 | 1.8e-03 | 1.9e-03 | +1.0e-03 |
+| j15_q2_A0.0_N12 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j16_q40_A0.0_N20 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j17_q40_A0.0_N34 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j18_q2_A0.01_N20 | 0.01 | - | 1.4e-03 | 2.0e-03 | 2.2e-03 | +2.0e-03 |
+| j19_q2_A0.05_N14 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j20_q40_A0.05_N18 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j21_q2_A0.05_N16 | 0.05 | - | 8.7e-16 | 3.6e-02 | 3.6e-02 | -3.6e-02 |
+| j22_q7_A0.01_N32 | 0.01 | - | 4.9e-16 | 7.6e-04 | 7.6e-04 | -1.1e-04 |
+| j23_q7_A0.05_N26 | 0.05 | - | 6.1e-16 | 7.2e-03 | 7.2e-03 | +2.5e-03 |
+| j24_q40_A0.0_N38 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j25_q40_A0.05_N22 | 0.05 | - | 4.7e-03 | 2.6e-03 | 6.1e-03 | +2.5e-03 |
+| j26_q40_A0.05_N40 | 0.05 | - | 9.6e-03 | 1.2e-02 | 2.3e-02 | +1.2e-02 |
+| j27_q7_A0.0_N20 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j28_q40_A0.05_N26 | 0.05 | - | 3.7e-16 | 1.3e-02 | 1.3e-02 | -3.2e-03 |
+| j29_q40_A0.0_N34 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j30_q2_A0.01_N18 | 0.01 | yes | 0 | 0 | 0 | 0 |
+| j31_q7_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j32_q40_A0.05_N16 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j33_q40_A0.01_N28 | 0.01 | - | 0 | 6.9e-03 | 6.9e-03 | -6.2e-03 |
+| j34_q7_A0.01_N24 | 0.01 | - | 2.0e-16 | 1.4e-03 | 1.4e-03 | +3.8e-04 |
+| j35_q7_A0.0_N36 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j36_q40_A0.0_N22 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j37_q7_A0.05_N12 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j38_q40_A0.05_N48 | 0.05 | - | 0 | 1.5e-03 | 1.5e-03 | -1.0e-03 |
+| j39_q40_A0.01_N38 | 0.01 | - | 5.6e-16 | 2.2e-03 | 2.2e-03 | -1.2e-03 |
+| j40_q40_A0.01_N48 | 0.01 | - | 0 | 1.1e-03 | 1.1e-03 | -8.6e-04 |
+| j41_q2_A0.01_N28 | 0.01 | - | 9.8e-04 | 2.4e-03 | 1.8e-03 | -1.4e-03 |
+| j42_q2_A0.01_N12 | 0.01 | yes | 0 | 0 | 0 | 0 |
+| j43_q40_A0.05_N42 | 0.05 | - | 9.9e-16 | 1.9e-02 | 1.9e-02 | +4.4e-03 |
+| j44_q40_A0.0_N18 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j45_q2_A0.01_N32 | 0.01 | - | 5.1e-04 | 1.3e-03 | 1.5e-03 | +1.3e-03 |
+| j46_q7_A0.01_N30 | 0.01 | - | 0 | 2.1e-03 | 2.1e-03 | -1.6e-03 |
+| j47_q7_A0.01_N18 | 0.01 | - | 3.9e-16 | 3.9e-03 | 3.9e-03 | -3.9e-03 |
+| j48_q7_A0.0_N12 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j49_q7_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+
+(j21 is a 16-cell grid at `stepQTY = 2`, the coarsest fluid-coupled case: a half-cell ramp
+shift is the largest relative change there. The measurement script is not in the repo; the
+numbers come from `response.peak_response_jc` with explicit flags against
+`legacy_port.get_peak_response_jc` for the sweep and against `tests/.golden_cache/
+*_response.json` (legacy `actual`, Excel `expected`) for the golden cases.)
+
+**Data files and viewer (step 5).** `docs/viz/data/example_jc_step.json` (1.80 MB, 1124
+frames, 37 cells) and `golden_r096_jc.json.gz` (46.88 MB of JSON, 20.63 MB gzipped, 832
+frames, 1333 cells) re-exported with the defaults (`tools/export.py trace --step --amplitude
+1600 --area 0.05 --length 6 --nat-freq 2 --mu 0.0001 --sample-freq 10 --step-qty 80 --celerity
+1200 --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc` and `--golden r096_jc_L24_f3`, the
+W.1 commands; `meta.inputs.fraction_profile = "fixed"`, `meta.outputs` carry the F-4 values,
+e.g. row 96 `max_velocity` 0.058215 against the legacy 0.058272). Measured from the files'
+`moving_fraction` through `geometry._segments`: Example JC legs 4 and 4 interleaved cells
+(legacy 4 and 3), row 96 legs 164 and 164 (legacy 164 and 163); zero moving cells on the inlet
+and outlet runs in both (legacy: the D-4 cell on the inlet). Confirmed in the viewer
+(`tests/test_viewer.py::test_screenshots_at_peak`, headless Chromium, screenshots
+`tests/.artifacts/viewer_example_jc_step_peak.png` / `viewer_golden_r096_jc_peak.png`, not
+committed): the Example JC panel shows four cells on each leg and every inlet cell at the pipe
+height, row 96 two legs of the same length. `example_lumped_step.json` and
+`reference_sweep.json` (Excel values) are unchanged.
+
+**Not done, for the owner.** The four V.2 plotly pages under `docs/viz/*.html` were generated
+with the legacy profile and are not regenerated (not in the F-4 scope); they show the
+one-cell leg difference and the stray inlet cell. `tools/animate.py --golden r096_jc_L24_f3`
+etc. regenerates them with the defaults.
+
+**Gates.** Commit 1: fast suite 955 passed in both modes, `-m slow` passed. Commit 2 (the
+flip): fast suite 1006 passed under Numba, 1005 passed + 1 skipped in pure Python
+(`make test-both`); `-m slow` 150 passed (7.5 min); `-m jc_slow` 6 passed (1 h 18 min: the three
+literal-port cases 1706 / 1551 / 1417 s, the three `peak_response_jc` legacy-flag cases 1.3-1.9 s
+under Numba); port-reviewer on the `src/` diff: no findings (transcription, loop bounds, the
+guard's documentation, the defaults, DEVIATIONS all checked; it re-evaluated the VBA expressions
+on every non-short grid up to 118 cells with 0 mismatches). One viewer load-timeout flake on the
+20.6 MB golden file was seen once under the full-suite load in commit 1's run (passes alone).
+Bench: see the "Bench" line below.
 
 ## Session W.2 — done (2026-10-26)
 Built as planned (plan section below); three commits (page + build, tests, docs). No `src/`
@@ -1376,6 +1570,13 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- **F-4, for the lead author:** the corrected profiles mirror about interleaved position
+  `N − 1`, not the geometric column centre `N` (half a MoC cell; inlet zero block 8 cells,
+  outlet 10; `A(4)` non-zero, `A(N − 4)` zero). Pinned as transcribed; details and the
+  alternative outlet tests in "Session F-4 — done".
+- F-4: `docs/viz/*.html` (the four V.2 plotly pages) still show the legacy profile's layout
+  (one-cell leg difference, stray inlet cell); regenerate with `tools/animate.py` if they are
+  to match the data files.
 - W.2: `docs/viewer/viewer.html` carries the **full** plotly.js 4.1.1 (4.8 MB) because the
   installed package ships no partial bundle and nothing is fetched; when a copy of
   `plotly.js-basic-dist-min` 4.1.1 is available offline, `tools/build_viewer.py --plotly <file>`
@@ -1427,6 +1628,7 @@ Approved fixes (lead author, 21 Oct 2026):
 F-1 vAv denominator: 2N+1 (number of terms), was 2N-1. port_review §3.2a.
 F-2 MoC parity: continuous even/odd alternation for the whole run via a single running step counter in the refactored JC solver; the literal port keeps the per-phase index. Intent: alternation never double-steps a half-grid at a phase boundary. port_review §2.5, §3.2c. Differential tests vs legacy_port.py for JC must therefore compare with a tolerance only on cases where the literal port's parity sequence is continuous (phase 3 not entered and phase-1 exit k odd); for the others, assert the refactored result against a legacy run patched to a running counter, and record the before/after difference.
 F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is the only module the decision may touch.
+F-4 (lead author, 26 Oct 2026) corrected moving-fraction profile: `interpFractionA/B` replaced by `legacy/vba/interpFraction_fix_2026-10-26.bas` (both profiles start at exactly 0 at `n = 3`, one squared ramp per leg, equal legs). Applied in Session F-4 as `fraction_profile="fixed"` (default; `"legacy"` reproduces the VBA). DEVIATIONS D-4 "preserved" → "fixed". The pivot-4 `ValueError` guard on the fixed path is the port's addition (owner's decision). Measured change in NOTES.md "Session F-4 — done"; the half-cell symmetry offset there is a question back to the lead author.
 
 Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixes are built behind keyword flags defaulting to the VBA behaviour, the differential suite passes bitwise on the legacy flags, then the defaults flip; this supersedes the tolerance-only comparison note under F-2 above.
 

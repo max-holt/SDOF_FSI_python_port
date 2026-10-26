@@ -7,8 +7,9 @@ fraction (``_segments``: the fraction-1 block is the run, the last fraction-0 ce
 and the first after it the upper elbows), uniform spacing by ``cell_position`` along the
 centreline, sharp elbows (the model has no bends). A JC trace brings its own grid; a lumped
 trace gets the grid the case would have (``lumped_grid``: ``moc.grid_size`` /
-``moc.interp_fractions``; a ``pivotSegQTY = 4`` grid, D-4, gets the B profile with the ``n <
-extQTY`` test, display only). The rules and the pinning tests are described in
+``moc.interp_fractions`` with the solver's default profile, F-4; a ``pivotSegQTY = 4`` grid,
+refused by both profiles, gets the legacy B profile with the ``n < extQTY`` test, display
+only). The rules and the pinning tests are described in
 ``docs/architecture.md`` ("the animation", Geometry) and ``tests/test_viz.py``.
 
 Shared by ``surge_sdof.viz.animate`` (which re-exports these names) and ``surge_sdof.export``;
@@ -98,8 +99,10 @@ class LoopLayout:
 def _segments(moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
     """``(inlet_end, run_start, run_end, outlet_start)`` from the fraction profile: the
     fraction-1 block is the run; the last fraction-0 cell before it and the first after it
-    are the upper elbows (the node-centred B ramp starts at exactly 0 at ``n = extQTY``,
-    D-4's ``n < 3`` cell sits one place earlier on the inlet)."""
+    are the upper elbows. With the F-4 profile both legs hold ``2 pivot - 10`` interleaved
+    cells and every inlet / outlet cell has fraction 0; with the legacy profile the inlet
+    leg is one cell longer and D-4's ``n < 3`` cell (B(3), fraction ``1 / (pivot - 4)^2``)
+    is a moving cell on the horizontal inlet (B(4) = 0 is the last zero before the run)."""
     ones = np.flatnonzero(moving_fraction == 1.0)
     if ones.size == 0:
         raise ValueError("no fraction-1 cell: the profile has no run")

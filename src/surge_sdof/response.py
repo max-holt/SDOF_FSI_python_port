@@ -16,6 +16,9 @@ Approved fixes F-1 and F-2 (NOTES.md) are keyword flags of ``peak_response_jc``:
 running sub-step counter for the whole run, so the even/odd alternation never
 double-steps a half-grid at a phase boundary). The parity flag is applied by
 ``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
+``fraction_profile`` ("legacy": the VBA ``interpFractionA/B``, D-4; "fixed": the lead
+author's corrected profiles, approved fix F-4) is passed to the coupling, which tabulates
+the profile once (``moc.interp_fractions``).
 
 Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
@@ -319,7 +322,7 @@ def peak_response_jc(
     *,
     vav_denominator: str = "fixed",
     parity: str = "running",
-    fraction_profile: str = "legacy",
+    fraction_profile: str = "fixed",
 ) -> PeakResponse:
     """Peak response with junction-coupling FSI (``GetPeakResponseJC``).
 
@@ -345,10 +348,11 @@ def peak_response_jc(
         MoC half-grid alternation: one running sub-step counter for the whole run
         (approved fix F-2, default) or the VBA per-phase index ``k + (totInd - 1) *
         stepQTY`` that can double-step a half-grid at a phase boundary (D-19).
-    fraction_profile : {"legacy", "fixed"}, keyword-only
+    fraction_profile : {"fixed", "legacy"}, keyword-only
         The interp-fraction profiles weighting the mass acceleration along the column:
-        the VBA ``interpFractionA/B`` (D-4, default) or the lead author's corrected
-        functions (approved fix F-4, ``legacy/vba/interpFraction_fix_2026-10-26.bas``).
+        the lead author's corrected functions (approved fix F-4, default,
+        ``legacy/vba/interpFraction_fix_2026-10-26.bas``) or the VBA ``interpFractionA/B``
+        (D-4).
 
     Returns
     -------
@@ -378,8 +382,10 @@ def peak_response_jc(
     -----
     With ``vav_denominator="legacy", parity="per_phase", fraction_profile="legacy"`` the
     result is bitwise identical to ``legacy_port.get_peak_response_jc`` on the differential
-    sweep; with the F-1/F-2 defaults the change is at rounding level on the golden cases
-    (NOTES.md "Stage 4.2 — F-1/F-2 before/after").
+    sweep. F-1/F-2 change the golden cases at rounding level (NOTES.md "Stage 4.2 — F-1/F-2
+    before/after"); F-4 changes them by about 1e-3 relative and the fluid-coupled sweep
+    cases by up to 3.6e-2 (NOTES.md "Session F-4 — done"). The Excel acceptance test
+    (``tests/test_golden.py``, the ``jc_slow`` cases) runs with the legacy flags.
     """
     if parity not in ("per_phase", "running"):
         raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")
