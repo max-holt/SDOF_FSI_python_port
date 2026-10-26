@@ -809,7 +809,7 @@ def test_no_coupling_is_unchanged():
 
 # ------------------------------------------------------------------ response.py (JC)
 
-LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase"}
+LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase", "fraction_profile": "legacy"}
 
 
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
@@ -1096,7 +1096,7 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
 
 # ------------------------------------------------------------------ approved fixes F-1, F-2
 
-FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running"}
+FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running", "fraction_profile": "legacy"}
 
 
 def test_peak_response_jc_defaults_are_the_approved_fixes():

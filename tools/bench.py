@@ -29,8 +29,8 @@ first call and the compile time is measured, not a cache load):
 * ``response_r20``, ``response_r80`` - the two lumped cases through
   ``response.peak_response``; digests must equal ``lumped_r20`` / ``lumped_r80``.
 * ``response_jc_r96_n2000`` - the truncated JC case through ``response.peak_response_jc``
-  with the legacy flags (``vav_denominator="legacy"``, ``parity="per_phase"``); digest must
-  equal ``jc_r96_n2000``.
+  with the legacy flags (``vav_denominator="legacy"``, ``parity="per_phase"``,
+  ``fraction_profile="legacy"``); digest must equal ``jc_r96_n2000``.
 * ``response_pressure_example`` - the Example call through ``pressure.pressure_response``;
   digest must equal ``pressure_example``. (``pressure.py`` is not compiled: milliseconds.)
 * ``response_jc_r96_full``, ``response_jc_r97_full``, ``response_jc_r98_full`` - the three
@@ -126,7 +126,7 @@ EXAMPLE_PRESSURE_KW = {
 JC_TRUNCATE = 2000
 FULL_JC_ROWS = ("96", "97", "98")
 REFERENCE_CASE = "lumped_r20"  # case (a): always run, every case is also a ratio to it
-LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase"}
+LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase", "fraction_profile": "legacy"}
 # (refactored case, literal-port case) whose result digests must be identical in a run,
 # in each refactored mode present
 DIGEST_PAIRS = (

@@ -237,6 +237,7 @@ def test_jc_trace_is_bitwise_under_both_flag_sets(flags):
     res = response.peak_response_jc(force, **kw, output_type=1, trace_every=2, **flags)
     _same_result(base, res)
     assert res.trace.inputs["parity"] == flags["parity"]
+    assert res.trace.inputs["fraction_profile"] == flags["fraction_profile"]
 
 
 @pytest.mark.parametrize("stride", [1, 5])
@@ -319,7 +320,8 @@ def test_jc_trace_geometry():
         kw["damping_percent"], kw["dynamic_fric"], kw["nat_freq"], dt, 0, 1,
     )  # fmt: skip
     assert set(tr.inputs) == set(kw) | {
-        "force_history", "restrain_freq_ratio", "gap", "output_type", "vav_denominator", "parity"
+        "force_history", "restrain_freq_ratio", "gap", "output_type", "vav_denominator", "parity",
+        "fraction_profile",
     }  # fmt: skip
     assert np.array_equal(tr.inputs["force_history"], loads.as_history_2d(force))
 

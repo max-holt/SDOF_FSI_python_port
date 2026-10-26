@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 import importlib.util
+import inspect
 import json
 import math
 import os
@@ -194,6 +195,10 @@ def test_meta_carries_the_run_as_resolved():
     assert p["trace_every"] == 4 and p["step_qty"] == 80 and p["dt"] == r.trace.dt
     assert doc["meta"]["outputs"]["max_displacement"] == r.max_displacement
     assert doc["meta"]["inputs"]["vav_denominator"] == "fixed"
+    assert (
+        doc["meta"]["inputs"]["fraction_profile"]
+        == inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default
+    )
     assert doc["meta"]["inputs"]["force_history"]["shape"] == [25, 1]
     assert doc["meta"]["solver"] == "peak_response_jc"
     assert trace_doc("example_lumped")["meta"]["solver"] == "peak_response"

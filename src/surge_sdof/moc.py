@@ -26,6 +26,14 @@ Approved fix F-1 (NOTES.md): the mean velocity ``vAv`` sums ``2N + 1`` terms; th
 divides by ``2N - 1`` (D-17). ``vav_divisor`` returns either, selected by the caller's
 ``vav_denominator`` flag ("legacy" | "fixed").
 
+Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
+``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``). ``interp_fractions``
+tabulates either the original profile (``fraction_profile="legacy"``: the ``n < 3`` test of
+``interpFractionB`` and the division by zero at ``pivotSegQTY = 4``) or the corrected one
+(``"fixed"``: both profiles start at exactly 0 at ``n = 3``, one strictly monotone squared
+ramp per leg, both legs the same length, mirror-symmetric about interleaved position
+``N - 1``, the lead author's ``n = 0 .. pipeSegQTY - 1`` convention).
+
 Exactness
 ---------
 Every expression keeps the VBA's operation order. The sweeps carry the previous cell's
@@ -48,8 +56,11 @@ __all__ = [
     "grid_size",
     "is_short_pipe",
     "decay_factor",
+    "FRACTION_PROFILES",
     "interp_fraction_a",
     "interp_fraction_b",
+    "interp_fraction_a_fixed",
+    "interp_fraction_b_fixed",
     "interp_fractions",
     "new_column",
     "vav_divisor",
@@ -61,6 +72,10 @@ EXT_QTY = 4
 
 DAMPING_A = 0.25
 """VBA ``Const dampingA = 0.25``: first-order low-pass on the junction force ``dF``."""
+
+FRACTION_PROFILES = ("legacy", "fixed")
+"""Values of the ``fraction_profile`` flag: the original ``interpFractionA/B`` (D-4
+included) or the lead author's corrected functions (approved fix F-4)."""
 
 
 # VBA lines 733-734
@@ -199,13 +214,87 @@ def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
         return 1.0
 
 
-def interp_fractions(pipe_seg_qty: int, pivot_seg_qty: int) -> tuple[np.ndarray, np.ndarray]:
+# interpFraction_fix_2026-10-26.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
+def interp_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+    """``interp_fraction_a`` as corrected by the lead author (approved fix F-4).
+
+    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-26.bas``; the tests
+    are on ``n + 1`` as written there.
+
+    Parameters
+    ----------
+    n : int
+        A node index, ``0 .. pipeSegQTY``.
+    pivot_seg_qty, pipe_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    float
+        0 for ``n <= 3`` and ``n >= pipeSegQTY - 4``, the squared ramp
+        ``((n + 0.5 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` (its mirror on the
+        outlet leg), 1 between; dimensionless. At ``pivotSegQTY = 4`` the ramp branch is
+        unreachable (the zero test covers it), so nothing divides by zero here.
+    """
+    if n + 1 < EXT_QTY + 0.5:
+        return 0.0
+    elif n + 1 < pivot_seg_qty:
+        return ((n + 0.5 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
+    elif n + 1 > pipe_seg_qty - EXT_QTY + 0.5:
+        return 0.0
+    elif n + 1 > pipe_seg_qty + 1 - pivot_seg_qty:
+        return ((pipe_seg_qty - EXT_QTY - n - 0.5) / (pivot_seg_qty - EXT_QTY)) ** 2
+    else:
+        return 1.0
+
+
+# interpFraction_fix_2026-10-26.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
+def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+    """``interp_fraction_b`` as corrected by the lead author (approved fix F-4).
+
+    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-26.bas``. The first
+    test is ``n + 1 < extQTY + 0.5`` as in the A profile, so ``n = 3`` is 0 (D-4 fixed).
+
+    Parameters
+    ----------
+    n : int
+        B cell index, ``0 .. pipeSegQTY - 1``.
+    pivot_seg_qty, pipe_seg_qty : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    float
+        0 for ``n <= 3`` and ``n >= pipeSegQTY - 5``, the squared ramp
+        ``((n + 1 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` (its mirror on the
+        outlet leg), 1 between; dimensionless. As for the A profile the ramp is unreachable
+        at ``pivotSegQTY = 4``.
+    """
+    if n + 1 < EXT_QTY + 0.5:
+        return 0.0
+    elif n + 1 < pivot_seg_qty:
+        return ((n + 1 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
+    elif n + 1 > pipe_seg_qty - EXT_QTY - 0.5:
+        return 0.0
+    elif n + 1 > pipe_seg_qty + 0.5 - pivot_seg_qty:
+        return ((pipe_seg_qty - EXT_QTY - n - 1) / (pivot_seg_qty - EXT_QTY)) ** 2
+    else:
+        return 1.0
+
+
+def interp_fractions(
+    pipe_seg_qty: int, pivot_seg_qty: int, fraction_profile: str = "legacy"
+) -> tuple[np.ndarray, np.ndarray]:
     """The two profiles tabulated once per grid.
 
     Parameters
     ----------
     pipe_seg_qty, pivot_seg_qty : int
         From ``grid_size``.
+    fraction_profile : {"legacy", "fixed"}, optional
+        ``"legacy"``: the VBA ``interpFractionA/B`` of ``Existing Code.bas`` (D-4
+        included); ``"fixed"``: the lead author's corrected functions (approved fix F-4,
+        ``interp_fraction_a_fixed`` / ``interp_fraction_b_fixed``).
 
     Returns
     -------
@@ -217,16 +306,34 @@ def interp_fractions(pipe_seg_qty: int, pivot_seg_qty: int) -> tuple[np.ndarray,
 
     Raises
     ------
+    ValueError
+        Unknown ``fraction_profile``; or, on the fixed profile, ``pivotSegQTY <= extQTY``
+        (the portal-frame height rounds to no cell: the ramp needs ``pivot > ext``). This
+        guard is an addition of the port: the corrected VBA expressions never reach the
+        ramp at ``pivotSegQTY = 4`` and would return a 0 -> 1 step.
     ZeroDivisionError
-        ``pivotSegQTY = 4`` (D-4), here at set-up where the legacy solver raised it in its
-        first MoC update.
+        ``pivotSegQTY = 4`` on the legacy profile (D-4), here at set-up where the legacy
+        solver raised it in its first MoC update.
     """
+    if fraction_profile not in FRACTION_PROFILES:
+        raise ValueError(
+            f"fraction_profile must be one of {FRACTION_PROFILES}, got {fraction_profile!r}"
+        )
+    if fraction_profile == "fixed":
+        if pivot_seg_qty <= EXT_QTY:
+            raise ValueError(
+                f"pivotSegQTY = {pivot_seg_qty} <= extQTY = {EXT_QTY}: the fixed fraction "
+                "profile needs pivot > ext (the portal-frame height rounds to no MoC cell)"
+            )
+        fa, fb = interp_fraction_a_fixed, interp_fraction_b_fixed
+    else:
+        fa, fb = interp_fraction_a, interp_fraction_b
     frac_a = np.zeros(pipe_seg_qty + 1)
     frac_b = np.zeros(pipe_seg_qty)
     for n in range(1, pipe_seg_qty):
-        frac_a[n] = interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+        frac_a[n] = fa(n, pivot_seg_qty, pipe_seg_qty)
     for n in range(0, pipe_seg_qty):
-        frac_b[n] = interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+        frac_b[n] = fb(n, pivot_seg_qty, pipe_seg_qty)
     return frac_a, frac_b
 
 

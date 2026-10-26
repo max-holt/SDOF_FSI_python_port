@@ -55,7 +55,7 @@ Two kinds of file, each with `kind` and `schema_version` (currently `1`):
 |---|---|---|
 | `case_id` | string | The case as the CLI named it: a fixture id (`r096_jc_L24_f3`, `example_jc`) or the `--step` description |
 | `solver` | string | `Trace.solver`: `"peak_response"` (lumped) or `"peak_response_jc"`; a JC call that took the short-pipe fallback reports `"peak_response"` and has no `cells` |
-| `inputs` | object | The solver's keyword arguments exactly as received (`Trace.inputs`), free-form; `force_history` is an array block (the 2-D history the walk used, `(n_samples, n_columns)`); the JC flags `vav_denominator` / `parity` are present for a JC run |
+| `inputs` | object | The solver's keyword arguments exactly as received (`Trace.inputs`), free-form; `force_history` is an array block (the 2-D history the walk used, `(n_samples, n_columns)`); the JC flags `vav_denominator` / `parity` / `fraction_profile` are present for a JC run |
 | `params` | object | `trace.meta.params`: what the set-up resolved |
 | `outputs` | object | `trace.meta.outputs`: the `PeakResponse` maxima, for the viewer's self-check against the reference values |
 | `n_frames` | int | Frames in the file, the rest frame included (`Trace.n_frames + 1`) |

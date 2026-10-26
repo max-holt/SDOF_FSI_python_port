@@ -195,11 +195,13 @@ def loop_layout(
 
 
 def _interp_fractions_display(pipe_seg_qty: int, pivot_seg_qty: int):
-    """``moc.interp_fractions``, or, when ``pivotSegQTY = 4`` divides by zero in
-    ``interp_fraction_b`` (D-4), the B profile with the ``n < extQTY`` test; display only."""
+    """``moc.interp_fractions`` with the solver's default profile, or, when
+    ``pivotSegQTY = 4`` is refused (legacy: ``interp_fraction_b`` divides by zero, D-4;
+    fixed: the port's ``pivot > ext`` guard), the legacy B profile with the ``n < extQTY``
+    test; display only."""
     try:
         return moc.interp_fractions(pipe_seg_qty, pivot_seg_qty)
-    except ZeroDivisionError:
+    except (ZeroDivisionError, ValueError):
         frac_a = np.zeros(pipe_seg_qty + 1)
         frac_b = np.zeros(pipe_seg_qty)
         for n in range(1, pipe_seg_qty):

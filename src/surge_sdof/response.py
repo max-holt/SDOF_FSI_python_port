@@ -319,6 +319,7 @@ def peak_response_jc(
     *,
     vav_denominator: str = "fixed",
     parity: str = "running",
+    fraction_profile: str = "legacy",
 ) -> PeakResponse:
     """Peak response with junction-coupling FSI (``GetPeakResponseJC``).
 
@@ -344,6 +345,10 @@ def peak_response_jc(
         MoC half-grid alternation: one running sub-step counter for the whole run
         (approved fix F-2, default) or the VBA per-phase index ``k + (totInd - 1) *
         stepQTY`` that can double-step a half-grid at a phase boundary (D-19).
+    fraction_profile : {"legacy", "fixed"}, keyword-only
+        The interp-fraction profiles weighting the mass acceleration along the column:
+        the VBA ``interpFractionA/B`` (D-4, default) or the lead author's corrected
+        functions (approved fix F-4, ``legacy/vba/interpFraction_fix_2026-10-26.bas``).
 
     Returns
     -------
@@ -354,10 +359,12 @@ def peak_response_jc(
     Raises
     ------
     ValueError
-        Unknown ``parity`` or ``vav_denominator``; ``trace_every < 0`` or a trace over
-        ``trace.MAX_TRACE_VALUES``.
+        Unknown ``parity``, ``vav_denominator`` or ``fraction_profile``; ``trace_every <
+        0`` or a trace over ``trace.MAX_TRACE_VALUES``; ``pivotSegQTY = 4`` at the set-up
+        with the fixed fraction profile (the ramp needs ``pivot > ext``).
     ZeroDivisionError
-        ``step_qty = 1`` (D-7); ``pivotSegQTY = 4`` at the set-up (D-4).
+        ``step_qty = 1`` (D-7); ``pivotSegQTY = 4`` at the set-up with the legacy fraction
+        profile (D-4).
     IndexError
         A single-row 2-D history (D-8).
     TypeError
@@ -369,13 +376,17 @@ def peak_response_jc(
 
     Notes
     -----
-    With ``vav_denominator="legacy", parity="per_phase"`` the result is bitwise identical
-    to ``legacy_port.get_peak_response_jc`` on the differential sweep; with the defaults
-    the change is at rounding level on the golden cases (NOTES.md "Stage 4.2 — F-1/F-2
-    before/after").
+    With ``vav_denominator="legacy", parity="per_phase", fraction_profile="legacy"`` the
+    result is bitwise identical to ``legacy_port.get_peak_response_jc`` on the differential
+    sweep; with the F-1/F-2 defaults the change is at rounding level on the golden cases
+    (NOTES.md "Stage 4.2 — F-1/F-2 before/after").
     """
     if parity not in ("per_phase", "running"):
         raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")
+    if fraction_profile not in moc.FRACTION_PROFILES:
+        raise ValueError(
+            f"fraction_profile must be one of {moc.FRACTION_PROFILES}, got {fraction_profile!r}"
+        )
     step_qty = int(step_qty)
     sample_freq = float(sample_freq)
     physical_length = float(physical_length)
@@ -443,6 +454,7 @@ def peak_response_jc(
         fluid_area,
         decay,
         vav_denominator,
+        fraction_profile,
     )
     forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
     meta = None
@@ -467,6 +479,7 @@ def peak_response_jc(
                 "output_type": output_type,
                 "vav_denominator": vav_denominator,
                 "parity": parity,
+                "fraction_profile": fraction_profile,
             },
             celerity,
             loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),

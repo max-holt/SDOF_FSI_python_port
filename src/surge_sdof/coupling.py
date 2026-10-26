@@ -96,6 +96,9 @@ class JunctionCoupling:
     vav_denominator : {"fixed", "legacy"}, optional
         Divisor of the mean-velocity sum: ``2N + 1`` (approved fix F-1, default) or the
         VBA's ``2N - 1`` (D-17).
+    fraction_profile : {"legacy", "fixed"}, optional
+        The interp-fraction profiles (``moc.interp_fractions``): the VBA originals (D-4,
+        default) or the lead author's corrected functions (approved fix F-4).
 
     Attributes
     ----------
@@ -112,8 +115,9 @@ class JunctionCoupling:
     half-grid selected by ``step_index % 2`` (even first, as the VBA's index 0) with
     ``a * dt`` from the state's acceleration. The parity source (running counter, F-2, or
     the VBA per-phase index, D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the
-    constructor raises ``ZeroDivisionError`` (D-4, at set-up rather than in the first
-    MoC update). The compiled loop (Stage 5) reads the attributes listed in ``__slots__``
+    constructor raises ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather
+    than in the first MoC update) and ``ValueError`` on the fixed one (the port's guard:
+    the ramp needs ``pivot > ext``). The compiled loop (Stage 5) reads the attributes listed in ``__slots__``
     directly and performs the same update; after the run ``d_f`` and the arrays hold the
     final column state either way.
     """
@@ -145,10 +149,11 @@ class JunctionCoupling:
         fluid_area: float,
         decay: float,
         vav_denominator: str = "fixed",
+        fraction_profile: str = "legacy",
     ):
         self.n_seg = int(pipe_seg_qty)
         self.pivot = int(pivot_seg_qty)
-        self.frac_a, self.frac_b = moc.interp_fractions(self.n_seg, self.pivot)
+        self.frac_a, self.frac_b = moc.interp_fractions(self.n_seg, self.pivot, fraction_profile)
         self.p_a, self.v_a, self.p_b, self.v_b = moc.new_column(self.n_seg)
         self.dt = float(dt)
         self.rho_c = float(rho_c)
