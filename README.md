@@ -160,6 +160,28 @@ printed and put in the title). `docs/viz/` holds four such
 pages; the full-library HTML is never committed. `docs/architecture.md` "Session V.2 / V.2b / V.2c / V.2d — the
 animation" has the geometry and scaling rules.
 
+## Data files for the JS viewer
+
+```
+.venv/bin/python tools/export.py trace --golden example_lumped --out docs/viz/data/example_lumped_step.json
+.venv/bin/python tools/export.py trace --golden r096_jc_L24_f3 --out docs/viz/data/golden_r096_jc.json.gz
+.venv/bin/python tools/export.py trace --step --amplitude 1600 --area 0.05 --length 6 --nat-freq 2 --mu 0.0001 \
+    --sample-freq 10 --step-qty 80 --celerity 1200 --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc \
+    --out docs/viz/data/example_jc_step.json
+.venv/bin/python tools/export.py sweep --from-csv tests/fixtures/curve_10in/cases.csv --out docs/viz/data/reference_sweep.json
+```
+
+Session W.1: `surge_sdof.export` writes the data the single-file JS viewer (Session W.2) loads
+and plays back live, from disk or a SharePoint / OCI bucket with no Python on the viewing
+machine. `docs/data_format.md` is the contract (`tests/test_export.py` parses it): a `trace` file
+holds one whole run at the trace stride (meta, the loop geometry, thirteen per-frame columns with
+the rest frame first, the JC column arrays as row-major blocks), a `sweep` file holds Session 5b
+rows as columns plus the Excel reference values the viewer self-checks against. Column-wise
+arrays, floats via `repr`, no NaN, optional gzip by the `.gz` suffix. The default `--trace-every`
+is the 2000-frame stride or the coarser one that keeps the JSON under 45 MB (row 96: 832 frames,
+46.9 MB, 20.6 MB gzipped); the size written is printed. `docs/viz/data/` holds the four committed
+files.
+
 ## Where the behaviour is documented
 
 * `DEVIATIONS.md`: every place the Python differs from, or deliberately preserves a quirk of,
@@ -168,7 +190,9 @@ animation" has the geometry and scaling rules.
   duplicated-code map the Stage 4 restructure followed, the blind spots of the Excel golden
   suite.
 * `docs/architecture.md`: the Stage 4 module layout, fixed interfaces, exactness arguments,
-  the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace and the Session V.2 animation.
+  the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace, the Session V.2 animation
+  and the Session W.1 data files.
+* `docs/data_format.md`: the contract of the viewer's `trace` and `sweep` data files.
 * `NOTES.md`: session hand-off (current stage, results, open issues, next action).
 * `CLAUDE.md`: the working rules (stage discipline, hard rules, commands).
 
@@ -178,6 +202,6 @@ animation" has the geometry and scaling rules.
 src/surge_sdof/      the package (see above)
 legacy/vba/          the VBA source of truth (never edited)
 tests/               pytest suites; tests/fixtures/ holds the Excel-generated data (never edited)
-tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py
-docs/                architecture.md, port_review.md, bench/, viz/ (animation pages)
+tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading)
+docs/                architecture.md, port_review.md, data_format.md, bench/, viz/ (animation pages), viz/data/ (viewer data files)
 ```

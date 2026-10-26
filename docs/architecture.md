@@ -24,6 +24,8 @@ src/surge_sdof/
   response.py          # public API: peak_response(...) and peak_response_jc(...); returns a dataclass; one private _integrate loop
   trace.py             # Session V.1: the Trace dataclass of a traced run (trace_every > 0) and its allocation / assembly helpers
   viz/animate.py       # Session V.2: the two-panel plotly animation of a Trace (optional `viz` extra: plotly, pandas); tools/animate.py drives it
+  viz/geometry.py      # Session W.1: the expansion-loop layout of a Trace (LoopLayout, loop_layout, lumped_grid, layout_from_trace; moved out of animate.py, which re-exports them); numpy only
+  export.py            # Session W.1: the trace / sweep data documents for the JS viewer (docs/data_format.md) and their JSON / gzip writer; tools/export.py drives it
   pressure.py          # pressure_response (valve/pump MoC) as a standalone driver; get_pressure_response is a thin alias
 ```
 
@@ -39,6 +41,8 @@ src/surge_sdof/
 | `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). Session V.1: both solvers take `trace_every: int = 0`; with `k > 0` the kernel records every `k`-th sub-step into preallocated arrays and the result carries `PeakResponse.trace`. | the internals of `step`, the MoC arrays, how `loads` interpolates |
 | `trace.py` | Session V.1. `Trace`, the frozen dataclass of a traced run (per-frame arrays `t, sub_step, sample, phase, x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`; JC only `p_cells`, `v_cells` and the column geometry; one-off `solver`, `trace_every`, `dt`, `step_qty`, `out_max`, `params`, `inputs`), the frame-array column constants the kernel writes (`F_*`, `I_*`), `capacity` (frames to allocate: the forced sub-steps plus free decay up to the history window), `check_memory` (`MAX_TRACE_VALUES`, `ValueError` naming the smallest stride that fits), `allocate`, `interleave` (the staggered grid as `A0 B0 A1 … AN`) and `build` (slices and copies the kernel arrays into a `Trace`). | the solver loop, `loads`, `moc.step` (it only lays out what the kernel copied) |
 | `viz/animate.py` | Session V.2 / V.2b. The model animation of a traced run, read-only on a `PeakResponse`: `loop_layout` (the interleaved column on the expansion loop, mapped by moving fraction: fraction-0 cells at each end are the horizontal inlet / outlet, the ramp cells the vertical legs, fraction-1 cells the run along `y = 0`; uniform spacing by `cell_position` along the centreline, sharp elbows; a lumped run rebuilds the grid it would have with `moc.grid_size` / `moc.interp_fractions`), `select_frames` (the frame stride for at most `max_frames` frames, the last traced frame kept), `scalars_table` (pandas, the per-frame scalars with a synthetic `t = 0` row), `is_capped`, `build_figure` (Panel 1: circles offset by `x(t) * moving_fraction * exaggeration`, sized by pressure, coloured by velocity; Panel 2: `f_unbalance` on the left axis over `f_friction` on the right (drawn first, translucent), both symmetric so the zero lines coincide, phase bands, peak-`\|x\|` marker, cursor; plotly frames that change trace data only (no redraw), slider, play / pause; `t_start` / `t_end` animate a window, shaded on Panel 2) and `write_html` (CDN page with a typed playback speed). Imports plotly / pandas lazily. | the solvers (it never runs one; `tools/animate.py` does), `moc.step`, `loads` |
+| `viz/geometry.py` | Session W.1 (code of V.2b / V.2c, moved). `LoopLayout`, `_segments`, `loop_layout`, `lumped_grid`, `layout_from_trace`: the expansion-loop layout of a trace's interleaved column, shared by the animation and the exporter; numpy only, no plotly. `viz/animate.py` re-exports the names so `tests/test_viz.py` is unchanged. | the solvers, plotly, the file format |
+| `export.py` | Session W.1. `to_trace_dict(result, case_id)` (the `trace` document: meta with inputs as given, the resolved `SdofParams` + run scalars, the five maxima, provenance; the `LoopLayout` as `geometry`; the thirteen frame columns with the synthetic rest frame first, `sub_step = sample = -1`; JC `p` / `v` as row-major `{shape, data}` blocks), `to_sweep_dict(rows, ...)` (the `sweep` document: thirty fixed columns, regen template, reference block), `dumps` / `write_json` / `read_json` (compact JSON, floats via `repr`, `allow_nan=False`, UTF-8, LF, gzip by suffix). `docs/data_format.md` is the contract and `tests/test_export.py` parses it. Reads a `PeakResponse`; never runs a solver (`tools/export.py` does). | the solvers, the viewer, plotly |
 | `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
@@ -217,6 +221,8 @@ the Stage 4 code; what changed is the calling convention:
 
 ## Session V.2 / V.2b / V.2c / V.2d — the animation
 
+(The geometry functions this section describes live in `viz/geometry.py` since Session W.1; `viz/animate.py` re-exports them.)
+
 `surge_sdof.viz.animate.build_figure(result, case_name, max_frames=400, t_start=0)` turns a
 traced `PeakResponse` into a two-panel plotly figure (`tools/animate.py --golden <case_id> |
 --step … --out docs/viz/<name>.html` drives it; `docs/viz/` holds four CDN pages). The lead
@@ -345,6 +351,39 @@ docstring of `trace.py` is the reference; the design points:
 * **Numba cache.** `_trace_frame` and the `trace.F_* / I_*` constants are compiled into
   `_integrate_kernel`; after editing `trace.py` run `make clean-cache` (the `cache=True`
   staleness note above applies).
+
+## Session W.1 — the data files
+
+`surge_sdof.export` writes what the single-file JS viewer (Session W.2) loads; the contract is
+`docs/data_format.md` and `tests/test_export.py` parses its key tables, so the document and the
+code cannot drift apart silently. Design points:
+
+* **Two kinds.** `trace` (one traced run: `meta`, `geometry`, `frames`, JC `cells`) and `sweep`
+  (Session 5b rows as columns plus a `reference` block with the Excel values of the three
+  Example-sheet cases and the three JC golden rows, so the viewer can self-check on open). Both
+  carry `kind` and `schema_version` (1).
+* **Column-wise, repr floats, no NaN.** Every per-frame or per-row quantity is one flat array;
+  2-D data is `{"shape", "data"}` row-major; floats are `float.__repr__` (the json module's
+  default, shortest round-trip); `allow_nan=False` makes a non-finite value an error at write
+  time, so a missing value is `null` and a failed sweep row has its message in `error`.
+* **Whole run, rest frame first.** A trace file is the whole run at the solver's `trace_every`
+  (the viewer windows live; `--t-start` / `--t-end` do not exist here) and frame 0 is the
+  synthetic rest frame the animation also prepends (`t = 0`, `sub_step = sample = -1` so `t =
+  (sub_step + 1) dt` holds everywhere, phase as `animate._synthetic_phase`, zeros, a zero
+  column); frame `i >= 1` is traced frame `i - 1`.
+* **Geometry from one place.** The expansion-loop layout moved from `viz/animate.py` to
+  `viz/geometry.py` (verbatim) so the exporter and the animation share it; the file carries the
+  `LoopLayout` (positions, kinds, fractions, segment indices, nominal circle centres, the two
+  pipe heights, run length) so the viewer draws what the plotly pages draw without rebuilding it,
+  and a lumped run gets the grid it would have, as the animation does.
+* **Size.** About 20 bytes a float: row 96's 1333 cells cost 53 KB a frame, so `tools/export.py`
+  picks the default stride as the 2000-frame stride of `tools/animate.py` or the coarser one
+  that keeps the estimated JSON under 45 MB (`JSON_BUDGET_MB`, forced phases only); row 96 lands
+  at 832 frames (24 ms a frame), 46.9 MB of JSON, 20.6 MB gzipped. `docs/data_format.md` names
+  the binary variant (same header + float64 blobs) as the upgrade path.
+* **Shared case loading.** `tools/cases.py` holds the `--golden` / `--step` case loading that
+  `tools/animate.py` and `tools/export.py` share, plus the fixture readers for the sweep
+  reference block and the `cases.csv` → sweep-row mapping.
 
 ## Lint policy
 

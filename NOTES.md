@@ -1,6 +1,14 @@
 # NOTES — session handoff
 
 ## Current stage
+Session W.1 (results data format and exporter, 2026-10-26) done: `docs/data_format.md` (the
+contract, parsed by the tests), `src/surge_sdof/export.py` (`to_trace_dict`, `to_sweep_dict`,
+`write_json` / `read_json`), `src/surge_sdof/viz/geometry.py` (the loop geometry moved out of
+`animate.py`, re-exported), `tools/export.py` (`trace --golden | --step`, `sweep --from-csv`),
+`tools/cases.py` (case loading shared with `tools/animate.py`), `tests/test_export.py` (19 tests),
+four data files in `docs/viz/data/`; no solver module touched. See "Session W.1 — done".
+**Next action: W.2** (the single-file JS viewer that loads these files). Still pending after W:
+the owner's local bench reference run and Session 5b.
 Session V.2f (fix, 2026-10-26) done: every animation frame now lists all six traces (an empty
 update for the centreline, friction and unbalance), the proven candidate 1 of
 `docs/viz/diagnosis.md`; the four pages regenerated; `tests/test_viz_motion.py` green (the two
@@ -53,6 +61,58 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session W.1 — done (2026-10-26)
+Built as planned (plan section below); commits per step. No solver module changed (`src/` changes:
+`export.py` new, `viz/geometry.py` new with code moved verbatim from `viz/animate.py`, which now
+imports and re-exports it); fast suite 888 passed, `-m slow` green before the `src/` commit,
+pure-Python mode green (the row 96 memory test skips there), lint clean.
+- **Contract first.** `docs/data_format.md` has one `### <block>` key table per object;
+  `tests/test_export.py::doc_keys` parses them and asserts `list(obj) == keys` for every block of
+  both kinds (no extras, nothing missing), so a key is in the format exactly when the document
+  lists it. Rules as instructed: column-wise arrays, floats via `repr` (the json module's
+  default), no NaN (`allow_nan=False`, a write with a non-finite value raises), UTF-8, LF,
+  compact separators; gzip by the `.gz` suffix, read back identical.
+- **Trace file.** Whole run at the trace stride, never windowed. Frame 0 is the synthetic rest
+  frame with `sub_step = sample = -1` (so `t = (sub_step + 1) dt` holds for every frame, pinned)
+  and the animation's rest phase; `stick` is 0/1; `cells.p` / `cells.v` are `{shape, data}`
+  row-major with a zero row 0; absent for lumped (pinned). `meta.params` carries all six
+  `SdofParams` fields plus `dt`, `step_qty`, `out_max`, `trace_every`, `capped`; `meta.outputs`
+  the five maxima and `free_decay_samples` (for the viewer's self-check); `meta.inputs` the
+  solver kwargs as received with `force_history` as a block. `geometry` is the `LoopLayout`
+  (positions, kinds, fractions, `segments` indices, nominal centres, run length, both pipe
+  heights, portal height, spacing, cell length), the lumped grid rebuilt as the animation does.
+- **Sweep file.** The owner's 29 columns plus `case_id` (the regen template needs it); the
+  golden `cases.csv` maps to `case_id`, `size_in = 10`, `length_m`, `nat_freq_hz`, `history_type
+  = "golden"`, `mu`, `rho_c` and the row's own solver's `f_eq_*` / `f_peak_*` (the other solver's
+  columns and the ratios null: the 75 lumped and 3 JC rows are different cases). A 5b CSV with the
+  fixed header passes through; an empty cell is null. `reference`: the three Example-sheet cases
+  (the pressure case with its 121 values, `output_names` null) and the three JC golden rows with
+  the Excel values exactly as the fixtures hold them and the golden RTOLs (pinned against the
+  fixtures).
+- **Sizes.** Floats at full `repr` cost ~20 bytes each, so row 96 (1333 cells) at the 2000-frame
+  stride of `tools/animate.py` would be ~107 MB. `tools/export.py` picks the default stride as
+  that stride or the coarser one keeping the estimated JSON under `JSON_BUDGET_MB` = 45 (forced
+  phases only); row 96 lands at stride 1212: 832 frames (24 ms a frame, 0.07 of the 3 Hz period),
+  46.88 MB of JSON, **20.60 MB gzipped** (committed as `docs/viz/data/golden_r096_jc.json.gz`),
+  5.8 s end to end under Numba. The memory test runs the full row (seconds under Numba) and
+  prints the size. Example cases: `example_jc_step.json` 1.80 MB (1124 frames, 37 cells),
+  `example_lumped_step.json` 0.14 MB (1004 frames), `reference_sweep.json` 0.02 MB.
+- **Judgement calls to flag.** (1) `git_sha` / `created_utc` sit in `meta`, not in `params`
+  (the instruction's list ran them together); `meta.outputs`, `n_frames`, `n_cells`, `gap`,
+  `ratio2` and the extra geometry keys are additions to the instruction's lists, each listed in
+  the document. (2) The 20.6 MB gzipped row 96 file is committed as instructed; it is the largest
+  file in the repository by far (the plotly page was 4.9 MB) and the budget constant is the lever
+  if it should be smaller. (3) The 45 MB estimate under-shoots by ~4 % (46.9 MB actual, the
+  pressures are 7-digit numbers); still under the 50 MB rule with a 3 MB margin. (4)
+  `export.py` imports `_synthetic_phase` and `is_capped` from `viz.animate` (the rest frame and
+  the capped flag are the animation's definitions); the animation module has no plotly import at
+  module level, so this costs nothing. (5) `tools/cases.py` is a tools-only refactor of
+  `tools/animate.py` (behaviour unchanged; the viz pages are not regenerated).
+- **Open for the owner (also in Open issues).** The 5b sweep column semantics are defined by the
+  document for the first time; `f_peak_*` is defined as `max_applied_force`, which `FMax`
+  computes without the junction force in both solvers (VBA 443 / 871), so `ratio_f_peak` would be
+  identically 1 on one history. `f_eq_over_LD2_*` and `daf_*` normalisations are marked inferred.
 
 ## Session W.1 — scope and plan (recorded 2026-10-26 before touching `src/`)
 Owner's instruction: a results data format and exporter for the single-file JS viewer (W.2), which
@@ -1190,6 +1250,18 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
+- **W.1, for the owner before 5b writes sweep files:** `docs/data_format.md` defines the sweep
+  columns' semantics for the first time. `f_peak_lumped` / `f_peak_jc` are defined as
+  `max_applied_force`, which both solvers compute as `max |forceA - forceB|` without the junction
+  force (VBA 443 / 871), so on one history they are equal and `ratio_f_peak` is identically 1;
+  if `f_peak` was meant to be something else (the peak spring force `k x_max`? the peak total
+  force on the mass?), the document and `tools/cases.golden_sweep_rows` need the change. The
+  `f_eq_over_LD2_*` normalisation (`f_eq / (L D²)`, D = `od_mm`) and `daf_*` (`f_eq /
+  history_peak`) are inferred too.
+- W.1: `docs/viz/data/golden_r096_jc.json.gz` is 20.6 MB (46.9 MB of JSON, 832 frames of 1333
+  cells). Committed as instructed; lower `tools/export.py`'s `JSON_BUDGET_MB` (or pass
+  `--trace-every`) and re-export if the repository should stay smaller, or move the file to the
+  bucket the viewer reads from once W.2 exists.
 - Port review of V.1 (pre-existing, not introduced): `loads._schedule` (as the Stage 4
   `unbalance_force` did) reads `fh[ib][jb]` before the first phase-2 `k` loop, where the VBA
   (line 491) and `legacy_port.py` 639 only read `forceHistory(iB, jB)` inside that loop. In the
@@ -1228,6 +1300,19 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**Session W.2: the single-file JS viewer.** It loads a `trace` or `sweep` file written by
+`tools/export.py` (`docs/data_format.md`; `docs/viz/data/` has four) from disk or a bucket, with
+no Python on the viewing machine, and controls playback live: play / pause / speed, a time
+window chosen while playing, the whole run on the force panel. Copy the geometry and scaling
+formulas from `src/surge_sdof/viz/animate.py` (`build_figure`: `exaggeration = 0.1 run_length /
+max|x|`, `size = nominal (1 + k_p (p - p_ref) / p_scale)` with the largest circle 2x nominal and
+the 0.15 floor, colour `v` on the diverging scale with `cmin/cmax = -+max|v|`) and the layout
+from the file's `geometry` block (`x_nominal_m` / `y_nominal_m` are already there). The gzip
+variant needs inflating in the browser (`DecompressionStream("gzip")` or a bundled inflater).
+Self-check on open: a `sweep` file's `reference` block against the port's values; a `trace`
+file's `meta.outputs` against the matching reference entry when its `case_id` is one.
+
+Previous next action (V.2f → W.1, kept for the record):
 **First: the friction-line fix (V.2e diagnosis).** Choose one of the candidates in
 `docs/viz/diagnosis.md` (listing every trace in each frame's `traces` with `{}` data is the
 one shown to work in the browser), apply it in `src/surge_sdof/viz/animate.py`, regenerate the

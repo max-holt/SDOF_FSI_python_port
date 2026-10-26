@@ -280,8 +280,11 @@ integer. A trace file is therefore roughly
   targets would be ~107 MB. `tools/export.py` therefore picks its default `--trace-every` as the
   2000-frame stride **or the coarser stride that keeps the estimated file under 45 MB**
   (estimated over the forced phases; free decay adds frames), and prints the size written. The
-  committed `docs/viz/data/golden_r096_jc.json.gz` is that default; `--trace-every` overrides it
-  in either direction. gzip roughly halves decimal floats.
+  committed `docs/viz/data/golden_r096_jc.json.gz` is that default: stride 1212, 832 frames (24 ms a
+  frame), 46.9 MB of JSON, 20.6 MB gzipped; `--trace-every` overrides it in either direction.
+  gzip roughly halves decimal floats. Measured on the committed files: `example_jc_step.json`
+  1.80 MB (1124 frames, 37 cells), `example_lumped_step.json` 0.14 MB (1004 frames),
+  `reference_sweep.json` 0.02 MB (78 rows).
 * A sweep file is small: 30 columns × rows (a 1000-row sweep is ~0.5 MB) plus the reference block
   (~10 KB).
 
