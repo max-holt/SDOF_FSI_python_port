@@ -54,6 +54,45 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Session W.1 — scope and plan (recorded 2026-10-26 before touching `src/`)
+Owner's instruction: a results data format and exporter for the single-file JS viewer (W.2), which
+loads a data file and controls playback live (the plotly pages bake frames, speed and window in).
+No solver module changes; fast suite green and lint clean per step; one commit per step.
+
+1. **`docs/data_format.md` first** (the contract; `tests/test_export.py` parses its key tables, so
+   the doc *is* the schema). Two kinds, `kind` + `schema_version: 1`. `trace`: `meta` (case id,
+   solver, `inputs` as given with `force_history` as a `{shape, data}` block, `params` as resolved
+   = the six `SdofParams` fields + `dt`, `step_qty`, `out_max`, `trace_every`, `capped`; the five
+   maxima + `free_decay_samples` as `outputs` so the viewer can self-check; `n_frames`,
+   `n_cells`; `git_sha`, `created_utc`), `geometry` (the `LoopLayout` the animation draws:
+   `cell_position_m`, `cell_kind`, `moving_fraction`, `ext_qty`, `pivot_seg_qty`, `pipe_seg_qty`,
+   `segments`, `x_nominal_m`, `y_nominal_m`, `run_length_m`, `leg_height_m`, `leg_height_2_m`,
+   `portal_height_m`, `spacing_m`, `cell_length_m`), `frames` (13 flat columns of `n_frames`,
+   frame 0 the synthetic rest frame: `t = 0`, `sub_step = sample = -1`, phase as the animation's
+   `_synthetic_phase`, zeros, `stick` 0/1), `cells` (`p`, `v` as `{shape, data}` row-major; absent
+   for lumped). Whole run at the trace stride, never windowed. `sweep`: `meta` (`git_sha`, `tier`,
+   `created_utc`, `cpu`, `histories_version`, `source`, `n_rows`), `columns` (the owner's 29 names
+   plus `case_id`, all the same length, null for unknown), `regen` (command template), `reference`
+   (the three Example-sheet cases and the three JC golden rows with their Excel values). Rules:
+   column-wise arrays, floats via `repr`, no NaN (null + `error`), UTF-8, LF; size expectations and
+   the binary variant (same header + float64 blobs) as the upgrade path.
+2. **`src/surge_sdof/export.py`**: `to_trace_dict(result, case_id)`, `to_sweep_dict(rows, ...)`,
+   `write_json(path, obj, gzip=False)`, `read_json(path)`. Geometry comes from the animation's
+   helpers, moved to `src/surge_sdof/viz/geometry.py` (`LoopLayout`, `loop_layout`, `lumped_grid`,
+   `layout_from_trace`, `_segments`, `_interp_fractions_display`); `viz/animate.py` re-exports
+   them so `tests/test_viz.py` is unchanged. `tools/export.py`: `trace --golden <id> | --step ...
+   [--trace-every N] --out file.json[.gz]` and `sweep --from-csv <file>.csv --out file.json`
+   (the golden `cases.csv` layout is recognised and mapped; a 5b CSV with the fixed header passes
+   through). The case loading shared with `tools/animate.py` moves to `tools/cases.py`.
+   **Default stride**: the 2000-frame stride of `tools/animate.py`, or the coarser stride that keeps
+   the estimated JSON under 45 MB (about 20 bytes a value; row 96 at 2000 frames would be ~107 MB).
+3. **Tests** (`tests/test_export.py`): round-trip, schema vs the doc (every listed key, no extras,
+   lengths and shape products), frame 0 at rest, no `cells` for lumped, reference block from the
+   golden CSV with the Excel values, gzip identical, row 96 at the CLI default under 50 MB with the
+   size printed (skipped under `NUMBA_DISABLE_JIT=1`: the full row is ~25 min in pure Python).
+4. **Deliverables** `docs/viz/data/`: `example_jc_step.json`, `example_lumped_step.json`,
+   `golden_r096_jc.json.gz`, `reference_sweep.json`; architecture / README rows; NOTES; next = W.2.
+
 ## Session V.2f — done (2026-10-26)
 Owner's instruction: apply the proven fix only (diagnosis.md candidate 1), nothing else on the figure.
 - **Fix (`viz/animate.py`).** Each `go.Frame` lists `traces = [circles, cursor, status,
