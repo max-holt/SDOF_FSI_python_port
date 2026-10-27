@@ -259,20 +259,24 @@ def test_loop_layout_geometry(which):
 def test_example_jc_elbow_cells_are_distinct():
     """The item-4 check of Session V.2b, pinned: at each elbow of the Example JC case the two
     cells are distinct cells at distinct positions and fractions."""
-    # N = 18, pivot = 7. F-4 profile: inlet_end = B(3) at 7, run_start = A(pivot - 1) at
-    # 2 pivot - 2 = 12, run_end = A(N - pivot) at 22, outlet_start = B(N - 5) at 2N - 9 = 27
-    # (legs of 4 cells each). Legacy profile: inlet_end = B(4) at 9, run_start = A(pivot) at
+    # N = 18, pivot = 7. F-4b profile (27 Oct): inlet_end = B(3) at 7, run_start =
+    # A(pivot - 1) at 2 pivot - 2 = 12, run_end = A(N - pivot + 1) at 2N - 2 pivot + 2 = 24,
+    # outlet_start = B(N - 4) at 2N - 7 = 29 (legs of 4 cells each, 8 fixed cells at each
+    # end). The 26 Oct F-4 profile had run_end 22 and outlet_start 27 (equal legs, 10 fixed
+    # cells at the outlet). Legacy profile: inlet_end = B(4) at 9, run_start = A(pivot) at
     # 14, run_end = B(N - pivot) at 23, outlet_start 27 (legs of 4 and 3 cells).
     layout = animate.layout_from_trace(_example_jc_result().trace)
-    assert layout.elbow_pairs == ((7, 8), (11, 12), (22, 23), (26, 27))
+    assert layout.elbow_pairs == ((7, 8), (11, 12), (24, 25), (28, 29))
+    assert layout.outlet_start - layout.run_end == layout.run_start - layout.inlet_end
+    assert layout.inlet_end + 1 == len(layout.moving_fraction) - layout.outlet_start == 8
     for a, b in layout.elbow_pairs:
         assert layout.cell_position[a] != layout.cell_position[b]
         assert layout.moving_fraction[a] != layout.moving_fraction[b]
-    assert layout.moving_fraction[7] == 0.0 and layout.moving_fraction[27] == 0.0
+    assert layout.moving_fraction[7] == 0.0 and layout.moving_fraction[29] == 0.0
     legacy = animate.layout_from_trace(_example_jc_result(fraction_profile="legacy").trace)
     assert legacy.elbow_pairs == ((9, 10), (13, 14), (23, 24), (26, 27))
     assert legacy.moving_fraction[9] == 0.0 and legacy.moving_fraction[27] == 0.0
-    assert layout.moving_fraction[12] == 1.0 and layout.moving_fraction[22] == 1.0
+    assert layout.moving_fraction[12] == 1.0 and layout.moving_fraction[24] == 1.0
     assert legacy.moving_fraction[14] == 1.0 and legacy.moving_fraction[23] == 1.0
 
 

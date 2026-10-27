@@ -443,11 +443,12 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
         )
     assert size < 50_000_000
     assert doc["meta"]["n_cells"] == 1333 and n_frames >= 800
-    # the defaults (F-1, F-2, F-4): the legacy / Excel value is 0.0036195012413468937, F-4
-    # moves it by -1.03e-3 relative (NOTES.md "Session F-4 — done")
+    # the defaults (F-1, F-2, F-4 + F-4b): the legacy / Excel value is 0.0036195012413468937;
+    # F-4 (26 Oct profile) gave 0.0036157685826052957 (-1.03e-3 relative), F-4b (27 Oct
+    # profile) -2.07e-3 (NOTES.md "Session F-4b — done")
     assert math.isclose(
-        doc["meta"]["outputs"]["max_displacement"], 0.0036157685826052957, rel_tol=5e-12
+        doc["meta"]["outputs"]["max_displacement"], 0.003612019681294949, rel_tol=5e-12
     )
     assert math.isclose(
-        doc["meta"]["outputs"]["max_displacement"], 0.0036195012413468937, rel_tol=1.1e-3
+        doc["meta"]["outputs"]["max_displacement"], 0.0036195012413468937, rel_tol=2.2e-3
     )

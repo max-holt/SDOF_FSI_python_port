@@ -1,9 +1,10 @@
-"""Approved fix F-4: the lead author's corrected interp-fraction profiles (DEVIATIONS D-4).
+"""Approved fix F-4 (+ F-4b): the corrected interp-fraction profiles (DEVIATIONS D-4).
 
 ``moc.interp_fractions(..., fraction_profile="fixed")`` transcribes
-``legacy/vba/interpFraction_fix_2026-10-26.bas``; ``"legacy"`` stays the original
-``Existing Code.bas`` profile. The expected values below are computed from the VBA
-expressions by hand, not from the Python.
+``legacy/vba/interpFraction_fix_2026-10-27.bas`` (the 26 Oct functions with the outlet side
+moved one node outward, F-4b, pending the lead author's confirmation); ``"legacy"`` stays
+the original ``Existing Code.bas`` profile. The expected values below are computed from the
+VBA expressions by hand, not from the Python.
 
 Grid conventions (``moc`` module docstring): A nodes ``0 .. N``, B cells ``0 .. N - 1``,
 interleaved ``A0 B0 A1 B1 ... B(N-1) A(N)`` at positions ``0 .. 2N`` (``trace.interleave``).
@@ -84,19 +85,19 @@ def test_unknown_profile_is_rejected():
 
 
 def test_table_pivot_8_pipe_30():
-    """Hand-computed from the VBA with ``extQTY = 4``, ``pivotSegQTY - extQTY = 4``.
+    """Hand-computed from the 27 Oct VBA with ``extQTY = 4``, ``pivotSegQTY - extQTY = 4``.
 
     A: ``n + 1 < 4.5`` -> 0 for n <= 3; ``n + 1 < 8`` -> ((n - 3.5) / 4)^2 for n = 4, 5, 6;
-    ``n + 1 > 26.5`` -> 0 for n >= 26; ``n + 1 > 23`` -> ((25.5 - n) / 4)^2 for n = 23, 24,
-    25; 1 for n = 7 .. 22.
-    B: 0 for n <= 3; ``n + 1 < 8`` -> ((n - 3) / 4)^2 for n = 4, 5, 6; ``n + 1 > 25.5`` ->
-    0 for n >= 25; ``n + 1 > 22.5`` -> ((25 - n) / 4)^2 for n = 22, 23, 24; 1 for
-    n = 7 .. 21."""
+    ``n + 1 > 27.5`` -> 0 for n >= 27; ``n + 1 > 24`` -> ((26.5 - n) / 4)^2 for n = 24, 25,
+    26; 1 for n = 7 .. 23.
+    B: 0 for n <= 3; ``n + 1 < 8`` -> ((n - 3) / 4)^2 for n = 4, 5, 6; ``n + 1 > 26.5`` ->
+    0 for n >= 26; ``n + 1 > 23.5`` -> ((26 - n) / 4)^2 for n = 23, 24, 25; 1 for
+    n = 7 .. 22. (The 26 Oct text had the outlet ramps at n = 23, 24, 25 and 22, 23, 24.)"""
     fa, fb = fixed(30, 8)
-    expected_a = [0.0] * 4 + [1 / 64, 9 / 64, 25 / 64] + [1.0] * 16 + [25 / 64, 9 / 64, 1 / 64]
-    expected_a += [0.0] * 5
-    expected_b = [0.0] * 4 + [1 / 16, 1 / 4, 9 / 16] + [1.0] * 15 + [9 / 16, 1 / 4, 1 / 16]
-    expected_b += [0.0] * 5
+    expected_a = [0.0] * 4 + [1 / 64, 9 / 64, 25 / 64] + [1.0] * 17 + [25 / 64, 9 / 64, 1 / 64]
+    expected_a += [0.0] * 4
+    expected_b = [0.0] * 4 + [1 / 16, 1 / 4, 9 / 16] + [1.0] * 16 + [9 / 16, 1 / 4, 1 / 16]
+    expected_b += [0.0] * 4
     assert len(expected_a) == 31 and len(expected_b) == 30
     assert fa.tolist() == expected_a
     assert fb.tolist() == expected_b
@@ -159,27 +160,46 @@ def test_fixed_legs_have_the_same_length(pipe, pivot):
 
 
 @pytest.mark.parametrize("pipe, pivot", GRIDS)
-def test_fixed_profiles_mirror_about_position_n_minus_1(pipe, pivot):
-    """A(n) = A(N - 1 - n), B(n) = B(N - 2 - n): both profiles mirror about interleaved
-    position N - 1, the centre of the lead author's ``n = 0 .. pipeSegQTY - 1`` nodes
-    (the geometric centre of the N + 1 A nodes is position N, half a MoC cell further;
-    NOTES.md F-4 "for the lead author"). The legacy profiles mirror about position N."""
+def test_fixed_profiles_mirror_about_the_pipe_centre(pipe, pivot):
+    """F-4b: A(n) = A(N - n) over the called nodes 1 .. N - 1 (centre N / 2 of the N + 1
+    A nodes) and B(n) = B(N - 1 - n) over the N B cells (centre (N - 1) / 2); the
+    interleaved column mirrors about position N. The 26 Oct functions mirrored about
+    interleaved position N - 1 (A(n) = A(N - 1 - n), B(n) = B(N - 2 - n)), half a MoC
+    cell short of the geometric centre. The legacy A profile mirrors about N too; the
+    legacy B does not mirror at all."""
     n_seg = pipe
     fa, fb = fixed(pipe, pivot)
-    assert np.array_equal(fa[:n_seg], fa[:n_seg][::-1])  # A0 .. A(N-1)
-    assert np.array_equal(fb[: n_seg - 1], fb[: n_seg - 1][::-1])  # B0 .. B(N-2)
+    assert all(fa[n] == fa[n_seg - n] for n in range(1, n_seg))
+    assert np.array_equal(fa, fa[::-1])  # A0 = A(N) = 0 as well
+    assert np.array_equal(fb, fb[::-1])
     inter = interleave(fa, fb)
-    assert np.array_equal(inter[: 2 * n_seg - 1], inter[: 2 * n_seg - 1][::-1])
-    # the half-cell offset: the inlet zero block is 8 interleaved cells, the outlet 10
-    zeros = np.flatnonzero(inter == 0.0)
-    assert zeros[:8].tolist() == list(range(8)) and inter[8] != 0.0
-    assert zeros[-10:].tolist() == list(range(2 * n_seg - 9, 2 * n_seg + 1))
-    assert fa[4] != 0.0 and fa[n_seg - 4] == 0.0
-    # legacy: A mirrors about position N (A(n) = A(N - n)); B does not mirror at all (its
-    # inlet ramp runs n = 3 .. pivot - 1, the outlet ramp n = N - pivot + 1 .. N - 4)
+    assert np.array_equal(inter, inter[::-1])
+    # not the 26 Oct mirror
+    assert not np.array_equal(fa[:n_seg], fa[:n_seg][::-1])
+    assert not np.array_equal(fb[: n_seg - 1], fb[: n_seg - 1][::-1])
+    assert fa[4] == fa[n_seg - 4] != 0.0
     la, lb = legacy(pipe, pivot)
     assert np.array_equal(la, la[::-1])
     assert not np.array_equal(lb, lb[::-1]) and not np.array_equal(lb[:-1], lb[:-1][::-1])
+
+
+@pytest.mark.parametrize("pipe, pivot", GRIDS)
+def test_fixed_blocks_are_equal_at_both_ends(pipe, pivot):
+    """``extQTY`` zero nodes / cells at each end of each profile (A: n <= 3 and
+    n >= N - 3; B: n <= 3 and n >= N - 4), 8 interleaved cells at each end of the
+    column; the 26 Oct text had 8 at the inlet and 10 at the outlet."""
+    n_seg = pipe
+    fa, fb = fixed(pipe, pivot)
+    assert np.flatnonzero(fa == 0.0).tolist() == list(range(EXT)) + list(
+        range(n_seg - EXT + 1, n_seg + 1)
+    )
+    assert np.flatnonzero(fb == 0.0).tolist() == list(range(EXT)) + list(range(n_seg - EXT, n_seg))
+    inter = interleave(fa, fb)
+    zeros = np.flatnonzero(inter == 0.0)
+    assert zeros.tolist() == list(range(2 * EXT)) + list(
+        range(2 * n_seg - 2 * EXT + 1, 2 * n_seg + 1)
+    )
+    assert inter[2 * EXT] == inter[2 * n_seg - 2 * EXT] == fa[EXT] != 0.0
 
 
 @pytest.mark.parametrize("pipe, pivot", GRIDS)

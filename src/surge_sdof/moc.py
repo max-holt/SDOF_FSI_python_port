@@ -27,12 +27,16 @@ divides by ``2N - 1`` (D-17). ``vav_divisor`` returns either, selected by the ca
 ``vav_denominator`` flag ("legacy" | "fixed").
 
 Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
-``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``). ``interp_fractions``
-tabulates either the original profile (``fraction_profile="legacy"``: the ``n < 3`` test of
-``interpFractionB`` and the division by zero at ``pivotSegQTY = 4``) or the corrected one
-(``"fixed"``: both profiles start at exactly 0 at ``n = 3``, one strictly monotone squared
-ramp per leg, both legs the same length, mirror-symmetric about interleaved position
-``N - 1``, the lead author's ``n = 0 .. pipeSegQTY - 1`` convention).
+``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``); F-4b
+(``legacy/vba/interpFraction_fix_2026-10-27.bas``, pending the lead author's confirmation)
+moves the outlet side of both one node outward (``pipeSegQTY -> pipeSegQTY + 1`` in the two
+outlet tests and the outlet ramp). ``interp_fractions`` tabulates either the original
+profile (``fraction_profile="legacy"``: the ``n < 3`` test of ``interpFractionB`` and the
+division by zero at ``pivotSegQTY = 4``) or the corrected one (``"fixed"``, the 27 Oct
+text: both profiles start at exactly 0 at ``n = 3``, one strictly monotone squared ramp per
+leg, both legs the same length, A mirror-symmetric about the column centre ``N / 2`` over
+the called nodes ``1 .. N - 1`` (``A(n) = A(N - n)``) and B about ``(N - 1) / 2``
+(``B(n) = B(N - 1 - n)``), equal fixed blocks of ``extQTY`` nodes / cells at both ends).
 
 Exactness
 ---------
@@ -214,11 +218,12 @@ def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
         return 1.0
 
 
-# interpFraction_fix_2026-10-26.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
+# interpFraction_fix_2026-10-27.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def interp_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """``interp_fraction_a`` as corrected by the lead author (approved fix F-4).
+    """``interp_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
+    moved one node outward by F-4b).
 
-    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-26.bas``; the tests
+    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``; the tests
     are on ``n + 1`` as written there.
 
     Parameters
@@ -231,28 +236,30 @@ def interp_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     Returns
     -------
     float
-        0 for ``n <= 3`` and ``n >= pipeSegQTY - 4``, the squared ramp
-        ``((n + 0.5 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` (its mirror on the
-        outlet leg), 1 between; dimensionless. At ``pivotSegQTY = 4`` the ramp branch is
-        unreachable (the zero test covers it), so nothing divides by zero here.
+        0 for ``n <= 3`` and ``n >= pipeSegQTY - 3``, the squared ramp
+        ``((n + 0.5 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` and its mirror
+        ``A(N - n)`` on the outlet leg (``N - pivot + 2 <= n <= N - 4``), 1 between;
+        dimensionless. At ``pivotSegQTY = 4`` the ramp branch is unreachable (the zero test
+        covers it), so nothing divides by zero here.
     """
     if n + 1 < EXT_QTY + 0.5:
         return 0.0
     elif n + 1 < pivot_seg_qty:
         return ((n + 0.5 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n + 1 > pipe_seg_qty - EXT_QTY + 0.5:
+    elif n + 1 > pipe_seg_qty + 1 - EXT_QTY + 0.5:
         return 0.0
-    elif n + 1 > pipe_seg_qty + 1 - pivot_seg_qty:
-        return ((pipe_seg_qty - EXT_QTY - n - 0.5) / (pivot_seg_qty - EXT_QTY)) ** 2
+    elif n + 1 > pipe_seg_qty + 2 - pivot_seg_qty:
+        return ((pipe_seg_qty + 1 - EXT_QTY - n - 0.5) / (pivot_seg_qty - EXT_QTY)) ** 2
     else:
         return 1.0
 
 
-# interpFraction_fix_2026-10-26.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
+# interpFraction_fix_2026-10-27.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """``interp_fraction_b`` as corrected by the lead author (approved fix F-4).
+    """``interp_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
+    moved one cell outward by F-4b).
 
-    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-26.bas``. The first
+    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``. The first
     test is ``n + 1 < extQTY + 0.5`` as in the A profile, so ``n = 3`` is 0 (D-4 fixed).
 
     Parameters
@@ -265,19 +272,19 @@ def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     Returns
     -------
     float
-        0 for ``n <= 3`` and ``n >= pipeSegQTY - 5``, the squared ramp
-        ``((n + 1 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` (its mirror on the
-        outlet leg), 1 between; dimensionless. As for the A profile the ramp is unreachable
-        at ``pivotSegQTY = 4``.
+        0 for ``n <= 3`` and ``n >= pipeSegQTY - 4``, the squared ramp
+        ``((n + 1 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` and its mirror
+        ``B(N - 1 - n)`` on the outlet leg (``N - pivot + 1 <= n <= N - 5``), 1 between;
+        dimensionless. As for the A profile the ramp is unreachable at ``pivotSegQTY = 4``.
     """
     if n + 1 < EXT_QTY + 0.5:
         return 0.0
     elif n + 1 < pivot_seg_qty:
         return ((n + 1 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n + 1 > pipe_seg_qty - EXT_QTY - 0.5:
+    elif n + 1 > pipe_seg_qty + 1 - EXT_QTY - 0.5:
         return 0.0
-    elif n + 1 > pipe_seg_qty + 0.5 - pivot_seg_qty:
-        return ((pipe_seg_qty - EXT_QTY - n - 1) / (pivot_seg_qty - EXT_QTY)) ** 2
+    elif n + 1 > pipe_seg_qty + 1.5 - pivot_seg_qty:
+        return ((pipe_seg_qty + 1 - EXT_QTY - n - 1) / (pivot_seg_qty - EXT_QTY)) ** 2
     else:
         return 1.0
 

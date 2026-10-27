@@ -1270,9 +1270,10 @@ def test_fixed_fraction_profile_changes_every_fluid_coupled_moc_case(idx):
     """F-4 (D-4 fixed): the corrected profile cannot act with no fluid (dF = 0) or in the
     fallback (no MoC) and equals the legacy bitwise there; on every fluid-coupled MoC case
     it changes the result (the ramps move by half a cell and the stray B(3) cell goes, so
-    dF differs from the first accelerated sub-step on). Measured on this sweep (NOTES.md
-    "Session F-4 — done"): F-4 alone max 3.6e-2 (j21), median 3.9e-3 over the 25 changed
-    cases; all three fixes max 3.6e-2."""
+    dF differs from the first accelerated sub-step on). Measured on this sweep with the 27 Oct
+    profile (NOTES.md "Session F-4b — done", ``tools/profile_delta.py``): F-4 alone max
+    4.5e-2 (j00), median 7.4e-3 over the 25 changed cases; all three fixes max 4.5e-2 (the
+    26 Oct profile: max 3.6e-2 (j21), median 3.9e-3)."""
     case = jc_sweep_cases()[idx]
     base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
     f4 = response.peak_response_jc(
