@@ -107,8 +107,9 @@ def golden_sweep_doc() -> dict:
 def test_module_constants_match_the_document():
     assert list(export.FRAME_COLUMNS) == doc_keys("trace.frames")
     assert list(export.SWEEP_COLUMNS) == doc_keys("sweep.columns")
-    assert len(export.SWEEP_COLUMNS) == 30
+    assert len(export.SWEEP_COLUMNS) == 72
     assert "schema_version` | int | `1`" in DOC and export.SCHEMA_VERSION == 1
+    assert "schema_version` | int | `2`" in DOC and export.SWEEP_SCHEMA_VERSION == 2
 
 
 @pytest.mark.parametrize("case_id", ["example_jc", "example_lumped"])
@@ -274,7 +275,7 @@ def test_sweep_values_are_typed_and_null_where_unknown():
 def test_sweep_schema_and_reference_block_from_the_golden_csv():
     doc = golden_sweep_doc()
     assert_keys(doc, "sweep")
-    assert doc["kind"] == "sweep" and doc["schema_version"] == 1
+    assert doc["kind"] == "sweep" and doc["schema_version"] == 2
     assert_keys(doc["meta"], "sweep.meta")
     assert_keys(doc["columns"], "sweep.columns")
     assert_keys(doc["regen"], "sweep.regen")

@@ -3,7 +3,8 @@
 ``to_trace_dict(result, case_id)`` turns a traced ``PeakResponse`` into the ``trace`` document
 (meta, the loop geometry of ``viz.geometry``, the per-frame columns with the synthetic rest
 frame first, the JC column arrays as row-major blocks); ``to_sweep_dict(rows, ...)`` turns
-sweep rows into the ``sweep`` document (fixed columns, regen template, reference block);
+sweep rows into the ``sweep`` document (the 5b sweep CSV columns, ``schema_version`` 2,
+regen template, reference block);
 ``write_json`` / ``read_json`` serialise them under the document's rules: column-wise arrays,
 floats via ``repr`` (the json module's default), no NaN (``allow_nan=False`` raises), UTF-8,
 LF, compact separators, optional gzip.
@@ -30,6 +31,7 @@ from surge_sdof.viz.geometry import LoopLayout, layout_from_trace
 
 __all__ = [
     "SCHEMA_VERSION",
+    "SWEEP_SCHEMA_VERSION",
     "KIND_TRACE",
     "KIND_SWEEP",
     "FRAME_COLUMNS",
@@ -47,6 +49,9 @@ __all__ = [
 ]
 
 SCHEMA_VERSION = 1
+"""``schema_version`` of a ``trace`` document."""
+SWEEP_SCHEMA_VERSION = 2
+"""``schema_version`` of a ``sweep`` document (2 since Session 5b: the sweep CSV columns)."""
 KIND_TRACE = "trace"
 KIND_SWEEP = "sweep"
 
@@ -69,6 +74,8 @@ FRAME_COLUMNS = (
 
 SWEEP_COLUMNS = (
     "case_id",
+    "tier",
+    "subset",
     "size_in",
     "od_mm",
     "thk_mm",
@@ -78,30 +85,75 @@ SWEEP_COLUMNS = (
     "f_osc_hz",
     "seed",
     "amplitude_fraction",
-    "p_design_bar",
-    "p_peak_bar",
     "mu",
+    "p_design_bar",
+    "p_cap_bar",
+    "p_peak_bar",
+    "p_mean_bar",
+    "p_rms_bar",
+    "noise_rms_bar",
+    "sample_freq",
+    "lead_in_s",
+    "transit_s",
+    "tail_s",
+    "decay_s",
+    "duration_s",
+    "n_samples",
+    "p_step",
+    "p_osc",
+    "p_noise_rms",
+    "f_cut_hz",
+    "f_ref_hz",
+    "decay_cycles",
+    "decay_fraction",
+    "p_cap",
+    "histories_version",
+    "fluid_area_m2",
+    "mass_per_unit_len",
+    "ei",
+    "rho_c",
+    "portal_height_m",
+    "mass_total_kg",
+    "pipe_seg_qty",
+    "pivot_seg_qty",
+    "jc_short_pipe",
     "history_peak",
     "history_mean",
     "history_rms",
     "f_eq_lumped",
     "f_eq_jc",
+    "ratio_f_eq",
+    "v_peak_lumped",
+    "v_peak_jc",
+    "ratio_v_peak",
+    "momentum_lumped",
+    "momentum_jc",
+    "ke_peak_lumped",
+    "ke_peak_jc",
+    "x_peak_lumped",
+    "x_peak_jc",
+    "a_peak_lumped",
+    "a_peak_jc",
     "f_peak_lumped",
     "f_peak_jc",
-    "ratio_f_eq",
-    "ratio_f_peak",
     "f_eq_over_LD2_lumped",
     "f_eq_over_LD2_jc",
     "daf_lumped",
     "daf_jc",
-    "rho_c",
     "t_lumped_s",
     "t_jc_s",
+    "cpu",
+    "git_sha",
     "error",
 )
-"""``sweep.columns`` names, in the document's order."""
-SWEEP_STRING_COLUMNS = frozenset({"case_id", "history_type", "error"})
-SWEEP_INT_COLUMNS = frozenset({"seed"})
+"""``sweep.columns`` names, in the document's order: the Session 5b sweep CSV columns
+(``tools/sweep_jc.py``), sweep ``schema_version`` 2 (the W.1 schema 1 had thirty)."""
+SWEEP_STRING_COLUMNS = frozenset(
+    {"case_id", "subset", "history_type", "histories_version", "cpu", "git_sha", "error"}
+)
+SWEEP_INT_COLUMNS = frozenset(
+    {"tier", "size_in", "seed", "n_samples", "pipe_seg_qty", "pivot_seg_qty", "jc_short_pipe"}
+)
 
 _INT_FRAME_COLUMNS = frozenset({"sub_step", "sample", "phase", "stick"})
 
@@ -417,7 +469,7 @@ def to_sweep_dict(
         reference = {"example_cases": [], "jc_golden_rows": []}
     return {
         "kind": KIND_SWEEP,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": SWEEP_SCHEMA_VERSION,
         "meta": {
             "git_sha": git_sha() if sha is True else sha,
             "tier": tier,

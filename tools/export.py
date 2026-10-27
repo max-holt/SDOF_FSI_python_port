@@ -101,14 +101,24 @@ def main_trace(args) -> None:
 
 def main_sweep(args) -> None:
     rows, layout = cases.sweep_rows_from_csv(args.from_csv)
+    # a 5b CSV records its tier, CPU, histories version and sha in every row; the options override
+    uniform = {
+        k: cases.uniform_value(rows, k) for k in ("tier", "cpu", "histories_version", "git_sha")
+    }
+    tier = args.tier if args.tier is not None else uniform["tier"]
     doc = export.to_sweep_dict(
         rows,
         source=str(args.from_csv),
-        tier=args.tier,
-        cpu=args.cpu,
-        histories_version=args.histories_version,
-        regen=cases.golden_regen() if layout == "golden" else None,
+        tier=None if tier is None else str(tier),
+        cpu=args.cpu if args.cpu is not None else uniform["cpu"],
+        histories_version=(
+            args.histories_version
+            if args.histories_version is not None
+            else uniform["histories_version"]
+        ),
+        regen=cases.golden_regen() if layout == "golden" else cases.sweep_regen(),
         reference=cases.reference_block(),
+        sha=uniform["git_sha"] if uniform["git_sha"] else True,
     )
     n_bytes = export.write_json(args.out, doc)
     print(

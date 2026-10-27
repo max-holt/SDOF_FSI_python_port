@@ -194,6 +194,28 @@ def golden_regen() -> dict:
     }
 
 
+def sweep_regen() -> dict:
+    """``regen`` of a Session 5b CSV: the sweep command of the row's tier (one row is
+    reproduced by ``tools/sweep_jc.py``'s ``run_case`` from its columns; a single-case trace
+    command is a W.3 item)."""
+    return {
+        "template": "python tools/sweep_jc.py run --tier {tier}",
+        "columns_used": ["tier"],
+        "note": (
+            "Reruns the whole tier the row belongs to (docs/sweep/tier<N>_<sha>.csv). One row is "
+            "reproduced by tools/sweep_jc.run_case on the Case its parameter columns describe; "
+            "its history is histories.from_params over the fifteen generator columns "
+            "(sweep_jc.history_from_row). A single-case trace command is a W.3 item."
+        ),
+    }
+
+
+def uniform_value(rows, column: str):
+    """The one value ``column`` holds in every row (empty cells ignored), else None."""
+    values = {r.get(column) for r in rows} - {None, ""}
+    return values.pop() if len(values) == 1 else None
+
+
 def reference_block() -> dict:
     """The three Example-sheet cases and the three JC golden rows with their Excel values."""
     params = tg.load_params()

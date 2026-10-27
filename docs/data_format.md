@@ -7,7 +7,7 @@ time window live, so nothing about the presentation is baked into the file. This
 contract; `tests/test_export.py` parses the key tables below (every `### <block>` heading and the
 `` `key` `` column of its table), so a key is part of the format exactly when it is listed here.
 
-Two kinds of file, each with `kind` and `schema_version` (currently `1`):
+Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 since Session 5b):
 
 * **`trace`** — one traced run (`PeakResponse.trace`, Session V.1): meta, the loop geometry the
   animation draws, the per-frame scalars and, for a junction-coupling run, the column arrays.
@@ -174,7 +174,7 @@ sub-step, exactly as the model stores it.
 | key | type | meaning |
 |---|---|---|
 | `kind` | string | `"sweep"` |
-| `schema_version` | int | `1` |
+| `schema_version` | int | `2` (`export.SWEEP_SCHEMA_VERSION`; 1 was the thirty-column W.1 layout) |
 | `meta` | object | `sweep.meta` |
 | `columns` | object | `sweep.columns`: one flat array per column, all of length `meta.n_rows` |
 | `regen` | object | `sweep.regen`: how to reproduce any row's trace with `tools/export.py` |
@@ -185,7 +185,7 @@ sub-step, exactly as the model stores it.
 | key | type | meaning |
 |---|---|---|
 | `git_sha` | string or null | Checkout that produced the rows (null when converting a CSV that does not record it) |
-| `tier` | string or null | The sweep tier (Session 5b's name for the grid size); null when unknown |
+| `tier` | string or null | The sweep tier (`"1"`, `"2"`; from the rows' `tier` column for a 5b CSV); null when unknown |
 | `created_utc` | string | ISO 8601 UTC of the export |
 | `cpu` | string or null | CPU the rows were timed on; null when unknown |
 | `histories_version` | string or null | Version of the 5b history generator (`histories.py`); null for rows without one (the golden CSV) |
@@ -194,92 +194,16 @@ sub-step, exactly as the model stores it.
 
 ### sweep.columns
 
-Thirty columns, fixed names, every column the same length. Numeric columns are floats (or `null`),
-`seed` is an int (or `null`), `case_id`, `history_type` and `error` are strings (or `null`). The
-definitions are the contract Session 5b's sweep writes to; where a definition is marked
-*inferred* the owner has not yet confirmed it (see NOTES.md, Session W.1 open issues).
-
-| key | type | meaning |
-|---|---|---|
-| `case_id` | string | Identifies the row for `regen`: a fixture case id for golden rows, the 5b run id otherwise |
-| `size_in` | float | Nominal pipe size, in (`10` for `curve_10in`) |
-| `od_mm` | float | Outside diameter, mm |
-| `thk_mm` | float | Wall thickness, mm |
-| `length_m` | float | Span between the elbows (`physicalLength`), m |
-| `nat_freq_hz` | float | `natFreq`, Hz |
-| `history_type` | string | The 5b history generator kind (`"step"`, `"step_sine"`, `"step_noise"`: `surge_sdof.histories.KINDS`); `"golden"` for a `curve_10in` row (the Excel sheet's history) |
-| `f_osc_hz` | float | Oscillation frequency of a periodic history, Hz; null otherwise |
-| `seed` | int | RNG seed of a random history; null otherwise |
-| `amplitude_fraction` | float | The history peak as a fraction of the cap `1.33 p_design` (Session 5b: `peak = amplitude_fraction × 1.33 × p_design`) |
-| `p_design_bar` | float | Design pressure, bar |
-| `p_peak_bar` | float | Peak pressure of the history `max(p)`, bar (equal to the cap for a 5b history) |
-| `mu` | float | `dynamicFric` |
-| `history_peak` | float | `max(abs(F))` of the applied force history, N |
-| `history_mean` | float | Mean of the force history, N |
-| `history_rms` | float | RMS of the force history, N |
-| `f_eq_lumped` | float | `max_static_equivalent_force` of the lumped solver, N |
-| `f_eq_jc` | float | The same, JC solver |
-| `f_peak_lumped` | float | `max_applied_force` of the lumped solver, N: the VBA `FMax`, the peak applied unbalance `max \|forceA − forceB\|`, an **input property** of the history and span (the junction force is excluded in both solvers, VBA 443 / 871, so on one history it equals `f_peak_jc`). Kept with that meaning; **not ratioed** (owner, Session 5b) |
-| `f_peak_jc` | float | The same, JC solver |
-| `ratio_f_eq` | float | `f_eq_jc / f_eq_lumped` |
-| `ratio_f_peak` | float | Kept in this schema for the W.1 converter only (identically 1 on one history); the 5b CSV does not carry it and a 5b row converted to this document has it null |
-| `f_eq_over_LD2_lumped` | float | `f_eq_lumped / (L d²)` with `L = length_m` and `d = od_mm / 1000` (the OD), N/m³: the owner's mass-collapse normalisation (Session 5b) |
-| `f_eq_over_LD2_jc` | float | The same, JC |
-| `daf_lumped` | float | Effective dynamic amplification factor `f_eq_lumped / (p_peak A)`, `p_peak = max(p)` of the pressure history and `A` the fluid area (Session 5b; equals `f_eq / history_peak` when `max(p) ≥ \|min(p)\|`) |
-| `daf_jc` | float | The same, JC |
-| `rho_c` | float | `fluidDensity celerity`, Pa·s/m (the junction impedance) |
-| `t_lumped_s` | float | Wall-clock seconds of the lumped run |
-| `t_jc_s` | float | Wall-clock seconds of the JC run |
-| `error` | string | null for a good row; the exception message of a failed run (its result columns null) |
-
-A `curve_10in` golden row (`tests/fixtures/curve_10in/cases.csv`, converted by `tools/export.py
-sweep --from-csv`) fills `case_id`, `size_in = 10`, `length_m`, `nat_freq_hz`, `history_type =
-"golden"`, `mu`, `rho_c`, and `f_eq_*` / `f_peak_*` for its own solver only (the other solver's
-columns and the ratios are null: the 75 lumped and 3 JC rows are different cases). Everything the
-sheet does not record is null.
-
-### sweep.regen
-
-| key | type | meaning |
-|---|---|---|
-| `template` | string | A `str.format` template over the column names of one row, giving the `tools/export.py` command that writes that row's trace file |
-| `columns_used` | string[] | The placeholders the template uses |
-| `note` | string or null | Caveats (for the golden CSV: `--golden {case_id}` reproduces the row; 5b rows get their own template once the history options exist) |
-
-### sweep.reference
-
-The viewer's self-check: the Excel values the port is verified against (`tests/test_golden.py`,
-tolerance record there). Two lists of `reference entry`.
-
-| key | type | meaning |
-|---|---|---|
-| `example_cases` | entry[] | The three `Example`-sheet cases (`example_pressure`, `example_lumped`, `example_jc`; RTOL 1e-12) |
-| `jc_golden_rows` | entry[] | The three `GetPeakResponseJC` rows of `curve_10in` (96, 97, 98; RTOL 5e-12) |
-
-### reference entry
-
-| key | type | meaning |
-|---|---|---|
-| `case_id` | string | Fixture case id |
-| `solver` | string | `"pressure"`, `"lumped"` or `"jc"` |
-| `source` | object | Free-form: the fixture's provenance (sheet and cell, or `source_row`) |
-| `inputs` | object | Free-form: the solver keyword arguments of the case (a golden row's are its row values merged with `params.json`); 2-D inputs as array blocks |
-| `output_names` | string[] or null | Names of `excel_values` (the five maxima); null for the pressure case (a time series) |
-| `excel_values` | float[] | The Excel-computed values exactly as cached in the workbook |
-| `rtol` | float | The relative tolerance the golden test holds the port to |
-
-## sweep CSV (Session 5b)
-
-`tools/sweep_jc.py run` writes `docs/sweep/tier<N>[_subset<pct>]_<sha>.csv`: one row per case,
-both solvers, the columns below in this order (`sweep_jc.COLUMNS`). It is a superset of
-`sweep.columns` (same names where both exist; `ratio_f_peak` is not carried) and is the record of
-the junction-coupling assessment (`docs/jc_sweep.md`). Floats are written with `repr`; an empty
-cell is null; a failed run has its message in `error` and its result columns empty, never a
-skipped row. The fifteen generator columns (`history_type` … `p_cap`, SI values exactly as the
-generator received them) rebuild the row's pressure history bitwise through
-`surge_sdof.histories.from_params` (`sweep_jc.history_from_row`); `tests/test_sweep_jc.py` pins
-the round trip. Converting a 5b CSV to the `sweep` JSON document is a proposed extension of
-`export.SWEEP_COLUMNS` (NOTES.md, Session 5b), not yet made.
+Seventy-two columns, fixed names, every column the same length: the columns of the Session 5b
+sweep CSV (`tools/sweep_jc.py run`, `sweep_jc.COLUMNS is export.SWEEP_COLUMNS`). Numeric columns
+are floats (or `null`); `tier`, `size_in`, `seed`, `n_samples`, `pipe_seg_qty`, `pivot_seg_qty`
+and `jc_short_pipe` are ints (or `null`); `case_id`, `subset`, `history_type`,
+`histories_version`, `cpu`, `git_sha` and `error` are strings (or `null`). The fifteen generator
+columns (`history_type` … `p_cap`, SI values exactly as the generator received them) rebuild the
+row's pressure history bitwise through `surge_sdof.histories.from_params`
+(`sweep_jc.history_from_row`; `tests/test_sweep_jc.py` pins the round trip). Schema 1 (Session
+W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak`, which is gone
+(`f_peak` is an input property and is not ratioed).
 
 | key | type | meaning |
 |---|---|---|
@@ -356,6 +280,56 @@ the round trip. Converting a 5b CSV to the `sweep` JSON document is a proposed e
 | `git_sha` | string | Short sha of the checkout (`-dirty` when `src`, `tests` or `tools` had uncommitted changes) |
 | `error` | string | Empty for a good row; `lumped: …` and / or `jc: …` with the exception for a failed run |
 
+A `curve_10in` golden row (`tests/fixtures/curve_10in/cases.csv`, converted by `tools/export.py
+sweep --from-csv`) fills `case_id`, `size_in = 10`, `length_m`, `nat_freq_hz`, `history_type =
+"golden"`, `mu`, `rho_c`, and `f_eq_*` / `f_peak_*` for its own solver only (the other solver's
+columns and `ratio_*` are null: the 75 lumped and 3 JC rows are different cases). Everything the
+sheet does not record is null.
+
+### sweep.regen
+
+| key | type | meaning |
+|---|---|---|
+| `template` | string | A `str.format` template over the column names of one row, giving the `tools/export.py` command that writes that row's trace file |
+| `columns_used` | string[] | The placeholders the template uses |
+| `note` | string or null | Caveats (for the golden CSV: `--golden {case_id}` reproduces the row; for a 5b CSV: the template reruns the tier, one row is `sweep_jc.run_case` on its columns) |
+
+### sweep.reference
+
+The viewer's self-check: the Excel values the port is verified against (`tests/test_golden.py`,
+tolerance record there). Two lists of `reference entry`.
+
+| key | type | meaning |
+|---|---|---|
+| `example_cases` | entry[] | The three `Example`-sheet cases (`example_pressure`, `example_lumped`, `example_jc`; RTOL 1e-12) |
+| `jc_golden_rows` | entry[] | The three `GetPeakResponseJC` rows of `curve_10in` (96, 97, 98; RTOL 5e-12) |
+
+### reference entry
+
+| key | type | meaning |
+|---|---|---|
+| `case_id` | string | Fixture case id |
+| `solver` | string | `"pressure"`, `"lumped"` or `"jc"` |
+| `source` | object | Free-form: the fixture's provenance (sheet and cell, or `source_row`) |
+| `inputs` | object | Free-form: the solver keyword arguments of the case (a golden row's are its row values merged with `params.json`); 2-D inputs as array blocks |
+| `output_names` | string[] or null | Names of `excel_values` (the five maxima); null for the pressure case (a time series) |
+| `excel_values` | float[] | The Excel-computed values exactly as cached in the workbook |
+| `rtol` | float | The relative tolerance the golden test holds the port to |
+
+## sweep CSV (Session 5b)
+
+`tools/sweep_jc.py run` writes `docs/sweep/tier<N>[_subset<pct>]_<sha>[_<tag>].csv`: one row per
+case, both solvers, exactly the `sweep.columns` above in that order (`--tag` suffixes a rerun,
+e.g. after a profile correction, so that it never overwrites an earlier file). Floats are written
+with `repr`; an empty cell is null; a failed run has its message in `error` and its result
+columns empty, never a skipped row. It is the record of the junction-coupling assessment
+(`docs/jc_sweep.md`). `tools/export.py sweep --from-csv <csv> --out <json>` converts it to the
+`sweep` document (`meta.tier`, `cpu`, `histories_version` and `git_sha` taken from the rows
+unless given), e.g. `docs/viz/data/tier1_sweep.json` from the Tier 1 CSV.
+`docs/viz/data/reference_sweep.json` is the W.1 conversion of the golden `cases.csv` at
+`schema_version` 1 (thirty columns), kept as the W.2 viewer's test file until Session W.3 moves
+the viewer to sweep schema 2 and regenerates it.
+
 ## Size expectations
 
 JSON at full `repr` costs about 20 bytes a float (`-1525123.4567891234,`) and 2–10 bytes an
@@ -373,8 +347,8 @@ integer. A trace file is therefore roughly
   gzip roughly halves decimal floats. Measured on the committed files: `example_jc_step.json`
   1.80 MB (1124 frames, 37 cells), `example_lumped_step.json` 0.14 MB (1004 frames),
   `reference_sweep.json` 0.02 MB (78 rows).
-* A sweep file is small: 30 columns × rows (a 1000-row sweep is ~0.5 MB) plus the reference block
-  (~10 KB).
+* A sweep file is small: 72 columns × rows (the 1600-row Tier 1 file is ~1.5 MB) plus the
+  reference block (~10 KB).
 
 **Upgrade path.** When 45 MB of JSON is too coarse (a long run at a fine stride, or many cells),
 the binary variant is the same header (`kind`, `schema_version`, `meta`, `geometry`, and for a

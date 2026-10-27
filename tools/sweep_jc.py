@@ -15,8 +15,9 @@ pressure history (``canonical``) times the size's fluid area. Pipe OD / thicknes
 workbook's ``curve_10in!J7:M8`` table (``PIPES``) and mass, EI and fluid area from the sheet's
 formulas (H11, H13, H15, J15); ``p_design = 2 t S / OD`` with ``S = 138`` MPa.
 
-The CSV (``docs/sweep/tier<N>[_subset<pct>]_<sha>.csv``, columns in ``COLUMNS``, documented in
-``docs/data_format.md`` "sweep CSV (Session 5b)") carries every parameter of a row's history
+The CSV (``docs/sweep/tier<N>[_subset<pct>]_<sha>[_<tag>].csv``, the ``export.SWEEP_COLUMNS``,
+documented in ``docs/data_format.md`` "sweep.columns"; ``tools/export.py sweep --from-csv``
+converts it to the ``sweep`` JSON document) carries every parameter of a row's history
 (``surge_sdof.histories.from_params`` rebuilds it bitwise through ``history_from_row``), the
 results of both solvers, the JC / lumped ratios, the normalised forces, timings, CPU and git
 sha. A failed solver run is recorded in ``error`` with its result columns empty; the sweep never
@@ -44,7 +45,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from surge_sdof import histories, moc, response, structure  # noqa: E402
+from surge_sdof import export, histories, moc, response, structure  # noqa: E402
 
 # ------------------------------------------------------------------ fixed inputs
 
@@ -259,80 +260,8 @@ HISTORY_PARAM_COLUMNS = (
     ("p_cap", "p_cap"),
 )
 
-COLUMNS = (
-    "case_id",
-    "tier",
-    "subset",
-    "size_in",
-    "od_mm",
-    "thk_mm",
-    "length_m",
-    "nat_freq_hz",
-    "history_type",
-    "f_osc_hz",
-    "seed",
-    "amplitude_fraction",
-    "mu",
-    "p_design_bar",
-    "p_cap_bar",
-    "p_peak_bar",
-    "p_mean_bar",
-    "p_rms_bar",
-    "noise_rms_bar",
-    "sample_freq",
-    "lead_in_s",
-    "transit_s",
-    "tail_s",
-    "decay_s",
-    "duration_s",
-    "n_samples",
-    "p_step",
-    "p_osc",
-    "p_noise_rms",
-    "f_cut_hz",
-    "f_ref_hz",
-    "decay_cycles",
-    "decay_fraction",
-    "p_cap",
-    "histories_version",
-    "fluid_area_m2",
-    "mass_per_unit_len",
-    "ei",
-    "rho_c",
-    "portal_height_m",
-    "mass_total_kg",
-    "pipe_seg_qty",
-    "pivot_seg_qty",
-    "jc_short_pipe",
-    "history_peak",
-    "history_mean",
-    "history_rms",
-    "f_eq_lumped",
-    "f_eq_jc",
-    "ratio_f_eq",
-    "v_peak_lumped",
-    "v_peak_jc",
-    "ratio_v_peak",
-    "momentum_lumped",
-    "momentum_jc",
-    "ke_peak_lumped",
-    "ke_peak_jc",
-    "x_peak_lumped",
-    "x_peak_jc",
-    "a_peak_lumped",
-    "a_peak_jc",
-    "f_peak_lumped",
-    "f_peak_jc",
-    "f_eq_over_LD2_lumped",
-    "f_eq_over_LD2_jc",
-    "daf_lumped",
-    "daf_jc",
-    "t_lumped_s",
-    "t_jc_s",
-    "cpu",
-    "git_sha",
-    "error",
-)
+COLUMNS = export.SWEEP_COLUMNS
+"""The CSV columns: the ``sweep`` document's columns (``docs/data_format.md``, schema 2)."""
 
 
 def case_history(case: Case, p_design: float) -> histories.History:
@@ -535,7 +464,8 @@ def run(args) -> Path:
         cases = [c for c in cases if c.history_type == args.history]
     cpu = cpu_model()
     sha = git_sha_tag()
-    name = f"tier{tier}{'_' + subset if subset else ''}{'_limit' + str(args.limit) if args.limit else ''}_{sha}.csv"
+    tag = f"_{args.tag}" if args.tag else ""
+    name = f"tier{tier}{'_' + subset if subset else ''}{'_limit' + str(args.limit) if args.limit else ''}_{sha}{tag}.csv"
     out = Path(args.out) / name
     print(f"tier {tier}: {len(cases)} cases, {args.jobs} jobs, cpu {cpu}, sha {sha}")
     for d, c in coverage(cases).items():
@@ -1162,6 +1092,11 @@ def parse_args(argv=None):
     r.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     r.add_argument("--progress", type=int, default=25, help="print progress every N cases")
     r.add_argument("--out", default=str(REPO / "docs" / "sweep"))
+    r.add_argument(
+        "--tag",
+        default="",
+        help="suffix of the CSV name after the sha (a rerun, e.g. after the F-4b profile correction, must not overwrite an earlier file)",
+    )
     p = sub.add_parser("plot", help="PNGs and docs/jc_sweep.md from a sweep CSV")
     p.add_argument("csv")
     p.add_argument("--out", default=str(REPO / "docs" / "sweep" / "png"))

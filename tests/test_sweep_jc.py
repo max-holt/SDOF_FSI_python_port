@@ -84,11 +84,14 @@ def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path)
     assert float(back["history_peak"]) == float(np.abs(direct.force(sw.pipe(10).fluid_area)).max())
 
 
-def test_data_format_csv_block_lists_the_tool_columns_in_order():
+def test_data_format_sweep_columns_are_the_tool_columns_in_order():
+    from surge_sdof import export
+
+    assert sw.COLUMNS is export.SWEEP_COLUMNS
     import re
 
     doc = (REPO / "docs" / "data_format.md").read_text(encoding="utf-8")
-    m = re.search(r"^## sweep CSV \(Session 5b\)\n(.*?)(?=^## )", doc, re.S | re.M)
-    assert m, "docs/data_format.md has no 'sweep CSV (Session 5b)' section"
+    m = re.search(r"^### sweep\.columns\n(.*?)(?=^### )", doc, re.S | re.M)
+    assert m, "docs/data_format.md has no 'sweep.columns' block"
     keys = re.findall(r"^\| `([^`]+)` \|", m.group(1), re.M)
     assert keys == list(sw.COLUMNS)
