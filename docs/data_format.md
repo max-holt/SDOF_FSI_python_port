@@ -207,25 +207,25 @@ definitions are the contract Session 5b's sweep writes to; where a definition is
 | `thk_mm` | float | Wall thickness, mm |
 | `length_m` | float | Span between the elbows (`physicalLength`), m |
 | `nat_freq_hz` | float | `natFreq`, Hz |
-| `history_type` | string | The 5b history generator (`"step"`, `"sine"`, `"random"`, …); `"golden"` for a `curve_10in` row (the Excel sheet's history) |
+| `history_type` | string | The 5b history generator kind (`"step"`, `"step_sine"`, `"step_noise"`: `surge_sdof.histories.KINDS`); `"golden"` for a `curve_10in` row (the Excel sheet's history) |
 | `f_osc_hz` | float | Oscillation frequency of a periodic history, Hz; null otherwise |
 | `seed` | int | RNG seed of a random history; null otherwise |
-| `amplitude_fraction` | float | History amplitude as a fraction of `p_design_bar` |
+| `amplitude_fraction` | float | The history peak as a fraction of the cap `1.33 p_design` (Session 5b: `peak = amplitude_fraction × 1.33 × p_design`) |
 | `p_design_bar` | float | Design pressure, bar |
-| `p_peak_bar` | float | Peak pressure of the history, bar |
+| `p_peak_bar` | float | Peak pressure of the history `max(p)`, bar (equal to the cap for a 5b history) |
 | `mu` | float | `dynamicFric` |
 | `history_peak` | float | `max(abs(F))` of the applied force history, N |
 | `history_mean` | float | Mean of the force history, N |
 | `history_rms` | float | RMS of the force history, N |
 | `f_eq_lumped` | float | `max_static_equivalent_force` of the lumped solver, N |
 | `f_eq_jc` | float | The same, JC solver |
-| `f_peak_lumped` | float | `max_applied_force` of the lumped solver, N (*inferred*; `FMax` excludes the junction force in both solvers, VBA 443 / 871, so on one history it equals `f_peak_jc`) |
+| `f_peak_lumped` | float | `max_applied_force` of the lumped solver, N: the VBA `FMax`, the peak applied unbalance `max \|forceA − forceB\|`, an **input property** of the history and span (the junction force is excluded in both solvers, VBA 443 / 871, so on one history it equals `f_peak_jc`). Kept with that meaning; **not ratioed** (owner, Session 5b) |
 | `f_peak_jc` | float | The same, JC solver |
 | `ratio_f_eq` | float | `f_eq_jc / f_eq_lumped` |
-| `ratio_f_peak` | float | `f_peak_jc / f_peak_lumped` (identically 1 under the inferred `f_peak`) |
-| `f_eq_over_LD2_lumped` | float | `f_eq_lumped / (length_m (od_mm / 1000)²)`, N/m³ (*inferred* normalisation) |
+| `ratio_f_peak` | float | Kept in this schema for the W.1 converter only (identically 1 on one history); the 5b CSV does not carry it and a 5b row converted to this document has it null |
+| `f_eq_over_LD2_lumped` | float | `f_eq_lumped / (L d²)` with `L = length_m` and `d = od_mm / 1000` (the OD), N/m³: the owner's mass-collapse normalisation (Session 5b) |
 | `f_eq_over_LD2_jc` | float | The same, JC |
-| `daf_lumped` | float | Dynamic amplification factor `f_eq_lumped / history_peak` (*inferred*) |
+| `daf_lumped` | float | Effective dynamic amplification factor `f_eq_lumped / (p_peak A)`, `p_peak = max(p)` of the pressure history and `A` the fluid area (Session 5b; equals `f_eq / history_peak` when `max(p) ≥ \|min(p)\|`) |
 | `daf_jc` | float | The same, JC |
 | `rho_c` | float | `fluidDensity celerity`, Pa·s/m (the junction impedance) |
 | `t_lumped_s` | float | Wall-clock seconds of the lumped run |
@@ -267,6 +267,94 @@ tolerance record there). Two lists of `reference entry`.
 | `output_names` | string[] or null | Names of `excel_values` (the five maxima); null for the pressure case (a time series) |
 | `excel_values` | float[] | The Excel-computed values exactly as cached in the workbook |
 | `rtol` | float | The relative tolerance the golden test holds the port to |
+
+## sweep CSV (Session 5b)
+
+`tools/sweep_jc.py run` writes `docs/sweep/tier<N>[_subset<pct>]_<sha>.csv`: one row per case,
+both solvers, the columns below in this order (`sweep_jc.COLUMNS`). It is a superset of
+`sweep.columns` (same names where both exist; `ratio_f_peak` is not carried) and is the record of
+the junction-coupling assessment (`docs/jc_sweep.md`). Floats are written with `repr`; an empty
+cell is null; a failed run has its message in `error` and its result columns empty, never a
+skipped row. The fifteen generator columns (`history_type` … `p_cap`, SI values exactly as the
+generator received them) rebuild the row's pressure history bitwise through
+`surge_sdof.histories.from_params` (`sweep_jc.history_from_row`); `tests/test_sweep_jc.py` pins
+the round trip. Converting a 5b CSV to the `sweep` JSON document is a proposed extension of
+`export.SWEEP_COLUMNS` (NOTES.md, Session 5b), not yet made.
+
+| key | type | meaning |
+|---|---|---|
+| `case_id` | string | `s<size>_L<length>_f<natFreq>_<step \| sine<f_osc> \| noise<seed>>_a<amplitude>_mu<mu>` |
+| `tier` | int | The sweep tier (1 or 2) |
+| `subset` | string | `subset<pct>` for a stratified subset run, empty for a full tier |
+| `size_in` | int | Nominal pipe size, in |
+| `od_mm` | float | Outside diameter, mm (`curve_10in!J7:M7`) |
+| `thk_mm` | float | Wall thickness, mm (`curve_10in!J8:M8`) |
+| `length_m` | float | `physicalLength`, m |
+| `nat_freq_hz` | float | `natFreq`, Hz (with the contained fluid, as the solvers model it) |
+| `history_type` | string | Generator kind: `step`, `step_sine`, `step_noise` |
+| `f_osc_hz` | float | Sine frequency, Hz; empty otherwise |
+| `seed` | int | Noise RNG seed; empty otherwise |
+| `amplitude_fraction` | float | Peak as a fraction of the cap `1.33 p_design` |
+| `mu` | float | `dynamicFric`, the Coulomb coefficient (the VBA uses `0.5 mu 9.81 dt` directly) |
+| `p_design_bar` | float | `2 t S / OD` with `S = 138` MPa, bar |
+| `p_cap_bar` | float | `amplitude_fraction × 1.33 × p_design`, bar |
+| `p_peak_bar` | float | `max(p)` of the history, bar (equals `p_cap_bar` to rounding) |
+| `p_mean_bar` | float | Mean of the pressure history over its whole length (lead-in included), bar |
+| `p_rms_bar` | float | RMS of the pressure history over its whole length, bar |
+| `noise_rms_bar` | float | `step_noise` only: RMS of the scaled noise component over the active window (after the lead-in), bar |
+| `sample_freq` | float | Generator: sample rate, Hz |
+| `lead_in_s` | float | Generator: zero lead-in, s |
+| `transit_s` | float | Generator: transit allowance in the duration, s (the tier's longest span, `48 / 1237`, rounded up to 0.04, so one history serves every length) |
+| `tail_s` | float | Generator: tail after the decay, s |
+| `decay_s` | float | `decay_cycles / f_osc` (sine), `decay_cycles / f_ref` (noise), 0 (step), s |
+| `duration_s` | float | `lead_in_s + transit_s + decay_s + tail_s`, s |
+| `n_samples` | int | `round(duration_s × sample_freq)` |
+| `p_step` | float | Generator: held step, Pa (the cap for `step`, half the cap otherwise) |
+| `p_osc` | float | Generator: sine amplitude, Pa (set so the first positive peak of the enveloped sine is the cap); empty otherwise |
+| `p_noise_rms` | float | Generator: requested white-noise RMS, Pa (inert: the noise is rescaled to the cap); empty otherwise |
+| `f_cut_hz` | float | Generator: noise low-pass cut-off, Hz (the Nyquist frequency when unfiltered); empty otherwise |
+| `f_ref_hz` | float | Generator: envelope reference frequency of the noise, Hz; empty otherwise |
+| `decay_cycles` | float | Generator: cycles after which the envelope is `1 − decay_fraction`; empty for `step` |
+| `decay_fraction` | float | Generator: the envelope's decay over `decay_cycles`; empty for `step` |
+| `p_cap` | float | Generator: the noise's peak target, Pa; empty otherwise (`p_cap_bar` carries the cap for every row) |
+| `histories_version` | string | `surge_sdof.histories.HISTORIES_VERSION` |
+| `fluid_area_m2` | float | `π ((OD/2 − t)/1000)²`, m² (`curve_10in!H13`) |
+| `mass_per_unit_len` | float | Pipe plus contents, kg/m (`curve_10in!H11`, steel 7800, water 1000) |
+| `ei` | float | `E I`, N·m² (`curve_10in!J15`, `E = 195e9`) |
+| `rho_c` | float | `fluidDensity × celerity`, Pa·s/m |
+| `portal_height_m` | float | `structure.solve_portal_height` of the case, m |
+| `mass_total_kg` | float | `(L + 4h/3) × massPerUnitLen`: the mass the natural frequency is modelled on (pipe and contents, VBA 727), used for the momentum and kinetic energy of both solvers; the MoC column's fluid momentum is not added |
+| `pipe_seg_qty` | int | `moc.grid_size`: MoC cells between the elbows |
+| `pivot_seg_qty` | int | `moc.grid_size`: cells from each end to the pivot |
+| `jc_short_pipe` | int | 1 when `moc.is_short_pipe` holds and the JC call fell back to the lumped solver (none in Tier 1) |
+| `history_peak` | float | `max \|F\|` of the force history `p × A`, N |
+| `history_mean` | float | Mean of the force history, N |
+| `history_rms` | float | RMS of the force history, N |
+| `f_eq_lumped` | float | `max_static_equivalent_force`, lumped, N |
+| `f_eq_jc` | float | The same, JC |
+| `ratio_f_eq` | float | `f_eq_jc / f_eq_lumped`: the flexibility measure |
+| `v_peak_lumped` | float | `max_velocity`, lumped, m/s |
+| `v_peak_jc` | float | The same, JC |
+| `ratio_v_peak` | float | `v_peak_jc / v_peak_lumped`: the support-design measure (the lead author's peak local force at impact is derived from the velocity, Stage 6) |
+| `momentum_lumped` | float | `mass_total_kg × v_peak_lumped`, kg·m/s |
+| `momentum_jc` | float | The same, JC |
+| `ke_peak_lumped` | float | `0.5 × mass_total_kg × v_peak_lumped²`, J |
+| `ke_peak_jc` | float | The same, JC |
+| `x_peak_lumped` | float | `max_displacement`, lumped, m |
+| `x_peak_jc` | float | The same, JC |
+| `a_peak_lumped` | float | `max_acceleration`, lumped, m/s² |
+| `a_peak_jc` | float | The same, JC |
+| `f_peak_lumped` | float | `max_applied_force`: the VBA `FMax`, the peak applied unbalance, an input property; not ratioed |
+| `f_peak_jc` | float | The same, JC (equal to `f_peak_lumped` on one history) |
+| `f_eq_over_LD2_lumped` | float | `f_eq_lumped / (L d²)`, `d` = OD, N/m³ |
+| `f_eq_over_LD2_jc` | float | The same, JC |
+| `daf_lumped` | float | `f_eq_lumped / (p_peak A)`, the effective DAF |
+| `daf_jc` | float | The same, JC |
+| `t_lumped_s` | float | Wall-clock seconds of the lumped call (history generation excluded) |
+| `t_jc_s` | float | Wall-clock seconds of the JC call |
+| `cpu` | string | CPU model the row was timed on |
+| `git_sha` | string | Short sha of the checkout (`-dirty` when `src`, `tests` or `tools` had uncommitted changes) |
+| `error` | string | Empty for a good row; `lumped: …` and / or `jc: …` with the exception for a failed run |
 
 ## Size expectations
 

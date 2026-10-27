@@ -16,6 +16,8 @@ dependencies = ["numpy", "numba"]
 dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools", "playwright==1.56.0"]
 # Session V.2: the model animation (surge_sdof.viz, tools/animate.py) only.
 viz = ["plotly", "pandas"]
+# Session 5b: the sweep plots (tools/sweep_jc.py plot) only.
+plots = ["matplotlib"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
