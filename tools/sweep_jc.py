@@ -853,7 +853,7 @@ def plot_collapse(rows, out_png: Path, mu_on: float, amp: float):
     variants = _history_variants(rows)
     sizes = sorted({r["size_in"] for r in rows})
     fig, axes = plt.subplots(
-        2, len(variants), figsize=(3.2 * len(variants), 5.6), squeeze=False, sharey="row"
+        2, len(variants), figsize=(3.2 * len(variants), 5.6), squeeze=False, sharey=True
     )
     all_freqs = sorted({r["nat_freq_hz"] for r in rows})
     for k, solver in enumerate(("lumped", "jc")):

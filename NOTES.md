@@ -1,6 +1,14 @@
 # NOTES — session handoff
 
 ## Current stage
+Session 5b (junction-coupling sweep with canonical histories, 2026-10-27), parts A–C built and
+the 10 % Tier 1 subset run; **stopped for the owner's go before the full Tier 1 run.**
+`src/surge_sdof/histories.py` (+ `tests/test_histories.py`, 20 tests), `tools/sweep_jc.py`
+(+ `tests/test_sweep_jc.py`, 7 tests), `docs/sweep/tier1_subset10_ef89cbf.csv` (160 rows, 0
+errors), four PNGs under `docs/sweep/png/`, `docs/jc_sweep.md`, `docs/data_format.md` "sweep CSV
+(Session 5b)". No other `src/` file changed. See "Session 5b — done (subset)".
+**Next action: the owner's go, then the full Tier 1 run (about 90 s here), then the lead
+author's Decision 16, then Stage 6.**
 Session F-4 (the lead author's corrected moving-fraction profile, 2026-10-26) done:
 `peak_response_jc(fraction_profile="fixed" | "legacy")`, `moc.interp_fractions(...,
 fraction_profile)` and `coupling.JunctionCoupling` carry the flag; the corrected
@@ -82,6 +90,86 @@ the legacy flags reproduce `legacy_port.get_peak_response_jc` bitwise), DEVIATIO
 JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. Finding: F-1 is
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
+
+## Session 5b — done (subset) (2026-10-27)
+Commits: `4384dac` (Part A), `ef89cbf` (Part B), this commit (subset CSV, PNGs, `jc_sweep.md`).
+- **Part A** `histories.py`: `step`, `step_sine`, `step_noise`, `canonical` (the common scaling),
+  `from_params` (bitwise rebuild), `envelope` / `decay_rate`; `HISTORIES_VERSION = "5b.1"`.
+  Envelope `exp(-lambda tau)` with `lambda = -ln(1 - decay_fraction) f / decay_cycles`, `tau` from
+  the first held sample; sine `p_osc` set from a unit probe so the first positive peak is the
+  cap; noise = `default_rng(seed).standard_normal` → FFT brick-wall low-pass at `f_cut` →
+  envelope on `1 / f_ref` → scaled by `(p_cap - p_step) / max(noise)`.
+- **Part B** `tools/sweep_jc.py check | run | plot`. Pipe table from the workbook
+  (`curve_10in!J7:M8`), formulas H11 / H13 / H15 / J15; `check` reproduces the owner's design
+  pressures (78.83 / 75.33 / 64.69 / 76.70 bar vs 78.8 / 75.3 / 64.7 / 76.7) and the 10 in
+  fixture to 1e-12. Tier 1 = 1600 cases, Tier 2 = 24 300 (4 sizes × 5 lengths × 15 curve-sheet
+  frequencies × 9 history variants × 3 amplitudes × 3 frictions). Stratified subset: seeded
+  shuffle with per-dimension quotas (every level of every dimension present, counts within 4).
+- **Subset run** (160 cases, 4 processes, Intel Xeon @ 2.30 GHz, sha `ef89cbf`): wall 8 s;
+  solver time per case lumped mean 0.039 s (max 0.26 s), JC mean 0.149 s (max 0.62 s); no
+  errors, no short-pipe fallback, no `pivotSegQTY <= 4`. Extrapolated: full Tier 1 ≈ 80–90 s wall
+  on 4 cores (≈ 5 min of solver CPU); Tier 2 ≈ 24 300 × 0.19 s ≈ 77 min of solver CPU, ≈ 20 min
+  wall on 4 cores (≈ 10 min on 8), so neither tier approaches the 2 h limit and the
+  `loads.unbalance_force` lever (Stage 5c) is not needed for this sweep: the histories are
+  2–12 k samples (0.04 s of scheduler per lumped run) and the JC kernel dominates.
+- **Observed on the subset, recorded without interpretation** (the lead author decides):
+  `ratio_f_eq` 0.15–1.10, median 0.95; `ratio_v_peak` 0.15–1.44, median 1.04; `daf_lumped` up
+  to 12.4 (the 16 Hz sine on a 16 Hz span at amplitude 1, both sizes, L = 24 m: a resonant
+  build-up over the 10 decay cycles at 0.5 % damping) where `daf_jc` stays ≤ 2.0; every
+  `ratio_f_eq < 0.8` case of the subset is a sine history. The plain step's `ratio_f_eq` lies in
+  0.84–1.00 on the subset.
+- `docs/jc_sweep.md` sections 1–4 as specified (figure 1 at mu = 0.3; figure 2 lumped hollow /
+  JC filled, amplitude as line style; figure 3 one log scale for both rows with a numeric
+  spread table; the section-4 counts per band × length and the low / high amplitude DAF ratio).
+  The subset's panels are sparse by construction (2–4 points per line).
+- Matplotlib 3.11.2 installed into `.venv` with `uv pip install` (`.venv` has no pip);
+  `pyproject.toml` lists it as the `plots` extra. Not a runtime dependency of the package.
+
+Open for the owner (Session 5b):
+- `f_ref = 4 Hz` for the noise envelope and the shared transit allowance (0.04 s) are the
+  session's choices (scope section); change `F_REF_NOISE` / `TRANSIT_ALLOWANCE_S` in the tool
+  and re-run if another convention is wanted.
+- `m_total = (L + 4h/3) massPerUnitLen` for momentum / KE of both solvers (scope section); if
+  the JC rigid mass (`structure.jc_params`, core fluid removed) was meant, it is one line.
+- **Proposed API addition (not made):** extend `export.SWEEP_COLUMNS` (`src/surge_sdof/export.py`,
+  pinned to 30 by `tests/test_export.py`) to the 72 `sweep_jc.COLUMNS` so `tools/export.py
+  sweep --from-csv` converts a 5b CSV for the W.3 viewer; `ratio_f_peak` would go. Waits for the go.
+- Tier 2 locally (the owner): see the "Tier 2" lines under Next action.
+
+## Session 5b — scope and plan (recorded 2026-10-27 before touching `src/`)
+Owner's instruction: quantify the junction-coupling effect with canonical load histories.
+Part A `src/surge_sdof/histories.py` (package code, reused by the gap-contact work): seeded
+generators `step`, `step_sine`, `step_noise` returning a `History` dataclass (time, pressure,
+every generator parameter, peak, mean, RMS, seed; `from_params` rebuilds a history from a CSV
+row's parameters bitwise); common scaling to `amplitude_fraction * 1.33 * p_design`. Part B
+`tools/sweep_jc.py`: both solvers on every case (F-1, F-2, F-4 on, ratio 1, gap 0, stepQTY 40,
+c 1237, 0.5 %, E 195e9), Tier 1 / Tier 2 grids, CSV under `docs/sweep/` named by tier and sha,
+errors recorded per row. Part C `docs/jc_sweep.md` with matplotlib PNGs (matplotlib installed
+into `.venv` for the tool only; added as the `plots` extra). Procedure: Part A with tests, Part
+B, the stratified 10 % Tier 1 subset with timings and first plots, then stop for the owner's go.
+Rules: no change under `src/` except adding `histories.py`; an API addition is proposed, not
+made. Decisions taken at the start (flag if you disagree):
+- The OD/thickness table was asked for from `tests/fixtures/curve_10in_params.json`, which does
+  not exist (the fixture is `tests/fixtures/curve_10in/params.json` and carries mass, EI and
+  area only). The table **is** in the workbook, `curve_10in!J7:M8` (10 in 273.1/7.8, 12 in
+  307.1/8.382, 16 in 406.4/9.525, 18 in 457/12.7 mm) with the mass / area / I formulas in
+  H11 / H13 / H15 and `EI = H14 * H15`; the tool embeds the table with that provenance, and a
+  test pins the 10 in values to `params.json` and the four `p_design` values to the owner's
+  figures (0.1 bar).
+- `f_ref` of `step_noise` has no default in the owner's signature; the tool passes 4 Hz (the
+  middle Tier 1 `f_osc`), recorded in every noise row.
+- `p_noise_rms` is inert after the peak scaling (the noise is rescaled to hit the cap, so its
+  requested RMS drops out); it is kept as the generator's input and the resulting RMS is recorded.
+- One history per (type, amplitude, `f_osc`, seed) shared by every size / length / frequency /
+  friction: the transit allowance is the tier's longest span (`48 / 1237` s, rounded up to
+  0.04 s), not the case's own, so that the pressure history (and the noise realisation) is the
+  same for every length. The force history is the pressure times the size's fluid area.
+- `m_total` for momentum and kinetic energy is `(L + 4h/3) * massPerUnitLen`, the mass the
+  natural frequency is modelled on (pipe plus contents as rigid; VBA 727 comment), for both
+  solvers; the MoC column's fluid momentum is not added.
+- The sweep CSV has more columns than `export.SWEEP_COLUMNS` (30, pinned by
+  `tests/test_export.py`); extending the JSON schema is an `export.py` change under `src/` and is
+  proposed, not made. `docs/data_format.md` documents the CSV in its own block.
 
 ## Session F-4 — done (2026-10-26)
 Scope (owner's instruction, this session): the lead author replaced `interpFractionA` and
@@ -1642,6 +1730,19 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
+**(0) The owner's go on the subset, then the full Tier 1 run:**
+`.venv/bin/python tools/sweep_jc.py run --tier 1 --jobs 4` (≈ 90 s; writes
+`docs/sweep/tier1_<sha>.csv`), then `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier1_<sha>.csv`
+(regenerates `docs/jc_sweep.md` and `docs/sweep/png/tier1_<sha>_*.png`); commit the CSV, the
+PNGs and the doc. Then the lead author's Decision 16, then Stage 6. **Tier 2 locally (the owner):**
+`.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores>` (≈ 77 min of solver CPU, ≈ 10 min
+wall on 8 cores) and `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>.csv --doc
+docs/jc_sweep_tier2.md --out docs/sweep/png`; commit `docs/sweep/tier2_<sha>.csv`,
+`docs/sweep/png/tier2_<sha>_*.png` and `docs/jc_sweep_tier2.md` (the plot command's `--mu` /
+`--amplitude` select the friction and amplitude level of figures 1–3; the noise envelope over
+the three seeds is taken pointwise by the plotter, the per-seed rows stay in the CSV).
+
+Previous next action (before 5b, kept for the record):
 **Local bench reference run, then Session 5b, then W.3 (sweep mode).** (1) The owner's
 reference bench on local hardware: `.venv/bin/python tools/bench.py --profile` from the
 repository root on a quiet machine (about an hour; `--skip-full-python` ~10 min without the
