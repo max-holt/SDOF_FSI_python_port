@@ -36,7 +36,10 @@ division by zero at ``pivotSegQTY = 4``) or the corrected one (``"fixed"``, the 
 text: both profiles start at exactly 0 at ``n = 3``, one strictly monotone squared ramp per
 leg, both legs the same length, A mirror-symmetric about the column centre ``N / 2`` over
 the called nodes ``1 .. N - 1`` (``A(n) = A(N - n)``) and B about ``(N - 1) / 2``
-(``B(n) = B(N - 1 - n)``), equal fixed blocks of ``extQTY`` nodes / cells at both ends).
+(``B(n) = B(N - 1 - n)``), equal fixed blocks of ``extQTY`` nodes / cells at both ends). The
+mirror identities hold when the two legs do not overlap (``N >= 2 pivot - 4`` for A,
+``2 pivot - 3`` for B; the If-chain gives the inlet branch precedence otherwise), which every
+grid past the short-pipe fallback (``N >= 2 pivot + 3``) satisfies.
 
 Exactness
 ---------

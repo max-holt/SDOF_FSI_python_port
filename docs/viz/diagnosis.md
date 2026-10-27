@@ -1,5 +1,9 @@
 # Animation pages: browser diagnosis (Session V.2e, 2026-10-26)
 
+*Session F-4b (2026-10-27): the four pages this document names were deleted from `docs/viz/`
+(the viewer `docs/viewer/` replaces them); `tests/test_viz_motion.py` now builds the two it
+drives into a temporary directory with the same arguments. The text below is unchanged.*
+
 **Status (Session V.2f, 2026-10-26): fixed with candidate 1 below.** Every frame lists all six
 traces, `{}` for the static ones (`viz/animate.py`); the four pages are regenerated and
 `tests/test_viz_motion.py` is green (the two V.2e tests unchanged, plus a friction group count

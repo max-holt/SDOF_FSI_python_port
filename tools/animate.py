@@ -16,16 +16,19 @@ in Session 5b.
 frames, so Panel 2 keeps its resolution inside the trace memory guard; ``--max-frames``
 (400) caps the animation frames; ``--t-start`` / ``--t-end`` animate a time window only (Panel 2
 keeps the whole run with the window shaded), the way to see a long run at full resolution
-around its peak. The page is written with plotly.js from the CDN.
+around its peak. The page is written with plotly.js from the CDN; no page is committed (the
+four once under ``docs/viz/`` were deleted in Session F-4b, the viewer ``docs/viewer/``
+replaces them; ``tests/test_viz_motion.py`` builds the two it drives into a temporary
+directory with the arguments below).
 
 Examples::
 
-    .venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_sheet.html
+    .venv/bin/python tools/animate.py --golden example_jc --out out/example_jc_sheet.html
     .venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --t-start 6 --t-end 7.5 \\
-        --max-frames 160 --out docs/viz/golden_r096_jc.html
+        --max-frames 160 --out out/golden_r096_jc.html
     .venv/bin/python tools/animate.py --step --amplitude 1600 --area 0.05 --length 6 \\
         --nat-freq 2 --mu 0.0001 --sample-freq 10 --step-qty 80 --celerity 1200 \\
-        --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc --out docs/viz/example_jc_step.html
+        --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc --out out/example_jc_step.html
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from surge_sdof.viz import animate  # noqa: E402
 def parse_args(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     cases.add_source_arguments(ap)
-    ap.add_argument("--out", required=True, type=Path, help="output HTML (docs/viz/<name>.html)")
+    ap.add_argument("--out", required=True, type=Path, help="output HTML page")
     ap.add_argument(
         "--max-frames", type=int, default=animate.MAX_FRAMES, help="animation frame cap (400)"
     )

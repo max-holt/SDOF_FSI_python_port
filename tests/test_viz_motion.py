@@ -1,6 +1,9 @@
-"""Browser-level diagnosis of the animation pages under ``docs/viz/`` (Playwright, headless
-Chromium): what the page does when it is actually played, which ``tests/test_viz.py`` cannot
-see (it checks the figure object, not plotly.js).
+"""Browser-level tests of the plotly animation pages ``viz/animate.py`` writes (Playwright,
+headless Chromium): what the page does when it is actually played, which ``tests/test_viz.py``
+cannot see (it checks the figure object, not plotly.js). The pages are built into a
+temporary directory by ``tools/animate.py`` (the ``pages`` fixture, once per module) with the
+arguments the four committed ``docs/viz/*.html`` pages were made with until Session F-4b
+deleted them (the viewer, ``docs/viewer/``, replaced them).
 
 Session V.2e (2026-10-25, diagnosis only): the lead author reports the friction line (Panel
 2, right axis) vanishing when the page is played. ``test_play_keeps_friction_trace`` presses
@@ -21,9 +24,11 @@ committed).
 from __future__ import annotations
 
 import glob
+import importlib
 import os
 import pathlib
 import re
+import sys
 
 import pytest
 
@@ -34,7 +39,48 @@ from playwright.sync_api import Error as PlaywrightError  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VIZ = ROOT / "docs" / "viz"
+sys.path.insert(0, str(ROOT / "tools"))
+animate_cli = importlib.import_module("animate")  # tools/animate.py
+# the arguments of the pages once committed under docs/viz/ (README "Animation", until F-4b)
+PAGE_ARGS = {
+    "example_jc_step.html": [
+        "--step",
+        "--amplitude",
+        "1600",
+        "--area",
+        "0.05",
+        "--length",
+        "6",
+        "--nat-freq",
+        "2",
+        "--mu",
+        "0.0001",
+        "--sample-freq",
+        "10",
+        "--step-qty",
+        "80",
+        "--celerity",
+        "1200",
+        "--mass-per-len",
+        "100",
+        "--ei",
+        "1e7",
+        "--duration",
+        "2.4",
+        "--solver",
+        "jc",
+    ],
+    "golden_r096_jc.html": [
+        "--golden",
+        "r096_jc_L24_f3",
+        "--t-start",
+        "6",
+        "--t-end",
+        "7.5",
+        "--max-frames",
+        "160",
+    ],
+}
 ARTIFACTS = pathlib.Path(__file__).parent / ".artifacts"
 PLOTLY_JS = pathlib.Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
 BROWSERS = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -103,6 +149,18 @@ STEP_OPTS = {
 
 
 @pytest.fixture(scope="module")
+def pages(tmp_path_factory) -> dict[str, pathlib.Path]:
+    """``{name: path}`` of the two pages, written by ``tools/animate.py`` into a temporary
+    directory (plotly.js from the CDN, served from the installed package by ``load_page``)."""
+    out_dir = tmp_path_factory.mktemp("viz_pages")
+    built = {}
+    for name, args in PAGE_ARGS.items():
+        animate_cli.main([*args, "--out", str(out_dir / name)])
+        built[name] = out_dir / name
+    return built
+
+
+@pytest.fixture(scope="module")
 def browser():
     with sync_playwright() as p:
         kw = {"executable_path": CHROMIUM[-1]} if CHROMIUM else {}
@@ -114,10 +172,10 @@ def browser():
         b.close()
 
 
-def load_page(browser, name):
-    """Open ``docs/viz/<name>`` with plotly.js served from the installed package, and wait for
-    the frames to be registered.  Returns ``(page, page_errors)``."""
-    path = VIZ / name
+def load_page(browser, path: pathlib.Path):
+    """Open the page at ``path`` with plotly.js served from the installed package, and wait
+    for the frames to be registered.  Returns ``(page, page_errors)``."""
+    name = path.name
     html = path.read_text(encoding="utf-8")
     cdn = re.search(r'src="(https://cdn\.plot\.ly/plotly-([\d.]+)\.min\.js)"', html)
     assert cdn, f"{name}: no plotly CDN script tag"
@@ -175,12 +233,12 @@ def frame_report(snap):
     return "\n".join(lines)
 
 
-def test_play_keeps_friction_trace(browser):
+def test_play_keeps_friction_trace(browser, pages):
     """Press the page's play button, wait 2 s, and compare the trace table and the rendered
     SVG with the loaded state. The friction trace must still be there: same name, same
     length, visible, and drawn."""
     ARTIFACTS.mkdir(exist_ok=True)
-    page, errors = load_page(browser, "example_jc_step.html")
+    page, errors = load_page(browser, pages["example_jc_step.html"])
     before = snapshot(page)
     page.screenshot(path=str(ARTIFACTS / "example_jc_step_before_play.png"))
     page.click('button[id$="-play"]')
@@ -206,11 +264,11 @@ def test_play_keeps_friction_trace(browser):
     assert fr1["in_dom"], "friction trace no longer drawn after play:\n" + report
 
 
-def test_first_animated_frame_keeps_every_trace_group(browser):
+def test_first_animated_frame_keeps_every_trace_group(browser, pages):
     """One slider step (frame '1', the options every step and button uses) must leave each
     trace's SVG group in place; the report names the trace groups and overlay layers a
     single frame removes."""
-    page, errors = load_page(browser, "example_jc_step.html")
+    page, errors = load_page(browser, pages["example_jc_step.html"])
     before = snapshot(page)
     page.evaluate(ANIMATE_JS, [["1"], STEP_OPTS])
     page.wait_for_timeout(300)
@@ -230,11 +288,11 @@ def test_first_animated_frame_keeps_every_trace_group(browser):
     assert not removed, report
 
 
-def test_golden_r096_frames_inside_window(browser):
-    """The row 96 page was written with ``--t-start 6 --t-end 7.5``: every frame lies in the
+def test_golden_r096_frames_inside_window(browser, pages):
+    """The row 96 page is written with ``--t-start 6 --t-end 7.5``: every frame lies in the
     window, the frames are one traced sample apart (stride 1), and Panel 2 keeps the whole
     run; the spans are printed."""
-    page, errors = load_page(browser, "golden_r096_jc.html")
+    page, errors = load_page(browser, pages["golden_r096_jc.html"])
     snap = snapshot(page)
     page.close()
     title = re.sub(r"<[^>]+>", "", snap["title"])
@@ -282,12 +340,12 @@ FRICTION_GROUPS_JS = """
 """.replace("FRICTION", str(FRICTION))
 
 
-@pytest.mark.parametrize("name", ["example_jc_step.html", "golden_r096_jc.html"])
-def test_play_keeps_friction_svg_group_count(browser, name):
+@pytest.mark.parametrize("name", list(PAGE_ARGS))
+def test_play_keeps_friction_svg_group_count(browser, pages, name):
     """Session V.2f: play for 2 s; the number of SVG groups drawn for the friction trace (its
     ``g.trace`` group, the ``g`` elements inside it and its line path) is the same before and
     after, and non-zero."""
-    page, errors = load_page(browser, name)
+    page, errors = load_page(browser, pages[name])
     before = page.evaluate(FRICTION_GROUPS_JS)
     slider0 = snapshot(page)["slider_active"]
     page.click('button[id$="-play"]')

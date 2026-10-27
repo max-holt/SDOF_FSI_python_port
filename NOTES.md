@@ -1,6 +1,24 @@
 # NOTES — session handoff
 
 ## Current stage
+Session F-4b (the mirror-point correction of the fixed moving-fraction profile and the stale
+export, 2026-10-27) **done**: `legacy/vba/interpFraction_fix_2026-10-27.bas` (owner's proposal,
+pending the lead author's confirmation; `pipeSegQTY -> pipeSegQTY + 1` in the two outlet-side
+tests and the outlet ramp of both functions) transcribed as the `"fixed"` profile (commit
+`83d23ef`); A now mirrors about the column centre `N / 2` over the called nodes, B about
+`(N - 1) / 2`, equal fixed blocks at both ends; `tests/test_fraction_profile.py` re-pinned;
+measured vs the legacy flags (`tools/profile_delta.py`, committed): golden JC rows max 2.1e-3
+(row 96; peak velocity −2.0e-3 / −1.2e-3 / +1.5e-3), JC sweep max 4.5e-2 (j00), median 8.2e-4 (all
+50) / 7.4e-3 (the 25 fluid-coupled cases); legacy flags still bitwise. All five
+`docs/viz/data/` files re-exported at `83d23ef` (the lumped file had never been re-exported
+after F-4) and `tests/test_export.py::test_committed_data_files_are_not_stale` pins every
+file's `meta.git_sha` at or after that commit. Tier 1 rerun: `docs/sweep/tier1_83d23ef_f4b.csv`,
+`docs/jc_sweep_f4b.md` (with the delta paragraph against `tier1_8590c3f`), `tier1_sweep.json`;
+`docs/jc_sweep.md` untouched for the lead author's Decision 16. The four plotly pages under
+`docs/viz/` deleted (the viewer replaces them; `tests/test_viz_motion.py` builds its two pages
+into a temporary directory). See "Session F-4b — done".
+**Next action: the owner's local bench, then 5b (Tier 2 with `--tag f4b`); `docs/jc_sweep.md`
+is replaced by `docs/jc_sweep_f4b.md` after Decision 16.**
 Session 5b (junction-coupling sweep with canonical histories, 2026-10-27) **done through the full
 Tier 1 run** (owner's go after the 10 % subset): `src/surge_sdof/histories.py`,
 `tools/sweep_jc.py` (`check | run --tier --subset --tag | plot`), `docs/sweep/tier1_8590c3f.csv`
@@ -11,9 +29,8 @@ Tier 1 run** (owner's go after the 10 % subset): `src/surge_sdof/histories.py`,
 with the resulting RMS recorded; one history per (type, amplitude, f_osc, seed) shared across
 lengths; `m_total = (L + 4h/3) m'`) are accepted and recorded in the scope section. Tier 2 is the
 owner's local run (command under Next action). See "Session 5b — done".
-**A Tier 1 rerun is required once the profile correction F-4b (pending the lead author) lands:**
-`tools/sweep_jc.py run --tier 1 --tag f4b` (the `--tag` suffix keeps the earlier CSV).
-**Next action: the lead author's Decision 16 (on `docs/jc_sweep.md`), then Stage 6.**
+The Tier 1 rerun after F-4b is done (`tier1_83d23ef_f4b.csv`, Session F-4b).
+**Next action (as of 5b): the lead author's Decision 16 (on `docs/jc_sweep.md`), then Stage 6.**
 Session F-4 (the lead author's corrected moving-fraction profile, 2026-10-26) done:
 `peak_response_jc(fraction_profile="fixed" | "legacy")`, `moc.interp_fractions(...,
 fraction_profile)` and `coupling.JunctionCoupling` carry the flag; the corrected
@@ -96,6 +113,173 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Session F-4b — done (2026-10-27)
+Scope (owner's instruction): store the corrected VBA, re-transcribe the fixed profile, re-pin
+the profile tests, re-measure the F-4 deltas, re-export every data file with a staleness test,
+delete the plotly pages. Commits: `83d23ef` (the correction, under `src/`) and this commit (data,
+staleness test, Tier 1 rerun, page deletion, docs).
+
+**The correction.** The 26 Oct functions mirrored about interleaved position `N − 1` (NOTES F-4
+"for the lead author"). The column has `N + 1` A nodes (`interpFractionA` called for
+`1 .. N − 1`, centre `N / 2`) and `N` B cells (centre `(N − 1) / 2`). `legacy/vba/
+interpFraction_fix_2026-10-27.bas` (owner's proposal, header states the provenance; pending the
+lead author's confirmation) replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side
+tests and the outlet ramp expression of both functions; the inlet side is identical to 26 Oct.
+`moc.interp_fraction_a_fixed / b_fixed` transcribe it (three substitutions each, literal); the
+26 Oct file stays on disk and is no longer transcribed; the `"legacy"` profile is untouched.
+Verified on every grid of `tests/test_fraction_profile.py::GRIDS`: `A(n) = A(N − n)` for
+`n = 1 .. N − 1`, `B(n) = B(N − 1 − n)`, the interleaved column mirrors about position `N`, inlet
+and outlet fixed blocks equal (`extQTY` nodes / cells each, 8 interleaved cells each). The
+port-reviewer (no correctness findings) adds the qualifier now in the `moc.py` docstring and
+D-4: the identities are exact when the legs do not overlap (`N >= 2 pivot − 3`), which every
+grid past the short-pipe fallback (`N >= 2 pivot + 3`) satisfies.
+
+Pivot 8 / pipe 30, `extQTY = 4` (the table test; the 26 Oct values in brackets where they differ):
+
+| n | A(n) | B(n) |
+|---|---|---|
+| 0–3 | 0 | 0 |
+| 4, 5, 6 | 1/64, 9/64, 25/64 | 1/16, 1/4, 9/16 |
+| run | 1 for n = 7 … 23 (7 … 22) | 1 for n = 7 … 22 (7 … 21) |
+| outlet ramp | n = 24, 25, 26: 25/64, 9/64, 1/64 (23, 24, 25) | n = 23, 24, 25: 9/16, 1/4, 1/16 (22, 23, 24) |
+| then 0 | n = 27–30 (26–30) | n = 26–29 (25–29) |
+
+Re-pins to the new default: `tests/test_export.py` row 96 `max_displacement`
+0.003612019681294949 (−2.07e-3 vs Excel; the Excel bound of that test 1.1e-3 → 2.2e-3, the
+D-4-recorded deviation, with the tight 5e-12 pin on the new value), `tests/test_viz.py` Example
+JC elbow pairs `((7, 8), (11, 12), (24, 25), (28, 29))` (26 Oct `((7, 8), (11, 12), (22, 23),
+(26, 27))`; the inlet is unchanged, the outlet moves one cell outward). `tests/test_differential.py`
+bounds (5e-2) hold unchanged: the sweep max is 4.51e-2.
+
+**Measured change (output type 0, relative to the legacy-flag result, which equals
+`legacy_port` bitwise and Excel to 8.6e-13; `tools/profile_delta.py`, Numba, one run each).**
+Golden JC cases; outputs static-eq. force / displacement / velocity / acceleration / applied
+force; "F-4" here is the 27 Oct profile alone (`("legacy", "per_phase", "fixed")`):
+
+| row | f (Hz) | N | time (s) | F-4 alone vs legacy | F-1+F-2+F-4 (defaults) vs legacy | defaults vs Excel |
+|---|---|---|---|---|---|---|
+| 96 | 3 | 666 | 3.1 | −2.1e-3 / −2.1e-3 / −2.0e-3 / +3.7e-5 / 0 | −2.1e-3 / −2.1e-3 / −2.0e-3 / +3.7e-5 / 0 | −2.1e-3 / −2.1e-3 / −2.0e-3 / +3.7e-5 / 0 |
+| 97 | 7.5 | 592 | 2.7 | −1.2e-3 / −1.2e-3 / −1.2e-3 / +3.0e-4 / 0 | −1.2e-3 / −1.2e-3 / −1.2e-3 / +3.0e-4 / 0 | −1.2e-3 / −1.2e-3 / −1.2e-3 / +3.0e-4 / 0 |
+| 98 | 22 | 546 | 2.5 | −1.3e-3 / −1.3e-3 / +1.5e-3 / +9.6e-4 / 0 | −1.3e-3 / −1.3e-3 / +1.5e-3 / +9.6e-4 / 0 | −1.3e-3 / −1.3e-3 / +1.5e-3 / +9.6e-4 / 0 |
+
+**Peak velocity, F-4 alone vs legacy: row 96 −2.0e-3, row 97 −1.2e-3, row 98 +1.5e-3** (26 Oct
+profile: −9.7e-4 / −5.9e-4 / +7.4e-4). Max relative change on the golden cases 2.07e-3 (row 96,
+static-equivalent force and displacement; 26 Oct 1.03e-3). The defaults remain a different model
+from Excel by ~2e-3; `tests/test_golden.py` / the `jc_slow` cases keep the legacy flags.
+
+JC differential sweep (50 cases, output type 0, max |relative change| over the five outputs vs
+the legacy flags). **F-4 alone: max 4.51e-2 (j00), median 8.16e-4 over all 50 cases, 7.39e-3
+over the 25 changed cases; peak velocity: max 2.33e-2 (j26), median 6.6e-5 (all) / 3.9e-3
+(changed), 9 up, 16 down. All three: max 4.51e-2, median 4.54e-4 / 7.35e-3.** (26 Oct profile:
+max 3.61e-2 (j21), median 3.81e-4 / 3.90e-3.) The 25 unchanged cases are exactly the no-fluid and
+fallback cases; the F-1+F-2 column is unchanged from the F-4 table.
+
+| case | fluidArea | fallback | F-1+F-2 | F-4 alone | all three | F-4 alone, peak velocity (signed) |
+|---|---|---|---|---|---|---|
+| j00_q40_A0.05_N28 | 0.05 | - | 2.2e-03 | 4.5e-02 | 4.5e-02 | -1.7e-02 |
+| j01_q7_A0.05_N28 | 0.05 | - | 3.5e-16 | 9.6e-03 | 9.6e-03 | +8.2e-04 |
+| j02_q7_A0.01_N30 | 0.01 | - | 1.7e-04 | 7.0e-03 | 7.4e-03 | -7.0e-03 |
+| j03_q7_A0.05_N12 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j04_q40_A0.0_N18 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j05_q7_A0.0_N32 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j06_q40_A0.01_N18 | 0.01 | - | 7.9e-04 | 5.9e-03 | 5.9e-03 | -2.8e-03 |
+| j07_q40_A0.0_N28 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j08_q2_A0.0_N36 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j09_q40_A0.0_N22 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j10_q2_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j11_q40_A0.05_N28 | 0.05 | - | 2.6e-16 | 1.1e-02 | 1.1e-02 | -3.7e-03 |
+| j12_q7_A0.05_N36 | 0.05 | - | 0 | 5.6e-03 | 5.6e-03 | -4.4e-03 |
+| j13_q40_A0.01_N20 | 0.01 | - | 2.8e-15 | 1.8e-02 | 1.8e-02 | -1.4e-02 |
+| j14_q7_A0.01_N34 | 0.01 | - | 4.7e-04 | 5.5e-03 | 5.7e-03 | +1.3e-03 |
+| j15_q2_A0.0_N12 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j16_q40_A0.0_N20 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j17_q40_A0.0_N34 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j18_q2_A0.01_N20 | 0.01 | - | 1.4e-03 | 7.4e-03 | 7.2e-03 | +7.4e-04 |
+| j19_q2_A0.05_N14 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j20_q40_A0.05_N18 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j21_q2_A0.05_N16 | 0.05 | - | 8.7e-16 | 2.7e-02 | 2.7e-02 | +1.1e-02 |
+| j22_q7_A0.01_N32 | 0.01 | - | 4.9e-16 | 1.7e-03 | 1.7e-03 | -7.5e-04 |
+| j23_q7_A0.05_N26 | 0.05 | - | 6.1e-16 | 2.3e-02 | 2.3e-02 | +6.1e-03 |
+| j24_q40_A0.0_N38 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j25_q40_A0.05_N22 | 0.05 | - | 4.7e-03 | 9.5e-03 | 1.5e-02 | +5.4e-04 |
+| j26_q40_A0.05_N40 | 0.05 | - | 9.6e-03 | 2.3e-02 | 3.6e-02 | +2.3e-02 |
+| j27_q7_A0.0_N20 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j28_q40_A0.05_N26 | 0.05 | - | 3.7e-16 | 3.9e-02 | 3.9e-02 | -1.1e-02 |
+| j29_q40_A0.0_N34 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j30_q2_A0.01_N18 | 0.01 | yes | 0 | 0 | 0 | 0 |
+| j31_q7_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j32_q40_A0.05_N16 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j33_q40_A0.01_N28 | 0.01 | - | 0 | 1.6e-02 | 1.6e-02 | -1.4e-02 |
+| j34_q7_A0.01_N24 | 0.01 | - | 2.0e-16 | 3.3e-03 | 3.3e-03 | -2.0e-03 |
+| j35_q7_A0.0_N36 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j36_q40_A0.0_N22 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j37_q7_A0.05_N12 | 0.05 | yes | 0 | 0 | 0 | 0 |
+| j38_q40_A0.05_N48 | 0.05 | - | 0 | 3.4e-03 | 3.4e-03 | -3.2e-03 |
+| j39_q40_A0.01_N38 | 0.01 | - | 5.6e-16 | 1.3e-02 | 1.3e-02 | -1.3e-02 |
+| j40_q40_A0.01_N48 | 0.01 | - | 0 | 2.2e-03 | 2.2e-03 | -2.1e-03 |
+| j41_q2_A0.01_N28 | 0.01 | - | 9.8e-04 | 1.6e-03 | 9.1e-04 | -1.3e-04 |
+| j42_q2_A0.01_N12 | 0.01 | yes | 0 | 0 | 0 | 0 |
+| j43_q40_A0.05_N42 | 0.05 | - | 9.9e-16 | 3.8e-02 | 3.8e-02 | +5.3e-03 |
+| j44_q40_A0.0_N18 | 0.0 | - | 0 | 0 | 0 | 0 |
+| j45_q2_A0.01_N32 | 0.01 | - | 5.1e-04 | 4.1e-03 | 4.3e-03 | +4.1e-03 |
+| j46_q7_A0.01_N30 | 0.01 | - | 0 | 4.5e-03 | 4.5e-03 | -3.9e-03 |
+| j47_q7_A0.01_N18 | 0.01 | - | 3.9e-16 | 1.8e-03 | 1.8e-03 | -1.5e-03 |
+| j48_q7_A0.0_N12 | 0.0 | yes | 0 | 0 | 0 | 0 |
+| j49_q7_A0.0_N24 | 0.0 | - | 0 | 0 | 0 | 0 |
+
+**Data files and viewer.** All five `docs/viz/data/` files re-exported at `83d23ef` with the README
+commands (`example_lumped_step.json` had kept its pre-F-4 export since W.1: nothing checked).
+From the files' `moving_fraction` through `geometry._segments`: Example JC (37 cells) inlet 8
+fixed, leg 4, run 13, leg 4, outlet 8 (26 Oct: run 13 one cell further left, outlet 10 fixed);
+row 96 (1333 cells) 8 / 164 / 989 / 164 / 8. Row 96 `max_velocity` 0.058158 (26 Oct 0.058215,
+legacy 0.058272). `golden_r096_jc.json.gz` is 13.9 MB gzipped (was 20.6; same 46.87 MB of JSON,
+a different compressor level in this environment's zlib, not a format change).
+`tests/test_export.py::test_committed_data_files_are_not_stale` (one test per file): `meta.git_sha`
+must be `83d23ef` or a descendant (`git merge-base --is-ancestor`); the sweep files' abbreviated
+CSV sha resolves through git; skipped only without git or with a sha outside the checkout's
+history (a shallow clone), never on a stale file.
+
+**Tier 1 rerun** (`tools/sweep_jc.py run --tier 1 --jobs 4 --tag f4b` on the clean `83d23ef`
+tree; a first attempt with uncommitted edits under `tests/` and `tools/` produced
+`tier1_83d23ef-dirty_f4b.csv` and was discarded): `docs/sweep/tier1_83d23ef_f4b.csv`, 1600 rows,
+0 errors, wall 75 s; `tools/sweep_jc.py plot … --doc docs/jc_sweep_f4b.md` (PNGs
+`docs/sweep/png/tier1_83d23ef_f4b_*.png`), `docs/viz/data/tier1_sweep.json` from the new CSV.
+`docs/jc_sweep.md` is **not** regenerated (the lead author is reviewing it); `docs/jc_sweep_f4b.md`
+carries a hand-added delta section (from `tools/profile_delta.py --tier-csv`): lumped columns and
+`f_peak_jc` bitwise equal; every JC column changes on all 1600 rows, max 5.6e-3 on `f_eq_jc` /
+`x_peak_jc` / `daf_jc` / `ratio_f_eq` (median 1.1e-4), 4.4e-3 on `v_peak_jc` / `momentum_jc` /
+`ratio_v_peak` (median 5.9e-4), 4.2e-3 on `a_peak_jc`, 8.8e-3 on `ke_peak_jc`; 13 table cells
+move in their last digit and two `ratio_v_peak` band counts move by one case. Regenerating
+`jc_sweep_f4b.md` with `plot` drops the hand-added section; re-add it from the tool's output.
+
+**Viewer, one line.** Re-exporting `reference_sweep.json` makes it a schema-2 sweep file (the 5b
+bump), which the W.2 viewer refused ("Unsupported file") instead of showing its W.3 placeholder;
+`docs/viewer/viewer.src.html` `validate` now accepts a `sweep` file at schema 1 or 2
+(`SWEEP_SCHEMA_VERSIONS`), trace files stay at 1, `viewer.html` rebuilt with `tools/build_viewer.py`;
+`tests/test_viewer.py` unchanged apart from the screenshot test. Sweep mode itself is still W.3.
+
+**Pages deleted.** `docs/viz/example_jc_sheet.html`, `example_jc_step.html`,
+`example_lumped_step.html`, `golden_r096_jc.html` (legacy-profile layout, W.3 decision pulled
+forward). `tests/test_viz_motion.py` builds its two pages into a module `tmp_path` with
+`tools/animate.py` and the pages' former arguments (`PAGE_ARGS`), so the V.2f pins stay;
+`tests/test_viewer.py::test_screenshots_at_peak` keeps the viewer screenshot and drops the
+plotly half. README "Animation" section removed (the CLI is described under the data files),
+`docs/architecture.md`, `docs/viewer/README.md`, `docs/viz/diagnosis.md` (a status line) and
+`tools/animate.py`'s docstring no longer point at the pages. `viz/animate.py`, `tools/animate.py`
+and `tests/test_viz.py` stay.
+
+**Gates.** `ruff check` / `format --check` clean. Commit `83d23ef`: `make test-both` 1042 passed (Numba) /
+1041 passed + 1 skipped (pure Python), `-m slow` 150 passed (4.6 min), the three
+`peak_response_jc` legacy-flag `jc_slow` cases vs Excel 3 passed (5.7 s; the three literal-port
+cases, 80 min, were not run: `legacy_port.py` is untouched, owner's decision). Port-reviewer on
+`83d23ef`: no correctness findings (the mirror qualifier above). This commit: `make test-both`
+1047 passed (86 s) / 1046 passed + 1 skipped (**12 min**: `tests/test_viz_motion.py` now solves
+row 96 in pure Python to build its page, ~9 min under `NUMBA_DISABLE_JIT=1`; see open issues),
+`-m slow` 150 passed, `jc_slow -k peak_response_jc` 3 passed, `tools/bench.py --skip-full-python`
+digests all equal, full JC rows vs Excel 8.6e-13 / 2.1e-14 / 8.4e-15 (`docs/bench/83d23ef.json`;
+this host is ~2x faster than the Stage 5 one, the Numba / literal ratios 0.097 (a) and 0.57 (r96
+full) against 0.081 / 0.555 before: within the between-host noise the bench README describes).
+
 ## Session 5b — done (2026-10-27)
 Commits: `4384dac` (Part A), `ef89cbf` (Part B), `3db6604` (10 % subset), `8590c3f` (export
 schema 2, `--tag`), this commit (full Tier 1, PNGs, `jc_sweep.md`, `tier1_sweep.json`).
@@ -115,11 +299,15 @@ schema 2, `--tag`), this commit (full Tier 1, PNGs, `jc_sweep.md`, `tier1_sweep.
   loads `docs/viz/data/reference_sweep.json` (the W.1 schema-1 conversion of the golden
   `cases.csv`, left as is); W.3 must take sweep files at version 2 (`tier1_sweep.json`),
   regenerate `reference_sweep.json` and update the README line and the test's message text.
+  **F-4b (2026-10-27):** `reference_sweep.json` is re-exported (schema 2, for the staleness test)
+  and the viewer's `validate` accepts a `sweep` file at schema 1 or 2 for its W.3 placeholder
+  message (`SWEEP_SCHEMA_VERSIONS`, one line; trace stays at 1); W.3 still owes sweep mode.
 - `--tag`: `run --tag <name>` suffixes the CSV after the sha, so a rerun (F-4b) never overwrites.
-- **F-4b (pending the lead author):** the profile correction will change every JC row; rerun
-  Tier 1 with `--tag f4b` and re-plot (`plot <csv> --doc docs/jc_sweep.md`), keep
-  `tier1_8590c3f.csv` for the before / after comparison; the owner's Tier 2 should wait for it
-  or be tagged the same way.
+- **F-4b (done 2026-10-27, Session F-4b):** the profile correction changed every JC row (max
+  5.6e-3 relative on `f_eq_jc`, 4.4e-3 on `v_peak_jc`); the Tier 1 rerun is
+  `docs/sweep/tier1_83d23ef_f4b.csv` with `docs/jc_sweep_f4b.md` (owner's instruction:
+  `docs/jc_sweep.md` stays for Decision 16 and is replaced afterwards); `tier1_8590c3f.csv` kept
+  for the comparison; the owner's Tier 2 is to be tagged `f4b`.
 
 ## Session 5b — done (subset) (2026-10-27)
 Commits: `4384dac` (Part A), `ef89cbf` (Part B), this commit (subset CSV, PNGs, `jc_sweep.md`).
@@ -254,7 +442,9 @@ repeated its first value at `n = 4, 5`, the legacy B had `B(3) = 1 / (pivot − 
 `B(4) = 0` inside its ramp and an inlet ramp one cell longer than its outlet ramp).
 
 **For the lead author — the half-cell symmetry offset (one cell in ~550; a model-intent
-question, not a transcription one).** Transcribed literally, both corrected profiles mirror
+question, not a transcription one). Resolved by F-4b (2026-10-27, "Session F-4b — done"): the
+outlet tests and ramp now use `pipeSegQTY + 1`, the alternative proposed at the end of this
+paragraph in a different form.** Transcribed literally, both corrected profiles mirror
 about interleaved position `N − 1` (`A(n) = A(N − 1 − n)`, `B(n) = B(N − 2 − n)`), the centre
 of the `n = 0 .. pipeSegQTY − 1` nodes of the VBA comment, with A node `N` excluded; the
 geometric centre of the `N + 1` A nodes (and of the `2N + 1` interleaved cells) is position
@@ -368,7 +558,7 @@ committed): the Example JC panel shows four cells on each leg and every inlet ce
 height, row 96 two legs of the same length. `example_lumped_step.json` and
 `reference_sweep.json` (Excel values) are unchanged.
 
-**Not done, by decision.** The four V.2 plotly pages under `docs/viz/*.html` were generated
+**Not done, by decision (done in F-4b).** The four V.2 plotly pages under `docs/viz/*.html` were generated
 with the legacy profile and show the one-cell leg difference and the stray inlet cell. The
 owner's decision: delete them in W.3 rather than regenerate, since the viewer replaces them
 (W.3 then also retires `tests/test_viz_motion.py` and the plotly-page screenshots of
@@ -1695,14 +1885,19 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
-- **F-4, for the lead author:** the corrected profiles mirror about interleaved position
-  `N − 1`, not the geometric column centre `N` (half a MoC cell; inlet zero block 8 cells,
-  outlet 10; `A(4)` non-zero, `A(N − 4)` zero). Pinned as transcribed; details and the
-  alternative outlet tests in "Session F-4 — done".
-- F-4: `docs/viz/*.html` (the four V.2 plotly pages) still show the legacy profile's layout
-  (one-cell leg difference, stray inlet cell). **Owner's decision (2026-10-26): delete them in
-  W.3 rather than regenerate; the viewer replaces them** (`tests/test_viz_motion.py` and the
-  `tests/test_viewer.py` side-by-side screenshots read those pages and go with them).
+- **F-4b, for the lead author:** `legacy/vba/interpFraction_fix_2026-10-27.bas` is the owner's
+  correction of the 26 Oct functions (outlet side `pipeSegQTY + 1`), applied as the default
+  profile pending confirmation; if the lead author confirms, edit the file's header comment
+  (it states the provenance). The measured effect is in "Session F-4b — done".
+- F-4b: the pure-Python fast suite (`make test-nojit`) takes 12 min instead of 3 because
+  `tests/test_viz_motion.py::pages` builds the row 96 page by solving row 96 without Numba
+  (`tools/animate.py --golden r096_jc_L24_f3`). Options: skip the page build under
+  `NUMBA_DISABLE_JIT=1` (the browser tests do not test the solver), or build the page from a
+  smaller windowed run; the owner to choose.
+- 5b / F-4b: `docs/jc_sweep.md` is the 26 Oct-profile Tier 1 (`tier1_8590c3f.csv`), kept for
+  Decision 16; `docs/jc_sweep_f4b.md` is the current one. After Decision 16 replace the former
+  with the latter (or re-plot `tier1_83d23ef_f4b.csv` with `--doc docs/jc_sweep.md` and re-add
+  the delta section).
 - W.2: `docs/viewer/viewer.html` carries the **full** plotly.js 4.1.1 (4.8 MB) because the
   installed package ships no partial bundle and nothing is fetched; when a copy of
   `plotly.js-basic-dist-min` 4.1.1 is available offline, `tools/build_viewer.py --plotly <file>`
@@ -1754,7 +1949,8 @@ Approved fixes (lead author, 21 Oct 2026):
 F-1 vAv denominator: 2N+1 (number of terms), was 2N-1. port_review §3.2a.
 F-2 MoC parity: continuous even/odd alternation for the whole run via a single running step counter in the refactored JC solver; the literal port keeps the per-phase index. Intent: alternation never double-steps a half-grid at a phase boundary. port_review §2.5, §3.2c. Differential tests vs legacy_port.py for JC must therefore compare with a tolerance only on cases where the literal port's parity sequence is continuous (phase 3 not entered and phase-1 exit k odd); for the others, assert the refactored result against a legacy run patched to a running counter, and record the before/after difference.
 F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is the only module the decision may touch.
-F-4 (lead author, 26 Oct 2026) corrected moving-fraction profile: `interpFractionA/B` replaced by `legacy/vba/interpFraction_fix_2026-10-26.bas` (both profiles start at exactly 0 at `n = 3`, one squared ramp per leg, equal legs). Applied in Session F-4 as `fraction_profile="fixed"` (default; `"legacy"` reproduces the VBA). DEVIATIONS D-4 "preserved" → "fixed". The pivot-4 `ValueError` guard on the fixed path is the port's addition (owner's decision). Measured change in NOTES.md "Session F-4 — done"; the half-cell symmetry offset there is a question back to the lead author.
+F-4 (lead author, 26 Oct 2026) corrected moving-fraction profile: `interpFractionA/B` replaced by `legacy/vba/interpFraction_fix_2026-10-26.bas` (both profiles start at exactly 0 at `n = 3`, one squared ramp per leg, equal legs). Applied in Session F-4 as `fraction_profile="fixed"` (default; `"legacy"` reproduces the VBA). DEVIATIONS D-4 "preserved" → "fixed". The pivot-4 `ValueError` guard on the fixed path is the port's addition (owner's decision). Measured change in NOTES.md "Session F-4 — done".
+F-4b (owner, 27 Oct 2026, pending the lead author's confirmation) the half-cell symmetry offset of F-4 resolved: `legacy/vba/interpFraction_fix_2026-10-27.bas` replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side tests and the outlet ramp of both functions (inlet unchanged), so A mirrors about the column centre `N / 2` over the called nodes `1 .. N - 1` and B about `(N - 1) / 2`, with equal fixed blocks at both ends. Applied in Session F-4b as the `"fixed"` profile (the 26 Oct text is kept on disk but no longer transcribed). Measured change in NOTES.md "Session F-4b — done".
 
 Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixes are built behind keyword flags defaulting to the VBA behaviour, the differential suite passes bitwise on the legacy flags, then the defaults flip; this supersedes the tolerance-only comparison note under F-2 above.
 
@@ -1762,12 +1958,11 @@ Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from 
 
 ## Next action
 **The lead author's Decision 16 on `docs/jc_sweep.md` (Tier 1), then Stage 6.** Pending items
-around it: (a) **F-4b** (the lead author's profile correction): apply it, then
-`.venv/bin/python tools/sweep_jc.py run --tier 1 --jobs 4 --tag f4b` (≈ 80 s), `plot` the new CSV
-into `docs/jc_sweep.md`, `tools/export.py sweep --from-csv <csv> --out docs/viz/data/tier1_sweep.json`,
-commit CSV + PNGs + doc + JSON; the earlier `tier1_8590c3f.csv` stays for the comparison. (b)
+around it: (a) **F-4b done** (Session F-4b: `tier1_83d23ef_f4b.csv`, `docs/jc_sweep_f4b.md`,
+`tier1_sweep.json`); after Decision 16 `docs/jc_sweep_f4b.md` replaces `docs/jc_sweep.md`; the
+lead author's confirmation of the 27 Oct VBA is still to come. (b)
 **Tier 2 locally (the owner):** `.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores>`
-(≈ 77 min of solver CPU, ≈ 10 min wall on 8 cores; add `--tag f4b` after F-4b) and
+(≈ 77 min of solver CPU, ≈ 10 min wall on 8 cores; `--tag f4b`, F-4b being in) and
 `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>.csv --doc docs/jc_sweep_tier2.md`;
 commit `docs/sweep/tier2_<sha>.csv`, `docs/sweep/png/tier2_<sha>_*.png`, `docs/jc_sweep_tier2.md`
 (the plot command's `--mu` / `--amplitude` select the friction and amplitude level of figures

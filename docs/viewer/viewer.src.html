@@ -115,6 +115,8 @@
   var SPEEDS = [0.25, 0.5, 1, 2, 4];
   var STORE_KEY = 'surge_sdof.viewer.v1';
   var SCHEMA_VERSION = 1, KINDS = ['trace', 'sweep'];
+  // a sweep file is only recognised (sweep mode is W.3): the Session 5b schema 2 is accepted too
+  var SWEEP_SCHEMA_VERSIONS = [1, 2];
 
   var $ = function (id) { return document.getElementById(id); };
   var gd = $('plot');
@@ -203,11 +205,12 @@
   function validate(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('the document is not an object');
     var kind = obj.kind, sv = obj.schema_version;
-    if (KINDS.indexOf(kind) < 0 || sv !== SCHEMA_VERSION) {
+    var okVersion = kind === 'sweep' ? SWEEP_SCHEMA_VERSIONS.indexOf(sv) >= 0 : sv === SCHEMA_VERSION;
+    if (KINDS.indexOf(kind) < 0 || !okVersion) {
       throw new Error('Unsupported file: kind ' + JSON.stringify(kind === undefined ? null : kind) +
         ', schema_version ' + JSON.stringify(sv === undefined ? null : sv) +
         '.\nThis viewer reads kind "trace" or "sweep" at schema_version ' + SCHEMA_VERSION +
-        ' (docs/data_format.md); re-export the file with the matching tools/export.py.');
+        ' (a sweep file also at 2; docs/data_format.md); re-export the file with the matching tools/export.py.');
     }
     if (kind === 'trace') {
       var need = ['meta', 'geometry', 'frames'];

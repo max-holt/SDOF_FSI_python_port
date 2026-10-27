@@ -3,9 +3,9 @@ on the Playwright / headless Chromium harness of ``tests/test_viz_motion.py`` (s
 fixture and skip rules: no ``playwright`` package or no browser skips the module).
 
 Every page the tests open records each request the browser makes; anything but the page's own
-``file:`` URL fails the test (the viewer makes no network request of any kind). The four W.1
+``file:`` URL fails the test (the viewer makes no network request of any kind). The W.1
 data files in ``docs/viz/data/`` are loaded through the file input; the three trace files
-must render the six traces of the plotly pages on the two panels with the scalings the file
+must render the six traces of ``viz/animate.py`` on the two panels with the scalings the file
 implies, the sweep file must show the W.3 message. Playback is exercised (friction trace and
 its SVG group survive 2 s of play; a time window keeps every shown frame inside it; 4x advances
 more frames than 1x over the same wall time), a ``schema_version: 99`` file must be rejected
@@ -13,9 +13,9 @@ with a readable message, settings must persist and the page must work with stora
 ``test_build_reproduces_committed_page`` needs no browser: the committed page is byte-identical
 to ``tools/build_viewer.py``'s output with the installed plotly bundle.
 
-Screenshots of the viewer at the peak-|x| frame and of the matching plotly page at its frame
-nearest that time go to ``tests/.artifacts/`` (not committed) for the owner's side-by-side
-review; no pixel comparison is made.
+Screenshots of the viewer at the peak-|x| frame go to ``tests/.artifacts/`` (not committed)
+for the owner's review; no pixel comparison is made. (Until Session F-4b the matching plotly
+page under ``docs/viz/`` was screenshotted alongside; those pages are deleted.)
 """
 
 from __future__ import annotations
@@ -44,11 +44,8 @@ DATA = ROOT / "docs" / "viz" / "data"
 ARTIFACTS = motion.ARTIFACTS
 TRACE_FILES = ["example_jc_step.json", "example_lumped_step.json", "golden_r096_jc.json.gz"]
 SWEEP_FILE = "reference_sweep.json"
-# the plotly page of the same run, for the side-by-side screenshots
-PAGE_FOR = {
-    "example_jc_step.json": "example_jc_step.html",
-    "golden_r096_jc.json.gz": "golden_r096_jc.html",
-}
+# the two JC trace files, screenshotted at their peak
+SCREENSHOT_FILES = ["example_jc_step.json", "golden_r096_jc.json.gz"]
 N_TRACES = 6
 CENTRELINE, CELLS, FRICTION, UNBALANCE, CURSOR, STATUS = 0, 1, 2, 3, 4, 5
 PLAY_MS = 2000
@@ -90,16 +87,6 @@ FRICTION_GROUPS_JS = """
           lines: Array.from(groups).reduce((n, g) => n + g.querySelectorAll('path.js-line').length, 0)};
 }
 """.replace("FRICTION", str(FRICTION))
-# plotly page: frame names and times, to pick the frame nearest the peak
-PAGE_FRAMES_JS = """
-() => {
-  const gd = document.querySelector('.plotly-graph-div');
-  const frames = gd._transitionData._frames;
-  const dec = (a) => Array.isArray(a) ? a : Array.from(new Float32Array(
-      Uint8Array.from(atob(a.bdata), c => c.charCodeAt(0)).buffer));
-  return frames.map(f => [f.name, dec(f.data[1].x)[0]]);
-}
-"""
 
 
 def read_data(name: str) -> dict:
@@ -405,11 +392,10 @@ def test_works_with_storage_blocked(browser):
 # ------------------------------------------------------------------ screenshots for review
 
 
-@pytest.mark.parametrize("name", list(PAGE_FOR))
+@pytest.mark.parametrize("name", SCREENSHOT_FILES)
 def test_screenshots_at_peak(browser, name):
     """For the owner's review (no pixel check): the viewer at the frame of peak |x| ("jump to
-    peak") and the plotly page of the same run at its frame nearest that time, both full-page,
-    in ``tests/.artifacts/``. The row 96 plotly page is the 6–7.5 s window, which holds the peak."""
+    peak"), full-page, in ``tests/.artifacts/``."""
     ARTIFACTS.mkdir(exist_ok=True)
     stem = name.split(".")[0]
     page, requests, errors = open_viewer(browser)
@@ -420,16 +406,8 @@ def test_screenshots_at_peak(browser, name):
     page.screenshot(path=str(ARTIFACTS / f"viewer_{stem}_peak.png"), full_page=True)
     page.close()
     assert_no_network(requests, errors)
-
-    plotly_page, _ = motion.load_page(browser, PAGE_FOR[name])
-    frames = plotly_page.evaluate(PAGE_FRAMES_JS)
-    fname, ft = min(frames, key=lambda f: abs(f[1] - st[1]))
-    plotly_page.evaluate(motion.ANIMATE_JS, [[fname], motion.STEP_OPTS])
-    plotly_page.wait_for_timeout(500)
-    plotly_page.screenshot(path=str(ARTIFACTS / f"plotly_page_{stem}_peak.png"), full_page=True)
-    plotly_page.close()
     print(
-        f"{name}: viewer frame {st[0]} at the peak t = {st[1]:.4f} s; plotly page frame {fname!r} "
-        f"at t = {ft:.4f} s -> {ARTIFACTS / f'viewer_{stem}_peak.png'}, {ARTIFACTS / f'plotly_page_{stem}_peak.png'}"
+        f"{name}: viewer frame {st[0]} at the peak t = {st[1]:.4f} s -> "
+        f"{ARTIFACTS / f'viewer_{stem}_peak.png'}"
     )
-    assert abs(ft - st[1]) < 0.05, "the plotly page has no frame near the peak"
+    assert st[1] > 0.0

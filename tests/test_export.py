@@ -16,6 +16,8 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -451,4 +453,42 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
     )
     assert math.isclose(
         doc["meta"]["outputs"]["max_displacement"], 0.0036195012413468937, rel_tol=2.2e-3
+    )
+
+
+# ------------------------------------------------------------------ staleness of the committed data files
+
+DATA_DIR = REPO / "docs" / "viz" / "data"
+F4B_SHA = "83d23ef6d10f6d44050dd3bb07ba7a79430b74e6"
+"""The F-4b profile commit (Session F-4b, 2026-10-27). Every committed data file must have
+been exported at or after it; raise this pin whenever a solver change makes the files stale."""
+
+
+@pytest.mark.parametrize("name", sorted(p.name for p in DATA_DIR.iterdir()))
+def test_committed_data_files_are_not_stale(name):
+    """``meta.git_sha`` of every file in ``docs/viz/data/`` is ``F4B_SHA`` or a descendant
+    of it (``git merge-base --is-ancestor``), so a file exported before the current solver
+    fails the suite (Session F-4: ``example_lumped_step.json`` kept its pre-F-4 geometry for
+    a day because nothing checked). A sweep file converted from a 5b CSV carries the CSV's
+    (abbreviated) sha; git resolves it."""
+    sha = export.read_json(DATA_DIR / name)["meta"]["git_sha"]
+    assert sha, f"{name}: no meta.git_sha"
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    probe = subprocess.run(
+        ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=REPO, capture_output=True, text=True
+    )
+    if probe.returncode != 0:
+        pytest.skip(
+            f"{name}: git_sha {sha} is not in this checkout's history ({probe.stderr.strip()})"
+        )
+    res = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", F4B_SHA, sha],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0, (
+        f"{name} was exported at {sha}, before the F-4b commit {F4B_SHA[:7]}: re-export it "
+        f"(README 'Data files for the JS viewer'; a sweep file needs its CSV rerun first)"
     )

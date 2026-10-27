@@ -134,32 +134,6 @@ identical result digests or the exit code is 1. Run it at the end of every Stage
 and commit `docs/bench/`. Expect about an hour (the full JC cases in pure Python are ~15 min
 each; `--skip-full-python` leaves them out and brings the run to about 10 minutes).
 
-## Animation
-
-```
-.venv/bin/python tools/animate.py --golden example_jc --out docs/viz/example_jc_sheet.html
-.venv/bin/python tools/animate.py --golden r096_jc_L24_f3 --t-start 6 --t-end 7.5 --max-frames 160 --out docs/viz/golden_r096_jc.html
-.venv/bin/python tools/animate.py --step --amplitude 1600 --area 0.05 --length 6 --nat-freq 2 --mu 0.0001 \
-    --sample-freq 10 --step-qty 80 --celerity 1200 --mass-per-len 100 --ei 1e7 --duration 2.4 --solver jc \
-    --out docs/viz/example_jc_step.html
-```
-
-Session V.2 / V.2b: `surge_sdof.viz.animate.build_figure(result)` (the `viz` extra) turns a run
-made with `trace_every > 0` into a two-panel plotly animation: the fluid column on the expansion
-loop (inlet, leg, run, return leg, outlet; cells mapped by their moving fraction, sharp elbows)
-with every cell a circle displaced by the mass motion times its moving fraction, sized by
-its pressure and coloured by its velocity (constant for the lumped model), and the applied
-unbalance `F_A(t) - F_B(t - L/c)` (left axis) over the friction force (right axis, zero lines
-aligned) against time, phases shaded, a cursor at the frame time; slider, a typed playback
-speed with play and pause on the page. `tools/animate.py` reruns a fixture case (`--golden`, a `curve_10in` case id
-or `example_lumped` / `example_jc`) or a plain step (`--step`: zero for `--lead-in` 0.1 s, then
-`--amplitude` bar on the area of a `--size` mm pipe or `--area` m²) and writes a standalone page
-with plotly.js from the CDN (`--max-frames`, default 400, caps the frames; `--t-start` / `--t-end` animate a time window
-at full resolution, shaded on the whole-run force panel; the stride and every scaling are
-printed and put in the title). `docs/viz/` holds four such
-pages; the full-library HTML is never committed. `docs/architecture.md` "Session V.2 / V.2b / V.2c / V.2d — the
-animation" has the geometry and scaling rules.
-
 ## Data files for the JS viewer
 
 ```
@@ -179,8 +153,13 @@ the rest frame first, the JC column arrays as row-major blocks), a `sweep` file 
 rows as columns plus the Excel reference values the viewer self-checks against. Column-wise
 arrays, floats via `repr`, no NaN, optional gzip by the `.gz` suffix. The default `--trace-every`
 is the 2000-frame stride or the coarser one that keeps the JSON under 45 MB (row 96: 832 frames,
-46.9 MB, 20.6 MB gzipped); the size written is printed. `docs/viz/data/` holds the four committed
-files.
+46.9 MB, 20.6 MB gzipped); the size written is printed. `docs/viz/data/` holds the five committed
+files (three traces, the Excel reference sweep and the Session 5b Tier 1 sweep); every one must
+carry a `meta.git_sha` at or after the F-4b profile commit (`tests/test_export.py`), so a stale
+export fails the suite. The model animation itself (`surge_sdof.viz.animate`, `tools/animate.py
+--golden <case_id> | --step … --out <file.html>`, the `viz` extra) writes a standalone plotly page
+of one run; the four pages once committed under `docs/viz/` were deleted in Session F-4b, the
+viewer below replaces them.
 
 ## The results viewer
 
@@ -219,6 +198,6 @@ is Session W.3.
 src/surge_sdof/      the package (see above)
 legacy/vba/          the VBA source of truth (never edited)
 tests/               pytest suites; tests/fixtures/ holds the Excel-generated data (never edited)
-tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading), build_viewer.py, viewer/ (vendored pako)
-docs/                architecture.md, port_review.md, data_format.md, bench/, viz/ (animation pages), viz/data/ (viewer data files), viewer/ (the single-file viewer, its source and README)
+tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading), build_viewer.py, sweep_jc.py, profile_delta.py, viewer/ (vendored pako)
+docs/                architecture.md, port_review.md, data_format.md, jc_sweep.md, bench/, sweep/, viz/data/ (viewer data files), viewer/ (the single-file viewer, its source and README)
 ```

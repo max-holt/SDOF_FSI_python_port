@@ -17,11 +17,11 @@ network. The page is ~4.9 MB because it carries the full plotly.js bundle (see "
 
 Use the file picker or drop a file anywhere on the page. `.json` and `.json.gz` are both read
 (gzip is detected by the file's own magic bytes, not its name). A file whose `kind` is not
-`trace` / `sweep` or whose `schema_version` is not `1` is refused with a message that names
-what was found; a `sweep` file is recognised and its meta shown, with a note that sweep mode is
-W.3. The committed examples are in `docs/viz/data/`: `example_jc_step.json` (1.8 MB),
-`example_lumped_step.json` (0.14 MB), `golden_r096_jc.json.gz` (20.6 MB, inflates to 47 MB and
-takes a few seconds to parse), `reference_sweep.json`.
+`trace` / `sweep` or whose `schema_version` is not `1` (a `sweep` file: `1` or the Session 5b
+`2`) is refused with a message that names what was found; a `sweep` file is recognised and its
+meta shown, with a note that sweep mode is W.3. The committed examples are in `docs/viz/data/`: `example_jc_step.json` (1.8 MB),
+`example_lumped_step.json` (0.14 MB), `golden_r096_jc.json.gz` (13.9 MB, inflates to 47 MB and
+takes a few seconds to parse), `reference_sweep.json` and `tier1_sweep.json` (sweep, schema 2).
 
 The header shows the file's meta (case id, solver, `dt`, `trace_every`, frame and cell counts,
 the capped flag, git sha, created time) and the scaling in use (exaggeration, the size rule, the
@@ -30,8 +30,8 @@ period), so a screenshot carries its own provenance.
 
 ## The picture
 
-The same two panels as the plotly pages in `docs/viz/`, drawn with the same rules so the two
-can be compared side by side (the rules are in `docs/architecture.md`, "the animation", and the
+The same two panels as the plotly pages `viz/animate.py` writes, drawn with the same rules so
+the two can be compared side by side (the rules are in `docs/architecture.md`, "the animation", and the
 constants at the top of the page's script name the `viz/animate.py` constants they copy):
 
 * **Panel 1, expansion loop.** Inlet pipe, leg, run, return leg, outlet from the file's
@@ -93,7 +93,7 @@ offline, `tools/build_viewer.py --plotly <file>` swaps it in (about 1 MB) with n
 ## Browsers tested
 
 * Headless Chromium 141 (Playwright 1.56.0, `chromium-1194`), on Linux, by `tests/test_viewer.py`:
-  the four data files, playback, windowing, speed, settings, blocked storage, the schema check,
+  the five data files, playback, windowing, speed, settings, blocked storage, the schema check,
   and zero requests beyond the page itself.
 * Not tested in this session: Edge, Chrome with a visible window, Firefox, Safari. The page uses
   only `file.arrayBuffer()`, `TextDecoder`, `requestAnimationFrame`, `localStorage` and plotly.js
