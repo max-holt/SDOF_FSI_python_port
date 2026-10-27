@@ -1,14 +1,19 @@
 # NOTES — session handoff
 
 ## Current stage
-Session 5b (junction-coupling sweep with canonical histories, 2026-10-27), parts A–C built and
-the 10 % Tier 1 subset run; **stopped for the owner's go before the full Tier 1 run.**
-`src/surge_sdof/histories.py` (+ `tests/test_histories.py`, 20 tests), `tools/sweep_jc.py`
-(+ `tests/test_sweep_jc.py`, 7 tests), `docs/sweep/tier1_subset10_ef89cbf.csv` (160 rows, 0
-errors), four PNGs under `docs/sweep/png/`, `docs/jc_sweep.md`, `docs/data_format.md` "sweep CSV
-(Session 5b)". No other `src/` file changed. See "Session 5b — done (subset)".
-**Next action: the owner's go, then the full Tier 1 run (about 90 s here), then the lead
-author's Decision 16, then Stage 6.**
+Session 5b (junction-coupling sweep with canonical histories, 2026-10-27) **done through the full
+Tier 1 run** (owner's go after the 10 % subset): `src/surge_sdof/histories.py`,
+`tools/sweep_jc.py` (`check | run --tier --subset --tag | plot`), `docs/sweep/tier1_8590c3f.csv`
+(1600 rows, 0 errors, 76 s wall on 4 processes), `docs/jc_sweep.md` with four PNGs under
+`docs/sweep/png/`, the approved API addition (`export.SWEEP_COLUMNS` = the 72 CSV columns, sweep
+`schema_version` 2, `docs/data_format.md` and the pins updated), `docs/viz/data/tier1_sweep.json`
+(1.51 MB) from the Tier 1 CSV. The owner's four decisions (f_ref 4 Hz; `p_noise_rms` an input
+with the resulting RMS recorded; one history per (type, amplitude, f_osc, seed) shared across
+lengths; `m_total = (L + 4h/3) m'`) are accepted and recorded in the scope section. Tier 2 is the
+owner's local run (command under Next action). See "Session 5b — done".
+**A Tier 1 rerun is required once the profile correction F-4b (pending the lead author) lands:**
+`tools/sweep_jc.py run --tier 1 --tag f4b` (the `--tag` suffix keeps the earlier CSV).
+**Next action: the lead author's Decision 16 (on `docs/jc_sweep.md`), then Stage 6.**
 Session F-4 (the lead author's corrected moving-fraction profile, 2026-10-26) done:
 `peak_response_jc(fraction_profile="fixed" | "legacy")`, `moc.interp_fractions(...,
 fraction_profile)` and `coupling.JunctionCoupling` carry the flag; the corrected
@@ -91,6 +96,31 @@ JC differential sweep (100/100 bitwise), bench `(g)` case and reference ratios. 
 numerically inert for the outputs (rounding level; see "Stage 4.2 — F-1/F-2 before/after").
 Stage 4.1 (refactor, first seam) done 2026-10-21: `src/surge_sdof/structure.py`, `loads.py`, `coupling.py` (`NoCoupling` only), `response.py` (lumped `peak_response`), `docs/architecture.md`, `tests/test_differential.py` (sweep + golden differential against the frozen `legacy_port.py`, 335 tests, all bitwise), DEVIATIONS D-23, bench `docs/bench/4ea09d2.json`. `legacy_port.py` is unchanged and remains the reference until Stage 6. Stage 4.0 (performance baseline of the literal port) done 2026-10-21: `tools/bench.py`, `docs/bench/1adaddd.json`, `docs/bench/README.md`. Stage 1 (literal port) complete and **verified against Excel for both peak solvers**: all 75 `GetPeakResponse` golden cases pass at RTOL 5e-12 (max observed 8.3e-13) and, since 2026-10-21, all 3 `GetPeakResponseJC` golden cases pass at RTOL 5e-12 (max observed 8.6e-13; first full run, 1 h 20 min in pure Python). `GetPressureResponse` has no golden case yet (the workbook's `Example` sheet exercises it only on a demo pattern with cached values; not extracted). `src/surge_sdof/legacy_port.py` holds the line-for-line transcription; `vba_compat.py` the VBA-semantics helpers.
 
+## Session 5b — done (2026-10-27)
+Commits: `4384dac` (Part A), `ef89cbf` (Part B), `3db6604` (10 % subset), `8590c3f` (export
+schema 2, `--tag`), this commit (full Tier 1, PNGs, `jc_sweep.md`, `tier1_sweep.json`).
+- **Full Tier 1** (`docs/sweep/tier1_8590c3f.csv`): 1600 cases, 0 errors, 0 short-pipe
+  fallbacks; wall 76 s on 4 processes (Intel Xeon @ 2.30 GHz); solver time per case lumped
+  mean 0.036 s (max 0.19 s), JC mean 0.152 s (max 0.69 s). Recorded without interpretation:
+  `ratio_f_eq` 0.12–1.10 (median 0.95); step 0.84–1.01 (none below 0.8, 202 of 320 within 5 %);
+  sine 0.12–1.10 (143 of 960 below 0.8, all at `natFreq = f_osc` or its neighbours); noise
+  0.39–1.02 (86 of 320 below 0.8, the 24 Hz spans); `ratio_v_peak` 0.12–1.58 (median 1.03);
+  `daf_lumped` up to 14.2 at the 16 Hz sine on the 16 Hz span (L = 48 m) where `daf_jc` ≤ 2.0.
+- **Approved API addition made (commit `8590c3f`):** `export.SWEEP_COLUMNS` is the 72-column CSV
+  layout, `export.SWEEP_SCHEMA_VERSION = 2` (trace stays 1), `ratio_f_peak` gone;
+  `tools/export.py sweep --from-csv` takes `meta.tier / cpu / histories_version / git_sha` from a
+  5b CSV's rows (`cases.uniform_value`) and gives it `cases.sweep_regen`; `tools/sweep_jc.py`
+  takes its columns from `export`. **For W.3:** `docs/viewer/viewer.src.html` accepts
+  `schema_version 1` for both kinds (`SCHEMA_VERSION = 1`, line 117) and `tests/test_viewer.py`
+  loads `docs/viz/data/reference_sweep.json` (the W.1 schema-1 conversion of the golden
+  `cases.csv`, left as is); W.3 must take sweep files at version 2 (`tier1_sweep.json`),
+  regenerate `reference_sweep.json` and update the README line and the test's message text.
+- `--tag`: `run --tag <name>` suffixes the CSV after the sha, so a rerun (F-4b) never overwrites.
+- **F-4b (pending the lead author):** the profile correction will change every JC row; rerun
+  Tier 1 with `--tag f4b` and re-plot (`plot <csv> --doc docs/jc_sweep.md`), keep
+  `tier1_8590c3f.csv` for the before / after comparison; the owner's Tier 2 should wait for it
+  or be tagged the same way.
+
 ## Session 5b — done (subset) (2026-10-27)
 Commits: `4384dac` (Part A), `ef89cbf` (Part B), this commit (subset CSV, PNGs, `jc_sweep.md`).
 - **Part A** `histories.py`: `step`, `step_sine`, `step_noise`, `canonical` (the common scaling),
@@ -134,7 +164,8 @@ Open for the owner (Session 5b):
 - **Proposed API addition (not made):** extend `export.SWEEP_COLUMNS` (`src/surge_sdof/export.py`,
   pinned to 30 by `tests/test_export.py`) to the 72 `sweep_jc.COLUMNS` so `tools/export.py
   sweep --from-csv` converts a 5b CSV for the W.3 viewer; `ratio_f_peak` would go. Waits for the go.
-- Tier 2 locally (the owner): see the "Tier 2" lines under Next action.
+- Tier 2 locally (the owner): see the "Tier 2" lines under Next action; the proposed API
+  addition above was approved and made in `8590c3f`.
 
 ## Session 5b — scope and plan (recorded 2026-10-27 before touching `src/`)
 Owner's instruction: quantify the junction-coupling effect with canonical load histories.
@@ -1730,17 +1761,20 @@ Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixe
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-**(0) The owner's go on the subset, then the full Tier 1 run:**
-`.venv/bin/python tools/sweep_jc.py run --tier 1 --jobs 4` (≈ 90 s; writes
-`docs/sweep/tier1_<sha>.csv`), then `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier1_<sha>.csv`
-(regenerates `docs/jc_sweep.md` and `docs/sweep/png/tier1_<sha>_*.png`); commit the CSV, the
-PNGs and the doc. Then the lead author's Decision 16, then Stage 6. **Tier 2 locally (the owner):**
-`.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores>` (≈ 77 min of solver CPU, ≈ 10 min
-wall on 8 cores) and `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>.csv --doc
-docs/jc_sweep_tier2.md --out docs/sweep/png`; commit `docs/sweep/tier2_<sha>.csv`,
-`docs/sweep/png/tier2_<sha>_*.png` and `docs/jc_sweep_tier2.md` (the plot command's `--mu` /
-`--amplitude` select the friction and amplitude level of figures 1–3; the noise envelope over
-the three seeds is taken pointwise by the plotter, the per-seed rows stay in the CSV).
+**The lead author's Decision 16 on `docs/jc_sweep.md` (Tier 1), then Stage 6.** Pending items
+around it: (a) **F-4b** (the lead author's profile correction): apply it, then
+`.venv/bin/python tools/sweep_jc.py run --tier 1 --jobs 4 --tag f4b` (≈ 80 s), `plot` the new CSV
+into `docs/jc_sweep.md`, `tools/export.py sweep --from-csv <csv> --out docs/viz/data/tier1_sweep.json`,
+commit CSV + PNGs + doc + JSON; the earlier `tier1_8590c3f.csv` stays for the comparison. (b)
+**Tier 2 locally (the owner):** `.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores>`
+(≈ 77 min of solver CPU, ≈ 10 min wall on 8 cores; add `--tag f4b` after F-4b) and
+`.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>.csv --doc docs/jc_sweep_tier2.md`;
+commit `docs/sweep/tier2_<sha>.csv`, `docs/sweep/png/tier2_<sha>_*.png`, `docs/jc_sweep_tier2.md`
+(the plot command's `--mu` / `--amplitude` select the friction and amplitude level of figures
+1–3; the noise envelope over the three seeds is taken pointwise by the plotter, the per-seed
+rows stay in the CSV). (c) **W.3** (sweep mode in the viewer) now loads `tier1_sweep.json` at
+sweep `schema_version` 2 (see "Session 5b — done"). (d) The owner's local bench reference run
+(unchanged, below).
 
 Previous next action (before 5b, kept for the record):
 **Local bench reference run, then Session 5b, then W.3 (sweep mode).** (1) The owner's
