@@ -25,8 +25,7 @@ from pathlib import Path
 import numpy as np
 
 from surge_sdof.response import PeakResponse
-from surge_sdof.trace import Trace
-from surge_sdof.viz.animate import _synthetic_phase, is_capped
+from surge_sdof.trace import PHASE_FREE_DECAY, PHASE_TRANSIT, Trace
 from surge_sdof.viz.geometry import LoopLayout, layout_from_trace
 
 __all__ = [
@@ -41,6 +40,7 @@ __all__ = [
     "git_sha",
     "created_utc",
     "array_block",
+    "is_capped",
     "to_trace_dict",
     "to_sweep_dict",
     "dumps",
@@ -266,9 +266,33 @@ def _geometry(layout: LoopLayout) -> dict:
     }
 
 
+def _synthetic_phase(trace: Trace) -> int:
+    """Phase of the ``t = 0`` rest frame: transit, unless the run has no transit sub-step."""
+    if trace.n_frames and trace.sub_step[0] == 0 and trace.phase[0] != PHASE_TRANSIT:
+        return int(trace.phase[0])
+    return PHASE_TRANSIT
+
+
+def is_capped(result: PeakResponse) -> bool:
+    """True when the run decayed past the traced history window (``trace.py``: free decay
+    is traced while ``sample < 2 * out_max``), so the trace ends before the run did.
+
+    Parameters
+    ----------
+    result : PeakResponse
+        With a trace.
+    """
+    trace = result.trace
+    decay = trace.phase == PHASE_FREE_DECAY
+    if not decay.any():
+        return False
+    forced_samples = int(trace.sample[decay].min())
+    return forced_samples + int(result.free_decay_samples) > 2 * int(trace.out_max)
+
+
 def _frames(trace: Trace) -> dict:
     """The thirteen columns with the synthetic rest frame first (``t = 0``, ``sub_step =
-    sample = -1``, the animation's rest phase, zeros)."""
+    sample = -1``, the rest phase, zeros)."""
     rest = {
         "t": 0.0,
         "sub_step": -1,

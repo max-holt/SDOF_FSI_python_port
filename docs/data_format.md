@@ -77,7 +77,7 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 | `step_qty` | int | Sub-steps per sample |
 | `out_max` | int | The VBA `outMax`; free decay is traced while `sample < 2 out_max` |
 | `trace_every` | int | The trace stride in sub-steps: frame `i >= 1` is the end of sub-step `(i - 1) trace_every` |
-| `capped` | int (0/1) | 1 when the run decayed past the traced history window, so the trace ends before the run did (`viz.animate.is_capped`) |
+| `capped` | int (0/1) | 1 when the run decayed past the traced history window, so the trace ends before the run did (`export.is_capped`) |
 
 ### trace.meta.outputs
 
@@ -338,8 +338,8 @@ integer. A trace file is therefore roughly
     bytes ≈ 20 × n_frames × (13 + 2 × n_cells) + inputs (force history: 20 × n_samples)
 
 * Example-sheet cases (37 cells, ~500 frames): about 1 MB for JC, 0.15 MB for lumped.
-* Row 96 of `curve_10in` (1333 cells): 53 KB a frame, so the 2000 frames `tools/animate.py`
-  targets would be ~107 MB. `tools/export.py` therefore picks its default `--trace-every` as the
+* Row 96 of `curve_10in` (1333 cells): 53 KB a frame, so the 2000 frames the default stride
+  targets (`tools/cases.TRACE_FRAMES`) would be ~107 MB. `tools/export.py` therefore picks its default `--trace-every` as the
   2000-frame stride **or the coarser stride that keeps the estimated file under 45 MB**
   (estimated over the forced phases; free decay adds frames), and prints the size written. The
   committed `docs/viz/data/golden_r096_jc.json.gz` is that default: stride 1212, 832 frames (24 ms a

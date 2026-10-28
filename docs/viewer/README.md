@@ -1,8 +1,9 @@
 # The results viewer (`docs/viewer/viewer.html`)
 
 One self-contained HTML file that plays a `trace` results file (`tools/export.py`,
-`docs/data_format.md`) as the two-panel animation of `viz/animate.py`, with playback, speed, frame
-stride, time window, exaggeration and colour range controlled live in the page. Nothing is
+`docs/data_format.md`) as a two-panel animation (`docs/architecture.md`, "The picture"), with
+playback, speed, frame stride, time window, exaggeration and colour range controlled live in
+the page. Nothing is
 downloaded at runtime: plotly.js and the gzip inflater are inside the file, and a
 content-security policy in the page blocks every network request, so the page behaves the same
 opened from disk, from a SharePoint download or from an object-storage URL. Session W.2 covers
@@ -30,9 +31,9 @@ period), so a screenshot carries its own provenance.
 
 ## The picture
 
-The same two panels as the plotly pages `viz/animate.py` writes, drawn with the same rules so
-the two can be compared side by side (the rules are in `docs/architecture.md`, "the animation", and the
-constants at the top of the page's script name the `viz/animate.py` constants they copy):
+Two panels, drawn by the rules of `docs/architecture.md`, "The picture" (the constants at the
+top of the page's script name them; the rules came from the plotly-python animation the
+viewer replaced, retired in Session H.1):
 
 * **Panel 1, expansion loop.** Inlet pipe, leg, run, return leg, outlet from the file's
   `geometry` (the nominal circle centres the exporter wrote). Each cell is a circle at
@@ -51,13 +52,12 @@ constants at the top of the page's script name the `viz/animate.py` constants th
 
 * **play / pause** (the space bar toggles), **jump to peak** (the frame of peak `|x|` over the
   whole run; if it lies outside the window, play restarts from `t_start`).
-* **speed**: a typed multiplier or the 0.25x … 4x buttons; 1x is 40 ms a shown frame, the plotly
-  pages' rate. The loop computes the frame due from the elapsed wall time, so when a frame
+* **speed**: a typed multiplier or the 0.25x … 4x buttons; 1x is 40 ms a shown frame. The loop computes the frame due from the elapsed wall time, so when a frame
   takes longer to draw than the period (row 96's 1333 cells at 4x) frames are skipped and the
   speed holds.
-* **stride**: animation frames advanced per shown frame; blank is automatic, the stride
-  `tools/animate.py` would pick for the file (`ceil((n_frames - 1) / 398)`), so 1x at the
-  automatic stride is the plotly page's pace. Stride 1 shows every frame of the file.
+* **stride**: animation frames advanced per shown frame; blank is automatic, the stride that
+  shows at most 400 frames of the file (`ceil((n_frames - 1) / 398)`). Stride 1 shows every
+  frame of the file.
 * **t_start / t_end**: the window played (default the whole run); Panel 2 shades it.
 * **exaggeration**: overrides the automatic multiplier (blank = automatic).
 * **colour range**: overrides `±max|v|` in m/s (blank = automatic; JC files only).
@@ -103,6 +103,5 @@ offline, `tools/build_viewer.py --plotly <file>` swaps it in (about 1 MB) with n
 ## Tests
 
 `.venv/bin/python -m pytest -q tests/test_viewer.py -s` (needs the `dev` extra's `playwright`
-and a browser; otherwise the module skips). Screenshots of the viewer at the peak frame and of
-the matching plotly page at its frame nearest that time are written to `tests/.artifacts/`
-(not committed) for review.
+and `plotly` and a browser; otherwise the module skips). Screenshots of the viewer at the peak
+frame are written to `tests/.artifacts/` (not committed) for review.

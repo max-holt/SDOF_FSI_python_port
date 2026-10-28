@@ -1,27 +1,32 @@
 """Browser tests of the single-file results viewer ``docs/viewer/viewer.html`` (Session W.2),
-on the Playwright / headless Chromium harness of ``tests/test_viz_motion.py`` (same browser
-fixture and skip rules: no ``playwright`` package or no browser skips the module).
+in Playwright / headless Chromium (no ``playwright`` package, no ``plotly`` package or no
+browser skips the module).
 
 Every page the tests open records each request the browser makes; anything but the page's own
 ``file:`` URL fails the test (the viewer makes no network request of any kind). The W.1
 data files in ``docs/viz/data/`` are loaded through the file input; the three trace files
-must render the six traces of ``viz/animate.py`` on the two panels with the scalings the file
-implies, the sweep file must show the W.3 message. Playback is exercised (friction trace and
-its SVG group survive 2 s of play; a time window keeps every shown frame inside it; 4x advances
-more frames than 1x over the same wall time), a ``schema_version: 99`` file must be rejected
-with a readable message, settings must persist and the page must work with storage blocked.
-``test_build_reproduces_committed_page`` needs no browser: the committed page is byte-identical
-to ``tools/build_viewer.py``'s output with the installed plotly bundle.
+must render the six traces of the two-panel picture (``docs/architecture.md``, "The picture")
+with the scalings the file implies, the sweep file must show the W.3 message. Playback is
+exercised (friction trace and its SVG group survive 2 s of play; a time window keeps every
+shown frame inside it; 4x advances more frames than 1x over the same wall time), a
+``schema_version: 99`` file must be rejected with a readable message, settings must persist
+and the page must work with storage blocked. ``test_build_reproduces_committed_page`` needs no
+browser: the committed page is byte-identical to ``tools/build_viewer.py``'s output with the
+installed plotly bundle.
 
-Screenshots of the viewer at the peak-|x| frame go to ``tests/.artifacts/`` (not committed)
-for the owner's review; no pixel comparison is made. (Until Session F-4b the matching plotly
-page under ``docs/viz/`` was screenshotted alongside; those pages are deleted.)
+Requirements: the ``playwright`` package (``uv pip install playwright``, no ``playwright
+install``: the browser is read from ``/opt/pw-browsers`` or ``PLAYWRIGHT_BROWSERS_PATH``) and
+the ``plotly`` Python package (the source of the inlined plotly.js bundle; both in the ``dev``
+extra). Screenshots of the viewer at the peak-|x| frame go to ``tests/.artifacts/`` (not
+committed) for the owner's review; no pixel comparison is made.
 """
 
 from __future__ import annotations
 
+import glob
 import gzip
 import json
+import os
 import pathlib
 import sys
 
@@ -30,9 +35,8 @@ import pytest
 pytest.importorskip("playwright.sync_api")
 plotly = pytest.importorskip("plotly")
 
-import test_viz_motion as motion  # noqa: E402  (the harness: browser fixture, page loader)
-
-browser = motion.browser  # the module-scoped fixture, re-exported so pytest finds it here
+from playwright.sync_api import Error as PlaywrightError  # noqa: E402
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -41,7 +45,9 @@ import build_viewer  # noqa: E402
 VIEWER = ROOT / "docs" / "viewer" / "viewer.html"
 VIEWER_SRC = ROOT / "docs" / "viewer" / "viewer.src.html"
 DATA = ROOT / "docs" / "viz" / "data"
-ARTIFACTS = motion.ARTIFACTS
+ARTIFACTS = pathlib.Path(__file__).parent / ".artifacts"
+BROWSERS = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+CHROMIUM = sorted(glob.glob(f"{BROWSERS}/chromium-*/chrome-linux/chrome"))
 TRACE_FILES = ["example_jc_step.json", "example_lumped_step.json", "golden_r096_jc.json.gz"]
 SWEEP_FILE = "reference_sweep.json"
 # the two JC trace files, screenshotted at their peak
@@ -87,6 +93,18 @@ FRICTION_GROUPS_JS = """
           lines: Array.from(groups).reduce((n, g) => n + g.querySelectorAll('path.js-line').length, 0)};
 }
 """.replace("FRICTION", str(FRICTION))
+
+
+@pytest.fixture(scope="module")
+def browser():
+    with sync_playwright() as p:
+        kw = {"executable_path": CHROMIUM[-1]} if CHROMIUM else {}
+        try:
+            b = p.chromium.launch(**kw)
+        except PlaywrightError as exc:  # no browser in this environment
+            pytest.skip(f"headless Chromium not available: {exc}")
+        yield b
+        b.close()
 
 
 def read_data(name: str) -> dict:
@@ -183,8 +201,8 @@ def test_source_has_no_external_reference():
 @pytest.mark.parametrize("name", TRACE_FILES + [SWEEP_FILE])
 def test_loads_each_data_file(browser, name):
     """Each W.1 data file through the file input: a trace file renders the six traces of the
-    plotly pages on the two panels (the friction on the right axis) with the scalings the file
-    implies; the sweep file shows the W.3 message and no plot; no request leaves the page."""
+    two-panel picture (the friction on the right axis) with the scalings the file implies; the
+    sweep file shows the W.3 message and no plot; no request leaves the page."""
     page, requests, errors = open_viewer(browser)
     snap = load(page, DATA / name)
     doc = read_data(name)
@@ -215,7 +233,7 @@ def test_loads_each_data_file(browser, name):
         f"trace_every = {meta['params']['trace_every']}",
     ):
         assert needle in snap["meta"], needle
-    # the scalings, as animate.build_figure computes them over the whole run
+    # the scalings, computed over the whole run (docs/architecture.md, "The picture")
     x = doc["frames"]["x"]
     i_peak = max(range(n), key=lambda i: abs(x[i]))
     run = doc["geometry"]["run_length_m"]
@@ -224,7 +242,7 @@ def test_loads_each_data_file(browser, name):
     assert sc["exag"] == pytest.approx(0.1 * run / abs(x[i_peak]), rel=1e-12)
     st = snap["state"]
     assert (st["iStart"], st["iEnd"]) == (0, n - 1)  # whole run by default
-    assert st["stride"] == max(1, -(-(n - 1) // 398))  # select_frames' stride
+    assert st["stride"] == max(1, -(-(n - 1) // 398))  # the automatic stride (400 frames)
     if "cells" in doc:
         p = doc["cells"]["p"]["data"]
         v = doc["cells"]["v"]["data"]

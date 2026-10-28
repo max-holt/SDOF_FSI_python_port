@@ -5,8 +5,9 @@ The structure was fixed at the start of Stage 4 and filled in module by module (
 `structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped path; 4.2: `moc`, the
 JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change; 5: the three
 inner loops compiled with Numba, see "Stage 5 — compiled kernels"; Session V.1: the
-sub-step trace for visualisation, see "Session V.1 — the trace"). This document describes
-the code as it stands after Session V.1. `legacy_port.py` stays the reference
+sub-step trace for visualisation, see "Session V.1 — the trace"; W.1 / W.2: the data files and
+the viewer; 5b: `histories`; F-4 / F-4b: the corrected moving-fraction profile). This document
+describes the code as it stands at the handover (Session H.1). `legacy_port.py` stays the reference
 implementation until Stage 6 and every new module is proved against it by
 `tests/test_differential.py`. Every public function and dataclass of the six live modules
 carries a numpy-style docstring with the unit of each physical argument and return and the
@@ -23,8 +24,7 @@ src/surge_sdof/
   loads.py             # elbow-to-elbow unbalance force from a history: transit delay, phase scheduling
   response.py          # public API: peak_response(...) and peak_response_jc(...); returns a dataclass; one private _integrate loop
   trace.py             # Session V.1: the Trace dataclass of a traced run (trace_every > 0) and its allocation / assembly helpers
-  viz/animate.py       # Session V.2: the two-panel plotly animation of a Trace (optional `viz` extra: plotly, pandas); tools/animate.py drives it
-  viz/geometry.py      # Session W.1: the expansion-loop layout of a Trace (LoopLayout, loop_layout, lumped_grid, layout_from_trace; moved out of animate.py, which re-exports them); numpy only
+  viz/geometry.py      # Session W.1: the expansion-loop layout of a Trace (LoopLayout, loop_layout, lumped_grid, layout_from_trace); numpy only
   export.py            # Session W.1: the trace / sweep data documents for the JS viewer (docs/data_format.md) and their JSON / gzip writer; tools/export.py drives it
   pressure.py          # pressure_response (valve/pump MoC) as a standalone driver; get_pressure_response is a thin alias
 ```
@@ -40,9 +40,8 @@ src/surge_sdof/
 | `moc.py` | The 1-D MoC fluid column (Stage 4.2): grid construction (`grid_size`: `pipeSegQTY`, `pivotSegQTY`, `extQTY`; `is_short_pipe`), the interp-fraction profiles tabulated once per grid (`interp_fractions`), the four contiguous state arrays (`new_column`: `p_a`, `v_a` on the A nodes `0..N`, `p_b`, `v_b` on the B cells `0..N-1`), and one kernel `step(even, a_dt, arrays…, scalars…, d_f) -> d_f` with scalar loop bodies: the even/odd half-step update, the decaying end-node boundary (`dacayFactor`), the mean-velocity (`vAv`) subtraction and the low-pass `dF`. No per-cell helper calls, no Python objects: Stage 5 compiles it whole with `numba.njit(cache=True)`, body unchanged. The VBA's dead `useUndamped` branch (`Const useUndamped = False`, the AFT infinite-pipe boundary, lines 803-818) is **not ported**; only the live decaying boundary is. `vav_divisor(N, "legacy" \| "fixed")` selects `2N - 1` (VBA, D-17) or `2N + 1` (approved fix F-1). `interp_fractions(N, pivot, "fixed" \| "legacy")` tabulates the lead author's corrected profiles (approved fix F-4, `legacy/vba/interpFraction_fix_2026-10-26.bas`, with the F-4b outlet correction of `interpFraction_fix_2026-10-27.bas`, transcribed as `interp_fraction_a_fixed` / `interp_fraction_b_fixed`; default; A mirrors about the column centre `N / 2`, B about `(N - 1) / 2`) or the VBA originals (D-4); on the fixed profile `pivotSegQTY <= extQTY` is refused with `ValueError` (an added guard). Driven by the JC coupling. | the structure proxy, the force history, output types, the sub-step counter (it is told the parity) |
 | `response.py` | Public API. `peak_response(...)` (lumped) and `peak_response_jc(...)` (Stage 4.2) each do their own set-up and pass a coupling object to one shared integration loop `_integrate` (Stage 5: the Python orchestrator of the compiled `_integrate_kernel`: sample loop, max trackers, result history through `_record`, free-decay phase with the `_decay_test` overflow check; the static-equivalent force and the `PeakResponse` are built in Python). Returns a `PeakResponse` dataclass with 0-based histories (no VBA pad). The two set-ups are *not* merged into one function with flags. The JC set-up is `structure.jc_params` (rigid mass; stiffness, damping, `fricAcc` on the total mass, VBA 726-729), `moc.decay_factor`, `moc.grid_size` and the short-pipe fallback to `peak_response`; `rhoC = 0` is rejected at the set-up (D-9; `np.errstate` has no effect inside the compiled kernel). `peak_response_jc` carries the approved-fix flags `vav_denominator` ("legacy" \| "fixed", F-1) and `parity` ("per_phase" \| "running", F-2); the loop turns `parity` into the `step_index` it passes to the coupling (`n + off`, `off` fixed per sample). Session V.1: both solvers take `trace_every: int = 0`; with `k > 0` the kernel records every `k`-th sub-step into preallocated arrays and the result carries `PeakResponse.trace`. | the internals of `step`, the MoC arrays, how `loads` interpolates |
 | `trace.py` | Session V.1. `Trace`, the frozen dataclass of a traced run (per-frame arrays `t, sub_step, sample, phase, x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`; JC only `p_cells`, `v_cells` and the column geometry; one-off `solver`, `trace_every`, `dt`, `step_qty`, `out_max`, `params`, `inputs`), the frame-array column constants the kernel writes (`F_*`, `I_*`), `capacity` (frames to allocate: the forced sub-steps plus free decay up to the history window), `check_memory` (`MAX_TRACE_VALUES`, `ValueError` naming the smallest stride that fits), `allocate`, `interleave` (the staggered grid as `A0 B0 A1 … AN`) and `build` (slices and copies the kernel arrays into a `Trace`). | the solver loop, `loads`, `moc.step` (it only lays out what the kernel copied) |
-| `viz/animate.py` | Session V.2 / V.2b. The model animation of a traced run, read-only on a `PeakResponse`: `loop_layout` (the interleaved column on the expansion loop, mapped by moving fraction: fraction-0 cells at each end are the horizontal inlet / outlet, the ramp cells the vertical legs, fraction-1 cells the run along `y = 0`; uniform spacing by `cell_position` along the centreline, sharp elbows; a lumped run rebuilds the grid it would have with `moc.grid_size` / `moc.interp_fractions`), `select_frames` (the frame stride for at most `max_frames` frames, the last traced frame kept), `scalars_table` (pandas, the per-frame scalars with a synthetic `t = 0` row), `is_capped`, `build_figure` (Panel 1: circles offset by `x(t) * moving_fraction * exaggeration`, sized by pressure, coloured by velocity; Panel 2: `f_unbalance` on the left axis over `f_friction` on the right (drawn first, translucent), both symmetric so the zero lines coincide, phase bands, peak-`\|x\|` marker, cursor; plotly frames that change trace data only (no redraw), slider, play / pause; `t_start` / `t_end` animate a window, shaded on Panel 2) and `write_html` (CDN page with a typed playback speed). Imports plotly / pandas lazily. | the solvers (it never runs one; `tools/animate.py` does), `moc.step`, `loads` |
-| `viz/geometry.py` | Session W.1 (code of V.2b / V.2c, moved). `LoopLayout`, `_segments`, `loop_layout`, `lumped_grid`, `layout_from_trace`: the expansion-loop layout of a trace's interleaved column, shared by the animation and the exporter; numpy only, no plotly. `viz/animate.py` re-exports the names so `tests/test_viz.py` is unchanged. | the solvers, plotly, the file format |
-| `export.py` | Session W.1. `to_trace_dict(result, case_id)` (the `trace` document: meta with inputs as given, the resolved `SdofParams` + run scalars, the five maxima, provenance; the `LoopLayout` as `geometry`; the thirteen frame columns with the synthetic rest frame first, `sub_step = sample = -1`; JC `p` / `v` as row-major `{shape, data}` blocks), `to_sweep_dict(rows, ...)` (the `sweep` document: thirty fixed columns, regen template, reference block), `dumps` / `write_json` / `read_json` (compact JSON, floats via `repr`, `allow_nan=False`, UTF-8, LF, gzip by suffix). `docs/data_format.md` is the contract and `tests/test_export.py` parses it. Reads a `PeakResponse`; never runs a solver (`tools/export.py` does). | the solvers, the viewer, plotly |
+| `viz/geometry.py` | Session W.1 (code of V.2b / V.2c, moved). `LoopLayout`, `_segments`, `loop_layout`, `lumped_grid`, `layout_from_trace`: the expansion-loop layout of a trace's interleaved column (the rules under "The picture", pinned by `tests/test_geometry.py`), written into every trace file by the exporter; numpy only, no plotly. The plotly-python animation that once consumed it (`viz/animate.py`) was retired in Session H.1. | the solvers, plotly, the file format |
+| `export.py` | Session W.1. `to_trace_dict(result, case_id)` (the `trace` document: meta with inputs as given, the resolved `SdofParams` + run scalars, the five maxima, provenance; the `LoopLayout` as `geometry`; the thirteen frame columns with the synthetic rest frame first, `sub_step = sample = -1`; JC `p` / `v` as row-major `{shape, data}` blocks), `to_sweep_dict(rows, ...)` (the `sweep` document: thirty fixed columns, regen template, reference block), `dumps` / `write_json` / `read_json` (compact JSON, floats via `repr`, `allow_nan=False`, UTF-8, LF, gzip by suffix). `docs/data_format.md` is the contract and `tests/test_export.py` parses it. Also `is_capped` (the run decayed past the traced window) and the rest-frame phase, moved here from the retired animation. Reads a `PeakResponse`; never runs a solver (`tools/export.py` does). | the solvers, the viewer, plotly |
 | `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
@@ -219,63 +218,51 @@ the Stage 4 code; what changed is the calling convention:
   `loads.unbalance_force`, which is now the dominant cost of a compiled lumped run (the
   generator is Python; Stage 5b candidate).
 
-## Session V.2 / V.2b / V.2c / V.2d — the animation
+## The picture — the geometry and scaling rules the viewer draws
 
-(The geometry functions this section describes live in `viz/geometry.py` since Session W.1; `viz/animate.py` re-exports them.)
+The two-panel animation of a traced run was designed in Sessions V.2–V.2f as a plotly-python
+figure (`viz/animate.py`, retired in Session H.1) against the lead author's requirements (22
+Oct 2026) and review rounds (23 and 25 Oct); the single-file viewer (`docs/viewer/`, Session
+W.2) draws the same picture from the exported files by the same rules. Those rules are:
 
-`surge_sdof.viz.animate.build_figure(result, case_name, max_frames=400, t_start=0)` turns a
-traced `PeakResponse` into a two-panel plotly figure (`tools/animate.py --golden <case_id> |
---step … --out <name>.html` drives it; the four CDN pages once committed under `docs/viz/` were
-deleted in Session F-4b, the viewer `docs/viewer/` replaces them; `tests/test_viz_motion.py`
-builds the two it drives into a temporary directory). The lead
-author's requirements (22 Oct 2026) and the review rounds (V.2b and V.2c, 23 Oct; V.2d, 25 Oct) are
-met as follows.
-
-* **Geometry (V.2b).** The column is an expansion loop: inlet pipe, leg down, run, return leg
-  up, outlet pipe. Cells are mapped by their moving fraction (`_segments`): the fraction-1
-  block is the run (`y = 0`, `x = 0 .. run_length`); the last fraction-0 cell before it and the
-  first after it are the upper elbows (F-4 profile: both ramps start at exactly 0 at B(3) /
-  A(3), legs of `2 pivot - 10` interleaved cells each; legacy profile: the D-4 `n < 3` cell
-  B(3) with fraction `1 / (pivot - 4)^2` is a moving cell on the horizontal inlet and the
-  inlet leg is one cell longer);
-  the cells before / after them are the horizontal inlet / outlet at the pipe height, extending
+* **Geometry** (`viz/geometry.py`, written into every trace file as `geometry`). The column is
+  an expansion loop: inlet pipe, leg down, run, return leg up, outlet pipe. Cells are mapped by
+  their moving fraction (`_segments`): the fraction-1 block is the run (`y = 0`, `x = 0 ..
+  run_length`); the last fraction-0 cell before it and the first after it are the upper elbows
+  (F-4 profile: both ramps start at exactly 0 at B(3) / A(3), legs of `2 pivot - 10`
+  interleaved cells each; legacy profile: the D-4 `n < 3` cell B(3) with fraction `1 / (pivot
+  - 4)^2` is a moving cell on the horizontal inlet and the inlet leg is one cell longer); the
+  cells before / after them are the horizontal inlet / outlet at the pipe height, extending
   left of leg 1 and right of leg 2; the cells between are the vertical legs. Spacing is uniform
   by `cell_position` along the whole centreline and the four elbows are sharp corners at the
-  elbow cells (V.2c: the model has no bends; the V.2b arcs were removed), so every inlet /
-  outlet cell is at its pipe height, every run cell at `y = 0`, the legs vertical at `x = 0`
-  and `x = run_length`, consecutive cells exactly one spacing apart (pinned by
-  `tests/test_viz.py`). The pipe height is the centreline length between the elbow cells; it
-  differs from `h` (`structure.solve_portal_height`, printed in the panel). With the F-4
-  profile (Session F-4, the default since 2026-10-26; F-4b, 2026-10-27, also makes the fixed
-  blocks at both ends equal) the two legs are equal; with the
-  legacy profile they differed by one cell because the VBA B profile ramps one cell longer
-  on the inlet side (Example JC: 7.5 m and 6.0 m for `h = 7.69 m`; row 96: 4.03 m and 4.00 m
-  for `h = 4.05 m`). A lumped
-  run uses the layout of the grid it would have (`moc.grid_size`, `moc.interp_fractions` with
-  the default profile; a `pivotSegQTY = 4` grid, refused by both profiles, gets the legacy B
-  profile with the `n < extQTY` test, display only).
-* **Frames.** Frame 0 is synthetic (`t = 0`, `x = 0`, the column at rest, no forces) so playback
-  starts from rest; the V.1 convention (frame `i` = end of sub-step `i k`, so the first traced
-  frame is at `t = dt`) is untouched. The animation shows every `frame_stride`-th traced frame
-  with the last one always included, at most `max_frames` (400) frames; `t_start` / `t_end`
-  (V.2d) animate a time window only (`t_start > 0` drops the rest frame), the frame
-  count and stride then counted inside the window, while Panel 2 keeps the whole run and shades
-  the window: a 20 s run at 3 Hz cannot be followed at 150 or 400 frames (0.14 s or 0.05 s a
-  frame, 0.42 or 0.15 of a period, several wave transits), so the committed row 96 page is
-  the window 6.0–7.5 s around the peak at 151 frames of 10 ms (0.03 period, half a transit). A frame changes trace data only (the circles,
-  the cursor and a status text with the frame time and phase in Panel 1), never the layout, and
-  every animate call uses `redraw: false`: a per-frame layout change forces a full redraw,
-  which made the lines flicker and drop the right-axis trace at high speed (V.2c). Every frame
-  lists all six traces, the static ones (centreline, friction, unbalance) with an empty update:
-  under `redraw: false` plotly.js rebuilds each subplot's module layers from the frame's listed
-  traces and removes the rest, which emptied the overlaying friction subplot on the first frame
-  (V.2e diagnosis in `docs/viz/diagnosis.md`, fixed in V.2f; browser tests in
-  `tests/test_viz_motion.py`, Playwright, skipped without a browser). The figure
-  carries plotly play (1x = 40 ms a frame) / pause buttons; the written page replaces them with
-  a typed playback speed (any positive multiplier), play and pause under the slider
-  (`SPEED_CONTROL_JS`, run after the plot is made). The title prints
-  `trace_every`, the stride, the frame count, the nominal circle size and "trace capped by the
-  history window" when the run decayed past the traced window (`is_capped`: `forced_samples +
+  elbow cells (the model has no bends), so every inlet / outlet cell is at its pipe height,
+  every run cell at `y = 0`, the legs vertical at `x = 0` and `x = run_length`, consecutive
+  cells exactly one spacing apart (pinned by `tests/test_geometry.py`). The pipe height is the
+  centreline length between the elbow cells; it differs from `h`
+  (`structure.solve_portal_height`, printed in the panel). With the F-4b profile (the default)
+  the two legs are equal and the fixed blocks at both ends are equal; with the legacy profile
+  they differed by one cell because the VBA B profile ramps one cell longer on the inlet side
+  (Example JC: 7.5 m and 6.0 m for `h = 7.69 m`; row 96: 4.03 m and 4.00 m for `h = 4.05 m`).
+  A lumped run uses the layout of the grid it would have (`moc.grid_size`,
+  `moc.interp_fractions` with the default profile; a `pivotSegQTY = 4` grid, refused by both
+  profiles, gets the legacy B profile with the `n < extQTY` test, display only).
+* **Frames.** Frame 0 is synthetic (`t = 0`, `x = 0`, the column at rest, no forces) so
+  playback starts from rest; the V.1 convention (frame `i` = end of sub-step `i k`, so the first
+  traced frame is at `t = dt`) is untouched. The viewer shows every `stride`-th frame with the
+  last one always included; the automatic stride keeps at most 400 frames
+  (`ceil((n_frames - 1) / 398)`), and `t_start` / `t_end` play a time window only while Panel 2
+  keeps the whole run and shades the window: a 20 s run at 3 Hz cannot be followed at 400
+  frames (0.05 s a frame, 0.15 of a period, several wave transits), so row 96 is watched in a
+  window of about 1.5 s around its peak at stride 1 (24 ms a frame). Every animated frame
+  updates trace data only (the circles, the cursor and a status text with the frame time and
+  phase in Panel 1), never the layout, and lists all six traces (the static ones with an empty
+  update) under `redraw: false`: a per-frame layout change forces a full redraw that flickers
+  and drops the right-axis trace at speed, and under `redraw: false` plotly.js rebuilds each
+  subplot's layers from the frame's listed traces and removes the rest, which emptied the
+  friction subplot on the first frame until every trace was listed (V.2e diagnosis in
+  `docs/viz/diagnosis.md`, fixed in V.2f). 1x playback is 40 ms a shown frame. The header
+  prints `trace_every`, the stride, the frame count, the nominal circle size and "capped" when
+  the run decayed past the traced window (`export.is_capped`: `forced_samples +
   free_decay_samples > 2 outMax`).
 * **Panel 1.** `x_circle = x_nominal + x(t) * moving_fraction * exaggeration` with
   `exaggeration = 0.1 * run_length / max|x|` (printed); `size = nominal * (1 + k_p (p - p_ref) /
@@ -287,20 +274,18 @@ met as follows.
   blue–grey–red diverging scale with `cmin = -max|v|`, `cmax = +max|v|` (the same picture as
   `v / max|v|` centred at zero), colour bar "relative fluid velocity (JC arrays)" in m/s. Lumped:
   constant nominal size and the grey midpoint. Hover: cell index, kind, segment, position,
-  fraction, and `p` / `v` for JC. The per-frame arrays are float32 (plotly typed arrays) to keep
-  the HTML small; the row 96 page (`--t-start 6 --t-end 7.5 --max-frames 160`) is a 1.5 s
-  window of 151 frames, 4.9 MB; 400 frames of 1333 cells is ~10 MB.
+  fraction, and `p` / `v` for JC.
 * **Panel 2.** `f_unbalance = F_A(t) - F_B(t - L/c)` on the left axis over `f_friction`
   (`Trace.f_friction`, the owner's definition) on the right, the friction drawn first, 1.5 px
   and translucent so it sits under the load line, both ranges symmetric (`±1.06 max|f|`) so
-  the zero lines coincide, legend labels naming the axis; over the whole trace plus
-  the `t = 0` row (`scalars_table`); the phase bands and the cursor on the primary axis (a band
-  is labelled when it spans 6 % of the axis, the current phase is always in the title), the
-  time of peak `|x|` marked.
-* **`--step` (tools/animate.py).** Zero force for `--lead-in` (0.1 s), then `--amplitude` bar on
-  the fluid area (`--size` mm internal diameter or `--area` m²) for `--duration`;
-  `docs/viz/data/example_jc_step.json` (and the page `tests/test_viz_motion.py` builds) is this
-  step with the Example-sheet parameters (1600 bar on 0.05 m² = 8 MN, the sheet's first level).
+  the zero lines coincide, legend labels naming the axis; over the whole trace plus the
+  `t = 0` row; the phase bands and the cursor on the primary axis (a band is labelled when it
+  spans 6 % of the axis, the current phase is always in the status text), the time of peak
+  `|x|` marked.
+* **The built-in step** (`tools/cases.py`, `tools/export.py trace --step`). Zero force for
+  `--lead-in` (0.1 s), then `--amplitude` bar on the fluid area (`--size` mm internal diameter
+  or `--area` m²) for `--duration`; `docs/viz/data/example_jc_step.json` is this step with the
+  Example-sheet parameters (1600 bar on 0.05 m² = 8 MN, the sheet's first level).
 
 ## Session V.1 — the trace
 
@@ -376,27 +361,26 @@ code cannot drift apart silently. Design points:
 * **Whole run, rest frame first.** A trace file is the whole run at the solver's `trace_every`
   (the viewer windows live; `--t-start` / `--t-end` do not exist here) and frame 0 is the
   synthetic rest frame the animation also prepends (`t = 0`, `sub_step = sample = -1` so `t =
-  (sub_step + 1) dt` holds everywhere, phase as `animate._synthetic_phase`, zeros, a zero
+  (sub_step + 1) dt` holds everywhere, phase as `export._synthetic_phase`, zeros, a zero
   column); frame `i >= 1` is traced frame `i - 1`.
-* **Geometry from one place.** The expansion-loop layout moved from `viz/animate.py` to
-  `viz/geometry.py` (verbatim) so the exporter and the animation share it; the file carries the
-  `LoopLayout` (positions, kinds, fractions, segment indices, nominal circle centres, the two
-  pipe heights, run length) so the viewer draws what the plotly pages draw without rebuilding it,
-  and a lumped run gets the grid it would have, as the animation does.
+* **Geometry from one place.** The expansion-loop layout lives in `viz/geometry.py` (moved
+  there from the animation in W.1); the file carries the `LoopLayout` (positions, kinds,
+  fractions, segment indices, nominal circle centres, the two pipe heights, run length) so the
+  viewer draws the picture without rebuilding it, and a lumped run gets the grid it would have.
 * **Size.** About 20 bytes a float: row 96's 1333 cells cost 53 KB a frame, so `tools/export.py`
-  picks the default stride as the 2000-frame stride of `tools/animate.py` or the coarser one
-  that keeps the estimated JSON under 45 MB (`JSON_BUDGET_MB`, forced phases only); row 96 lands
+  picks the default stride as the 2000-frame stride (`tools/cases.TRACE_FRAMES`) or the coarser
+  one that keeps the estimated JSON under 45 MB (`JSON_BUDGET_MB`, forced phases only); row 96 lands
   at 832 frames (24 ms a frame), 46.9 MB of JSON, 20.6 MB gzipped. `docs/data_format.md` names
   the binary variant (same header + float64 blobs) as the upgrade path.
-* **Shared case loading.** `tools/cases.py` holds the `--golden` / `--step` case loading that
-  `tools/animate.py` and `tools/export.py` share, plus the fixture readers for the sweep
-  reference block and the `cases.csv` → sweep-row mapping.
+* **Case loading.** `tools/cases.py` holds the `--golden` / `--step` case loading of
+  `tools/export.py` (once shared with the retired `tools/animate.py`), plus the fixture readers
+  for the sweep reference block and the `cases.csv` → sweep-row mapping.
 
 ## Session W.2 — the viewer
 
 `docs/viewer/viewer.html` is the single-file JS viewer that plays a `trace` data file (W.1) as
-the animation of `viz/animate.py`, with the playback decisions the plotly pages bake in (frame
-selection, speed, window) made live in the page. `docs/viewer/README.md` is the user guide.
+the two-panel animation of "The picture" above, with the playback decisions (frame selection,
+speed, window) made live in the page. `docs/viewer/README.md` is the user guide.
 Design points:
 
 * **One file, no requests.** plotly.js (4.1.1, the full bundle: the installed package ships no
@@ -410,19 +394,19 @@ Design points:
   first with a readable refusal; the thirteen frame columns, the geometry arrays and the JC
   blocks checked for length. The JC blocks become `Float64Array`s (row `i` is a zero-copy
   `subarray`), the JSON arrays released.
-* **Same picture.** The figure is the pages' six traces in the pages' order (centreline 0, cells
-  1, friction 2 on the overlaying right axis, unbalance 3, cursor 4, status 5), the same 1200 x
-  900 layout, margins and subplot domains (`make_subplots` 0.62 / 0.38, spacing 0.14), the same
-  scalings over the whole run (`exaggeration = 0.1 run / max|x|`, `k_p` for a 2x largest circle,
+* **Same picture.** The figure is the six traces of "The picture" in the order of the retired
+  plotly figure (centreline 0, cells 1, friction 2 on the overlaying right axis, unbalance 3,
+  cursor 4, status 5), the same 1200 x 900 layout, margins and subplot domains (0.62 / 0.38,
+  spacing 0.14), the same scalings over the whole run (`exaggeration = 0.1 run / max|x|`, `k_p` for a 2x largest circle,
   floor 0.15x, `±max|v|`, nominal size `clip(1800 / n, 5, 12)` capped at 0.8 of the on-screen
   spacing and never below 3 px) and the same phase bands, peak line and window shade. The
   `plotly_white` look is reproduced as a `layout.template` (plotly.js has no named templates).
 * **Playback mechanism (the V.2e lesson).** `newPlot` runs once per file. A frame is one
   `Plotly.animate` call with an inline frame that updates the cells (x, marker size and colour,
   customdata), the cursor x and the status text and lists all six traces, the static three with
-  `{}`, under `redraw: false`, `mode: 'immediate'`, no transition: exactly the V.2f frame shape,
-  because under `redraw: false` plotly.js rebuilds each subplot's module layers from the listed
-  traces and drops the rest. The static traces are never restyled during playback and the
+  `{}`, under `redraw: false`, `mode: 'immediate'`, no transition: exactly the V.2f frame shape
+  ("The picture", Frames), because under `redraw: false` plotly.js rebuilds each subplot's
+  module layers from the listed traces and drops the rest. The static traces are never restyled during playback and the
   layout never touched; the window shade is one `relayout` per window change and the colour
   override one `restyle` of the cells' colour axis, both outside the loop. The loop is a
   `requestAnimationFrame` callback that computes the frame due from the elapsed wall time
@@ -431,7 +415,7 @@ Design points:
   animate promise before issuing the next, so a slow render skips frames rather than slowing the
   clock and an interrupted animate never rejects unhandled.
 * **Controls and settings.** Play / pause, typed speed and 0.25x–4x buttons, stride (auto =
-  `select_frames`' stride, so 1x at auto is the plotly page's pace), `t_start` / `t_end` (Panel
+  `ceil((n_frames - 1) / 398)`, at most 400 frames), `t_start` / `t_end` (Panel
   2 keeps the whole run), exaggeration and colour range overrides, jump to peak, a frame slider.
   Speed and the overrides persist in `localStorage` behind try/catch; the window is per file.
 * **Test hook.** `window.viewer` exposes the playback state, the scalings and `show` / `play` /

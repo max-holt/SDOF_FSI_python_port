@@ -26,11 +26,13 @@ python -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```
 
-The `dev` extra adds pytest, ruff and hypothesis (and openpyxl / oletools, used only by
-`tools/extract_fixtures.py` to regenerate the fixtures from the source workbook). The `viz` extra
-(`pip install -e ".[viz]"`: plotly, pandas) is needed only for the model animation
-(`surge_sdof.viz`, `tools/animate.py`). The project's
-commands invoke the interpreter as `.venv/bin/python`; adapt the path if your environment differs.
+The `dev` extra adds pytest, ruff and hypothesis, openpyxl / oletools (used only by
+`tools/extract_fixtures.py` to regenerate the fixtures from the source workbook), playwright
+(the browser tests of the viewer) and the plotly Python package (only the source of the
+plotly.js bundle `tools/build_viewer.py` inlines; nothing in `src/` imports it). The `plots`
+extra (matplotlib) is needed only by `tools/sweep_jc.py plot`. The project's commands invoke
+the interpreter as `.venv/bin/python`; adapt the path if your environment differs.
+`docs/handover.md` is the two-page orientation for a new reader.
 
 The inner loops (`structure.step_scalars`, `moc.step`, `response._integrate_kernel`) are
 compiled with `numba.njit(cache=True)` on first use (about a second; the compiled code is cached
@@ -156,10 +158,9 @@ is the 2000-frame stride or the coarser one that keeps the JSON under 45 MB (row
 46.9 MB, 20.6 MB gzipped); the size written is printed. `docs/viz/data/` holds the five committed
 files (three traces, the Excel reference sweep and the Session 5b Tier 1 sweep); every one must
 carry a `meta.git_sha` at or after the F-4b profile commit (`tests/test_export.py`), so a stale
-export fails the suite. The model animation itself (`surge_sdof.viz.animate`, `tools/animate.py
---golden <case_id> | --step … --out <file.html>`, the `viz` extra) writes a standalone plotly page
-of one run; the four pages once committed under `docs/viz/` were deleted in Session F-4b, the
-viewer below replaces them.
+export fails the suite. `surge_sdof.viz.geometry` lays the column out on the expansion loop
+the file's `geometry` block carries (`tests/test_geometry.py`). The plotly-python animation
+that preceded the viewer (`viz.animate`, `tools/animate.py`) was retired in Session H.1.
 
 ## The results viewer
 
@@ -169,8 +170,8 @@ viewer below replaces them.
 
 Session W.2: `docs/viewer/viewer.html` is one self-contained page (plotly.js 4.1.1 and pako's
 inflate inlined, no network request of any kind) that opens a `trace` data file from the picker
-or by drag-and-drop (`.json` or `.json.gz`) and plays the two-panel animation of `viz/animate.py`
-with live controls: play / pause, speed (typed or 0.25x–4x), frame stride, `t_start` / `t_end`
+or by drag-and-drop (`.json` or `.json.gz`) and plays the two-panel animation (the rules in
+`docs/architecture.md`, "The picture") with live controls: play / pause, speed (typed or 0.25x–4x), frame stride, `t_start` / `t_end`
 window, exaggeration and colour range overrides, jump to peak; the header shows the file's meta
 and the scaling in use; settings persist in the browser. Publish it by copying the one file.
 `docs/viewer/README.md` is the user guide (opening, loading, publishing, browsers tested);
@@ -185,12 +186,14 @@ is Session W.3.
   duplicated-code map the Stage 4 restructure followed, the blind spots of the Excel golden
   suite.
 * `docs/architecture.md`: the Stage 4 module layout, fixed interfaces, exactness arguments,
-  the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace, the Session V.2 animation
-  and the Session W.1 data files.
+  the data flow of one sub-step, the Stage 5 kernels, the Session V.1 trace, the picture the
+  viewer draws and the Session W.1 data files.
 * `docs/data_format.md`: the contract of the viewer's `trace` and `sweep` data files.
 * `docs/viewer/README.md`: the single-file results viewer (how to open, load, publish; browsers tested).
-* `NOTES.md`: session hand-off (current stage, results, open issues, next action).
-* `CLAUDE.md`: the working rules (stage discipline, hard rules, commands).
+* `docs/handover.md`: the two-page orientation for the lead author (entry points and flags,
+  install, test tiers, viewer, sweep, data format, caveats, what is not done).
+* `NOTES.md`: session hand-off (how we got here, current stage, open issues, next action).
+* `CLAUDE.md`: the working rules (hard rules, commands, VBA gotchas).
 
 ## Repository layout
 
@@ -198,6 +201,6 @@ is Session W.3.
 src/surge_sdof/      the package (see above)
 legacy/vba/          the VBA source of truth (never edited)
 tests/               pytest suites; tests/fixtures/ holds the Excel-generated data (never edited)
-tools/               bench.py, golden_report.py, extract_fixtures.py, animate.py, export.py, cases.py (shared case loading), build_viewer.py, sweep_jc.py, profile_delta.py, viewer/ (vendored pako)
-docs/                architecture.md, port_review.md, data_format.md, jc_sweep.md, bench/, sweep/, viz/data/ (viewer data files), viewer/ (the single-file viewer, its source and README)
+tools/               bench.py, golden_report.py, extract_fixtures.py, export.py, cases.py (case loading for export.py), build_viewer.py, sweep_jc.py, profile_delta.py, viewer/ (vendored pako)
+docs/                handover.md, architecture.md, port_review.md, data_format.md, jc_sweep.md, bench/, sweep/, viz/data/ (viewer data files), viewer/ (the single-file viewer, its source and README)
 ```

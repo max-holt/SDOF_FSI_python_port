@@ -1,7 +1,7 @@
 """The expansion-loop geometry of a traced run (Session V.2b / V.2c, moved here in W.1).
 
 ``layout_from_trace(trace)`` lays the interleaved MoC column on the expansion loop the
-animation draws and the data files describe (``docs/data_format.md``, ``trace.geometry``):
+viewer draws and the data files describe (``docs/data_format.md``, ``trace.geometry``):
 inlet pipe, leg down, run, return leg up, outlet pipe, the cells mapped by their moving
 fraction (``_segments``: the fraction-1 block is the run, the last fraction-0 cell before it
 and the first after it the upper elbows), uniform spacing by ``cell_position`` along the
@@ -9,11 +9,10 @@ centreline, sharp elbows (the model has no bends). A JC trace brings its own gri
 trace gets the grid the case would have (``lumped_grid``: ``moc.grid_size`` /
 ``moc.interp_fractions`` with the solver's default profile, F-4; a ``pivotSegQTY = 4`` grid,
 refused by both profiles, gets the legacy B profile with the ``n < extQTY`` test, display
-only). The rules and the pinning tests are described in
-``docs/architecture.md`` ("the animation", Geometry) and ``tests/test_viz.py``.
+only). The rules are described in ``docs/architecture.md`` ("The picture", Geometry) and
+pinned by ``tests/test_geometry.py``.
 
-Shared by ``surge_sdof.viz.animate`` (which re-exports these names) and ``surge_sdof.export``;
-numpy only, no plotly.
+Used by ``surge_sdof.export`` (the ``geometry`` block of a trace file); numpy only, no plotly.
 """
 
 from __future__ import annotations

@@ -1,5 +1,6 @@
-"""Visualisation of a traced run (Session V.2): ``surge_sdof.viz.animate``.
+"""Geometry of a traced run for the results viewer: ``surge_sdof.viz.geometry``.
 
-The ``viz`` optional extra (``pip install -e ".[viz]"``: plotly, pandas) is needed only
-here; the solver package itself stays numpy + numba.
+numpy only. The plotly animation that once lived here (``viz.animate``, Sessions V.2-V.2f)
+was retired in Session H.1; the single-file viewer ``docs/viewer/viewer.html`` plays the
+data files ``surge_sdof.export`` writes.
 """

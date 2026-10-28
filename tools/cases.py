@@ -1,4 +1,4 @@
-"""Case loading shared by ``tools/animate.py`` and ``tools/export.py`` (Session W.1).
+"""Case loading for ``tools/export.py`` (Session W.1; once shared with the retired ``tools/animate.py``).
 
 A case is ``(force_history, kwargs, solver)``: a fixture case rerun from ``tests/fixtures``
 (``golden_case``: a ``curve_10in`` id such as ``r096_jc_L24_f3`` or an Example-sheet id,
@@ -6,8 +6,9 @@ A case is ``(force_history, kwargs, solver)``: a fixture case rerun from ``tests
 bar on the fluid area of a pipe of ``--size`` mm internal diameter or ``--area`` m², zero for
 ``--lead-in`` then held for ``--duration``, the remaining inputs defaulting to the
 ``curve_10in`` parameters). ``add_source_arguments`` puts the ``--golden | --step`` group and
-the step options on an argparse parser; ``case_from_args`` resolves them. A proper history
-generator (``histories.py``) arrives in Session 5b.
+the step options on an argparse parser; ``case_from_args`` resolves them. The sweep's
+canonical histories are ``surge_sdof.histories`` (Session 5b); the step here is the plain
+one the committed ``example_jc_step.json`` was made with.
 
 ``reference_block`` and ``golden_sweep_rows`` read the fixtures for the ``sweep`` document.
 """

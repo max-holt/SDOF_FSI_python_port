@@ -10,12 +10,20 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "numba"]
 
 [project.optional-dependencies]
-# playwright (Session V.2f) drives headless Chromium for tests/test_viz_motion.py; pinned to the
-# version matching the pre-installed browser (chromium-1194). The motion tests skip without it
-# or without a browser.
-dev = ["pytest", "ruff", "hypothesis", "openpyxl", "oletools", "playwright==1.56.0"]
-# Session V.2: the model animation (surge_sdof.viz, tools/animate.py) only.
-viz = ["plotly", "pandas"]
+# playwright drives headless Chromium for tests/test_viewer.py; pinned to the version matching
+# the pre-installed browser (chromium-1194). The viewer tests skip without it or without a
+# browser. The plotly *Python* package is only the source of the plotly.js bundle that
+# tools/build_viewer.py inlines into docs/viewer/viewer.html (tests/test_viewer.py pins the
+# committed page to the installed bundle, hence the pin); nothing in src/ imports it.
+dev = [
+    "pytest",
+    "ruff",
+    "hypothesis",
+    "openpyxl",
+    "oletools",
+    "playwright==1.56.0",
+    "plotly==7.1.0",
+]
 # Session 5b: the sweep plots (tools/sweep_jc.py plot) only.
 plots = ["matplotlib"]
 

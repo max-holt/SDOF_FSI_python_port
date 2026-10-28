@@ -28,7 +28,7 @@ divides by ``2N - 1`` (D-17). ``vav_divisor`` returns either, selected by the ca
 
 Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
 ``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``); F-4b
-(``legacy/vba/interpFraction_fix_2026-10-27.bas``, pending the lead author's confirmation)
+(``legacy/vba/interpFraction_fix_2026-10-27.bas``, confirmed by the lead author 29 Oct 2026)
 moves the outlet side of both one node outward (``pipeSegQTY -> pipeSegQTY + 1`` in the two
 outlet tests and the outlet ramp). ``interp_fractions`` tabulates either the original
 profile (``fraction_profile="legacy"``: the ``n < 3`` test of ``interpFractionB`` and the

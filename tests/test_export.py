@@ -26,7 +26,7 @@ import pytest
 import test_golden as tg
 
 from surge_sdof import export, response
-from surge_sdof.trace import PHASE_TRANSIT
+from surge_sdof.trace import PHASE_FREE_DECAY, PHASE_TRANSIT
 
 REPO = Path(__file__).resolve().parents[1]
 DOC = (REPO / "docs" / "data_format.md").read_text(encoding="utf-8")
@@ -453,6 +453,30 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
     )
     assert math.isclose(
         doc["meta"]["outputs"]["max_displacement"], 0.0036195012413468937, rel_tol=2.2e-3
+    )
+
+
+# ------------------------------------------------------------------ is_capped
+
+
+def test_is_capped():
+    """``export.is_capped`` (moved from the retired ``viz.animate`` in Session H.1): True only
+    when the run decayed past the traced history window."""
+    params = tg.load_params()
+    case = next(c for c in tg.load_cases() if c["case_id"] == "r096_jc_L24_f3")
+    force = tg.load_force(params)[:500]  # the truncated row 96 history ends in phase 1
+    res = response.peak_response_jc(force, **tg.case_params(case, params), trace_every=100)
+    assert export.is_capped(res) is False
+    assert not np.any(res.trace.phase == PHASE_FREE_DECAY)
+    # a run that decays past the window: the Example JC case with a long decay
+    case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
+    force = np.asarray(case["force_history"], dtype=float)
+    kw = dict(case["kwargs"], dynamic_fric=0.0, damping_percent=0.0)
+    r = response.peak_response_jc(force, **kw, trace_every=20)
+    assert np.any(r.trace.phase == PHASE_FREE_DECAY)
+    assert export.is_capped(r) is (
+        int(r.trace.sample[r.trace.phase == PHASE_FREE_DECAY].min()) + r.free_decay_samples
+        > 2 * r.trace.out_max
     )
 
 

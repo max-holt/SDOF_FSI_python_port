@@ -1,7 +1,7 @@
 """Write the viewer's data files (Session W.1; the contract is ``docs/data_format.md``).
 
 ``trace``: rerun a fixture case (``--golden <case_id>``) or a built-in step (``--step ...``,
-the options of ``tools/animate.py``) with a trace and write the ``trace`` document, the whole
+the options of ``tools/cases.py``) with a trace and write the ``trace`` document, the whole
 run at the trace stride (the viewer windows; nothing is windowed here)::
 
     .venv/bin/python tools/export.py trace --golden example_lumped --out docs/viz/data/example_lumped_step.json
@@ -11,7 +11,7 @@ run at the trace stride (the viewer windows; nothing is windowed here)::
         --duration 2.4 --solver jc --out docs/viz/data/example_jc_step.json
 
 ``--trace-every`` defaults to the stride that records about 2000 frames of the forced phases
-(as ``tools/animate.py``), or the coarser stride that keeps the estimated JSON under
+(``tools/cases.TRACE_FRAMES``), or the coarser stride that keeps the estimated JSON under
 ``JSON_BUDGET_MB`` (row 96's 1333 cells at 2000 frames would be ~107 MB); the size written is
 printed. A ``.gz`` suffix gzips the file.
 
@@ -62,9 +62,9 @@ def estimate_bytes(n_frames: int, n_cells: int, n_samples: int) -> int:
 
 
 def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: float) -> int:
-    """The ``tools/animate.py`` default (about ``target_frames`` frames of the forced phases),
-    or the coarser stride whose estimated JSON fits ``budget_mb`` (forced phases only; free
-    decay adds frames)."""
+    """The stride of about ``target_frames`` frames of the forced phases
+    (``tools/cases.default_trace_every``), or the coarser stride whose estimated JSON fits
+    ``budget_mb`` (forced phases only; free decay adds frames)."""
     stride = cases.default_trace_every(force, kw, target_frames)
     substeps = cases.forced_substeps(force, kw)
     n_cells = estimated_cells(kw, solver)
