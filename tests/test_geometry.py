@@ -41,7 +41,7 @@ def golden_result(case_id):
 def _example_jc_result(**flags):
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
-    return response.peak_response_jc(force, **case["kwargs"], trace_every=20, **flags)
+    return response.peak_response_jc(force, **case["kwargs"], trace_every=4, **flags)
 
 
 @pytest.mark.parametrize("which", ["lumped", "jc", "example_jc"])
