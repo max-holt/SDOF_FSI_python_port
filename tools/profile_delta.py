@@ -24,7 +24,7 @@ NOTES tables; ``--json <file>`` also writes every number. Numba is used when ava
 ``--tier-csv OLD NEW`` compares two Session 5b sweep CSVs (``tools/sweep_jc.py run``) row by
 row (``case_id``): the lumped columns must be bitwise equal (the profile never reaches the
 lumped solver), the applied-force peak too; for every JC column and ratio it prints the number
-of changed rows and the max / median relative change, the paragraph of ``docs/jc_sweep_f4b.md``.
+of changed rows and the max / median relative change, the delta paragraph of ``docs/jc_sweep.md``.
 """
 
 from __future__ import annotations

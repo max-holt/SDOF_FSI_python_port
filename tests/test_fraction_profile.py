@@ -2,7 +2,7 @@
 
 ``moc.interp_fractions(..., fraction_profile="fixed")`` transcribes
 ``legacy/vba/interpFraction_fix_2026-10-27.bas`` (the 26 Oct functions with the outlet side
-moved one node outward, F-4b, pending the lead author's confirmation); ``"legacy"`` stays
+moved one node outward, F-4b, confirmed by the lead author 29 Oct 2026); ``"legacy"`` stays
 the original ``Existing Code.bas`` profile. The expected values below are computed from the
 VBA expressions by hand, not from the Python.
 

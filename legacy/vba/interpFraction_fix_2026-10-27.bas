@@ -1,5 +1,5 @@
-' Proposed correction to interpFraction_fix_2026-10-26.bas (M. Holt / Claude, 27 Oct 2026),
-' pending lead author confirmation. Only the outlet-side tests and ramp change:
+' Correction to interpFraction_fix_2026-10-26.bas (M. Holt / Claude, 27 Oct 2026),
+' confirmed by the lead author 29 Oct 2026. Only the outlet-side tests and ramp change:
 ' pipeSegQTY -> pipeSegQTY + 1, so that A(n) = A(N - n) over the called range 1..N-1
 ' (arrayA has N + 1 nodes) and B(n) = B(N - 1 - n). Inlet side identical to 26 Oct.
 

@@ -3,7 +3,7 @@
 ## Current stage
 Session F-4b (the mirror-point correction of the fixed moving-fraction profile and the stale
 export, 2026-10-27) **done**: `legacy/vba/interpFraction_fix_2026-10-27.bas` (owner's proposal,
-pending the lead author's confirmation; `pipeSegQTY -> pipeSegQTY + 1` in the two outlet-side
+**confirmed by the lead author 29 Oct 2026**; `pipeSegQTY -> pipeSegQTY + 1` in the two outlet-side
 tests and the outlet ramp of both functions) transcribed as the `"fixed"` profile (commit
 `83d23ef`); A now mirrors about the column centre `N / 2` over the called nodes, B about
 `(N - 1) / 2`, equal fixed blocks at both ends; `tests/test_fraction_profile.py` re-pinned;
@@ -14,11 +14,12 @@ measured vs the legacy flags (`tools/profile_delta.py`, committed): golden JC ro
 after F-4) and `tests/test_export.py::test_committed_data_files_are_not_stale` pins every
 file's `meta.git_sha` at or after that commit. Tier 1 rerun: `docs/sweep/tier1_83d23ef_f4b.csv`,
 `docs/jc_sweep_f4b.md` (with the delta paragraph against `tier1_8590c3f`), `tier1_sweep.json`;
-`docs/jc_sweep.md` untouched for the lead author's Decision 16. The four plotly pages under
+`docs/jc_sweep.md` was left untouched for the lead author's Decision 16 (**taken 29 Oct 2026: the
+full MoC junction-coupling model is the paper's generating model**; `docs/jc_sweep_f4b.md` is now
+`docs/jc_sweep.md`, 2026-10-28). The four plotly pages under
 `docs/viz/` deleted (the viewer replaces them; `tests/test_viz_motion.py` builds its two pages
 into a temporary directory). See "Session F-4b — done".
-**Next action: the owner's local bench, then 5b (Tier 2 with `--tag f4b`); `docs/jc_sweep.md`
-is replaced by `docs/jc_sweep_f4b.md` after Decision 16.**
+**Next action: Tier 2 locally (the owner, `--tag f4b`), then W.3, then Stage 6.**
 Session 5b (junction-coupling sweep with canonical histories, 2026-10-27) **done through the full
 Tier 1 run** (owner's go after the 10 % subset): `src/surge_sdof/histories.py`,
 `tools/sweep_jc.py` (`check | run --tier --subset --tag | plot`), `docs/sweep/tier1_8590c3f.csv`
@@ -29,8 +30,9 @@ Tier 1 run** (owner's go after the 10 % subset): `src/surge_sdof/histories.py`,
 with the resulting RMS recorded; one history per (type, amplitude, f_osc, seed) shared across
 lengths; `m_total = (L + 4h/3) m'`) are accepted and recorded in the scope section. Tier 2 is the
 owner's local run (command under Next action). See "Session 5b — done".
-The Tier 1 rerun after F-4b is done (`tier1_83d23ef_f4b.csv`, Session F-4b).
-**Next action (as of 5b): the lead author's Decision 16 (on `docs/jc_sweep.md`), then Stage 6.**
+The Tier 1 rerun after F-4b is done (`tier1_83d23ef_f4b.csv`, Session F-4b). Decision 16 (lead
+author, 29 Oct 2026): **the full MoC junction-coupling model is the paper's generating model**
+(F-3 closed: `coupling.py` keeps the full coupling; no simplified variant is built).
 Session F-4 (the lead author's corrected moving-fraction profile, 2026-10-26) done:
 `peak_response_jc(fraction_profile="fixed" | "legacy")`, `moc.interp_fractions(...,
 fraction_profile)` and `coupling.JunctionCoupling` carry the flag; the corrected
@@ -122,8 +124,8 @@ staleness test, Tier 1 rerun, page deletion, docs).
 **The correction.** The 26 Oct functions mirrored about interleaved position `N − 1` (NOTES F-4
 "for the lead author"). The column has `N + 1` A nodes (`interpFractionA` called for
 `1 .. N − 1`, centre `N / 2`) and `N` B cells (centre `(N − 1) / 2`). `legacy/vba/
-interpFraction_fix_2026-10-27.bas` (owner's proposal, header states the provenance; pending the
-lead author's confirmation) replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side
+interpFraction_fix_2026-10-27.bas` (owner's proposal, header states the provenance; confirmed by
+the lead author 29 Oct 2026) replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side
 tests and the outlet ramp expression of both functions; the inlet side is identical to 26 Oct.
 `moc.interp_fraction_a_fixed / b_fixed` transcribe it (three substitutions each, literal); the
 26 Oct file stays on disk and is no longer transcribed; the `"legacy"` profile is untouched.
@@ -305,9 +307,9 @@ schema 2, `--tag`), this commit (full Tier 1, PNGs, `jc_sweep.md`, `tier1_sweep.
 - `--tag`: `run --tag <name>` suffixes the CSV after the sha, so a rerun (F-4b) never overwrites.
 - **F-4b (done 2026-10-27, Session F-4b):** the profile correction changed every JC row (max
   5.6e-3 relative on `f_eq_jc`, 4.4e-3 on `v_peak_jc`); the Tier 1 rerun is
-  `docs/sweep/tier1_83d23ef_f4b.csv` with `docs/jc_sweep_f4b.md` (owner's instruction:
-  `docs/jc_sweep.md` stays for Decision 16 and is replaced afterwards); `tier1_8590c3f.csv` kept
-  for the comparison; the owner's Tier 2 is to be tagged `f4b`.
+  `docs/sweep/tier1_83d23ef_f4b.csv`; its document was `docs/jc_sweep_f4b.md` until Decision 16
+  (29 Oct 2026) and is `docs/jc_sweep.md` since 2026-10-28; `tier1_8590c3f.csv` and its PNGs kept
+  for the comparison (noted in the doc); the owner's Tier 2 is to be tagged `f4b`.
 
 ## Session 5b — done (subset) (2026-10-27)
 Commits: `4384dac` (Part A), `ef89cbf` (Part B), this commit (subset CSV, PNGs, `jc_sweep.md`).
@@ -1885,19 +1887,11 @@ Sub-step count = `n·stepQTY + floor(unb·stepQTY) + 1` (verified by counting `m
 - Loops whose control variable is read after the loop (`jB`, `iB`) are while loops; all other `For` loops are `range` loops.
 
 ## Open issues
-- **F-4b, for the lead author:** `legacy/vba/interpFraction_fix_2026-10-27.bas` is the owner's
-  correction of the 26 Oct functions (outlet side `pipeSegQTY + 1`), applied as the default
-  profile pending confirmation; if the lead author confirms, edit the file's header comment
-  (it states the provenance). The measured effect is in "Session F-4b — done".
 - F-4b: the pure-Python fast suite (`make test-nojit`) takes 12 min instead of 3 because
   `tests/test_viz_motion.py::pages` builds the row 96 page by solving row 96 without Numba
   (`tools/animate.py --golden r096_jc_L24_f3`). Options: skip the page build under
   `NUMBA_DISABLE_JIT=1` (the browser tests do not test the solver), or build the page from a
   smaller windowed run; the owner to choose.
-- 5b / F-4b: `docs/jc_sweep.md` is the 26 Oct-profile Tier 1 (`tier1_8590c3f.csv`), kept for
-  Decision 16; `docs/jc_sweep_f4b.md` is the current one. After Decision 16 replace the former
-  with the latter (or re-plot `tier1_83d23ef_f4b.csv` with `--doc docs/jc_sweep.md` and re-add
-  the delta section).
 - W.2: `docs/viewer/viewer.html` carries the **full** plotly.js 4.1.1 (4.8 MB) because the
   installed package ships no partial bundle and nothing is fetched; when a copy of
   `plotly.js-basic-dist-min` 4.1.1 is available offline, `tools/build_viewer.py --plotly <file>`
@@ -1948,19 +1942,18 @@ Apply in the Stage 4.4 session, or earlier if Stage 4.2 builds the running step 
 Approved fixes (lead author, 21 Oct 2026):
 F-1 vAv denominator: 2N+1 (number of terms), was 2N-1. port_review §3.2a.
 F-2 MoC parity: continuous even/odd alternation for the whole run via a single running step counter in the refactored JC solver; the literal port keeps the per-phase index. Intent: alternation never double-steps a half-grid at a phase boundary. port_review §2.5, §3.2c. Differential tests vs legacy_port.py for JC must therefore compare with a tolerance only on cases where the literal port's parity sequence is continuous (phase 3 not entered and phase-1 exit k odd); for the others, assert the refactored result against a legacy run patched to a running counter, and record the before/after difference.
-F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is the only module the decision may touch.
+F-3 JC fidelity (full vs simplified) deferred to Stage 5b sweep. coupling.py is the only module the decision may touch. **Decision 16 (lead author, 29 Oct 2026): the full MoC junction-coupling model is the paper's generating model**; `coupling.py` stays as it is, no simplified variant.
 F-4 (lead author, 26 Oct 2026) corrected moving-fraction profile: `interpFractionA/B` replaced by `legacy/vba/interpFraction_fix_2026-10-26.bas` (both profiles start at exactly 0 at `n = 3`, one squared ramp per leg, equal legs). Applied in Session F-4 as `fraction_profile="fixed"` (default; `"legacy"` reproduces the VBA). DEVIATIONS D-4 "preserved" → "fixed". The pivot-4 `ValueError` guard on the fixed path is the port's addition (owner's decision). Measured change in NOTES.md "Session F-4 — done".
-F-4b (owner, 27 Oct 2026, pending the lead author's confirmation) the half-cell symmetry offset of F-4 resolved: `legacy/vba/interpFraction_fix_2026-10-27.bas` replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side tests and the outlet ramp of both functions (inlet unchanged), so A mirrors about the column centre `N / 2` over the called nodes `1 .. N - 1` and B about `(N - 1) / 2`, with equal fixed blocks at both ends. Applied in Session F-4b as the `"fixed"` profile (the 26 Oct text is kept on disk but no longer transcribed). Measured change in NOTES.md "Session F-4b — done".
+F-4b (owner, 27 Oct 2026; confirmed by the lead author 29 Oct 2026) the half-cell symmetry offset of F-4 resolved: `legacy/vba/interpFraction_fix_2026-10-27.bas` replaces `pipeSegQTY` by `pipeSegQTY + 1` in the two outlet-side tests and the outlet ramp of both functions (inlet unchanged), so A mirrors about the column centre `N / 2` over the called nodes `1 .. N - 1` and B about `(N - 1) / 2`, with equal fixed blocks at both ends. Applied in Session F-4b as the `"fixed"` profile (the 26 Oct text is kept on disk but no longer transcribed). Measured change in NOTES.md "Session F-4b — done".
 
 Flag-first approach for this (owner's instruction, Stage 4.2 session): both fixes are built behind keyword flags defaulting to the VBA behaviour, the differential suite passes bitwise on the legacy flags, then the defaults flip; this supersedes the tolerance-only comparison note under F-2 above.
 
 Bookkeeping when applied: F-1 changes DEVIATIONS D-17 and F-2 changes D-19 from "preserved" to "fixed" (with the pinning tests in `tests/test_quirks.py` re-pinned to the new behaviour); `legacy_port.py` itself stays literal.
 
 ## Next action
-**The lead author's Decision 16 on `docs/jc_sweep.md` (Tier 1), then Stage 6.** Pending items
-around it: (a) **F-4b done** (Session F-4b: `tier1_83d23ef_f4b.csv`, `docs/jc_sweep_f4b.md`,
-`tier1_sweep.json`); after Decision 16 `docs/jc_sweep_f4b.md` replaces `docs/jc_sweep.md`; the
-lead author's confirmation of the 27 Oct VBA is still to come. (b)
+**Tier 2 locally (the owner), then W.3, then Stage 6.** Decision 16 is taken (29 Oct 2026, the
+full JC model generates the paper's results) and F-4b is confirmed; `docs/jc_sweep.md` is the
+f4b Tier 1 run since 2026-10-28. (a) **F-4b done.** (b)
 **Tier 2 locally (the owner):** `.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores>`
 (≈ 77 min of solver CPU, ≈ 10 min wall on 8 cores; `--tag f4b`, F-4b being in) and
 `.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>.csv --doc docs/jc_sweep_tier2.md`;
