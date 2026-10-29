@@ -6,6 +6,29 @@ up to the `v0.3-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session W.3 (sweep mode in the viewer, 2026-10-29) **done**: `docs/viewer/viewer.src.html` opens
+a `sweep` file at schema 2 (schema 1 is refused with the other unsupported files) in sweep mode
+beside the untouched trace mode: three tabs against `nat_freq_hz` (curve families, `y` = `f_eq`
+raw / `daf` / `f_eq_over_LD2`, one panel per size, one trace per length and per open varying
+key, lumped hollow and JC filled at 0.55 opacity; JC effect, `ratio_f_eq` or `ratio_v_peak` as
+circles sized by length and coloured by history type, animated over `amplitude_fraction` or `mu`
+through the page's play / pause / speed / slider at 1 s a value; collapse, `f_eq_over_LD2` and
+`daf` with all sizes and lengths on one panel per history type), dropdown filters on
+`history_type`, `f_osc_hz`, `seed`, `mu`, `amplitude_fraction` (defaults: one history type, the
+largest friction and amplitude), hover → the full 72-column row in a panel under the plot, a
+"regenerate trace" button that formats the file's `regen.template` with the row and copies it,
+and on open the `reference` block checked against the rows of the same `case_id` with the golden
+rule `|row − excel| ≤ rtol |excel|` (green on `reference_sweep.json`: the three JC golden rows, 6
+values; neutral on Tier 1, no reference case among its rows; red on a tampered copy).
+`tests/test_viewer.py` replaces the W.2 placeholder pin with 10 sweep tests (both committed
+sweep files, trace counts computed from the file for each tab and filter set, the animation,
+hover and the regenerate command, mode switching, zero requests) and hardens the load wait
+against the "loading …" notice; 26 viewer tests pass in headless Chromium 141. Colours and
+symbols are the report's (`tools/sweep_jc.py`); the length palette passes the colour-blind
+separation check with the symbol as the secondary encoding. `docs/viewer/README.md` ("Sweep
+mode"), `docs/data_format.md`, `docs/handover.md` updated. No solver, exporter or data file
+changed; `src/` untouched, so the `-m slow` gate was not required.
+
 Session H.1 (handover, 2026-10-28) **done**: the plotly-python animation retired
 (`viz/animate.py`, `tools/animate.py`, `tests/test_viz.py`, `tests/test_viz_motion.py` deleted;
 the geometry pins moved to `tests/test_geometry.py`, `is_capped` and the rest-frame phase into
@@ -58,6 +81,8 @@ noise the bench README describes. `main` fast-forwarded to the branch and tagged
   `docs/sweep/tier1_83d23ef_f4b.csv`) reported in `docs/jc_sweep.md`. Decision 16 (lead author,
   29 Oct 2026): the full MoC junction-coupling model is the paper's generating model; F-3 (a
   simplified coupling) is closed.
+* **W.3, sweep mode** (29 Oct): the viewer plots a `sweep` file (three tabs, filters, hover row,
+  regenerate command, reference badge), above.
 
 ## Open issues
 
@@ -85,22 +110,30 @@ noise the bench README describes. `main` fast-forwarded to the branch and tagged
   package and nothing is fetched); `tools/build_viewer.py --plotly <file>` rebuilds at ~1 MB
   from an offline `plotly.js-basic-dist-min` (then `tests/test_viewer.py` needs the same
   switch). Tested in headless Chromium only. `docs/viz/data/golden_r096_jc.json.gz` is 13.9 MB.
+* Sweep mode's regenerate command is the file's own `regen.template`: the Tier 1 file's reruns
+  the whole tier (`python tools/sweep_jc.py run --tier 1`; its note says a single row is
+  `sweep_jc.run_case` on its columns). A `tools/export.py trace` option that rebuilds one sweep
+  row's history from its fifteen generator columns and traces it was not built; adding it means
+  a new template in `tools/export.py sweep --from-csv` and a re-export of `tier1_sweep.json`.
+  The hover label is compact (case, size, length, frequency, history, amplitude, friction, the
+  plotted value); the full row is the panel under the plot, not the label.
+* plotly.js 4.1.1 emits `plotly_hover` only for a real pointer event (`Plotly.Fx.hover` draws
+  the label but fires no event), so the hover tests move the mouse onto a marker.
 * The project hooks in `.claude/settings.json` load only when Claude Code is started from the
   repository root.
 
 ## Next action
 
-**Tier 2 locally (the lead author or owner), then W.3, then Stage 6.**
+**Stage 6** (Tier 2 locally by the lead author or owner whenever wanted; it needs no code).
 
 * Tier 2: `.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores> --tag f4b` (≈ 77 min
   of solver CPU, ≈ 10 min wall on 8 cores), then `.venv/bin/python tools/sweep_jc.py plot
   docs/sweep/tier2_<sha>_f4b.csv --doc docs/jc_sweep_tier2.md`; commit the CSV, the PNGs under
   `docs/sweep/png/` and the report. `plot --mu` / `--amplitude` select the friction and
   amplitude level of figures 1–3; the noise envelope over the three seeds is taken pointwise.
-* W.3: sweep mode in the viewer (`docs/viewer/viewer.src.html`, rebuild with
-  `tools/build_viewer.py`, extend `tests/test_viewer.py`): load a `sweep` file at
-  `schema_version` 2 (`docs/viz/data/tier1_sweep.json`), a table / scatter of the columns with a
-  row's `regen` command, the self-check of the `reference` block against the port's values.
 * Stage 6: remove `legacy_port.py` / `vba_compat.py` when the reference is no longer wanted
   (the `tests/test_quirks.py` pins move to the live modules); any extension beyond the VBA
-  needs the lead author's decision and a DEVIATIONS row.
+  needs the lead author's decision and a DEVIATIONS row. After Tier 2 is committed,
+  `tools/export.py sweep --from-csv docs/sweep/tier2_<sha>_f4b.csv --out
+  docs/viz/data/tier2_sweep.json` gives the viewer the 24 300-row file (sweep mode draws it;
+  the `all` filters then split each family by seed, amplitude and friction).
