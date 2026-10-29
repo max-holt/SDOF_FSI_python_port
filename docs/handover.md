@@ -95,6 +95,14 @@ time window, exaggeration and colour range are live controls. `docs/viewer/READM
 user guide; `docs/viz/data/` holds five committed files, including the Example-sheet cases and
 golden row 96. A `--step` option builds a plain step history instead of a fixture case.
 
+The same page opens a `sweep` file (`docs/viz/data/tier1_sweep.json`, or `tools/export.py sweep
+--from-csv` of any sweep CSV) in sweep mode: three tabs against the natural frequency (curve
+families per size and length with lumped and JC overlaid; the JC / lumped ratio as circles
+animated over amplitude or friction; the mass-collapse panels per history type), dropdown
+filters, the full row of a hovered point with its regenerate command, and a badge that reports
+whether the Excel reference values of the file's `reference` block are reproduced by the rows
+of the same case (green on `reference_sweep.json`; Tier 1 has no reference case among its rows).
+
 ## Run and plot the sweep
 
 ```
@@ -162,6 +170,6 @@ the VBA: 23 rows, each with the VBA and Python locations, both behaviours, the s
   any model extension beyond the VBA (input validation for non-physical inputs, a compiled force
   schedule, the binary data variant named in `docs/data_format.md`).
 * **Tier 2** of the sweep has not been run or committed; the command is above.
-* **W.3**: sweep mode in the viewer (a `sweep` file is recognised and its meta shown, nothing
-  is plotted) and the self-check against the `reference` block.
-* The viewer is tested in headless Chromium only.
+* The viewer is tested in headless Chromium only. A sweep row's regenerate command is the
+  file's own template: the Tier 1 file's reruns the whole tier (`tools/sweep_jc.py run --tier
+  1`); a single-row trace option in `tools/export.py` was not built.

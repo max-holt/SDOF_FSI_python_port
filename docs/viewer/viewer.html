@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- surge_sdof results viewer (Session W.2, trace mode). This is the SOURCE page; the one-file
+<!-- surge_sdof results viewer (Session W.2 trace mode, Session W.3 sweep mode). This is the SOURCE page; the one-file
      deliverable docs/viewer/viewer.html is built from it by tools/build_viewer.py, which replaces
      the two @inline markers below with plotly.js and pako. Everything else is in this file. -->
 <!-- No external request of any kind: the policy below blocks every network fetch at the browser
@@ -55,6 +55,41 @@
     font-variant-numeric: tabular-nums; margin-left: 8px; }
   #plot { width: 1200px; height: 900px; }
   .hint { color: var(--muted); }
+  /* ---- sweep mode (Session W.3) */
+  body.sweep #controls .trace-only { display: none; }
+  body.sweep #plot { display: none; }
+  #sweep { display: none; }
+  #sweep.on { display: block; }
+  #sweep-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
+  #tabs button, #filters button, #rowpanel button { font: inherit; padding: 3px 9px; border: 1px solid #b9b8b2;
+    border-radius: 3px; background: #fff; cursor: pointer; }
+  #tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #tabs button:hover, #rowpanel button:hover { border-color: var(--accent); }
+  .badge { padding: 2px 9px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+  .badge.green { background: #e3f4ea; color: #1b6e3e; border: 1px solid #9fd3b5; }
+  .badge.red { background: #fdecea; color: var(--error); border: 1px solid #f3b9b4; }
+  .badge.neutral { background: var(--panel); color: var(--muted); border: 1px solid var(--rule); }
+  #badge-detail { white-space: pre-wrap; }
+  #filters { display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; margin: 0 0 6px;
+    padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px; }
+  #filters label { color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+  #filters select { font: inherit; padding: 2px 4px; border: 1px solid #b9b8b2; border-radius: 3px; background: #fff; }
+  #filter-selects { display: inline-flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
+  #filters label.tab-opt { display: none; }
+  #filters label.tab-opt.on { display: inline-flex; }
+  #splot { width: 1200px; }
+  #rowpanel { width: 1200px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px;
+    background: var(--panel); box-sizing: border-box; }
+  #rowpanel .rowhead { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  #row-title { font-weight: 600; }
+  #regen-cmd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
+    background: #fff; border: 1px solid var(--rule); border-radius: 3px; padding: 2px 6px; min-width: 2em;
+    display: inline-block; white-space: pre-wrap; word-break: break-all; }
+  #row-list { display: grid; grid-template-columns: repeat(4, max-content 1fr); gap: 1px 10px; margin: 0;
+    font-variant-numeric: tabular-nums; }
+  #row-list dt { color: var(--muted); }
+  #row-list dd { margin: 0; overflow-wrap: anywhere; }
+  #row-list dd.null { color: #b9b8b2; }
 </style>
 <script>
 /* plotly.js v4.1.1 (MIT, Copyright 2012-2026 Plotly, Inc.), 4815814 bytes, copied by tools/build_viewer.py from plotly/package_data/plotly.min.js (the plotly Python package 7.1.0); never loaded from the network */
@@ -3706,7 +3741,7 @@ THE SOFTWARE. */
 </script>
 </head>
 <body>
-<h1>surge_sdof results viewer <small id="version">trace mode (Session W.2)</small></h1>
+<h1>surge_sdof results viewer <small id="version">trace mode (Session W.2) · sweep mode (Session W.3)</small></h1>
 <div id="load">
   <input id="file" type="file" accept=".json,.gz,.json.gz,application/json,application/gzip">
   <div id="drop">or drop a <code>.json</code> / <code>.json.gz</code> results file here
@@ -3718,22 +3753,56 @@ THE SOFTWARE. */
   <span class="group">
     <button id="play" title="space">&#9654; play</button>
     <button id="pause">&#10074;&#10074; pause</button>
-    <button id="peak" title="show the frame of peak |x| (whole run)">jump to peak</button>
+    <button id="peak" class="trace-only" title="show the frame of peak |x| (whole run)">jump to peak</button>
   </span>
   <label>speed &times;<input id="speed" type="number" min="0.001" step="any" value="1"></label>
   <span class="group" id="speed-buttons"></span>
-  <label title="animation frames advanced per shown frame; blank = automatic (the plotly pages' stride)">
+  <label class="trace-only" title="animation frames advanced per shown frame; blank = automatic (the plotly pages' stride)">
     stride <input id="stride" type="number" min="1" step="1" placeholder="auto"></label>
-  <label title="first frame time, s (whole run by default)">t_start <input id="t0" type="number" step="any"></label>
-  <label title="last frame time, s">t_end <input id="t1" type="number" step="any"></label>
-  <label title="displacement multiplier; blank = automatic (peak |x| drawn as 10 % of the run)">
+  <label class="trace-only" title="first frame time, s (whole run by default)">t_start <input id="t0" type="number" step="any"></label>
+  <label class="trace-only" title="last frame time, s">t_end <input id="t1" type="number" step="any"></label>
+  <label class="trace-only" title="displacement multiplier; blank = automatic (peak |x| drawn as 10 % of the run)">
     exaggeration <input id="exag" type="number" min="0" step="any" placeholder="auto"></label>
-  <label title="colour range ±v, m/s; blank = automatic (max |v| over the run)">
+  <label class="trace-only" title="colour range ±v, m/s; blank = automatic (max |v| over the run)">
     colour range &plusmn;<input id="vmax" type="number" min="0" step="any" placeholder="auto"> m/s</label>
   <span class="hint" id="store-note"></span>
 </div>
 <div id="frame"><input id="slider" type="range" min="0" max="0" step="1" value="0"><span id="readout"></span></div>
 <div id="plot"></div>
+<div id="sweep">
+  <div id="sweep-head">
+    <span id="tabs">
+      <button data-tab="curves" class="on" title="y against the natural frequency: one trace per length (and per remaining history / amplitude / friction variant), one panel per pipe size, lumped hollow and JC filled at lower opacity">curve families</button>
+      <button data-tab="effect" title="JC / lumped ratio against the natural frequency: circles sized by length, coloured by history type, animated over amplitude or friction">JC effect</button>
+      <button data-tab="collapse" title="F_eq / (L d^2) and the effective DAF against the natural frequency, all sizes and lengths on one panel per history type">collapse</button>
+    </span>
+    <span id="badge" class="badge neutral">reference: not checked</span>
+    <span id="badge-detail" class="hint"></span>
+  </div>
+  <div id="filters">
+    <label class="tab-opt tab-curves on">y <select id="y1">
+      <option value="f_eq">f_eq raw (N)</option>
+      <option value="daf">daf = F_eq / (p_peak A)</option>
+      <option value="f_eq_over_LD2">f_eq / (L d&sup2;) (N/m&sup3;)</option></select></label>
+    <label class="tab-opt tab-effect">ratio <select id="ratio">
+      <option value="ratio_f_eq">ratio_f_eq = f_eq_jc / f_eq_lumped</option>
+      <option value="ratio_v_peak">ratio_v_peak = v_peak_jc / v_peak_lumped</option></select></label>
+    <label class="tab-opt tab-effect">animate over <select id="anim">
+      <option value="amplitude_fraction">amplitude_fraction</option>
+      <option value="mu">mu</option></select></label>
+    <span id="filter-selects"></span>
+    <span class="hint" id="sweep-hint"></span>
+  </div>
+  <div id="splot"></div>
+  <div id="rowpanel">
+    <div class="rowhead">
+      <span id="row-title">hover a point: its full row appears here</span>
+      <button id="regen" title="the tools/export.py (or sweep) command of the file's regen template, formatted with the hovered row; copied to the clipboard">regenerate trace</button>
+      <code id="regen-cmd"></code><span id="regen-note" class="hint"></span>
+    </div>
+    <dl id="row-list"></dl>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -3761,8 +3830,7 @@ THE SOFTWARE. */
   var SPEEDS = [0.25, 0.5, 1, 2, 4];
   var STORE_KEY = 'surge_sdof.viewer.v1';
   var SCHEMA_VERSION = 1, KINDS = ['trace', 'sweep'];
-  // a sweep file is only recognised (sweep mode is W.3): the Session 5b schema 2 is accepted too
-  var SWEEP_SCHEMA_VERSIONS = [1, 2];
+  var SWEEP_SCHEMA_VERSION = 2;   // the Session 5b layout (docs/data_format.md); schema 1 is not read
 
   var $ = function (id) { return document.getElementById(id); };
   var gd = $('plot');
@@ -3835,7 +3903,7 @@ THE SOFTWARE. */
       catch (e) { throw new Error('not a JSON document' + (gz ? ' after inflating' : '') + ': ' + e.message); }
       var what = validate(obj);
       if (what === 'sweep') {
-        showSweep(obj, file.name);
+        openSweep(obj, file.name);
       } else {
         openTrace(obj, file.name);
       }
@@ -3843,6 +3911,7 @@ THE SOFTWARE. */
       console.log('loaded ' + file.name + ' in ' + dt.toFixed(2) + ' s');
     }).catch(function (e) {
       closeTrace();
+      closeSweep();
       message('error', 'Could not load ' + file.name + ':\n' + (e && e.message ? e.message : e));
     });
   }
@@ -3851,13 +3920,14 @@ THE SOFTWARE. */
   function validate(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('the document is not an object');
     var kind = obj.kind, sv = obj.schema_version;
-    var okVersion = kind === 'sweep' ? SWEEP_SCHEMA_VERSIONS.indexOf(sv) >= 0 : sv === SCHEMA_VERSION;
+    var okVersion = kind === 'sweep' ? sv === SWEEP_SCHEMA_VERSION : sv === SCHEMA_VERSION;
     if (KINDS.indexOf(kind) < 0 || !okVersion) {
       throw new Error('Unsupported file: kind ' + JSON.stringify(kind === undefined ? null : kind) +
         ', schema_version ' + JSON.stringify(sv === undefined ? null : sv) +
-        '.\nThis viewer reads kind "trace" or "sweep" at schema_version ' + SCHEMA_VERSION +
-        ' (a sweep file also at 2; docs/data_format.md); re-export the file with the matching tools/export.py.');
+        '.\nThis viewer reads kind "trace" at schema_version ' + SCHEMA_VERSION + ' and kind "sweep" at schema_version ' +
+        SWEEP_SCHEMA_VERSION + ' (docs/data_format.md); re-export the file with the matching tools/export.py.');
     }
+    if (kind === 'sweep') validateSweep(obj);
     if (kind === 'trace') {
       var need = ['meta', 'geometry', 'frames'];
       for (var i = 0; i < need.length; i++) if (!obj[need[i]]) throw new Error('trace file without "' + need[i] + '"');
@@ -3884,16 +3954,6 @@ THE SOFTWARE. */
     return kind;
   }
 
-  function showSweep(obj, name) {
-    closeTrace();
-    var m = obj.meta || {};
-    message('info', 'Sweep file recognised: ' + name + ' (' + m.n_rows + ' rows, source ' + m.source +
-      ', git ' + (m.git_sha ? String(m.git_sha).slice(0, 12) : 'none') + ').\n' +
-      'Sweep mode arrives in Session W.3; this viewer plays trace files (tools/export.py trace …).');
-    setMeta([['kind', 'sweep'], ['rows', m.n_rows], ['source', m.source], ['created', m.created_utc],
-             ['git sha', m.git_sha || 'null']], '');
-  }
-
   // ---------------------------------------------------------------- trace mode
   var D = null;   // the open file: columns, typed cell blocks, geometry
   var S = null;   // the scalings in use
@@ -3911,6 +3971,7 @@ THE SOFTWARE. */
 
   function openTrace(obj, name) {
     closeTrace();
+    closeSweep();
     var f = obj.frames, g = obj.geometry, meta = obj.meta;
     var n = meta.n_frames, jc = !!obj.cells;
     var nc = g.x_nominal_m.length;
@@ -4287,8 +4348,9 @@ THE SOFTWARE. */
       if (f) readFile(f);
     });
 
-    $('play').onclick = play;
-    $('pause').onclick = stop;
+    // play / pause / slider / space drive the trace playback or, in sweep mode, the JC-effect animation
+    $('play').onclick = function () { SW ? sweepPlay() : play(); };
+    $('pause').onclick = function () { SW ? sweepStop() : stop(); };
     $('peak').onclick = function () {
       if (!D) return;
       stop();
@@ -4336,14 +4398,590 @@ THE SOFTWARE. */
       if (D) { applyOverrides(); renderMeta(); restyleColour(); }
     });
     $('slider').addEventListener('input', function (e) {
+      if (SW) { sweepStop(); sweepShow(parseInt(e.target.value, 10)); return; }
       if (!D) return;
       stop();
       show(parseInt(e.target.value, 10));
     });
     document.addEventListener('keydown', function (e) {
-      if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); P.running ? stop() : play(); }
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        if (SW) { A.running ? sweepStop() : sweepPlay(); } else { P.running ? stop() : play(); }
+      }
     });
   }
+
+  // ================================================================ sweep mode (Session W.3)
+  // A `sweep` document (docs/data_format.md, schema 2): 72 flat columns, a regen template and
+  // the reference block. Three tabs draw the columns against the natural frequency; five
+  // dropdowns filter the rows; the JC-effect tab animates over amplitude or friction through
+  // the page's play controls (the same inline-frame Plotly.animate mechanism as trace mode);
+  // hovering a point fills the row panel with the full row, where the regenerate button formats
+  // the file's template. On open the reference entries are checked against the rows of the
+  // same case_id with the golden tests' rule |row - excel| <= rtol |excel| (tests/test_golden.py).
+  var SWEEP_FRAME_MS = 1000;    // 1x = one animation value a second
+  var FILTER_COLS = ['history_type', 'f_osc_hz', 'seed', 'mu', 'amplitude_fraction'];
+  var SWEEP_REQUIRED = ['case_id', 'size_in', 'length_m', 'nat_freq_hz', 'history_type', 'f_osc_hz', 'seed',
+    'amplitude_fraction', 'mu', 'f_eq_lumped', 'f_eq_jc', 'ratio_f_eq', 'ratio_v_peak',
+    'f_eq_over_LD2_lumped', 'f_eq_over_LD2_jc', 'daf_lumped', 'daf_jc'];
+  // tools/sweep_jc.py: LENGTH_COLOURS, LENGTH_MARKERS, SIZE_MARKERS, HISTORY_LABELS
+  var LENGTH_COLOURS = {3: '#2a78d6', 6: '#eb6834', 12: '#1baf7a', 24: '#eda100', 48: '#e87ba4'};
+  var EXTRA_COLOURS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#7a5bd6', '#52514e'];
+  var LENGTH_SYMBOLS = {3: 'circle', 6: 'square', 12: 'triangle-up', 24: 'diamond', 48: 'triangle-down'};
+  var SIZE_SYMBOLS = {10: 'circle', 12: 'square', 16: 'triangle-up', 18: 'diamond'};
+  var SYMBOLS = ['circle', 'square', 'triangle-up', 'diamond', 'triangle-down', 'star', 'hexagon'];
+  var HISTORY_ORDER = ['step', 'step_sine', 'step_noise', 'golden'];
+  var HISTORY_LABELS = {step: 'step', step_sine: 'step + sine', step_noise: 'step + noise', golden: 'golden (Excel)'};
+  var HISTORY_COLOURS = {step: '#2a78d6', step_sine: '#eb6834', step_noise: '#1baf7a', golden: '#eda100'};
+  var DASHES = ['solid', 'dot', 'dash', 'longdash', 'dashdot', 'longdashdot'];
+  var JC_OPACITY = 0.55;
+  var Y1 = {   // the curve-families y choices: column stem, axis title
+    f_eq: ['f_eq', 'F_eq, N'], daf: ['daf', 'F_eq / (p_peak A)'], f_eq_over_LD2: ['f_eq_over_LD2', 'F_eq / (L d²), N/m³']
+  };
+  var OUTPUT_COLUMNS = {   // reference output_names -> sweep column stem
+    max_static_equivalent_force: 'f_eq', max_displacement: 'x_peak', max_velocity: 'v_peak',
+    max_acceleration: 'a_peak', max_applied_force: 'f_peak'
+  };
+  var gd2 = $('splot');
+
+  var SW = null;   // the open sweep file
+  var A = {        // the JC-effect animation (window.viewer.anim)
+    cur: 0, n: 0, values: [], running: false, pending: false, wallStart: 0, frameStart: 0, raf: 0, shown: 0
+  };
+
+  function validateSweep(obj) {
+    if (!obj.meta || !obj.columns || !obj.regen || !obj.reference) throw new Error('sweep file without meta, columns, regen or reference');
+    var n = obj.meta.n_rows;
+    for (var i = 0; i < SWEEP_REQUIRED.length; i++) {
+      var c = obj.columns[SWEEP_REQUIRED[i]];
+      if (!Array.isArray(c) || c.length !== n) throw new Error('columns.' + SWEEP_REQUIRED[i] + ' is missing or not ' + n + ' long');
+    }
+    if (typeof obj.regen.template !== 'string') throw new Error('regen.template is not a string');
+    if (!Array.isArray(obj.reference.example_cases) || !Array.isArray(obj.reference.jc_golden_rows))
+      throw new Error('reference.example_cases / jc_golden_rows are not lists');
+  }
+
+  function closeSweep() {
+    sweepStop();
+    SW = null;
+    A.cur = 0; A.n = 0; A.values = [];
+    try { Plotly.purge(gd2); } catch (e) { /* nothing plotted */ }
+    $('sweep').className = '';
+    document.body.className = '';
+    $('row-list').innerHTML = ''; $('regen-cmd').textContent = ''; $('regen-note').textContent = '';
+    $('row-title').textContent = 'hover a point: its full row appears here';
+  }
+
+  function openSweep(obj, name) {
+    closeTrace();
+    closeSweep();
+    var cols = obj.columns, n = obj.meta.n_rows;
+    var colNames = Object.keys(cols);
+    SW = {name: name, obj: obj, cols: cols, colNames: colNames, n: n, tab: 'curves', filters: {},
+          y1: $('y1').value, ratio: $('ratio').value, anim: $('anim').value, row: -1, ref: null, counts: {}};
+    SW.ref = checkReference(obj);
+    buildFilters();
+    document.body.className = 'sweep';
+    $('sweep').className = 'on';
+    $('controls').className = ''; $('frame').className = '';
+    message('', '');
+    renderSweepMeta();
+    renderSweep();
+  }
+
+  // ---------------------------------------------------------------- reference self-check
+  function checkReference(obj) {
+    var cols = obj.columns, ids = cols.case_id, out = {entries: [], checked: 0, passed: 0, failed: 0, absent: 0, worst: null};
+    var lists = [['example_cases', obj.reference.example_cases], ['jc_golden_rows', obj.reference.jc_golden_rows]];
+    lists.forEach(function (l) {
+      l[1].forEach(function (e) {
+        var row = ids.indexOf(e.case_id);
+        var ent = {list: l[0], case_id: e.case_id, solver: e.solver, row: row, values: [], status: 'absent'};
+        if (row < 0) { out.absent += 1; out.entries.push(ent); return; }
+        var names = e.output_names || [];
+        var stem = e.solver === 'lumped' || e.solver === 'jc' ? e.solver : null;
+        for (var k = 0; k < names.length; k++) {
+          var col = OUTPUT_COLUMNS[names[k]];
+          if (!stem || !col || !cols[col + '_' + stem]) continue;
+          var v = cols[col + '_' + stem][row], x = e.excel_values[k];
+          if (v === null || v === undefined || x === null || x === undefined) continue;
+          var rel = x !== 0 ? Math.abs(v - x) / Math.abs(x) : (v === 0 ? 0 : Infinity);
+          var ok = Math.abs(v - x) <= e.rtol * Math.abs(x);
+          ent.values.push({column: col + '_' + stem, row_value: v, excel: x, rel: rel, ok: ok});
+          out.checked += 1;
+          if (ok) out.passed += 1; else out.failed += 1;
+          if (!out.worst || rel > out.worst.rel) out.worst = {case_id: e.case_id, column: col + '_' + stem, rel: rel, rtol: e.rtol, ok: ok};
+        }
+        ent.status = ent.values.length === 0 ? 'no values' : (ent.values.every(function (q) { return q.ok; }) ? 'pass' : 'fail');
+        out.entries.push(ent);
+      });
+    });
+    var total = out.entries.length, present = total - out.absent;
+    if (out.failed > 0) {
+      out.colour = 'red';
+      var bad = [];
+      out.entries.forEach(function (ent) { ent.values.forEach(function (q) { if (!q.ok) bad.push(ent.case_id + ' ' + q.column + ' (rel ' + q.rel.toExponential(1) + ' > rtol)'); }); });
+      out.summary = 'reference NOT reproduced: ' + out.failed + ' of ' + out.checked + ' values outside tolerance';
+      out.detail = bad.join('; ');
+    } else if (out.checked > 0) {
+      out.colour = 'green';
+      out.summary = 'reference reproduced: ' + present + ' of ' + total + ' reference cases among the rows, ' + out.checked +
+        ' values within tolerance';
+      out.detail = 'worst rel ' + (out.worst ? out.worst.rel.toExponential(1) : '0') + '; ' +
+        out.entries.filter(function (ent) { return ent.row >= 0; }).map(function (ent) { return ent.case_id + ' (' + ent.status + ')'; }).join(', ') +
+        (out.absent ? '; not among the rows: ' + out.entries.filter(function (ent) { return ent.row < 0; }).map(function (ent) { return ent.case_id; }).join(', ') : '');
+    } else {
+      out.colour = 'neutral';
+      out.summary = 'reference not checked: none of the ' + total + ' reference cases is among the rows';
+      out.detail = 'the Excel-verified cases (' + out.entries.map(function (ent) { return ent.case_id; }).join(', ') +
+        ') are checked when a row of the same case_id carries their outputs (docs/viz/data/reference_sweep.json)';
+    }
+    var b = $('badge');
+    b.className = 'badge ' + out.colour; b.textContent = out.summary; b.title = out.detail;
+    $('badge-detail').textContent = out.detail;
+    return out;
+  }
+
+  // ---------------------------------------------------------------- filters
+  function distinct(col, rows) {    // sorted distinct values of a column (numbers ascending, strings, null last)
+    var seen = {}, vals = [];
+    var src = rows || null;
+    var m = src ? src.length : SW.n;
+    for (var i = 0; i < m; i++) {
+      var v = SW.cols[col][src ? src[i] : i];
+      var key = v === null || v === undefined ? 'null' : typeof v + ':' + String(v);
+      if (!seen[key]) { seen[key] = true; vals.push(v); }
+    }
+    vals.sort(function (a, b) {
+      if (a === null) return 1; if (b === null) return -1;
+      if (typeof a === 'number' && typeof b === 'number') return a - b;
+      return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+    });
+    return vals;
+  }
+  function valueKey(v) { return v === null || v === undefined ? 'null' : String(v); }
+  function fmtVal(v) { return v === null || v === undefined ? '(none)' : String(v); }
+
+  function buildFilters() {
+    var box = $('filter-selects');
+    box.innerHTML = '';
+    FILTER_COLS.forEach(function (col) {
+      var vals = distinct(col);
+      var lab = document.createElement('label'), sel = document.createElement('select');
+      sel.id = 'f-' + col; sel.dataset.col = col;
+      var optAll = document.createElement('option'); optAll.value = 'all'; optAll.textContent = 'all (' + vals.length + ')';
+      sel.appendChild(optAll);
+      vals.forEach(function (v) {
+        var o = document.createElement('option'); o.value = valueKey(v); o.textContent = fmtVal(v); sel.appendChild(o);
+      });
+      // defaults: the report's convention (tools/sweep_jc.py plot): one history type, the
+      // largest friction and amplitude; sine frequency and seed open
+      var def = 'all';
+      if (col === 'history_type') {
+        var first = HISTORY_ORDER.filter(function (h) { return vals.indexOf(h) >= 0; })[0];
+        def = valueKey(first !== undefined ? first : vals[0]);
+      } else if ((col === 'mu' || col === 'amplitude_fraction') && vals.length > 1 && vals.length <= 6) {
+        var nums = vals.filter(function (v) { return typeof v === 'number'; });
+        if (nums.length) def = valueKey(nums[nums.length - 1]);
+      }
+      sel.value = def;
+      SW.filters[col] = def;
+      sel.addEventListener('change', function () { setFilter(col, sel.value); });
+      lab.appendChild(document.createTextNode(col + ' '));
+      lab.appendChild(sel);
+      box.appendChild(lab);
+    });
+  }
+  function setFilter(col, value) {
+    if (!SW) return;
+    SW.filters[col] = value;
+    var sel = $('f-' + col);
+    if (sel && sel.value !== value) sel.value = value;
+    renderSweep();
+  }
+  function filterValue(col) {      // the animated variable is open while the JC-effect tab animates over it
+    if (SW.tab === 'effect' && col === SW.anim) return 'all';
+    return SW.filters[col];
+  }
+  function filteredRows() {
+    var rows = [];
+    for (var i = 0; i < SW.n; i++) {
+      var ok = true;
+      for (var k = 0; k < FILTER_COLS.length; k++) {
+        var f = filterValue(FILTER_COLS[k]);
+        if (f !== 'all' && valueKey(SW.cols[FILTER_COLS[k]][i]) !== f) { ok = false; break; }
+      }
+      if (ok) rows.push(i);
+    }
+    return rows;
+  }
+  // the filter columns left open whose values vary among `rows`: a trace is split by them
+  function varyingKeys(rows) {
+    var keys = [];
+    FILTER_COLS.forEach(function (col) {
+      if (filterValue(col) !== 'all') return;
+      if (distinct(col, rows).length > 1) keys.push(col);
+    });
+    return keys;
+  }
+  function subLabel(keys, i) {
+    var parts = [];
+    keys.forEach(function (col) {
+      var v = SW.cols[col][i];
+      if (v === null || v === undefined) return;
+      if (col === 'history_type') parts.push(HISTORY_LABELS[v] || String(v));
+      else if (col === 'f_osc_hz') parts.push('f_osc ' + v + ' Hz');
+      else if (col === 'seed') parts.push('seed ' + v);
+      else if (col === 'amplitude_fraction') parts.push('a ' + v);
+      else if (col === 'mu') parts.push('mu ' + v);
+      else parts.push(col + ' ' + v);
+    });
+    return parts.join(' · ');
+  }
+
+  // ---------------------------------------------------------------- figure helpers
+  function lengthColour(L, lengths) {
+    if (LENGTH_COLOURS[L]) return LENGTH_COLOURS[L];
+    return EXTRA_COLOURS[lengths.indexOf(L) % EXTRA_COLOURS.length];
+  }
+  function lengthSymbol(L, lengths) {
+    if (LENGTH_SYMBOLS[L]) return LENGTH_SYMBOLS[L];
+    return SYMBOLS[lengths.indexOf(L) % SYMBOLS.length];
+  }
+  function sizeSymbol(sz, sizes) {
+    if (SIZE_SYMBOLS[sz]) return SIZE_SYMBOLS[sz];
+    return SYMBOLS[sizes.indexOf(sz) % SYMBOLS.length];
+  }
+  function panelGrid(nRows, nCols) {   // explicit domains, so the panel titles can be placed
+    var xgap = nCols > 1 ? 0.07 : 0, ygap = nRows > 1 ? 0.14 : 0;
+    var w = (1 - xgap * (nCols - 1)) / nCols, h = (1 - ygap * (nRows - 1)) / nRows;
+    var out = [];
+    for (var r = 0; r < nRows; r++) for (var c = 0; c < nCols; c++) {
+      var k = r * nCols + c, sfx = k === 0 ? '' : String(k + 1);
+      out.push({k: k, row: r, col: c, xa: 'x' + sfx, ya: 'y' + sfx, xkey: 'xaxis' + sfx, ykey: 'yaxis' + sfx,
+        xdom: [c * (w + xgap), c * (w + xgap) + w], ydom: [1 - (r * (h + ygap) + h), 1 - r * (h + ygap)]});
+    }
+    return out;
+  }
+  function pointText(i, yName, yVal) {
+    var c = SW.cols;
+    return escapeHtml(c.case_id[i]) + '<br>' + c.size_in[i] + ' in, L = ' + c.length_m[i] + ' m, f_n = ' + c.nat_freq_hz[i] + ' Hz' +
+      '<br>' + (HISTORY_LABELS[c.history_type[i]] || c.history_type[i]) +
+      (c.f_osc_hz[i] !== null ? ', f_osc ' + c.f_osc_hz[i] + ' Hz' : '') + (c.seed[i] !== null ? ', seed ' + c.seed[i] : '') +
+      (c.amplitude_fraction[i] !== null ? ', a ' + c.amplitude_fraction[i] : '') + (c.mu[i] !== null ? ', mu ' + c.mu[i] : '') +
+      '<br>' + yName + ' = ' + fmtG(yVal, 6);
+  }
+  function baseLayout(height, panels, xTitle) {
+    var axis = {automargin: true, gridcolor: '#EBF0F8', linecolor: '#EBF0F8', ticks: '', title: {standoff: 10},
+                zerolinecolor: '#EBF0F8', zerolinewidth: 2};
+    var layout = {
+      template: {layout: {font: {color: '#2a3f5f'}, paper_bgcolor: 'white', plot_bgcolor: 'white', hovermode: 'closest',
+        xaxis: axis, yaxis: axis, annotationdefaults: {arrowcolor: '#2a3f5f', arrowhead: 0, arrowwidth: 1}}},
+      width: FIG_W, height: height, margin: {l: 70, r: 250, t: 80, b: 60}, hovermode: 'closest',
+      legend: {orientation: 'v', x: 1.01, y: 1, xanchor: 'left', yanchor: 'top', font: {size: 11}, tracegroupgap: 2},
+      annotations: [], shapes: []
+    };
+    panels.forEach(function (p) {
+      layout[p.xkey] = {domain: p.xdom, anchor: p.ya, title: {text: xTitle}};
+      layout[p.ykey] = {domain: p.ydom, anchor: p.xa, title: {text: p.yTitle || ''}};
+      if (p.matches) layout[p.ykey].matches = p.matches;
+      if (p.title) layout.annotations.push({text: p.title, x: (p.xdom[0] + p.xdom[1]) / 2, y: p.ydom[1], xref: 'paper', yref: 'paper',
+        xanchor: 'center', yanchor: 'bottom', showarrow: false, font: {size: 13}});
+    });
+    return layout;
+  }
+  // rows grouped by a key function; groups in first-seen order of the sorted keys given
+  function groupBy(rows, keyFn) {
+    var map = {}, order = [];
+    rows.forEach(function (i) { var k = keyFn(i); if (!map[k]) { map[k] = []; order.push(k); } map[k].push(i); });
+    return {map: map, keys: order};
+  }
+  function sortByX(rows) { return rows.slice().sort(function (a, b) { return SW.cols.nat_freq_hz[a] - SW.cols.nat_freq_hz[b]; }); }
+
+  // one lines+markers trace per (series, solver) over `rows`; null when the column is all null
+  function seriesTrace(rows, stem, solver, name, colour, symbol, dash, panel, legendSeen) {
+    var col = SW.cols[stem + '_' + solver];
+    var x = [], y = [], text = [], cd = [];
+    sortByX(rows).forEach(function (i) {
+      var v = col[i];
+      if (v === null || v === undefined) return;
+      x.push(SW.cols.nat_freq_hz[i]); y.push(v); text.push(pointText(i, stem + '_' + solver, v)); cd.push(i);
+    });
+    if (!x.length) return null;
+    var full = name + ' ' + (solver === 'jc' ? 'JC' : 'lumped');
+    var show = !legendSeen[full];
+    legendSeen[full] = true;
+    return {type: 'scatter', mode: 'lines+markers', x: x, y: y, text: text, customdata: cd, name: full,
+      legendgroup: full, showlegend: show, opacity: solver === 'jc' ? JC_OPACITY : 1.0,
+      line: {color: colour, width: solver === 'jc' ? 2.5 : 1.5, dash: dash},
+      marker: {color: colour, size: 7, symbol: solver === 'jc' ? symbol : symbol + '-open', line: {width: 1.2, color: colour}},
+      hovertemplate: '%{text}<extra></extra>', xaxis: panel.xa, yaxis: panel.ya};
+  }
+
+  // ---------------------------------------------------------------- tab 1: curve families
+  function figCurves(rows) {
+    var stem = Y1[SW.y1][0], yTitle = Y1[SW.y1][1];
+    var sizes = distinct('size_in', rows), lengths = distinct('length_m', rows), keys = varyingKeys(rows);
+    var panels = panelGrid(1, Math.max(1, sizes.length));
+    panels.forEach(function (p, k) {
+      p.title = sizes.length ? sizes[k] + ' in' : ''; p.yTitle = k === 0 ? yTitle : ''; if (k > 0) p.matches = 'y';
+    });
+    var data = [], legendSeen = {};
+    sizes.forEach(function (sz, k) {
+      var inPanel = rows.filter(function (i) { return SW.cols.size_in[i] === sz; });
+      var byLen = groupBy(inPanel, function (i) { return valueKey(SW.cols.length_m[i]); });
+      lengths.forEach(function (L) {
+        var r = byLen.map[valueKey(L)];
+        if (!r) return;
+        var subs = groupBy(r, function (i) { return subLabel(keys, i); });
+        subs.keys.forEach(function (sub, si) {
+          var name = 'L = ' + L + ' m' + (sub ? ' · ' + sub : '');
+          ['lumped', 'jc'].forEach(function (solver) {
+            var t = seriesTrace(subs.map[sub], stem, solver, name, lengthColour(L, lengths), lengthSymbol(L, lengths),
+              DASHES[si % DASHES.length], panels[k], legendSeen);
+            if (t) data.push(t);
+          });
+        });
+      });
+    });
+    var layout = baseLayout(620, panels, 'natural frequency, Hz');
+    layout.title = {text: '<b>' + yTitle + ' against the natural frequency</b> — colour and symbol: length; hollow lumped, filled JC (' +
+      fmtG(JC_OPACITY, 2) + ' opacity)' + (keys.length ? '; dash: ' + keys.join(' / ') : ''), x: 0, xanchor: 'left', font: {size: 13}};
+    return {data: data, layout: layout};
+  }
+
+  // ---------------------------------------------------------------- tab 2: JC effect (animated)
+  function figEffect(rows) {
+    var col = SW.cols[SW.ratio], c = SW.cols;
+    var hist = HISTORY_ORDER.filter(function (h) { return rows.some(function (i) { return c.history_type[i] === h; }); });
+    distinct('history_type', rows).forEach(function (h) { if (h !== null && hist.indexOf(h) < 0) hist.push(h); });
+    var lengths = distinct('length_m', rows).filter(function (v) { return typeof v === 'number'; });
+    var Lmin = lengths.length ? lengths[0] : 0, Lmax = lengths.length ? lengths[lengths.length - 1] : 0;
+    function sizePx(L) { return Lmax > Lmin ? 7 + 15 * (L - Lmin) / (Lmax - Lmin) : 11; }
+    var values = distinct(SW.anim, rows);
+    A.values = values; A.n = values.length;
+    // the ranges over every frame, so the axes hold while the animation runs
+    var xs = [], ys = [];
+    rows.forEach(function (i) { if (col[i] !== null) { xs.push(c.nat_freq_hz[i]); ys.push(col[i]); } });
+    var xr = xs.length ? [Math.min.apply(null, xs), Math.max.apply(null, xs)] : [0, 1];
+    var yr = ys.length ? [Math.min(Math.min.apply(null, ys), 0.75), Math.max(Math.max.apply(null, ys), 1.1)] : [0, 1.2];
+    var xpad = 0.06 * (xr[1] - xr[0] || 1), ypad = 0.06 * (yr[1] - yr[0] || 1);
+    var panel = panelGrid(1, 1)[0];
+    panel.yTitle = SW.ratio;
+    var frames = values.map(function (v) {
+      return hist.map(function (h) {
+        var x = [], y = [], size = [], text = [], cd = [];
+        rows.forEach(function (i) {
+          if (c.history_type[i] !== h || valueKey(c[SW.anim][i]) !== valueKey(v) || col[i] === null) return;
+          x.push(c.nat_freq_hz[i]); y.push(col[i]); size.push(sizePx(c.length_m[i])); text.push(pointText(i, SW.ratio, col[i])); cd.push(i);
+        });
+        return {x: x, y: y, marker: {size: size}, text: text, customdata: cd};
+      });
+    });
+    A.frames = frames;
+    var data = hist.map(function (h, k) {
+      var f = frames.length ? frames[0][k] : {x: [], y: [], marker: {size: []}, text: [], customdata: []};
+      return {type: 'scatter', mode: 'markers', x: f.x, y: f.y, text: f.text, customdata: f.customdata,
+        name: HISTORY_LABELS[h] || h, legendgroup: h, opacity: 0.6,
+        marker: {size: f.marker.size, color: HISTORY_COLOURS[h] || EXTRA_COLOURS[k % EXTRA_COLOURS.length], symbol: 'circle',
+                 line: {width: 0.5, color: '#fff'}},
+        hovertemplate: '%{text}<extra></extra>', xaxis: panel.xa, yaxis: panel.ya};
+    });
+    A.nTraces = hist.length;
+    data.push({type: 'scatter', x: [xr[1] + xpad], y: [yr[1] + ypad], mode: 'text', text: [animText(0)], textposition: 'bottom left',
+      textfont: {size: 14, color: COLOUR_CURSOR}, hoverinfo: 'skip', showlegend: false, name: 'status', xaxis: panel.xa, yaxis: panel.ya});
+    var layout = baseLayout(620, [panel], 'natural frequency, Hz');
+    layout[panel.xkey].range = [xr[0] - xpad, xr[1] + xpad];
+    layout[panel.ykey].range = [yr[0] - ypad, yr[1] + ypad];
+    layout.shapes = [
+      {type: 'rect', x0: 0, x1: 1, xref: 'paper', y0: 0.95, y1: 1.05, yref: panel.ya, fillcolor: '#e6e5e1', opacity: 0.5, line: {width: 0}, layer: 'below'},
+      {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 1, y1: 1, yref: panel.ya, line: {color: '#c3c2b7', width: 0.8}, layer: 'below'},
+      {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0.8, y1: 0.8, yref: panel.ya, line: {color: '#c3c2b7', width: 0.6, dash: 'dash'}, layer: 'below'}
+    ];
+    layout.title = {text: '<b>' + SW.ratio + ' against the natural frequency</b> — circle size: L = ' + Lmin + ' m (small) … ' + Lmax +
+      ' m (large); colour: history type; band ±5 %, dashed 0.8; animated over ' + SW.anim + ' (' + values.length + ' values)',
+      x: 0, xanchor: 'left', font: {size: 13}};
+    return {data: data, layout: layout};
+  }
+  function animText(k) {
+    return A.n ? SW.anim + ' = ' + fmtVal(A.values[k]) + '  (' + (k + 1) + ' / ' + A.n + ')' : 'no rows';
+  }
+  function sweepShow(k) {
+    if (!SW || SW.tab !== 'effect' || !A.n) return Promise.resolve();
+    k = Math.max(0, Math.min(A.n - 1, k | 0));
+    A.cur = k;
+    var fr = A.frames[k].map(function (t) { return {x: t.x, y: t.y, marker: {size: t.marker.size}, text: t.text, customdata: t.customdata}; });
+    fr.push({text: [animText(k)]});
+    var traces = [];
+    for (var i = 0; i <= A.nTraces; i++) traces.push(i);
+    A.pending = true; A.shown += 1;
+    $('slider').value = String(k);
+    $('readout').textContent = 'frame ' + k + ' / ' + (A.n - 1) + ', ' + animText(k);
+    return Plotly.animate(gd2, {data: fr, traces: traces}, {frame: {duration: 0, redraw: false}, mode: 'immediate', transition: {duration: 0}})
+      .then(function () { A.pending = false; }, function () { A.pending = false; });
+  }
+  function sweepPlay() {
+    if (!SW || SW.tab !== 'effect' || A.running || A.n < 2) return;
+    if (A.cur >= A.n - 1) A.cur = 0;
+    A.running = true;
+    A.wallStart = performance.now(); A.frameStart = A.cur;
+    $('play').className = 'on';
+    sweepShow(A.cur);
+    A.raf = requestAnimationFrame(sweepTick);
+  }
+  function sweepStop() {
+    A.running = false;
+    if (A.raf) cancelAnimationFrame(A.raf);
+    A.raf = 0;
+    if (SW) $('play').className = '';
+  }
+  function sweepTick(now) {
+    if (!A.running) return;
+    var elapsed = Math.max(0, now - A.wallStart);
+    var due = Math.min(A.frameStart + Math.floor(elapsed / (SWEEP_FRAME_MS / speed())), A.n - 1);
+    if (due !== A.cur && !A.pending) sweepShow(due);
+    if (A.cur >= A.n - 1) { sweepStop(); return; }
+    A.raf = requestAnimationFrame(sweepTick);
+  }
+
+  // ---------------------------------------------------------------- tab 3: collapse
+  function figCollapse(rows) {
+    var c = SW.cols;
+    var hist = HISTORY_ORDER.filter(function (h) { return rows.some(function (i) { return c.history_type[i] === h; }); });
+    distinct('history_type', rows).forEach(function (h) { if (h !== null && hist.indexOf(h) < 0) hist.push(h); });
+    var sizes = distinct('size_in', rows), lengths = distinct('length_m', rows), keys = varyingKeys(rows).filter(function (k) { return k !== 'history_type'; });
+    var stems = [['f_eq_over_LD2', 'F_eq / (L d²), N/m³'], ['daf', 'F_eq / (p_peak A)']];
+    var nCols = Math.max(1, hist.length);
+    var panels = panelGrid(2, nCols);
+    panels.forEach(function (p) {
+      p.title = p.row === 0 && hist.length ? HISTORY_LABELS[hist[p.col]] || hist[p.col] : '';
+      p.yTitle = p.col === 0 ? stems[p.row][1] : '';
+      if (p.col > 0) p.matches = panels[p.row * nCols].ya;
+    });
+    var data = [], legendSeen = {};
+    hist.forEach(function (h, hc) {
+      var inHist = rows.filter(function (i) { return c.history_type[i] === h; });
+      stems.forEach(function (st, r) {
+        var panel = panels[r * nCols + hc];
+        var bySL = groupBy(inHist, function (i) { return valueKey(c.size_in[i]) + '|' + valueKey(c.length_m[i]); });
+        sizes.forEach(function (sz) {
+          lengths.forEach(function (L) {
+            var g = bySL.map[valueKey(sz) + '|' + valueKey(L)];
+            if (!g) return;
+            var subs = groupBy(g, function (i) { return subLabel(keys, i); });
+            subs.keys.forEach(function (sub, si) {
+              var name = sz + ' in, L = ' + L + ' m' + (sub ? ' · ' + sub : '');
+              ['lumped', 'jc'].forEach(function (solver) {
+                var t = seriesTrace(subs.map[sub], st[0], solver, name, lengthColour(L, lengths), sizeSymbol(sz, sizes),
+                  DASHES[si % DASHES.length], panel, legendSeen);
+                if (t) data.push(t);
+              });
+            });
+          });
+        });
+      });
+    });
+    var layout = baseLayout(900, panels, 'natural frequency, Hz');
+    layout.title = {text: '<b>Mass-collapse test</b> — all sizes and lengths on one panel per history type; colour: length, symbol: size; ' +
+      'hollow lumped, filled JC (' + fmtG(JC_OPACITY, 2) + ' opacity)' + (keys.length ? '; dash: ' + keys.join(' / ') : ''),
+      x: 0, xanchor: 'left', font: {size: 13}};
+    return {data: data, layout: layout};
+  }
+
+  // ---------------------------------------------------------------- render / tabs / row panel
+  function renderSweep() {
+    if (!SW) return;
+    sweepStop();
+    var rows = filteredRows();
+    var fig = SW.tab === 'curves' ? figCurves(rows) : SW.tab === 'effect' ? figEffect(rows) : figCollapse(rows);
+    var nPts = 0;
+    fig.data.forEach(function (t) { if (t.name !== 'status') nPts += t.x.length; });
+    SW.counts = {rows: rows.length, traces: fig.data.filter(function (t) { return t.name !== 'status'; }).length, points: nPts};
+    try { Plotly.Fx.unhover(gd2); } catch (e) { /* nothing hovered yet */ }   // no stale label across tabs
+    Plotly.react(gd2, fig.data, fig.layout, {displaylogo: false, responsive: false});
+    gd2.removeAllListeners && gd2.removeAllListeners('plotly_hover');
+    gd2.on('plotly_hover', function (ev) {
+      var p = ev && ev.points && ev.points[0];
+      if (p && p.customdata !== undefined && p.customdata !== null) selectRow(p.customdata);
+    });
+    var effect = SW.tab === 'effect';
+    $('controls').className = effect ? 'on' : ''; $('frame').className = effect ? 'on' : '';
+    if (effect) {
+      $('slider').max = String(Math.max(0, A.n - 1));
+      A.cur = 0;
+      sweepShow(0);
+    }
+    $('sweep-hint').textContent = rows.length + ' of ' + SW.n + ' rows pass the filters; ' + SW.counts.traces + ' traces, ' + nPts + ' points' +
+      (nPts === 0 ? ' — nothing to plot: the selected columns are null for these rows (or no row passes)' : '');
+    Array.prototype.forEach.call($('tabs').children, function (b) { b.className = b.dataset.tab === SW.tab ? 'on' : ''; });
+    Array.prototype.forEach.call($('filters').querySelectorAll('label.tab-opt'), function (l) {
+      l.className = 'tab-opt tab-' + l.className.replace(/.*tab-(\w+).*/, '$1') + (l.className.indexOf('tab-' + SW.tab) >= 0 ? ' on' : '');
+    });
+    var animSel = $('f-' + SW.anim);
+    FILTER_COLS.forEach(function (col) { var s = $('f-' + col); if (s) s.disabled = false; });
+    if (effect && animSel) animSel.disabled = true;
+  }
+  function setTab(tab) {
+    if (!SW || ['curves', 'effect', 'collapse'].indexOf(tab) < 0) return;
+    SW.tab = tab;
+    renderSweep();
+  }
+  function selectRow(i) {
+    if (!SW || i < 0 || i >= SW.n) return;
+    SW.row = i;
+    var c = SW.cols, dl = $('row-list');
+    dl.innerHTML = '';
+    SW.colNames.forEach(function (name) {
+      var v = c[name][i];
+      var dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = name;
+      if (v === null || v === undefined) { dd.textContent = 'null'; dd.className = 'null'; }
+      else dd.textContent = String(v);
+      dl.appendChild(dt); dl.appendChild(dd);
+    });
+    $('row-title').textContent = 'row ' + i + ': ' + c.case_id[i];
+  }
+  // str.format over the column names of row i ({name}; {{ and }} are literal braces)
+  function regenCommand(i) {
+    if (!SW || i < 0) return null;
+    var missing = [];
+    var cmd = SW.obj.regen.template.replace(/\{\{|\}\}|\{([A-Za-z_]\w*)\}/g, function (m, name) {
+      if (m === '{{') return '{';
+      if (m === '}}') return '}';
+      if (!SW.cols[name]) { missing.push(name); return m; }
+      var v = SW.cols[name][i];
+      return v === null || v === undefined ? '' : String(v);
+    });
+    return {command: cmd, missing: missing, note: SW.obj.regen.note || ''};
+  }
+  function showRegen() {
+    if (!SW) return;
+    if (SW.row < 0) { $('regen-note').textContent = 'hover a point first'; return; }
+    var r = regenCommand(SW.row);
+    $('regen-cmd').textContent = r.command;
+    var note = (r.missing.length ? 'template placeholder(s) not among the columns: ' + r.missing.join(', ') + '. ' : '') + r.note;
+    var done = function (ok) { $('regen-note').textContent = (ok ? 'copied to the clipboard. ' : 'select the command to copy it. ') + note; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(r.command).then(function () { done(true); }, function () { done(false); });
+      else done(false);
+    } catch (e) { done(false); }
+  }
+  function renderSweepMeta() {
+    var m = SW.obj.meta;
+    setMeta([['kind', 'sweep (schema ' + SW.obj.schema_version + ')'], ['rows', m.n_rows + ' × ' + SW.colNames.length + ' columns'],
+      ['tier', m.tier === null || m.tier === undefined ? 'null' : m.tier], ['source', m.source], ['created', m.created_utc],
+      ['git sha', m.git_sha || 'null'], ['cpu', m.cpu || 'null'], ['histories version', m.histories_version || 'null'],
+      ['regen template', SW.obj.regen.template], ['reference', SW.ref.summary], ['file', SW.name]], '');
+  }
+
+  function wireSweep() {
+    Array.prototype.forEach.call($('tabs').children, function (b) { b.onclick = function () { setTab(b.dataset.tab); }; });
+    $('y1').addEventListener('change', function () { if (SW) { SW.y1 = $('y1').value; renderSweep(); } });
+    $('ratio').addEventListener('change', function () { if (SW) { SW.ratio = $('ratio').value; renderSweep(); } });
+    $('anim').addEventListener('change', function () { if (SW) { SW.anim = $('anim').value; renderSweep(); } });
+    $('regen').onclick = showRegen;
+  }
+  wireSweep();
 
   loadSettings();
   wire();
@@ -4353,7 +4991,11 @@ THE SOFTWARE. */
     state: P, scaling: function () { return S; }, data: function () { return D; },
     show: show, play: play, stop: stop, applyWindow: applyWindow, settings: settings,
     indices: {CENTRELINE: CENTRELINE, CELLS: CELLS, FRICTION: FRICTION, UNBALANCE: UNBALANCE, CURSOR: CURSOR, STATUS: STATUS},
-    BASE_MS: BASE_MS
+    BASE_MS: BASE_MS,
+    // sweep mode (W.3): the open file, the animation state, and the actions the controls call
+    sweep: function () { return SW; }, anim: A, setTab: setTab, setFilter: setFilter, selectRow: selectRow,
+    regenCommand: regenCommand, sweepShow: sweepShow, sweepPlay: sweepPlay, sweepStop: sweepStop,
+    SWEEP_FRAME_MS: SWEEP_FRAME_MS
   };
 })();
 </script>

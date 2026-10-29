@@ -1,6 +1,6 @@
 # Results data format (Session W.1)
 
-The data files the single-file JS viewer (Session W.2) loads. A file is written once by
+The data files the single-file JS viewer (Session W.2 trace mode, Session W.3 sweep mode) loads. A file is written once by
 `tools/export.py` (`surge_sdof.export`) and read by the viewer from disk, a SharePoint folder or
 an OCI bucket with no Python on the viewing machine: the viewer controls playback, speed and the
 time window live, so nothing about the presentation is baked into the file. This document is the
@@ -326,9 +326,16 @@ columns empty, never a skipped row. It is the record of the junction-coupling as
 (`docs/jc_sweep.md`). `tools/export.py sweep --from-csv <csv> --out <json>` converts it to the
 `sweep` document (`meta.tier`, `cpu`, `histories_version` and `git_sha` taken from the rows
 unless given), e.g. `docs/viz/data/tier1_sweep.json` from the Tier 1 CSV.
-`docs/viz/data/reference_sweep.json` is the W.1 conversion of the golden `cases.csv` at
-`schema_version` 1 (thirty columns), kept as the W.2 viewer's test file until Session W.3 moves
-the viewer to sweep schema 2 and regenerates it.
+`docs/viz/data/reference_sweep.json` is the conversion of the golden `cases.csv` (78 rows, the
+reference block's three JC golden rows among them), re-exported at schema 2 in Session H.2.
+
+The viewer's sweep mode (Session W.3, `docs/viewer/README.md`) reads schema 2 only. It plots the
+columns against `nat_freq_hz`, filters on `history_type`, `f_osc_hz`, `seed`, `mu` and
+`amplitude_fraction`, formats `regen.template` with a row's columns as `str.format` would
+(`{name}`; a null is the empty string) and, on open, checks every `reference` entry whose
+`case_id` is among the rows: the entry's `output_names` map to the columns `f_eq`, `x_peak`,
+`v_peak`, `a_peak`, `f_peak` of its solver and each non-null one must satisfy `|row − excel| ≤
+rtol |excel|`.
 
 ## Size expectations
 
