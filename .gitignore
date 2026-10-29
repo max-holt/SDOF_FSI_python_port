@@ -9,3 +9,4 @@ dist/
 tests/.golden_cache/
 .hypothesis/
 tests/.artifacts/
+out/

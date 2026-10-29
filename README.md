@@ -23,10 +23,11 @@ Python 3.10 or later, numpy and numba. From the repository root:
 
 ```
 python -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+.venv/bin/pip install -e ".[dev,plots]"
 ```
 
-The `dev` extra adds pytest, ruff and hypothesis, openpyxl / oletools (used only by
+This is the one install command of the project (CI installs `[dev]` only; it never plots). The
+`dev` extra adds pytest, ruff and hypothesis, openpyxl / oletools (used only by
 `tools/extract_fixtures.py` to regenerate the fixtures from the source workbook), playwright
 (the browser tests of the viewer) and the plotly Python package (only the source of the
 plotly.js bundle `tools/build_viewer.py` inlines; nothing in `src/` imports it). The `plots`
@@ -46,7 +47,7 @@ Python. The `Makefile` wraps the common commands: `make test`, `make test-nojit`
 | Python | VBA | What it returns |
 |---|---|---|
 | `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio=1, gap=0, output_type=0, trace_every=0)` | `GetPeakResponse` | `PeakResponse`: the five maxima (static-equivalent force N, displacement m, velocity m/s, acceleration m/s², applied force N) and, for `output_type` 1-3, the per-sample history; with `trace_every=k > 0` also `.trace`, a `surge_sdof.trace.Trace` of every `k`-th sub-step (state, elbow forces, friction force, stick flag; the maxima and history are unchanged bitwise) |
-| `surge_sdof.response.peak_response_jc(..., fluid_densty, fluid_area, ..., trace_every=0, *, vav_denominator="fixed", parity="running")` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; the keyword flags select the two approved fixes (DEVIATIONS D-17, D-19); the values `"legacy"` / `"per_phase"` reproduce the VBA bitwise; a JC trace adds the junction force and the interleaved pressure / velocity column per frame with the grid geometry |
+| `surge_sdof.response.peak_response_jc(..., fluid_densty, fluid_area, ..., trace_every=0, *, vav_denominator="fixed", parity="running", fraction_profile="fixed")` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; the keyword flags select the three approved fixes (DEVIATIONS D-17, D-19, D-4); the values `"legacy"` / `"per_phase"` / `"legacy"` reproduce the VBA bitwise; a JC trace adds the junction force and the interleaved pressure / velocity column per frame with the grid geometry |
 | `surge_sdof.pressure.pressure_response(valve_pattern, closure_time, celerity, density, time_step, pressure_drop_from_pump, flow_rate, pipe_area, valve_cv, length_to_pump, pump_ramp_pressure)` | `GetPressureResponse` | 0-based array of the valve pressure (Pa) after each loop iteration of two time steps |
 
 Units are consistent SI for the two peak solvers (the VBA fixes m and s only through the
@@ -105,15 +106,18 @@ Invoke pytest through the project interpreter (`.venv/bin/python -m pytest`); a 
 PATH may be an isolated tool without numpy. Golden curve cases are excluded by default through
 `addopts` in `pyproject.toml`.
 
-| Suite | Command | Content | Time (pure Python) |
+| Suite | Command | Content | Time |
 |---|---|---|---|
-| fast | `.venv/bin/python -m pytest -q` (`make test`; `make test-both` adds the `NUMBA_DISABLE_JIT=1` run) | VBA-semantics pins, quirk pins (DEVIATIONS), smoke, structure, the Example-sheet golden cases, the differential suite (new modules vs `legacy_port`, bitwise on seeded sweeps), the hypothesis properties (`tests/test_properties.py`) | about 30 s per mode |
-| slow | `.venv/bin/python -m pytest -q -m slow` | the 75 lumped `GetPeakResponse` curve cases against Excel at 5e-12, through `legacy_port` and through `response.peak_response` | about 4-10 min |
-| jc_slow | `.venv/bin/python -m pytest -q -m jc_slow` | the 3 junction-coupling curve cases against Excel at 5e-12 (literal port, 23-30 min per case in pure Python; and `peak_response_jc` with the legacy flags, seconds under Numba) | see left |
+| fast | `.venv/bin/python -m pytest -q` (`make test`; `make test-both` adds the `NUMBA_DISABLE_JIT=1` run) | VBA-semantics pins, quirk pins (DEVIATIONS), smoke, structure, the Example-sheet golden cases, the differential suite (new modules vs `legacy_port`, bitwise on seeded sweeps), the hypothesis properties (`tests/test_properties.py`) | see below |
+| slow | `.venv/bin/python -m pytest -q -m slow` | the 75 lumped `GetPeakResponse` curve cases against Excel at 5e-12, through `legacy_port` and through `response.peak_response` | see below |
+| jc_slow | `.venv/bin/python -m pytest -q -m jc_slow` | the 3 junction-coupling curve cases against Excel at 5e-12 (literal port, about an hour or more for the three in pure Python; and `peak_response_jc` with the legacy flags, seconds under Numba) | see below |
 | golden only | `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"` | the Excel comparisons alone; `tools/golden_report.py` tabulates the cached errors | |
 
+Times are minutes; machine-dependent (fast suite ~3 min compiled / ~7 min pure Python, slow ~10 min, on a 4-core cloud container).
+
 Run the fast suite before every commit and `-m slow` before any commit touching `src/`
-(CLAUDE.md). Lint and format: `ruff check . && ruff format .`.
+(CLAUDE.md). Lint: `make lint` (`ruff check` and `ruff format --check` through the venv; a bare
+`ruff` on the PATH can be another version, and `ruff format .` rewrites files).
 
 ## Benchmark
 
@@ -176,7 +180,10 @@ window, exaggeration and colour range overrides, jump to peak; the header shows 
 and the scaling in use; settings persist in the browser. Publish it by copying the one file.
 `docs/viewer/README.md` is the user guide (opening, loading, publishing, browsers tested);
 `tests/test_viewer.py` drives it in headless Chromium (skipped without a browser). Sweep mode
-is Session W.3.
+(Session W.3) is built: the same page opens a `sweep` file (`docs/viz/data/tier1_sweep.json`, or
+`tools/export.py sweep --from-csv` of any sweep CSV) with three tabs against the natural
+frequency, filters, the hovered row and its regenerate command, and a badge that checks the
+file's Excel reference values (`docs/viewer/README.md`, "Sweep mode").
 
 ## Where the behaviour is documented
 

@@ -2,11 +2,22 @@
 
 Current stage, open issues and the next action. The session-by-session record that used to
 live here (scope, plan and "done" sections of every stage) is in the git history of this file
-up to the `v0.3-handover` tag; `docs/handover.md` is the orientation for a new reader.
+up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new reader.
 
 ## Current stage
 
-Session H.2 (close-out for `v0.4-sweep`, 2026-10-29) **done**: Tier 2 of the sweep is
+Session H.3 (handover fixes from an independent fresh-machine review, 2026-10-29) **done**:
+docs only, no `src/` change. Tag names corrected to the pushed tags; the README entry-point
+table lists `fraction_profile`; one install command (`pip install -e ".[dev,plots]"`); timing
+claims made machine-dependent with the 4-core container figures; `out/` git-ignored; the
+fixtures / legacy guard described as the Claude-Code-only hook it is; a glossary and the
+`PeakResponse` attributes, units and the column-major rule in `docs/handover.md`; `sweep_jc.py
+run --out` / `--limit` / `--subset` documented in `--help` and the handover; lint pointed at
+`make lint`; the viewer's source comments cite `docs/architecture.md` "The picture" instead of
+the retired `viz/animate.py` (page rebuilt). Gates: `make lint`, `make test`. Tag
+`v0.4.1-handover` is the owner's.
+
+Session H.2 (close-out for `v0.4-handover`, 2026-10-29) **done**: Tier 2 of the sweep is
 committed by the owner (`3c70302`: `docs/sweep/tier2_3664dc7_f4b.csv`, 24 300 rows, none with
 errors, ≈ 0.066 s lumped / 0.258 s JC a case, the four PNGs, `docs/jc_sweep_tier2.md`, and the
 `3664dc7` bench row on an i5-13600KF in `docs/bench/README.md`: digests all equal, Numba /
@@ -21,7 +32,7 @@ no page error, no request beyond the page. The Tier 2 viewer file is not committ
 the command is in `docs/handover.md`). `docs/handover.md` and this file updated for W.3 and
 Tier 2. Gates on the tree: lint clean, `make test-both` 1029 passed (Numba) / 1028 passed +
 1 skipped (pure Python), `-m slow` 150 passed; `src/` untouched, no bench. `main`
-fast-forwarded to the branch; the `v0.4-sweep` tag is the owner's (the tag push is refused
+fast-forwarded to the branch; the `v0.4-handover` tag is the owner's (the tag push is refused
 from the container).
 
 Session W.3 (sweep mode in the viewer, 2026-10-29) **done**: `docs/viewer/viewer.src.html` opens
@@ -60,8 +71,9 @@ motion tests gone), `-m slow` 150 passed, `-m jc_slow` 6 passed (the three liter
 test helper restored to its original stride, `028e399`); `tools/bench.py --skip-full-python`
 (`docs/bench/028e399.json`): digests all equal, Numba / literal 0.097 (a) and 0.525 (r96 full)
 against 0.097 / 0.572 and 0.074 / 0.444 on the two previous hosts, within the between-host
-noise the bench README describes. `main` fast-forwarded to the branch and tagged
-`v0.3-handover`.
+noise the bench README describes. `main` fast-forwarded to the branch; the `v0.3-handover`
+tag was local only and never pushed (the published tags are `v0.1-literal-port`, `v0.2-numba`,
+`v0.4-handover`).
 
 ## How we got here
 

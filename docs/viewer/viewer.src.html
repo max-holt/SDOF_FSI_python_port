@@ -162,9 +162,9 @@
 (function () {
   'use strict';
 
-  // ---------------------------------------------------------------- constants (viz/animate.py)
-  // Every scaling, colour and layout number below is the one `surge_sdof.viz.animate.build_figure`
-  // uses, so the viewer and a plotly page of the same run draw the same picture.
+  // ---------------------------------------------------------------- constants (docs/architecture.md, "The picture")
+  // Every scaling, colour and layout number below is the one docs/architecture.md "The picture"
+  // specifies, so the viewer draws the picture the retired plotly-python animation defined.
   var BASE_MS = 40;              // FRAME_DURATION_MS: 1x = 40 ms a shown frame, as the pages
   var MAX_FRAMES = 400;          // the pages' frame cap; the automatic stride is select_frames'
   var SIZE_CAP_SPACING = 0.8, SIZE_CAP_FLOOR_PX = 3.0;
@@ -234,7 +234,7 @@
     for (var i = 0; i < a.length; i++) { var x = a[i] < 0 ? -a[i] : a[i]; if (x > m) { m = x; k = i; } }
     return k;
   }
-  function pxPerM(xRange, yRange) {   // animate._px_per_m
+  function pxPerM(xRange, yRange) {   // "The picture": pixels per metre of the data range
     var plotW = FIG_W - MARGIN.l - MARGIN.r;
     var plotH = (FIG_H - MARGIN.t - MARGIN.b) * ROW_HEIGHTS[0] * (1 - VSPACE);
     return Math.min(plotW / xRange, plotH / yRange);
@@ -340,7 +340,7 @@
     };
     if (jc) { obj.cells.p.data = null; obj.cells.v.data = null; }   // let the JSON arrays go
 
-    // --- scalings over the whole run (animate.build_figure)
+    // --- scalings over the whole run (docs/architecture.md, "The picture")
     var iPeak = argmaxAbs(D.x);
     var xPeak = D.x[iPeak], tPeak = D.t[iPeak];
     var run = g.run_length_m;
@@ -412,7 +412,7 @@
             ticktext: text, len: 0.55, y: 0.78, thickness: 14};
   }
 
-  // the per-frame arrays of frame i (animate.build_figure's `circles`)
+  // the per-frame arrays of frame i (the circles of "The picture")
   function circles(i) {
     var nc = D.nc, x = new Float64Array(nc), xi = D.x[i] * S.exag;
     for (var j = 0; j < nc; j++) x[j] = D.xNom[j] + xi * D.frac[j];

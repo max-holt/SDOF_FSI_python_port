@@ -1078,20 +1078,27 @@ def parse_args(argv=None):
     )
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("check", help="assert the pipe table against the owner's design pressures")
-    r = sub.add_parser("run", help="run a tier (or a stratified subset of it) and write the CSV")
+    r = sub.add_parser(
+        "run",
+        help="run a tier (or --limit / --subset of it for a smoke run) and write the CSV into --out",
+    )
     r.add_argument("--tier", type=int, choices=sorted(TIERS), required=True)
     r.add_argument(
         "--subset",
         type=float,
         default=0.0,
-        help="fraction of the tier, stratified over every dimension",
+        help="fraction of the tier (0 < f <= 1), stratified over every dimension (smoke run)",
     )
     r.add_argument("--subset-seed", type=int, default=0)
     r.add_argument("--limit", type=int, default=0, help="first N cases only (smoke test)")
     r.add_argument("--history", choices=histories.KINDS, default=None, help="one history type only")
     r.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     r.add_argument("--progress", type=int, default=25, help="print progress every N cases")
-    r.add_argument("--out", default=str(REPO / "docs" / "sweep"))
+    r.add_argument(
+        "--out",
+        default=str(REPO / "docs" / "sweep"),
+        help="directory the CSV is written into (default docs/sweep); the file is named by tier, git sha and --tag",
+    )
     r.add_argument(
         "--tag",
         default="",

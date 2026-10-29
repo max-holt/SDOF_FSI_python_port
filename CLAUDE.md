@@ -20,7 +20,7 @@ Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an is
 - Tests: `.venv/bin/python -m pytest -q`
 - Lumped golden gate (before commits touching `src/`): `.venv/bin/python -m pytest -q -m slow`
 - Golden suite only: `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"`
-- Lint/format: `ruff check . && ruff format .`
+- Lint: `make lint` (`ruff check` + `ruff format --check` through the venv; a bare `ruff` on PATH can differ from the venv's, and `ruff format .` rewrites files: format with `.venv/bin/python -m ruff format .` only when you mean to)
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 .venv/bin/python -m pytest -q`
 - Numba cache (`cache=True`) does not notice when a callee in another module changed: after editing `moc.py`, `structure.py` or `trace.py`, a bare `pytest` can test a stale compiled `response._integrate_kernel`. Run `make test-both` (wipes `src/**/__pycache__/*.nb[ic]` first) or `make clean-cache` before trusting a result.
 - Benchmark: `tools/bench.py` — run at the end of every session that touches the solver path and commit docs/bench/.
