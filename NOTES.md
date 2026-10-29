@@ -12,9 +12,15 @@ the geometry pins moved to `tests/test_geometry.py`, `is_capped` and the rest-fr
 `export.py`, the viewer's browser fixture into `tests/test_viewer.py`; the `viz` extra gone,
 plotly pinned in `dev` as the viewer's bundle source, pandas gone), `docs/handover.md` written,
 this file compressed, `CLAUDE.md` trimmed to the post-port rules, `moc.py` docstring states the
-F-4b confirmation. No solver behaviour changed: `make test-both`, `-m slow`, `-m jc_slow` and
-lint green, port-reviewer no findings, bench within noise (`docs/bench/`). `main` fast-forwarded
-to the branch and tagged `v0.3-handover`.
+F-4b confirmation. No solver behaviour changed. Gates on the handover tree: `make test-both`
+1019 passed (Numba) / 1018 passed + 1 skipped (pure Python, 2.6 min, down from 12 with the
+motion tests gone), `-m slow` 150 passed, `-m jc_slow` 6 passed (the three literal-port cases
+73 min), lint clean; port-reviewer on the retirement commit: no correctness findings (one moved
+test helper restored to its original stride, `028e399`); `tools/bench.py --skip-full-python`
+(`docs/bench/028e399.json`): digests all equal, Numba / literal 0.097 (a) and 0.525 (r96 full)
+against 0.097 / 0.572 and 0.074 / 0.444 on the two previous hosts, within the between-host
+noise the bench README describes. `main` fast-forwarded to the branch and tagged
+`v0.3-handover`.
 
 ## How we got here
 
