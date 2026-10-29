@@ -1,8 +1,9 @@
 # surge_sdof — handover
 
-Written for the lead author at the `v0.3-handover` tag. It says what the repository contains,
-how to install and verify it, and what is not done. The history of how it was built is in git;
-`NOTES.md` keeps a short summary.
+Written for the lead author at the `v0.3-handover` tag and brought up to date at `v0.4-sweep`
+(the viewer's sweep mode and the Tier 2 sweep, 29 Oct 2026). It says what the repository
+contains, how to install and verify it, and what is not done. The history of how it was built
+is in git; `NOTES.md` keeps a short summary.
 
 ## What the package is
 
@@ -102,6 +103,15 @@ animated over amplitude or friction; the mass-collapse panels per history type),
 filters, the full row of a hovered point with its regenerate command, and a badge that reports
 whether the Excel reference values of the file's `reference` block are reproduced by the rows
 of the same case (green on `reference_sweep.json`; Tier 1 has no reference case among its rows).
+The Tier 2 file is not committed (22.7 MB for 24 300 rows); build it with
+
+```
+.venv/bin/python tools/export.py sweep --from-csv docs/sweep/tier2_3664dc7_f4b.csv --tier 2 --out out/tier2_sweep.json
+```
+
+and open it like the others: it loads in under a second in headless Chromium, the default
+filters show one history type at the largest friction and amplitude, and the `all` filters
+split each family by seed, amplitude and friction.
 
 ## Run and plot the sweep
 
@@ -110,6 +120,7 @@ of the same case (green on `reference_sweep.json`; Tier 1 has no reference case 
 .venv/bin/python tools/sweep_jc.py run --tier 1 --jobs 4 --tag f4b
 .venv/bin/python tools/sweep_jc.py run --tier 2 --jobs 8 --tag f4b
 .venv/bin/python tools/sweep_jc.py plot docs/sweep/tier1_<sha>_f4b.csv --doc docs/jc_sweep.md
+.venv/bin/python tools/sweep_jc.py plot docs/sweep/tier2_<sha>_f4b.csv --doc docs/jc_sweep_tier2.md
 ```
 
 Every case runs both solvers on a canonical pressure history (`surge_sdof.histories`: step,
@@ -118,7 +129,11 @@ is 1600 cases (two sizes, five lengths, eight frequencies; about 75 s on four pr
 2 is 24 300 (four sizes, the fifteen curve-sheet frequencies, three seeds, three amplitudes,
 three frictions; about 77 min of solver CPU). The CSV is named by tier, git sha and `--tag`,
 so a rerun never overwrites an earlier file; `plot` writes the PNGs and the markdown report.
-`docs/jc_sweep.md` is the Tier 1 report at the current profile.
+`docs/jc_sweep.md` is the Tier 1 report at the current profile; `docs/jc_sweep_tier2.md` is the
+Tier 2 report (`docs/sweep/tier2_3664dc7_f4b.csv`, 24 300 rows, none with errors, run on 29 Oct
+2026 at the handover solver). The same run's host also added the `3664dc7` row to
+`docs/bench/README.md`: digests all equal to the literal port, Numba against literal 0.090 on
+the Example lumped case, the full JC golden cases 0.7–0.8 s each.
 
 ## The data format
 
@@ -169,7 +184,7 @@ the VBA: 23 rows, each with the VBA and Python locations, both behaviours, the s
   the reference (the quirk pins in `tests/test_quirks.py` would move to the live modules), and
   any model extension beyond the VBA (input validation for non-physical inputs, a compiled force
   schedule, the binary data variant named in `docs/data_format.md`).
-* **Tier 2** of the sweep has not been run or committed; the command is above.
+* The Tier 2 viewer file (`tier2_sweep.json`) is not committed; the export command is above.
 * The viewer is tested in headless Chromium only. A sweep row's regenerate command is the
   file's own template: the Tier 1 file's reruns the whole tier (`tools/sweep_jc.py run --tier
   1`); a single-row trace option in `tools/export.py` was not built.

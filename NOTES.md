@@ -6,6 +6,24 @@ up to the `v0.3-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session H.2 (close-out for `v0.4-sweep`, 2026-10-29) **done**: Tier 2 of the sweep is
+committed by the owner (`3c70302`: `docs/sweep/tier2_3664dc7_f4b.csv`, 24 300 rows, none with
+errors, ≈ 0.066 s lumped / 0.258 s JC a case, the four PNGs, `docs/jc_sweep_tier2.md`, and the
+`3664dc7` bench row on an i5-13600KF in `docs/bench/README.md`: digests all equal, Numba /
+literal 0.090 (a), full JC cases 0.7–0.8 s). `docs/viz/data/reference_sweep.json` re-exported at
+`3c70302` (schema 2 as before; only `meta.git_sha` and `created_utc` change, the columns, regen
+and reference blocks byte-identical). The viewer confirmed in headless Chromium 141 on the two
+committed sweep files and on a Tier 2 export (`tools/export.py sweep --from-csv
+docs/sweep/tier2_3664dc7_f4b.csv --tier 2`, 22.7 MB): each loads in under a second, the
+reference badge is green / neutral / neutral, the Tier 2 defaults (step, mu 0.3, amplitude 1)
+draw 40 curve traces, 300 effect points animated over three amplitudes and 80 collapse traces,
+no page error, no request beyond the page. The Tier 2 viewer file is not committed (size;
+the command is in `docs/handover.md`). `docs/handover.md` and this file updated for W.3 and
+Tier 2. Gates on the tree: lint clean, `make test-both` 1029 passed (Numba) / 1028 passed +
+1 skipped (pure Python), `-m slow` 150 passed; `src/` untouched, no bench. `main`
+fast-forwarded to the branch; the `v0.4-sweep` tag is the owner's (the tag push is refused
+from the container).
+
 Session W.3 (sweep mode in the viewer, 2026-10-29) **done**: `docs/viewer/viewer.src.html` opens
 a `sweep` file at schema 2 (schema 1 is refused with the other unsupported files) in sweep mode
 beside the untouched trace mode: three tabs against `nat_freq_hz` (curve families, `y` = `f_eq`
@@ -83,6 +101,10 @@ noise the bench README describes. `main` fast-forwarded to the branch and tagged
   simplified coupling) is closed.
 * **W.3, sweep mode** (29 Oct): the viewer plots a `sweep` file (three tabs, filters, hover row,
   regenerate command, reference badge), above.
+* **Tier 2** (29 Oct, the owner's machine): 24 300 cases (four sizes, fifteen frequencies, three
+  seeds, amplitudes and frictions) at the handover solver, `docs/jc_sweep_tier2.md`; the
+  collapse spread and the negligible / essential bands extend the Tier 1 picture to 16 and
+  18 in and to the mid friction and amplitude levels.
 
 ## Open issues
 
@@ -124,16 +146,12 @@ noise the bench README describes. `main` fast-forwarded to the branch and tagged
 
 ## Next action
 
-**Stage 6** (Tier 2 locally by the lead author or owner whenever wanted; it needs no code).
+**Stage 6**, when the lead author wants it.
 
-* Tier 2: `.venv/bin/python tools/sweep_jc.py run --tier 2 --jobs <cores> --tag f4b` (≈ 77 min
-  of solver CPU, ≈ 10 min wall on 8 cores), then `.venv/bin/python tools/sweep_jc.py plot
-  docs/sweep/tier2_<sha>_f4b.csv --doc docs/jc_sweep_tier2.md`; commit the CSV, the PNGs under
-  `docs/sweep/png/` and the report. `plot --mu` / `--amplitude` select the friction and
-  amplitude level of figures 1–3; the noise envelope over the three seeds is taken pointwise.
-* Stage 6: remove `legacy_port.py` / `vba_compat.py` when the reference is no longer wanted
-  (the `tests/test_quirks.py` pins move to the live modules); any extension beyond the VBA
-  needs the lead author's decision and a DEVIATIONS row. After Tier 2 is committed,
-  `tools/export.py sweep --from-csv docs/sweep/tier2_<sha>_f4b.csv --out
-  docs/viz/data/tier2_sweep.json` gives the viewer the 24 300-row file (sweep mode draws it;
-  the `all` filters then split each family by seed, amplitude and friction).
+* Remove `legacy_port.py` / `vba_compat.py` when the reference is no longer wanted (the
+  `tests/test_quirks.py` pins move to the live modules); any extension beyond the VBA needs the
+  lead author's decision and a DEVIATIONS row.
+* Optional: commit `docs/viz/data/tier2_sweep.json` (22.7 MB; `tools/export.py sweep --from-csv
+  docs/sweep/tier2_3664dc7_f4b.csv --tier 2`) and add it to `SWEEP_FILES` in
+  `tests/test_viewer.py` if the viewer should carry Tier 2 in the repository; `plot --mu` /
+  `--amplitude` on the Tier 2 CSV select another friction and amplitude level for figures 1–3.
