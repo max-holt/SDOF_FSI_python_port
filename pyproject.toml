@@ -15,9 +15,11 @@ dependencies = ["numpy", "numba"]
 # browser. The plotly *Python* package is only the source of the plotly.js bundle that
 # tools/build_viewer.py inlines into docs/viewer/viewer.html (tests/test_viewer.py pins the
 # committed page to the installed bundle, hence the pin); nothing in src/ imports it.
+# radon measures the review baseline (tools/review_baseline.py, docs/review/baseline.md).
 dev = [
     "pytest",
     "ruff",
+    "radon",
     "hypothesis",
     "openpyxl",
     "oletools",
