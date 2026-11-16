@@ -1,6 +1,7 @@
-"""Per-function metrics of the solver modules under review (``docs/review/charter.md``).
+"""Per-function metrics of the code under review (``docs/review/charter.md``).
 
-Runs ruff and radon on the modules in scope and prints one markdown table: argument
+Runs ruff and radon on the files in scope, in three groups (the solver core, the
+supporting modules, ``tools/``), and prints one markdown table a group: argument
 count (ruff PLR0913), cyclomatic complexity (ruff C901 and radon cc), branches (ruff
 PLR0912), statements (ruff PLR0915), maximum nesting depth (ruff PLR1702, preview), and
 length in lines (radon's ``lineno`` .. ``endline``, signature and docstring included, with
@@ -10,7 +11,8 @@ Ruff only reports a function that exceeds a threshold, so every threshold is set
 the command line; ``pyproject.toml`` is not touched. The commands are printed with
 ``--commands`` and recorded in ``docs/review/baseline.md``.
 
-    .venv/bin/python tools/review_baseline.py > table.md
+    .venv/bin/python tools/review_baseline.py > tables.md
+    .venv/bin/python tools/review_baseline.py --group core
     .venv/bin/python tools/review_baseline.py --commands
 """
 
@@ -25,17 +27,18 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-MODULES = (
-    "moc",
-    "structure",
-    "coupling",
-    "loads",
-    "response",
-    "pressure",
-    "_vba_semantics",
-    "trace",
-)
-FILES = [f"src/surge_sdof/{name}.py" for name in MODULES]
+CORE = ("moc", "structure", "coupling", "loads", "response", "pressure", "_vba_semantics")
+SUPPORTING = ("trace", "export", "histories", "viz/geometry")
+GROUPS = {
+    "core": [f"src/surge_sdof/{name}.py" for name in CORE],
+    "supporting": [f"src/surge_sdof/{name}.py" for name in SUPPORTING],
+    "tools": sorted(str(path.relative_to(REPO)) for path in (REPO / "tools").glob("*.py")),
+}
+TITLES = {
+    "core": "The solver core",
+    "supporting": "The supporting modules",
+    "tools": "`tools/`",
+}
 
 RUFF = [
     sys.executable,
@@ -101,13 +104,20 @@ def _functions(path: str) -> list[dict]:
     return found
 
 
-def _run_json(command: list[str]) -> object:
-    done = subprocess.run(command + FILES, cwd=REPO, capture_output=True, text=True, check=False)
+def _run_json(command: list[str], files: list[str]) -> object:
+    done = subprocess.run(command + files, cwd=REPO, capture_output=True, text=True, check=False)
     return json.loads(done.stdout)
 
 
-def collect() -> list[dict]:
-    rows = [row for path in FILES for row in _functions(path)]
+def _label(path: str) -> str:
+    """``moc``, ``viz.geometry`` or ``tools/bench``: the prefix of a function's name."""
+    if path.startswith("tools/"):
+        return path.removesuffix(".py")
+    return path.removeprefix("src/surge_sdof/").removesuffix(".py").replace("/", ".")
+
+
+def collect(files: list[str]) -> list[dict]:
+    rows = [row for path in files for row in _functions(path)]
     for row in rows:
         row.update(args=0, cc=1, branches=0, statements=0, nesting=0, radon_cc=None)
 
@@ -115,7 +125,7 @@ def collect() -> list[dict]:
         inside = [r for r in rows if r["file"] == path and r["start"] <= line <= r["end"]]
         return max(inside, key=lambda r: r["start"]) if inside else None
 
-    for item in _run_json(RUFF):
+    for item in _run_json(RUFF, files):
         path = str(Path(item["filename"]).relative_to(REPO))
         row = owner(path, item["location"]["row"])
         value = int(re.search(r"\((\d+) > 0\)", item["message"]).group(1))
@@ -130,7 +140,7 @@ def collect() -> list[dict]:
             yield from radon_blocks(block.get("methods", []))
             yield from radon_blocks(block.get("closures", []))
 
-    for path, blocks in _run_json(RADON).items():
+    for path, blocks in _run_json(RADON, files).items():
         for block in radon_blocks(blocks):
             if block["type"] == "class":
                 continue
@@ -156,8 +166,7 @@ def table(rows: list[dict]) -> str:
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
-        module = Path(row["file"]).stem
-        name = f"`{module}.{row['name']}`" + (" (njit)" if row["compiled"] else "")
+        name = f"`{_label(row['file'])}.{row['name']}`" + (" (njit)" if row["compiled"] else "")
         cells = [
             name,
             str(row["def_line"]),
@@ -189,16 +198,23 @@ def summary(rows: list[dict]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--commands", action="store_true", help="print the two commands")
+    parser.add_argument("--group", choices=sorted(GROUPS), help="one group only")
     args = parser.parse_args()
+    groups = [args.group] if args.group else list(GROUPS)
     if args.commands:
+        files = [path for group in groups for path in GROUPS[group]]
         for command in (RUFF, RADON):
             shown = [".venv/bin/python" if part == sys.executable else part for part in command]
-            print(" ".join(f"'{p}'" if " " in p else p for p in shown + FILES))
+            print(" ".join(f"'{p}'" if " " in p else p for p in shown + files))
         return 0
-    rows = collect()
-    print(summary(rows))
-    print()
-    print(table(rows))
+    for group in groups:
+        rows = collect(GROUPS[group])
+        print(f"### {TITLES[group]}")
+        print()
+        print(summary(rows))
+        print()
+        print(table(rows))
+        print()
     return 0
 
 
