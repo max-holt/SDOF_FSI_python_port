@@ -7,13 +7,27 @@ the code started.
 
 ## Scope
 
-* **Reviewed and refactored:** `moc.py`, `structure.py`, `coupling.py`, `loads.py`,
-  `response.py`, `pressure.py`, `_vba_semantics.py`, and `trace.py` where the kernel
-  writes to it.
-* **Mechanical edits only**, the ones a rename forces: `tools/`, `tests/`, `export.py`,
-  `histories.py`, `viz/`, the viewer.
+Widened on 16 Nov 2026 (session R.0b) from the solver modules to two areas.
+
+* **The solver core:** `moc.py`, `structure.py`, `coupling.py`, `loads.py`, `response.py`,
+  `pressure.py`, `_vba_semantics.py`.
+* **The supporting Python:** `trace.py`, `export.py`, `histories.py`, `viz/geometry.py` and
+  `tools/`.
+* **The data format** (`docs/data_format.md`: the `trace` and `sweep` documents and the
+  sweep CSV columns) is in scope. Names in exported files change once, in a single schema
+  bump late in the review (the public API session, below); until then every exported file
+  stays byte-identical.
+* **The viewer** (`docs/viewer/viewer.src.html`) is in scope only for the keys it reads from
+  a data file. Its JavaScript structure is not reviewed.
+* **Mechanical edits only**, the ones a rename forces: `tests/`.
 * **Untouched:** `legacy_port.py`, `vba_compat.py`, `legacy/`, `tests/fixtures/`.
-* Everything else may change, public signatures included.
+
+Two sessions are fixed points for the rulings in `docs/style.md`:
+
+| session | what changes there, and not before |
+|---|---|
+| renames | internal names, the VBA spellings among them |
+| public API | public keywords, the `get_pressure_response` alias, the form of the junction-coupling flags and of `output_type`, the names in exported files (the schema bump), and the 6-argument limit becomes enforced |
 
 ## Change rules
 
@@ -27,6 +41,12 @@ the code started.
    approved behaviour change (a DEVIATIONS.md row) rewrites it. A rename is absorbed in the
    adapter of `tests/test_review_snapshot.py` (`run_solver` and its field tables), nowhere
    else in that file.
+6. `tests/review_support/` follows the same rule, with one planned rewrite: the schema bump
+   changes the names inside the exported files and the CSV header, and that commit
+   rewrites the stored exports and the stored CSV with `tools/review_support.py --write`.
+   The values must not change in it: the history documents stay untouched, and the commit
+   shows that the stored CSV differs in its header line only. A rename before the bump is
+   absorbed in the adapter section of `tests/test_review_support.py`.
 
 ## Gates
 
@@ -35,6 +55,7 @@ the code started.
 | every commit | `make lint` |
 | every commit | `make test-both` (cache wipe, fast suite compiled and with `NUMBA_DISABLE_JIT=1`) |
 | every commit | the snapshot test; `make test-both` runs it in both modes. Alone: `make clean-cache && .venv/bin/python -m pytest -q tests/test_review_snapshot.py`, then the same with `NUMBA_DISABLE_JIT=1` (2 s each) |
+| every commit | the supporting-code checks, `tests/test_review_support.py`; `make test-both` runs them in both modes (the sweep rows compiled only). `tools/review_support.py` lists the files that differ |
 | every session | `.venv/bin/python -m pytest -q -m slow` |
 | every session | `tools/bench.py`, with `docs/bench/` committed |
 

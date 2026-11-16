@@ -2,13 +2,19 @@
 
 Reads the hook payload from stdin. Always exits 0 so a formatter problem never breaks an
 edit; ruff's own output is forwarded to stderr for visibility.
+
+The formatter is the project venv's ruff (`.venv/bin/python -m ruff`), the one `make lint`
+checks with, so the hook and the gate cannot disagree. Without the venv the hook formats
+nothing and says so; it never falls back to a `ruff` on PATH, which can be another version.
 """
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 
 def main() -> int:
@@ -24,10 +30,15 @@ def main() -> int:
         path = Path(payload.get("cwd") or ".") / path
     if not path.is_file():
         return 0
-    ruff = shutil.which("ruff")
-    if ruff is None:
+    if not VENV_PYTHON.is_file():
+        sys.stderr.write(f"format hook: {VENV_PYTHON} not found, {path.name} left unformatted\n")
         return 0
-    result = subprocess.run([ruff, "format", str(path)], capture_output=True, text=True)
+    result = subprocess.run(
+        [str(VENV_PYTHON), "-m", "ruff", "format", str(path)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
     return 0

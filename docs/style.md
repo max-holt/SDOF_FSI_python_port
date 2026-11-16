@@ -1,6 +1,6 @@
 # surge_sdof style guide
 
-Basis: the Google Python Style Guide. The rules below add to it or depart from it, and win where they differ. They apply to the live solver modules. legacy_port.py and vba_compat.py are exempt: they are a literal transcription and stay as written.
+Basis: the Google Python Style Guide. The rules below add to it or depart from it, and win where they differ. They apply to the modules in the scope of docs/review/charter.md: the solver core and the supporting Python. legacy_port.py and vba_compat.py are exempt: they are a literal transcription and stay as written.
 
 ## 1. Priorities, in order
 1. Results stay bit-identical.
@@ -11,20 +11,22 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 ## 2. Names
 - Descriptive by default. A name says what the quantity is physically, not how it was computed or what type holds it: closed_gap_stiffness_ratio, not ratio2; transit_delay_samples, not unb. No array, flat, tmp, data, val.
 - The wider the scope, the fuller the name. One-letter names only for a loop index used within a few lines.
-- Symbols. Inside a kernel, a quantity with an established symbol may use it (x, v, a, dt, rho_c) if it is listed in docs/nomenclature.md with its meaning and unit. Never in a public signature. (Google 3.16.5.)
+- Symbols. Inside a kernel, a quantity with an established symbol may use it (x, v, a, dt, rho_c) if it is listed in docs/nomenclature.md with its meaning and unit. A compiled kernel may use listed symbols in its signature too. Never in a public signature. (Google 3.16.5.)
+- Public signature means the user-facing entry points in response and pressure. A function that other modules or the tests call is not public in this sense.
 - Units. Quantities are SI. A quantity that is not SI carries its unit in the name: pressure_drop_bar, flow_rate_m3_per_h.
 - Kinds. Counts end in _count, positions in _index, per-sub-step increments say so (friction_velocity_step). Booleans read as predicates (is_short_pipe, record_frame).
 - One word per concept, used everywhere: sample, sub-step, frame; node, cell; segment.
-- No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name.
+- No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name. Internal names change in the renames session; public keywords, the get_pressure_response alias and the names in exported files change in the public API session, and stay as they are until then.
 
 ## 3. Functions
 - One job at one level of abstraction. Set-up, stepping and recording are separate functions.
-- At most 6 parameters for a private function. Beyond that, group them into a NamedTuple or dataclass named for the thing it describes (the fluid column, the run settings), not for its type.
-- Public functions take keyword-only arguments after the first two.
-- No argument that selects behaviour or return shape by number or string code where two functions or an enum would do.
+- At most 6 parameters, as ruff counts them (PLR0913). Beyond that, group them into a NamedTuple or dataclass named for the thing it describes (the fluid column, the run settings), not for its type. The limit is enforced in the public API session; before it, it is a target.
+- The user-facing Python entry points take keyword-only arguments after the first two. Compiled functions do not: they take positional parameter objects, because on Numba 0.68 a compiled function with keyword-only parameters cannot be called from another compiled function.
+- No argument that selects behaviour or return shape by number or string code where two functions or an enum would do. The junction-coupling flags (vav_denominator, parity, fraction_profile) and output_type are the known cases: both flag paths must keep working, their form is redesigned in the public API session and is not touched before it.
 - Guard clauses and early returns in place of nested if-blocks.
 - No repeated block longer than about five lines.
 - Targets: cyclomatic complexity 10, 50 statements, nesting depth 3, and a second look at anything over about 40 lines (Google 3.18). A function that misses a target carries a one-line reason.
+- Complexity is as ruff counts it (C901). radon's count is reported in docs/review/baseline.md and is not a target.
 
 ## 4. Compiled kernels
 - numba.njit(cache=True) only. Never fastmath, parallel or inline='always'.
@@ -38,7 +40,8 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 
 ## 6. Constants and units
 - No bare literal with physical or numerical meaning. Module-level ALL_CAPS constants, each with a comment giving meaning, unit and source. 0, 1 and 2 inside a formula are fine.
-- Unit conversion factors are named constants.
+- Unit conversion factors are named constants. Each factor is named in place, where its literal stands today, and factors are never folded together: 60 * 60 stays two factors, because one constant of 3600 changes the grouping (section 5).
+- A pure-number coefficient of a formula (4 / 3, 12) stays inline, with a comment giving its derivation. A derivation that cannot be found in the code, the VBA or the documents is asked of the owner, not guessed.
 
 ## 7. Docstrings and comments (departure from Google)
 - Numpy-style sections: Parameters, Returns, Raises, Notes. The package already uses them throughout and they are the convention of the numerical Python libraries.
@@ -57,4 +60,5 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - One refactoring per commit, named in the message. Gates as in docs/review/charter.md. Revert on red.
 
 ## 11. Recorded exceptions
-- None yet. Add a line here, with the reason, for any function that keeps a deliberate departure from this guide.
+- Add a line here, with the reason, for any function that keeps a deliberate departure from this guide.
+- _vba_semantics.vba_min and vba_max stay without type annotations (section 9): they return the second argument itself on a tie or a NaN, with whatever type it has, and an annotation would claim more than the VBA rule does.
