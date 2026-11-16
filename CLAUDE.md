@@ -3,6 +3,9 @@
 ## What this is
 Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response with Coulomb friction, support gaps and MoC junction-coupling FSI. Source of truth for behaviour is `legacy/vba/` and the Excel-generated fixtures in `tests/fixtures/`. New sessions: read `docs/handover.md` first (entry points, flags, tiers, viewer, sweep, caveats, what is not done), then NOTES.md for the current stage.
 
+## Clean-code review (branch `review/clean-code`)
+The solver modules are under an architecture-and-style review. `docs/review/charter.md` is the contract (scope, change rules, gates, findings scale); `docs/style.md` is the style guide the code is moved towards; `docs/review/baseline.md` holds the starting metrics. Every refactoring leaves the results bit-identical: `tests/test_review_snapshot.py` compares every output with `tests/review_snapshot/` as `float.hex()` text and is part of the fast suite. Never regenerate the snapshot to make a refactoring pass; if a gate fails, revert the commit.
+
 ## Change discipline
 - One behaviour-preserving change per commit; the golden tests must stay green at the tolerance recorded in `tests/test_golden.py` and the differential suite bitwise against `legacy_port.py`. A deviation is only allowed with a DEVIATIONS.md row and a test that pins the new behaviour.
 - `legacy_port.py` and `vba_compat.py` are frozen (the literal transcription, the reference until Stage 6 removes them); do not edit them.
@@ -11,14 +14,16 @@ Python port of an Excel VBA solver: 1-D MoC water hammer + SDOF pipe response wi
 ## Hard rules
 - Never edit files under `tests/fixtures/` or `legacy/`.
 - Never delete, skip or loosen a test to make it pass. Raise the failure in NOTES.md instead.
-- Run `.venv/bin/python -m pytest -q` before every commit; run `.venv/bin/python -m pytest -q -m slow` before any commit touching `src/`.
-- Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba, openpyxl, oletools, playwright, plotly (the last four are dev extras: fixture extraction and the viewer build / tests) and matplotlib (the `plots` extra) without asking.
+- Run `make lint` and `make test-both` before every commit (the fast suite in both modes after a cache wipe; it includes the snapshot test, which guards each commit). On this branch run `.venv/bin/python -m pytest -q -m slow` and `tools/bench.py` at the end of every session, not before each commit touching `src/`.
+- Do not add dependencies beyond numpy, pytest, ruff, hypothesis, numba, openpyxl, oletools, playwright, plotly, radon (the last five are dev extras: fixture extraction, the viewer build / tests and the review metrics) and matplotlib (the `plots` extra) without asking.
 - When unsure of the VBA intent, stop and ask; do not guess.
 
 ## Commands
 Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an isolated uv tool without numpy); `pytest` below is shorthand for that.
 - Tests: `.venv/bin/python -m pytest -q`
-- Lumped golden gate (before commits touching `src/`): `.venv/bin/python -m pytest -q -m slow`
+- Lumped golden gate (end of every session on this branch): `.venv/bin/python -m pytest -q -m slow`
+- Snapshot test alone: `make clean-cache && .venv/bin/python -m pytest -q tests/test_review_snapshot.py`, then again with `NUMBA_DISABLE_JIT=1`; `tools/review_snapshot.py` lists the documents that differ.
+- Review metrics: `.venv/bin/python tools/review_baseline.py` (ruff and radon, thresholds on the command line; `pyproject.toml` lint settings are not changed yet).
 - Golden suite only: `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"`
 - Lint: `make lint` (`ruff check` + `ruff format --check` through the venv; a bare `ruff` on PATH can differ from the venv's, and `ruff format .` rewrites files: format with `.venv/bin/python -m ruff format .` only when you mean to)
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 .venv/bin/python -m pytest -q`
