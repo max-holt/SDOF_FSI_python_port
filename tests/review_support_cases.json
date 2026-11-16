@@ -1,0 +1,186 @@
+{
+ "history_calls": {
+  "history_step": [
+   "canonical",
+   [
+    "step",
+    7883000.0,
+    1.0
+   ],
+   {
+    "transit_s": 0.04
+   }
+  ],
+  "history_sine4": [
+   "canonical",
+   [
+    "step_sine",
+    7883000.0,
+    1.0
+   ],
+   {
+    "f_osc": 4.0,
+    "transit_s": 0.04
+   }
+  ],
+  "history_sine16": [
+   "canonical",
+   [
+    "step_sine",
+    7883000.0,
+    0.25
+   ],
+   {
+    "f_osc": 16.0,
+    "transit_s": 0.04
+   }
+  ],
+  "history_noise0": [
+   "canonical",
+   [
+    "step_noise",
+    7883000.0,
+    1.0
+   ],
+   {
+    "seed": 0,
+    "f_ref": 4.0,
+    "transit_s": 0.04
+   }
+  ],
+  "history_noise_lowpass": [
+   "canonical",
+   [
+    "step_noise",
+    6470000.0,
+    0.37
+   ],
+   {
+    "seed": 2,
+    "f_ref": 8.0,
+    "f_cut": 50.0,
+    "tail_s": 0.5,
+    "decay_cycles": 6.0
+   }
+  ],
+  "history_step_direct": [
+   "step",
+   [
+    310000.0
+   ],
+   {
+    "sample_freq": 240.0,
+    "lead_in_s": 0.05,
+    "transit_s": 0.013,
+    "tail_s": 0.7
+   }
+  ],
+  "history_sine_direct": [
+   "step_sine",
+   [
+    250000.0,
+    170000.0,
+    7.0,
+    3.0,
+    0.5
+   ],
+   {
+    "sample_freq": 333.0,
+    "lead_in_s": 0.02,
+    "transit_s": 0.01,
+    "tail_s": 0.3
+   }
+  ],
+  "history_noise_direct": [
+   "step_noise",
+   [
+    100000.0,
+    30000.0,
+    40.0,
+    11,
+    4.0,
+    0.6
+   ],
+   {
+    "f_ref": 5.0,
+    "p_cap": 220000.0,
+    "sample_freq": 500.0,
+    "tail_s": 0.25
+   }
+  ],
+  "history_from_params": [
+   "from_params",
+   [
+    {
+     "kind": "step_sine",
+     "p_step": 120000.0,
+     "p_osc": 40000.0,
+     "f_osc": 2.0,
+     "decay_cycles": 2.0,
+     "decay_fraction": 0.9,
+     "tail_s": 0.1
+    }
+   ],
+   {}
+  ]
+ },
+ "fluid_area": 0.052,
+ "p_cap": [
+  [
+   7883000.0,
+   0.25
+  ],
+  [
+   7883000.0,
+   0.3
+  ],
+  [
+   7883000.0,
+   0.37
+  ],
+  [
+   7883000.0,
+   0.7
+  ],
+  [
+   7883000.0,
+   1.0
+  ]
+ ],
+ "envelope": [
+  [
+   1.0,
+   10.0,
+   0.8
+  ],
+  [
+   16.0,
+   10.0,
+   0.8
+  ],
+  [
+   7.0,
+   3.0,
+   0.5
+  ],
+  [
+   3.7,
+   7.0,
+   0.63
+  ],
+  [
+   11.3,
+   9.0,
+   0.35
+  ],
+  [
+   0.9,
+   13.0,
+   0.71
+  ]
+ ],
+ "envelope_tau": {
+  "count": 40,
+  "sample_freq": 37.0
+ }
+}
