@@ -6,6 +6,20 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.1 (independent review, 2026-11-16) **done**: findings and plan only, no code
+change (`src/`, `tools/` and `tests/` are byte-identical to `6b31f71`). Six blind
+`clean-code-reviewer` passes (architecture, functions, names and documentation; solver
+core and supporting Python), each Design and Readability finding through its own
+`finding-verifier` (118 checked, 1 refuted, most corrected), then reconciled with
+`docs/architecture.md` and `DEVIATIONS.md`. `docs/review/findings.md`: 140 findings (31
+Design, 65 Readability, 44 Nit), the recorded constraints K-1 to K-11, what to leave alone,
+and 14 suspected defects that were not acted on. `docs/review/plan.md`: single-refactoring
+commits in the charter's order, four changes to that order, and questions Q-1 to Q-11 for
+the owner. A toy kernel (scratch, not committed) gave the same bits and the same time with
+NamedTuple parameters and compiled helpers as with flat scalars, compiled and with
+`NUMBA_DISABLE_JIT=1` (Numba 0.68.1): the Stage 5 flat signatures are a choice, not a
+limit. `docs/nomenclature.md` is not written yet (plan step 0.1, needs Q-6).
+
 Session R.0b (review set-up amended, 2026-11-16, branch `review/clean-code`) **done**: no
 solver change (`src/` is byte-identical to `177c8b1`). The owner answered the R.0 conflicts
 and widened the review. `docs/review/charter.md`: scope is the solver core plus the
@@ -271,12 +285,10 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Review session R.1** on `review/clean-code`: the owner's answers to the R.0b questions
-above (1 and 2 first: they decide whether two gates can be trusted on every host and
-through every commit), then `docs/nomenclature.md`, then the `clean-code-reviewer` agent on
-one module at a time with each finding passed to `finding-verifier`, findings recorded
-under `docs/review/`. Refactoring starts with the R0 / R1 classes. Rules and gates:
-`docs/review/charter.md`.
+**Owner:** answer Q-1 to Q-11 in `docs/review/plan.md` (Q-6, the vocabulary, and Q-2, the
+test-only interfaces, block the first commits) and the R.0b questions above. **Then review
+session R.2:** `docs/nomenclature.md` (plan 0.1), then group 1 of the plan (renames, R0),
+one refactoring per commit. Rules and gates: `docs/review/charter.md`.
 
 **Stage 6** (unchanged), when the lead author wants it.
 
