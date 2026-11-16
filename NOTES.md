@@ -6,6 +6,26 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.0b (review set-up amended, 2026-11-16, branch `review/clean-code`) **done**: no
+solver change (`src/` is byte-identical to `177c8b1`). The owner answered the R.0 conflicts
+and widened the review. `docs/review/charter.md`: scope is the solver core plus the
+supporting Python (`trace.py`, `export.py`, `histories.py`, `viz/geometry.py`, `tools/`);
+the data format is in scope with one schema bump (public API session); the viewer only for
+the keys it reads; rule 6 and a "renames" / "public API" session table. `docs/style.md`
+carries the rulings (below). `.claude/hooks/format_py.py` formats with the venv's ruff.
+New safety net `tests/test_review_support.py` + `tools/review_support.py` +
+`tests/review_support/` (20 files, 1.85 MB): 16 sweep rows through `tools/sweep_jc.py`,
+eight exported files byte for byte, ten history documents as `float.hex()` text; 5 s
+compiled, under 1 s in pure Python; 16 mutations fail, three regroupings are recorded as
+not visible (charter, "The supporting-code checks"). `docs/review/baseline.md` and
+`tools/review_baseline.py` cover three groups: core 52 functions, supporting 45, `tools/`
+129. Gates on the tree: lint clean; `make test-both` 1063 passed + 24 skipped (Numba) /
+1061 passed + 26 skipped (pure Python; the 24 are the viewer's browser tests, the two more
+are the sweep check and one existing skip); `-m slow` 150 passed; `tools/bench.py
+--skip-full-python` (`docs/bench/253210a.json`): digests all equal to the literal port and to the previous row (`afead1d`), the full JC golden cases 1.0-1.2 s. The first commit of
+the session (documents and the hook) was made after `make lint` only; `make test-both` ran
+on the tree of the second commit onwards.
+
 Session R.0 (clean-code review set-up, 2026-11-16, branch `review/clean-code`) **done**: no
 solver change (`src/` is byte-identical to `177c8b1`). Added `docs/review/charter.md` (scope,
 change rules, gates, findings scale, the mutation results), `docs/style.md` (the owner's style
@@ -140,48 +160,78 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Open issues
 
-* **Review R.0, style-guide conflicts for the owner** (`docs/style.md` against the code and
-  the tooling; none is resolved, the guide is saved unchanged):
-  1. `docs/nomenclature.md`, which §2 relies on twice, does not exist yet.
-  2. §3 "keyword-only after the first two" cannot be applied to a compiled function that
-     another compiled function calls: on Numba 0.68.1 a jit-to-jit call of a function with
-     keyword-only parameters fails to type (`Cannot bind ... to signature '(col, *, d_f)'`;
-     measured in this session). `moc.step` and `structure.step_scalars` are public, compiled
-     and called from `_integrate_kernel`. NamedTuple arguments with arrays updated in place
-     (§4) and `IntEnum` members do compile.
-  3. §2 allows symbols (`x, v, a, dt`) inside a kernel but never in a public signature; the
-     public compiled kernels and helpers take exactly those (`step_scalars(x, v, a, ...,
-     dt)`, `moc.step(even, a_dt, p_a, ...)`, `effective_displacement(x, gap, ratio2)`,
-     `grid_size(..., dt)`). Either they become private (the differential tests call them)
-     or the allowance covers kernel signatures.
-  4. §3 "no argument that selects behaviour or return shape by code" against `CLAUDE.md`
-     "Flags", which requires `vav_denominator`, `parity`, `fraction_profile` as string
-     flags with the named values, and against `output_type` 0-3, the VBA argument.
-  5. §2 "no VBA spellings" against names kept on purpose so that the keyword matches the VBA
-     argument (`fluid_densty`, `step_qty`, ...; `docs/handover.md`), against
-     `pressure.get_pressure_response`, whose parameter names a test pins to
-     `legacy_port`'s, and against the data files: `meta.inputs` echoes the keyword names
-     and `params` carries `fric_acc`, `ratio2`, `step_qty` (`docs/data_format.md`, the
-     committed files under `docs/viz/data/`, one read in the viewer). Renaming them is a
-     schema change, not a mechanical edit.
-  6. §6 against §5: several unit factors are spread over operands (`pipe_area * 60 * 60`,
-     `flow_rate * 1000000 / ...`, `(density / 1000) * 100000`, `0.5 * mu * 9.81 * dt`).
-     Each literal can be named in place; folding two into one constant (3600) changes the
-     grouping and is a behaviour change. "0, 1 and 2 are fine" leaves `4 / 3`, `12`,
-     `0.5 + 1.5 (...)`, `0.25` as literals that need a constant or an exception.
-  7. Targets against the tools: ruff's PLR0913 default is 5 arguments and does not tell
-     private from public (guide: 6, private only); PLR1702's default is 5 nested blocks
-     (guide: 3); ruff and radon disagree on complexity (`_integrate` 10 against 22,
-     `_integrate_kernel` 23 against 32) and the guide does not say which counts.
-  8. Nothing enforces §7, §8 or §9 today: no `D` or `ANN` rule is selected (51 missing
-     annotations, 38 numpy-convention docstring findings in scope), `E501` is ignored and
-     five lines in scope exceed 100 columns (ruff format does not wrap comments or
-     docstrings). `vba_min` / `vba_max` are untyped on purpose (they return the second
-     argument with its type).
-  9. `.claude/hooks/format_py.py` formats with the `ruff` on PATH (0.16.9 here) while
-     `make lint` checks with the venv's (0.17.5).
-  10. Google's import rule (modules only) against `from surge_sdof.trace import F_X, ...`
-      and `from surge_sdof.structure import SdofParams, step_scalars` in `response.py`.
+* **Review R.0b, the R.0 conflicts as answered** (owner, 16 Nov 2026; in `docs/style.md`):
+  2 keyword-only arguments are for the user-facing Python entry points; compiled functions
+  take positional parameter objects. 3 "public signature" is the user-facing entry points
+  of `response` and `pressure`; kernels may use nomenclature symbols in signatures. 4 both
+  junction-coupling flag paths keep working; the form of the flags and of `output_type` is
+  redesigned in the public API session, untouched before. 5 VBA spellings go: internal
+  names in the renames session; public keywords, the `get_pressure_response` alias and
+  exported names in the public API session. 6 unit factors are named in place, never
+  folded; pure-number coefficients stay inline with a derivation comment (ask the owner
+  when none is found). 7 complexity is ruff's count, radon is reported only; the argument
+  limit is 6, enforced in the public API session. 8 (in part) `vba_min` / `vba_max` stay
+  untyped, a recorded exception. 9 done. 10 left for the reviewers to raise.
+* **Review R.0b, open questions for the owner:**
+  1. **The history and sweep checks depend on the CPU.** numpy 2.5.5 dispatches `sin` /
+     `exp` to an AVX-512 kernel (`X86_V4`) on this container; with it switched off
+     (`NPY_DISABLE_CPU_FEATURES=X86_V4`, i.e. what a CPU without AVX-512 such as the
+     i5-13600KF runs) eight of ten history documents and the sweep rows differ in the last
+     bits. Today those two checks skip on such a host. Options: (a) pin the whole suite and
+     the write tool to the non-AVX-512 kernel through that variable in `tests/conftest.py`,
+     so every x86 host computes the same bits (needs a rewrite of the stored histories and
+     CSV; untested across operating systems); (b) store one set per kernel; (c) keep the
+     skip. The same fact means `histories.from_params` rebuilds a row's history "bitwise"
+     only on a host with the same kernel: the Tier 1 file (this container's Xeon) and the
+     Tier 2 file (i5-13600KF) were made with different ones. The solver snapshot and the
+     exports are not affected.
+  2. **A property test holds only by the choice of examples.**
+     `tests/test_properties.py::test_jc_without_fluid_area_equals_lumped` (rtol 1e-12) has
+     a counterexample at 1.27e-12 in one history sample: force 17 zeros then 17 samples of
+     -1428049.20021316 N, `step_qty` 6, `sample_freq` 184, `physical_length` 18,
+     `flexural_rigidity_ei` 64601, `celerity` 576, `mass_per_unit_len` 84,
+     `damping_percent` 1, `dynamic_fric` 0.005, `nat_freq` 4.891204503212263, ratio
+     1.390625, gap fraction 0.8125, `output_type` 1. Hypothesis 6.170 seeds its examples
+     with the numeric constants of every project module in `sys.modules`, `derandomize` or
+     not, so a new float in any imported module moves the examples: the first version of
+     `tests/test_review_support.py` did, and the test failed with no solver change. The
+     new test now keeps its numbers in `tests/review_support_cases.json` and loads the
+     tools without registering them, and the suite is green, but a refactoring that adds a
+     literal value to `src/` or `tests/` can turn it red again. The test was not touched
+     (hard rule). Wanted: a tolerance for this property, or the example pinned as a known
+     difference.
+  3. Argument limit 6 as ruff counts it (PLR0913) includes keyword-only arguments:
+     `peak_response` has 14 and `peak_response_jc` 19. Parameter objects for the
+     entry points, or an exception for keyword-only arguments?
+  4. "Public signature" names `response` and `pressure` only. Are `histories.canonical`,
+     `histories.step*`, `export.to_trace_dict` / `to_sweep_dict` user-facing entry points
+     for the keyword-only rule and the symbol rule, or internal?
+  5. The schema bump against the committed files: `docs/viz/data/` (five files, one of
+     13.9 MB) and `docs/sweep/*.csv` (the Tier 2 file, 21.8 MB, from the owner's machine)
+     carry today's names. Re-export and rewrite the headers by script, rerun, or leave the
+     old files and keep a reader for schema 1 / 2? And should the viewer read the old
+     schema as well as the new? The viewer tests do not run in this container (playwright
+     1.56.0 wants Chromium build 1194, the container has 1243), so a change to the keys the
+     viewer reads cannot be verified here.
+  6. Removing the `get_pressure_response` alias and the VBA keywords removes the subject of
+     `tests/test_differential.py::test_get_pressure_response_is_a_thin_alias`; the hard
+     rule "never delete a test" needs the owner's word for that test in that session.
+  7. Tools without a check: `tools/sweep_jc.py plot` (plots and the report text),
+     `tools/bench.py`, `tools/extract_fixtures.py`, `tools/golden_report.py`,
+     `tools/profile_delta.py`. Reviewed by reading only, or first given a check
+     (`extract_fixtures.py` could write to a temporary directory and be compared with
+     `tests/fixtures/`; the report tables of `sweep_jc.py` are plain text)?
+  8. Still open from R.0: `docs/nomenclature.md` does not exist (first job of R.1);
+     nesting depth 3 against ruff's PLR1702, which is a preview rule with default 5
+     (reported only, or `preview = true`?); nothing enforces §7 to §9 (no `D` or `ANN`
+     rule, `E501` ignored): when, if at all, do they become lint rules?
+  9. Readings made in this session, to confirm: the schema bump happens in the public API
+     session; `tests/` stays "mechanical edits only"; the session is called R.0b.
+  Notes for the renames session, not questions: the frame keys of a `trace` document are
+  the `Trace` attribute names (`export._frames` uses `getattr(trace, name)` over
+  `FRAME_COLUMNS`), `meta.inputs` echoes the public keywords, and the history columns of
+  the sweep CSV are `histories.PARAM_KEYS`; renaming any of them before the bump needs a
+  mapping in `export.py`, and the byte check fails without one.
 
 * **W.1, for the lead author:** `docs/data_format.md` defines the sweep columns' semantics for
   the first time. `f_peak_lumped` / `f_peak_jc` are `max_applied_force`, which both solvers
@@ -221,10 +271,12 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Review session R.1** on `review/clean-code`: the owner's answers to the ten conflicts
-above, then `docs/nomenclature.md`, then the `clean-code-reviewer` agent on one module at a
-time with each finding passed to `finding-verifier`, findings recorded under `docs/review/`.
-Refactoring starts with the R0 / R1 classes. Rules and gates: `docs/review/charter.md`.
+**Review session R.1** on `review/clean-code`: the owner's answers to the R.0b questions
+above (1 and 2 first: they decide whether two gates can be trusted on every host and
+through every commit), then `docs/nomenclature.md`, then the `clean-code-reviewer` agent on
+one module at a time with each finding passed to `finding-verifier`, findings recorded
+under `docs/review/`. Refactoring starts with the R0 / R1 classes. Rules and gates:
+`docs/review/charter.md`.
 
 **Stage 6** (unchanged), when the lead author wants it.
 
