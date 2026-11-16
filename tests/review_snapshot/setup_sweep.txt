@@ -1,0 +1,420 @@
+## setup lumped case 00
+transit_delay_samples = 0x1.a88ca5454bb90p-1
+overlap_sub_steps = 6
+portal_frame_height = 0x1.2dc7e3c4228ffp+1
+pipe_cell_count = 14
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.2078a0d591d92p+0
+## setup lumped case 01
+transit_delay_samples = 0x1.d8d69a593bb7cp+0
+overlap_sub_steps = 6
+portal_frame_height = 0x1.3853807b92defp+2
+pipe_cell_count = 20
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.0e1957e079856p+0
+## setup lumped case 02
+transit_delay_samples = 0x1.b8e4ababf9f63p+1
+overlap_sub_steps = 7
+portal_frame_height = 0x1.298b7b58dc7b5p+3
+pipe_cell_count = 56
+pivot_cell_count = 13
+end_node_decay_factor = 0x1.033d75f9c75a8p+0
+## setup lumped case 03
+transit_delay_samples = 0x1.72988234955c2p+1
+overlap_sub_steps = 14
+portal_frame_height = 0x1.22cc7b7f08518p+1
+pipe_cell_count = 38
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.03dbfae1fe655p+0
+## setup lumped case 04
+transit_delay_samples = 0x1.760f4c1fb17cdp+1
+overlap_sub_steps = 6
+portal_frame_height = 0x1.65c99a5a7a446p+3
+pipe_cell_count = 36
+pivot_cell_count = 12
+end_node_decay_factor = 0x1.08d2ae6a5faa1p+0
+## setup lumped case 05
+transit_delay_samples = 0x1.d29f67297a939p+0
+overlap_sub_steps = 8
+portal_frame_height = 0x1.b6fe6e0cddafbp+1
+pipe_cell_count = 24
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.09ec2c49059b9p+0
+## setup lumped case 06
+transit_delay_samples = 0x1.28a8a1c370370p+1
+overlap_sub_steps = 5
+portal_frame_height = 0x1.117631b3965c3p+2
+pipe_cell_count = 34
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.04d486dad17c8p+0
+## setup lumped case 07
+transit_delay_samples = 0x1.915a7ecf89a3ep+0
+overlap_sub_steps = 2
+portal_frame_height = 0x1.04278c4146a7cp+2
+pipe_cell_count = 16
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.1deb264621ec9p+0
+## setup lumped case 08
+transit_delay_samples = 0x1.2d4bacfe2b60cp+0
+overlap_sub_steps = 1
+portal_frame_height = 0x1.8366f16a9fcc8p+1
+pipe_cell_count = 14
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.289bc485dad28p+0
+## setup lumped case 09
+transit_delay_samples = 0x1.85867660a22a0p+1
+overlap_sub_steps = 0
+portal_frame_height = 0x1.414eb6003ec2ap+1
+pipe_cell_count = 22
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0877898ed8f85p+0
+## setup lumped case 10
+transit_delay_samples = 0x1.030f0b98b83c7p+2
+overlap_sub_steps = 0
+portal_frame_height = 0x1.9cc07adc0193ep+1
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0b328771c6b1ep+0
+## setup lumped case 11
+transit_delay_samples = 0x1.1da9a918d58dep+1
+overlap_sub_steps = 4
+portal_frame_height = 0x1.b535339c48c94p+0
+pipe_cell_count = 32
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.0504967899972p+0
+## setup lumped case 12
+transit_delay_samples = 0x1.8450a55f8c5edp+0
+overlap_sub_steps = 8
+portal_frame_height = 0x1.8044ccc6f2832p+1
+pipe_cell_count = 28
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.076ab4b8c8545p+0
+## setup lumped case 13
+transit_delay_samples = 0x1.ec4a56725c0d5p+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.3423e9f4f38e7p+2
+pipe_cell_count = 22
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.0bcc54cb484c7p+0
+## setup lumped case 14
+transit_delay_samples = 0x1.b39bb61abeb95p+0
+overlap_sub_steps = 11
+portal_frame_height = 0x1.821efd769b2b6p+0
+pipe_cell_count = 26
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0699eed3254cbp+0
+## setup lumped case 15
+transit_delay_samples = 0x1.3d8080be81eb9p+0
+overlap_sub_steps = 2
+portal_frame_height = 0x1.7e47caef5c773p+0
+pipe_cell_count = 18
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0eb6f69f7c3dcp+0
+## setup lumped case 16
+transit_delay_samples = 0x1.bb91cc625d9afp+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.925fe59e4ac71p+0
+pipe_cell_count = 24
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.076ba83b24db7p+0
+## setup lumped case 17
+transit_delay_samples = 0x1.1935a2eb04e90p+0
+overlap_sub_steps = 1
+portal_frame_height = 0x1.e93fa1c4a9452p+2
+pipe_cell_count = 22
+pivot_cell_count = 8
+end_node_decay_factor = 0x1.1826240212339p+0
+## setup lumped case 18
+transit_delay_samples = 0x1.73d9104cec074p+1
+overlap_sub_steps = 9
+portal_frame_height = 0x1.7780c844bfbdep+1
+pipe_cell_count = 30
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.062e7de2f9f7ep+0
+## setup lumped case 19
+transit_delay_samples = 0x1.2440705d5d87bp+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.707176ea3a966p+1
+pipe_cell_count = 16
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.142f880592523p+0
+## setup lumped case 20
+transit_delay_samples = 0x1.a58d782096931p+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.4741ff250e902p+1
+pipe_cell_count = 30
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.0571eec81e14dp+0
+## setup lumped case 21
+transit_delay_samples = 0x1.f4d78b12a6cddp+1
+overlap_sub_steps = 4
+portal_frame_height = 0x1.b275bf9fd247dp+0
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0b979c50f0630p+0
+## setup lumped case 22
+transit_delay_samples = 0x1.3a6e0590e1123p+1
+overlap_sub_steps = 5
+portal_frame_height = 0x1.87a5d5db2b036p+1
+pipe_cell_count = 24
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.075392041ec9ap+0
+## setup lumped case 23
+transit_delay_samples = 0x1.17d1c6c55f12bp+1
+overlap_sub_steps = 2
+portal_frame_height = 0x1.1edd8112d6386p+2
+pipe_cell_count = 30
+pivot_cell_count = 9
+end_node_decay_factor = 0x1.083f416972cbcp+0
+## setup lumped case 24
+transit_delay_samples = 0x1.68540c39dfcfdp+1
+overlap_sub_steps = 13
+portal_frame_height = 0x1.3f47cc543a536p+2
+pipe_cell_count = 44
+pivot_cell_count = 10
+end_node_decay_factor = 0x1.03f8596e12dc2p+0
+## setup lumped case 25
+transit_delay_samples = 0x1.0f461af4dfb54p+2
+overlap_sub_steps = 1
+portal_frame_height = 0x1.3c8172728b789p+1
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0aaecc38e41f0p+0
+## setup lumped case 26
+transit_delay_samples = 0x1.4027b874b1481p+1
+overlap_sub_steps = 8
+portal_frame_height = 0x1.c4280e8ac5f1ap+1
+pipe_cell_count = 40
+pivot_cell_count = 9
+end_node_decay_factor = 0x1.0478fd361d312p+0
+## setup lumped case 27
+transit_delay_samples = 0x1.7e79aa152a821p+1
+overlap_sub_steps = 16
+portal_frame_height = 0x1.cffcc0d0f5be8p+1
+pipe_cell_count = 44
+pivot_cell_count = 9
+end_node_decay_factor = 0x1.03bd1220f4d5ap+0
+## setup lumped case 28
+transit_delay_samples = 0x1.61303621d7eb0p+1
+overlap_sub_steps = 5
+portal_frame_height = 0x1.157f74f2d6361p+3
+pipe_cell_count = 32
+pivot_cell_count = 10
+end_node_decay_factor = 0x1.095a91132d078p+0
+## setup lumped case 29
+transit_delay_samples = 0x1.e0171ba096939p+0
+overlap_sub_steps = 4
+portal_frame_height = 0x1.a5485f83fee4dp+0
+pipe_cell_count = 16
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.18c845d8449adp+0
+## setup jc case 00
+transit_delay_samples = 0x1.6263bd5e27ddep+0
+overlap_sub_steps = 3
+portal_frame_height = 0x1.77f92a7b41ecap+2
+pipe_cell_count = 20
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.12fb7f758bc3dp+0
+## setup jc case 01
+transit_delay_samples = 0x1.c900150bb06e4p+0
+overlap_sub_steps = 8
+portal_frame_height = 0x1.56b596c8480fep+1
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0a22b3e3677c9p+0
+## setup jc case 02
+transit_delay_samples = 0x1.50bc1185f3c7ap+1
+overlap_sub_steps = 10
+portal_frame_height = 0x1.1e9af4575daa8p+1
+pipe_cell_count = 36
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.04402623ac437p+0
+## setup jc case 03
+transit_delay_samples = 0x1.c7eb2231a086cp+2
+overlap_sub_steps = 0
+portal_frame_height = 0x1.76d7631ecc667p+2
+pipe_cell_count = 30
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.064dbb0beb626p+0
+## setup jc case 04
+transit_delay_samples = 0x1.14a97cbe687e5p+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.9c67f867eaf90p+2
+pipe_cell_count = 24
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.0c003b15dc974p+0
+## setup jc case 05
+transit_delay_samples = 0x1.40a99d5715502p+1
+overlap_sub_steps = 4
+portal_frame_height = 0x1.606bc3d772d82p+1
+pipe_cell_count = 22
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.0a524a27d63d8p+0
+## setup jc case 06
+transit_delay_samples = 0x1.9507369539b5cp+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.35fc922b655f3p+1
+pipe_cell_count = 24
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0823448506ea1p+0
+## setup jc case 07
+transit_delay_samples = 0x1.aa6de553c144fp+1
+overlap_sub_steps = 2
+portal_frame_height = 0x1.022036b3ff105p+2
+pipe_cell_count = 28
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.07b9277455aa1p+0
+## setup jc case 08
+transit_delay_samples = 0x1.893b51aa52b65p+0
+overlap_sub_steps = 5
+portal_frame_height = 0x1.aa32cf219bd41p+1
+pipe_cell_count = 24
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.0bd10c91f2e35p+0
+## setup jc case 09
+transit_delay_samples = 0x1.74eb62eff0fddp+1
+overlap_sub_steps = 6
+portal_frame_height = 0x1.7c8e1279ba622p+1
+pipe_cell_count = 24
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.08d9b4aa08acep+0
+## setup jc case 10
+transit_delay_samples = 0x1.df86b1514d691p+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.d98bdd78192ffp+0
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0c1e9a1227c3cp+0
+## setup jc case 11
+transit_delay_samples = 0x1.fb2184c718633p+1
+overlap_sub_steps = 10
+portal_frame_height = 0x1.a0b10d85705b4p+1
+pipe_cell_count = 36
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.0484a4ed5da24p+0
+## setup jc case 12
+transit_delay_samples = 0x1.059326da9a5efp+1
+overlap_sub_steps = 0
+portal_frame_height = 0x1.b40f18f55c3b2p+1
+pipe_cell_count = 16
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.16a7aa627405ap+0
+## setup jc case 13
+transit_delay_samples = 0x1.6d7637eb49450p+1
+overlap_sub_steps = 9
+portal_frame_height = 0x1.f454e54c1e211p+2
+pipe_cell_count = 34
+pivot_cell_count = 9
+end_node_decay_factor = 0x1.064a7b3ce9629p+0
+## setup jc case 14
+transit_delay_samples = 0x1.8528873a03d32p+1
+overlap_sub_steps = 0
+portal_frame_height = 0x1.5443a244735e9p+2
+pipe_cell_count = 24
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.08799d51dfd1ap+0
+## setup jc case 15
+transit_delay_samples = 0x1.ddef971a606f2p+1
+overlap_sub_steps = 12
+portal_frame_height = 0x1.029984daa3287p+1
+pipe_cell_count = 46
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.02fcccaa20021p+0
+## setup jc case 16
+transit_delay_samples = 0x1.590550506d883p+1
+overlap_sub_steps = 7
+portal_frame_height = 0x1.878a09c149b06p+3
+pipe_cell_count = 42
+pivot_cell_count = 13
+end_node_decay_factor = 0x1.06ab20c666e2bp+0
+## setup jc case 17
+transit_delay_samples = 0x1.15689187dfe9fp+0
+overlap_sub_steps = 1
+portal_frame_height = 0x1.8894ddbf8f703p+2
+pipe_cell_count = 20
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.187ec73d58fecp+0
+## setup jc case 18
+transit_delay_samples = 0x1.ed5a5fd4d062ap+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.1f032b5d6dbc5p+1
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0bc5ada792510p+0
+## setup jc case 19
+transit_delay_samples = 0x1.ee331fd54dcbep+0
+overlap_sub_steps = 4
+portal_frame_height = 0x1.2410b7c5a7e59p+3
+pipe_cell_count = 20
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.180ae561b9980p+0
+## setup jc case 20
+transit_delay_samples = 0x1.2b027479a6c49p+2
+overlap_sub_steps = 5
+portal_frame_height = 0x1.ad16f8eac1034p+2
+pipe_cell_count = 36
+pivot_cell_count = 9
+end_node_decay_factor = 0x1.057bd2eff155cp+0
+## setup jc case 21
+transit_delay_samples = 0x1.b09b0eb6ae48ap+0
+overlap_sub_steps = 11
+portal_frame_height = 0x1.195ef57fd97acp+3
+pipe_cell_count = 50
+pivot_cell_count = 17
+end_node_decay_factor = 0x1.06a5d026e91e0p+0
+## setup jc case 22
+transit_delay_samples = 0x1.05f3a254b8578p+1
+overlap_sub_steps = 0
+portal_frame_height = 0x1.7577a59a098a8p+0
+pipe_cell_count = 22
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.08d1b7c4dd449p+0
+## setup jc case 23
+transit_delay_samples = 0x1.8bef6b4abe897p+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.331c7e24d240ep+1
+pipe_cell_count = 42
+pivot_cell_count = 8
+end_node_decay_factor = 0x1.039c4e73adc02p+0
+## setup jc case 24
+transit_delay_samples = 0x1.8cb6f91674185p+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.bb7375a7b897bp+2
+pipe_cell_count = 26
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.084fa00c351edp+0
+## setup jc case 25
+transit_delay_samples = 0x1.26e3655e5d8c5p+1
+overlap_sub_steps = 2
+portal_frame_height = 0x1.078d707058f0dp+1
+pipe_cell_count = 20
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.0b3e3ca5f4861p+0
+## setup jc case 26
+transit_delay_samples = 0x1.90dd8c06f4d9bp+1
+overlap_sub_steps = 1
+portal_frame_height = 0x1.01715c4f84fb4p+1
+pipe_cell_count = 22
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.08393eba5132fp+0
+## setup jc case 27
+transit_delay_samples = 0x1.48ca083b1cffcp+0
+overlap_sub_steps = 2
+portal_frame_height = 0x1.3f6c76b6c6468p+2
+pipe_cell_count = 18
+pivot_cell_count = 6
+end_node_decay_factor = 0x1.1484a8c3f3804p+0
+## setup jc case 28
+transit_delay_samples = 0x1.628f88bd5a879p+0
+overlap_sub_steps = 4
+portal_frame_height = 0x1.37c7847d5ace9p+2
+pipe_cell_count = 22
+pivot_cell_count = 7
+end_node_decay_factor = 0x1.0d2350bde9be6p+0
+## setup jc case 29
+transit_delay_samples = 0x1.5a40107b47dd9p+1
+overlap_sub_steps = 3
+portal_frame_height = 0x1.09b452e6dab76p+1
+pipe_cell_count = 18
+pivot_cell_count = 5
+end_node_decay_factor = 0x1.10ef9b71bf3e4p+0

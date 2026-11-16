@@ -1,0 +1,3947 @@
+## peak_response case 00
+max_static_equivalent_force = 0x1.8757e5b205194p+15
+max_displacement = 0x1.b0c3f701b842dp-2
+max_velocity = 0x1.a2652dbceee0dp+3
+max_acceleration = 0x1.d9dee094cd8a3p+9
+max_applied_force = 0x1.21372731071c6p+18
+free_decay_samples = 8
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.bd09794e8a20ap-10
+trace.step_qty = 7
+trace.out_max = 25
+trace.t : float64 (3,)
+0x1.bd09794e8a20ap-10
+0x1.54bb40e021c10p-3
+0x1.52fe3766d336ep-2
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+27
+trace.phase : int64 (3,)
+0
+1
+2
+trace.x : float64 (3,)
+0x0.0p+0
+0x1.3e7c9973550b6p-4
+0x1.889ac21ae7ccbp-2
+trace.v : float64 (3,)
+0x0.0p+0
+0x1.252efcce6141cp+3
+-0x1.a9b32fe2a6345p+1
+trace.a : float64 (3,)
+0x0.0p+0
+-0x1.86325f55d3444p+9
+-0x1.0c2c0a7db3154p+7
+trace.f_a : float64 (3,)
+-0x1.81343ddcd2a8ep+17
+-0x1.e522194fed069p+17
+0x0.0p+0
+trace.f_b : float64 (3,)
+-0x1.81343ddcd2a8ep+17
+0x1.05e97f9987500p+12
+0x0.0p+0
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+-0x1.ed51654cb9411p+17
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+-0x1.048428f455cd0p+5
+0x1.048428f458d72p+5
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.522d10be326cfp+8
+trace.params.stiffness = 0x1.0b818f9b0a235p+17
+trace.params.damping = 0x1.1ca57fd75c074p+8
+trace.params.fric_acc = 0x1.56d65bc834219p-13
+trace.params.gap = 0x1.37780c7abed71p-4
+trace.params.ratio2 = 0x1.abf52eedcf320p-1
+## peak_response case 01
+max_static_equivalent_force = 0x1.a181c4b18052fp+22
+max_displacement = 0x1.fa968c79723fap-1
+max_velocity = 0x1.3a9d4029d5f5dp+6
+max_acceleration = 0x1.b751d1c837228p+12
+max_applied_force = 0x1.105950e333241p+21
+free_decay_samples = 5
+history : float64 (50,)
+0x0.0p+0
+0x1.45a287a6e359cp-10
+0x1.e22e1e3460a7bp-7
+0x1.766563f014dffp-5
+0x1.c693aa194fa84p-4
+0x1.e62ee9519fdccp-3
+0x1.7d92e9ecf2527p-2
+0x1.a34a325da8278p-2
+0x1.1c188a54cacdep-2
+0x1.856a71a6bf034p-6
+-0x1.f58e7ca493959p-3
+-0x1.dd8a73b3cf5e8p-2
+-0x1.138dfdde36299p-1
+-0x1.a9ea9a77dd8cap-2
+-0x1.a9af7318da38ap-4
+0x1.28a4f2acf1d5ap-2
+0x1.1ce633ce83977p-1
+0x1.319def670925cp-1
+0x1.e05c384ca134ep-2
+0x1.0a5d386f25dc8p-3
+-0x1.4f8333de96734p-2
+-0x1.700003292bb58p-1
+-0x1.8398b36fc8137p-1
+-0x1.81e72adc1ce71p-2
+0x1.5fab2329c08d0p-3
+0x1.6212ad98dc636p-1
+0x1.f46779e7e3201p-1
+0x1.bd51d90e1e486p-1
+0x1.9619f1908482cp-2
+-0x1.e19096d3feeb5p-3
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.30b04a0d85c17p-10
+trace.step_qty = 7
+trace.out_max = 25
+trace.t : float64 (3,)
+0x1.30b04a0d85c17p-10
+0x1.d28df164b4d03p-4
+0x1.d02c90d099c4bp-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+27
+trace.phase : int64 (3,)
+0
+1
+2
+trace.x : float64 (3,)
+0x0.0p+0
+-0x1.86f30a1dffd07p-2
+0x1.bd51d90e1e486p-1
+trace.v : float64 (3,)
+0x0.0p+0
+0x1.f2fee8572a857p+4
+-0x1.333fada926d4dp+5
+trace.a : float64 (3,)
+0x0.0p+0
+0x1.81ee37c808617p+11
+-0x1.6992292376fa5p+12
+trace.f_a : float64 (3,)
+0x1.828600fc92f0ap+19
+0x1.76febb245b9c0p+14
+0x0.0p+0
+trace.f_b : float64 (3,)
+0x1.828600fc92f0ap+19
+-0x1.1ccbb6f46c2e9p+20
+0x0.0p+0
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+0x1.22a7b1e0fd9d0p+20
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+-0x1.6a1e41c2fd98cp+9
+0x1.6a1e41c2fd98cp+9
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.0a308b597f6fep+10
+trace.params.stiffness = 0x1.063be465df27ap+19
+trace.params.damping = 0x1.e7e5ab41b8e37p+9
+trace.params.fric_acc = 0x1.9e7dc899d18bfp-11
+trace.params.gap = 0x1.598c93339615ep-3
+trace.params.ratio2 = 0x1.ea0b9caa3bb70p+3
+## peak_response case 02
+max_static_equivalent_force = 0x1.d08e0eacc8c12p+19
+max_displacement = 0x1.a43fa5c2c3a09p-1
+max_velocity = 0x1.a355b7d34640cp+5
+max_acceleration = 0x1.42eaef3c34898p+12
+max_applied_force = 0x1.9bd18a65d83a2p+20
+free_decay_samples = 0
+history : float64 (48,)
+0x1.215910c29b308p+1
+0x1.c119577d768a1p+2
+0x1.13fa859d5a0cdp+3
+0x1.eab94af1fc897p+2
+0x1.05db127d0b715p+2
+0x1.8b8a89c1ec6ecp+2
+0x1.6fb6dbbe371d7p+3
+0x1.6aef4af84b8bfp+3
+0x1.f18343b6bb9c7p+3
+0x1.b12c4a8a1245bp+3
+0x1.40feac6bb4cadp+2
+-0x1.143d20ddb3672p+3
+-0x1.ecbd6e3115ad9p+4
+-0x1.6cf1ade403ebfp+5
+-0x1.8ca06fa03de3ep+5
+-0x1.80aaba105944ap+5
+-0x1.689447e6cffe3p+4
+0x1.9e9a42af432e9p+3
+0x1.4877f5e262fd2p+5
+0x1.9c48bc8fd9b7ep+5
+0x1.0531129a9664ep+5
+0x1.8b1ce1f02e1e8p+3
+-0x1.38ce91dc10554p+2
+-0x1.d16bd2e8ddd84p+3
+-0x1.dd37ff60404bap+3
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.d2d6d42fa22d4p-12
+trace.step_qty = 16
+trace.out_max = 24
+trace.t : float64 (5,)
+0x1.d2d6d42fa22d4p-12
+0x1.656c7a74782aap-5
+0x1.6399a3a048887p-4
+0x1.0a3e85032a7ddp-3
+0x1.62b0383630b76p-3
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+6
+12
+18
+24
+trace.phase : int64 (5,)
+0
+1
+1
+1
+1
+trace.x : float64 (5,)
+0x0.0p+0
+0x1.e406602eca915p-3
+0x1.11f73c4023cd7p-1
+-0x1.58c104518c73cp-1
+0x1.21b2daee29c1fp-4
+trace.v : float64 (5,)
+0x0.0p+0
+0x1.2c9bcf788d572p+3
+-0x1.7f91fac12a84bp+4
+0x1.16086759132f4p+5
+-0x1.dc2710cf842e1p+3
+trace.a : float64 (5,)
+0x0.0p+0
+0x1.e3e24ba5b1a6dp+9
+-0x1.7d3ef26be5f3fp+11
+0x1.c5487ae4738a0p+11
+-0x1.f3863b4c5a7d4p+4
+trace.f_a : float64 (5,)
+0x1.31d5f9640e31bp+19
+0x1.0c6fdf15d21a5p+19
+-0x1.0ce7c4f886483p+19
+0x1.53a4557a43a6fp+19
+0x1.4d4d8beaadfa2p+19
+trace.f_b : float64 (5,)
+0x1.31d5f9640e31bp+19
+-0x1.a0780cfeccaf0p+16
+0x1.a7a4d85ea9559p+18
+-0x1.811e1fe779512p+18
+0x1.4d4d8beaadfa3p+19
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+0x1.407ee0b5abb03p+19
+-0x1.e0ba3127daf30p+19
+0x1.0a19b2b70027cp+20
+-0x1.0000000000000p-33
+trace.f_friction : float64 (5,)
+0x0.0p+0
+-0x1.e64f80c4b3fe1p+8
+0x1.e64f80c4b3fe1p+8
+-0x1.e64f80c4b3fe1p+8
+0x1.e64f80c4b3fe1p+8
+trace.stick : bool (5,)
+1
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.fea2113e51d0cp+8
+trace.params.stiffness = 0x1.0a73a2f412f19p+18
+trace.params.damping = 0x1.5b4301f7d0412p+8
+trace.params.fric_acc = 0x1.bc9a4775a3fafp-12
+trace.params.gap = 0x1.2507658e927ddp-3
+trace.params.ratio2 = 0x1.3bc77842bedc1p+2
+## peak_response case 03
+max_static_equivalent_force = 0x1.b5bed76b51771p+23
+max_displacement = 0x1.2dd5ff6b462fcp+1
+max_velocity = 0x1.a6afb4655b43ap+7
+max_acceleration = 0x1.262ff2aeafcdbp+14
+max_applied_force = 0x1.d621a352ab931p+21
+free_decay_samples = 5
+history : float64 (44,)
+0x0.0p+0
+0x0.0p+0
+0x1.18dfb385a0468p+10
+-0x1.3f1c4911086d6p+11
+-0x1.7d5d3df0e0e37p+11
+-0x1.9c83eb9c0490cp+11
+0x1.32f3e848bef1bp+12
+0x1.8ec4d2a9dcbe1p+12
+0x1.157d5c103b5f3p+12
+0x1.46b5ccde738dbp+11
+0x1.79fc7ad7afdc0p+9
+-0x1.5eb5e0ad2fa30p+11
+-0x1.409bb0fa2f9f1p+13
+-0x1.504a1f605740bp+13
+-0x1.861749c76d146p+12
+-0x1.882c72de39aa7p+11
+0x1.55e3e5aedc487p+12
+0x1.71e0c140f810bp+13
+0x1.147ccf6b7939dp+14
+0x1.8f8aa5be29b2ep+13
+0x1.5795d3e3419b9p+11
+-0x1.ad7865943008dp+12
+-0x1.ef351140c4ebdp+13
+-0x1.25af337505164p+14
+-0x1.c2ee86abd856dp+13
+-0x1.0cf362c3a9bf5p+12
+0x1.754698282d46bp+12
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.c5f21257a8f00p-12
+trace.step_qty = 16
+trace.out_max = 22
+trace.t : float64 (5,)
+0x1.c5f21257a8f00p-12
+0x1.5b8d560b1d57cp-5
+0x1.59c763f8c5aedp-4
+0x1.02e40e75fe58ep-3
+0x1.58e46aef99da6p-3
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+6
+12
+18
+24
+trace.phase : int64 (5,)
+0
+1
+1
+1
+2
+trace.x : float64 (5,)
+0x0.0p+0
+-0x1.37dfd4d9d48ffp-2
+0x1.ec9df6d023eb7p-1
+-0x1.16f37a05fdce6p+1
+0x1.1e01561122958p+1
+trace.v : float64 (5,)
+0x0.0p+0
+-0x1.7a36d6245dc20p+5
+0x1.01d197d957085p+6
+-0x1.5ea4f069c7871p+5
+-0x1.0e78c93f757cep+6
+trace.a : float64 (5,)
+0x0.0p+0
+-0x1.1892221341367p+11
+-0x1.1a7fc0a93ff27p+12
+0x1.b89ec89976e86p+13
+-0x1.1926a1f5cbda8p+14
+trace.f_a : float64 (5,)
+-0x1.34bd218c4d0a6p+20
+-0x1.abb54a197e0cfp+20
+0x1.ba3a3e2d1ceeap+17
+0x1.aefecd52c1ab1p+19
+0x0.0p+0
+trace.f_b : float64 (5,)
+-0x1.34bd218c4d0a6p+20
+0x1.084528da4f8ecp+20
+-0x1.888da923758f6p+20
+0x1.8aa93014ebf8ep+21
+0x0.0p+0
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+-0x1.59fd3979e6cdep+21
+0x1.bfd4f0e9192d3p+20
+-0x1.1ee97cc03b8e2p+21
+0x0.0p+0
+trace.f_friction : float64 (5,)
+0x0.0p+0
+0x1.6132ba7ce3d96p+10
+-0x1.6132ba7ce3d96p+10
+0x1.6132ba7ce3d96p+10
+0x1.6132ba7ce3d96p+10
+trace.stick : bool (5,)
+1
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.7ceab843fb9dbp+9
+trace.params.stiffness = 0x1.a5d8d01ffde71p+19
+trace.params.damping = 0x1.778816e338da5p+8
+trace.params.fric_acc = 0x1.a4e9a635fbbc5p-11
+trace.params.gap = 0x1.06ae3131b8847p-3
+trace.params.ratio2 = 0x1.d8da84858fd8fp+2
+## peak_response case 04
+max_static_equivalent_force = 0x1.d5cedfcdc8b0cp+13
+max_displacement = 0x1.a6525d0f500a9p-5
+max_velocity = 0x1.da45090c7de2cp+1
+max_acceleration = 0x1.328fe7a171b9dp+9
+max_applied_force = 0x1.3e28f2cdf8d35p+19
+free_decay_samples = 0
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.41e2302a53878p-11
+trace.step_qty = 7
+trace.out_max = 25
+trace.t : float64 (2,)
+0x1.41e2302a53878p-11
+0x1.ece259c0cfe78p-5
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+13
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+0x1.6e2c6374c9ea6p-9
+trace.v : float64 (2,)
+0x0.0p+0
+-0x1.645e95d88af90p+1
+trace.a : float64 (2,)
+0x0.0p+0
+-0x1.96d04f69343a2p+8
+trace.f_a : float64 (2,)
+0x1.68c7787dda260p+14
+-0x1.3147f078f7bc8p+16
+trace.f_b : float64 (2,)
+0x1.68c7787dda260p+14
+0x1.606cbcb078cf5p+18
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+-0x1.acbeb8ceb6be7p+18
+trace.f_friction : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.stick : bool (2,)
+0
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.0bf334fde7f5cp+10
+trace.params.stiffness = 0x1.1cc8f29a1c229p+18
+trace.params.damping = 0x1.aa17a1e26920dp+10
+trace.params.fric_acc = 0x0.0p+0
+trace.params.gap = 0x1.b88214d79c036p-4
+trace.params.ratio2 = 0x1.aa8fca6563753p+3
+## peak_response case 05
+max_static_equivalent_force = 0x1.14a71fb774f47p+20
+max_displacement = 0x1.07a83f8211eacp+0
+max_velocity = 0x1.3c027c7dd8e85p+5
+max_acceleration = 0x1.54177bf1fee3dp+11
+max_applied_force = 0x1.8f017f6cd1f8bp+20
+free_decay_samples = 9
+history : float64 (50,)
+0x0.0p+0
+0x1.4c457bca14d8ep-8
+0x1.9466ec9a08d2dp-5
+0x1.18b8995a9b60bp-3
+0x1.ccb6e32cb3f8fp-3
+0x1.258d8c5a50662p-2
+0x1.3bd3418205463p-2
+0x1.efb39144d74d9p-3
+0x1.647ffbc623c8dp-4
+-0x1.1ec9a60961132p-6
+-0x1.eb6863a5811c1p-6
+-0x1.eaab2ab161f3ep-6
+-0x1.e0f882080b041p-4
+-0x1.3bbf10a73799bp-2
+-0x1.f3f54594cb05ep-2
+-0x1.1948a54e8f8adp-1
+-0x1.ef125414ce9ecp-2
+-0x1.86009bf830326p-2
+-0x1.4959b9f96cbeap-2
+-0x1.4d13e6f798d36p-2
+-0x1.436209bce8720p-2
+-0x1.e16f8fcc1ea71p-3
+-0x1.1b68a8b1720c7p-5
+0x1.f7fb2106ae2b8p-3
+0x1.0bd67cc65a726p-1
+0x1.83b08ac4f31a0p-1
+0x1.dab49bae64d20p-1
+0x1.047b4097730a9p+0
+0x1.0517b4544e7f0p+0
+0x1.de2747802e7a9p-1
+0x1.88b3fa963bb1cp-1
+0x1.1166b5dbc9a4fp-1
+0x1.05c3ae40ca0a6p-2
+-0x1.620c1ce46105ep-5
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.8f67f9a18c539p-11
+trace.step_qty = 10
+trace.out_max = 25
+trace.t : float64 (4,)
+0x1.8f67f9a18c539p-11
+0x1.31cb9b1faf700p-4
+0x1.303c33260de3ap-3
+0x1.c79298bc440f5p-3
+trace.sub_step : int64 (4,)
+0
+97
+194
+291
+trace.sample : int64 (4,)
+0
+9
+19
+29
+trace.phase : int64 (4,)
+0
+1
+1
+2
+trace.x : float64 (4,)
+0x0.0p+0
+-0x1.8298baf51ebc5p-7
+-0x1.4848c8137d2fep-2
+0x1.00d099e9020e5p+0
+trace.v : float64 (4,)
+0x0.0p+0
+-0x1.0623e81feec99p+3
+-0x1.7925d912234e7p+0
+-0x1.21882de7b24abp+3
+trace.a : float64 (4,)
+0x0.0p+0
+0x1.cbf1447bb4296p+10
+-0x1.48ac4b30d8215p+8
+-0x1.7995efa6a2e3fp+10
+trace.f_a : float64 (4,)
+-0x1.ccbcd4a742ff4p+17
+0x1.85c9a7cfe533cp+18
+0x1.abfa4f4985b99p+17
+0x0.0p+0
+trace.f_b : float64 (4,)
+-0x1.ccbcd4a742ff4p+17
+-0x1.ca91651896788p+19
+0x1.7e395d02f9b88p+19
+0x0.0p+0
+trace.f_unbalance : float64 (4,)
+0x0.0p+0
+0x1.46bb1c8044893p+20
+-0x1.133ac930984a2p+19
+0x0.0p+0
+trace.f_friction : float64 (4,)
+0x0.0p+0
+0x1.63237deddfa1cp+8
+0x1.63237deddce23p+8
+0x1.63237deddfa1cp+8
+trace.stick : bool (4,)
+1
+0
+0
+0
+trace.d_f : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.6ded90fe5b305p+9
+trace.params.stiffness = 0x1.e10cd25eda7f7p+18
+trace.params.damping = 0x1.282d35c403167p+9
+trace.params.fric_acc = 0x1.83a133f37493fp-12
+trace.params.gap = 0x1.0b2a1c5a59f0dp-4
+trace.params.ratio2 = 0x1.2893a9fab1913p+1
+## peak_response case 06
+max_static_equivalent_force = 0x1.f6de2a0f97f2ep+20
+max_displacement = 0x1.527b0b668af5fp+0
+max_velocity = 0x1.e7fdba90269b3p+5
+max_acceleration = 0x1.d3c86772f692bp+11
+max_applied_force = 0x1.39a1156d334c2p+21
+free_decay_samples = 7
+history : float64 (40,)
+0x1.f050c7e3333f8p-66
+0x1.efb0b8ef22c18p-65
+-0x1.0fba699bba705p-2
+-0x1.0309dce691171p+2
+-0x1.f8c4293169466p+2
+0x1.812f5ab2cc334p+3
+0x1.448c7631be9a3p+5
+0x1.7a39cb62e683bp+5
+0x1.ba2928e8bb486p+4
+0x1.cd4c7c8347b58p+1
+-0x1.fa46002c868eep+4
+-0x1.cc828a986804bp+5
+-0x1.b4d8345038e0ep+5
+-0x1.372abcc804c5cp+5
+-0x1.da4ed9d121d86p+4
+-0x1.3c834ddc7d596p+4
+0x1.6c9f9ae8711e6p+1
+0x1.e5050b14f29a6p+4
+0x1.7cd9b2954d3dbp+5
+0x1.965f80afab8e0p+5
+0x1.860c18107dcd2p+5
+0x1.2f5b9d3dadd6fp+5
+0x1.2c9585fc836fep+4
+-0x1.1af0d3d5a9806p+2
+-0x1.a9831dd48d8edp+4
+-0x1.56f8318e63d9cp+5
+-0x1.8d8ade585da47p+5
+-0x1.88a1753235571p+5
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.5cfcb9d1ba417p-11
+trace.step_qty = 16
+trace.out_max = 20
+trace.t : float64 (5,)
+0x1.5cfcb9d1ba417p-11
+0x1.0b317e44929a2p-4
+0x1.09d4818ac0dfep-3
+0x1.8e1043f33872ap-3
+0x1.0926032dd802bp-2
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+6
+12
+18
+24
+trace.phase : int64 (5,)
+0
+1
+1
+1
+2
+trace.x : float64 (5,)
+0x0.0p+0
+0x1.780dbd8f3c9d8p-4
+0x1.f3df11971e135p-4
+-0x1.55d48d5336d0fp-1
+0x1.2aad85e0b1e26p+0
+trace.v : float64 (5,)
+0x0.0p+0
+0x1.0dde76d44b399p+5
+-0x1.cdb426322e3adp+5
+0x1.733c1cff55334p+5
+-0x1.955e30843b97fp+4
+trace.a : float64 (5,)
+0x0.0p+0
+0x1.49c1ccc25436ep+11
+0x1.552b978b9de7bp+10
+0x1.f9ca97b4e5937p+9
+-0x1.dd3330604499ep+10
+trace.f_a : float64 (5,)
+0x1.f6efbccb94ab2p+19
+0x1.681015e2de417p+20
+0x1.1cd34178e40eep+19
+-0x1.269410bd704dap+19
+0x0.0p+0
+trace.f_b : float64 (5,)
+0x1.f6efbccb94ab2p+19
+-0x1.fc75611f61ae2p+19
+-0x1.3dbf29d10ec61p+19
+-0x1.50f5148998b67p+19
+0x0.0p+0
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+0x1.33256339478c4p+21
+0x1.2d4935a4f96a8p+20
+0x1.53081e6143468p+16
+0x0.0p+0
+trace.f_friction : float64 (5,)
+0x0.0p+0
+-0x1.081aaa4227425p+7
+0x1.081aaa4227425p+7
+-0x1.081aaa4227425p+7
+0x1.081aaa41fcbc8p+7
+trace.stick : bool (5,)
+1
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.cfbeeb5ff66c1p+9
+trace.params.stiffness = 0x1.4290a6728c4b5p+18
+trace.params.damping = 0x1.69b9415377714p+10
+trace.params.fric_acc = 0x1.8d7f72dadcf43p-14
+trace.params.gap = 0x1.ec7f81353c326p-3
+trace.params.ratio2 = 0x1.62b83a99c2156p+2
+## peak_response case 07
+max_static_equivalent_force = 0x1.7650391e58c0cp+23
+max_displacement = 0x1.fe90df3ba1acbp+2
+max_velocity = 0x1.70f797c85b14cp+9
+max_acceleration = 0x1.9730b3c8b0ed0p+15
+max_applied_force = 0x1.6c23256aacce6p+20
+free_decay_samples = 3
+history : float64 (58,)
+0x0.0p+0
+0x1.a0b00dd125a32p+9
+0x1.2002e24da0fe6p+10
+-0x1.ef237a29cbb9dp+10
+-0x1.01a94c76738c2p+12
+0x1.ba93e4c23245fp+7
+0x1.93070567abf47p+11
+0x1.860c24974135dp+12
+0x1.b2bf4db8b4ca9p+12
+-0x1.dd2f7c5eb3744p+12
+-0x1.c54eb24ca2ab7p+13
+-0x1.44f689fcd5ab4p+9
+-0x1.16250159d645fp+11
+0x1.f3aa6569bd56fp+12
+0x1.7e5651c09a40cp+13
+0x1.1601f094ee210p+13
+0x1.0a0beea2580d4p+10
+-0x1.8fb13dcfdba03p+13
+-0x1.5704fb8c4fd26p+14
+-0x1.ab2bd9f7e3eefp+13
+0x1.e45146031c495p+11
+0x1.40784058a1feap+14
+0x1.f16a1e1134cc6p+14
+0x1.100516d9317e2p+14
+-0x1.885e21dcb135ap+13
+-0x1.30cd963a3efb3p+15
+-0x1.0e8df1e134402p+15
+-0x1.48c383755aa3dp+13
+0x1.a24eb43c3d096p+14
+0x1.8e7c4222d32e0p+15
+0x1.411c6e0148d47p+15
+-0x1.15ce680c14b94p+10
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.5e7a923a3335cp-9
+trace.step_qty = 4
+trace.out_max = 29
+trace.t : float64 (2,)
+0x1.5e7a923a3335cp-9
+0x1.0c55d7f48f352p-2
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+24
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+0x1.9d12ce55555cbp+0
+trace.v : float64 (2,)
+0x0.0p+0
+0x1.c3139b672a3a8p+8
+trace.a : float64 (2,)
+0x0.0p+0
+-0x1.c0f864384f84ap+11
+trace.f_a : float64 (2,)
+0x1.50138c2c80c2ap+19
+-0x1.253d51205d8f6p+18
+trace.f_b : float64 (2,)
+0x1.50138c2c80c2ap+19
+-0x1.253d51205d8f6p+18
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.f_friction : float64 (2,)
+0x0.0p+0
+-0x1.227692eaf89aep+4
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.d72f11e5d3b95p+7
+trace.params.stiffness = 0x1.3844dfc348b2ap+18
+trace.params.damping = 0x1.5c602dd84749cp+9
+trace.params.fric_acc = 0x1.b01bacfde6b01p-13
+trace.params.gap = 0x1.4a4e930427055p-4
+trace.params.ratio2 = 0x1.363710d0d3a29p+2
+## peak_response case 08
+max_static_equivalent_force = 0x1.007a13d6c2e3bp+22
+max_displacement = 0x1.4cb31d18ccd05p+0
+max_velocity = 0x1.fa0041244403dp+6
+max_acceleration = 0x1.a108735dc1628p+13
+max_applied_force = 0x1.a43e47044c8b5p+20
+free_decay_samples = 3
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.a8b1f7cbd1a0cp-10
+trace.step_qty = 4
+trace.out_max = 21
+trace.t : float64 (1,)
+0x1.a8b1f7cbd1a0cp-10
+trace.sub_step : int64 (1,)
+0
+trace.sample : int64 (1,)
+0
+trace.phase : int64 (1,)
+0
+trace.x : float64 (1,)
+0x0.0p+0
+trace.v : float64 (1,)
+0x0.0p+0
+trace.a : float64 (1,)
+0x0.0p+0
+trace.f_a : float64 (1,)
+0x1.9412a6b657906p+19
+trace.f_b : float64 (1,)
+0x1.9412a6b657906p+19
+trace.f_unbalance : float64 (1,)
+0x0.0p+0
+trace.f_friction : float64 (1,)
+0x0.0p+0
+trace.stick : bool (1,)
+1
+trace.d_f : float64 (1,)
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.7f64cf30d813dp+8
+trace.params.stiffness = 0x1.e7ce65dd6a6e3p+18
+trace.params.damping = 0x1.394989ec257ccp+9
+trace.params.fric_acc = 0x1.38887f6e34915p-9
+trace.params.gap = 0x1.340e3bf3ce081p-3
+trace.params.ratio2 = 0x1.cc1f4a4ad0f38p+2
+## peak_response case 09
+max_static_equivalent_force = 0x1.2c892dcff5440p+22
+max_displacement = 0x1.c23cd06f6b74ap+1
+max_velocity = 0x1.c6e43e2d83d12p+7
+max_acceleration = 0x1.d3d8657c1460ap+13
+max_applied_force = 0x1.11eec3e7c4502p+21
+free_decay_samples = 8
+history : float64 (58,)
+-0x1.412e0ae5c13c1p-8
+-0x1.51ad963b1e181p-5
+-0x1.b756882bda08cp-4
+-0x1.dc2703c1b7098p-4
+-0x1.437a3b538b24bp-3
+-0x1.1a610468b218fp-3
+-0x1.85699582544a7p-6
+0x1.48d5d5dbeca82p-2
+0x1.cdeb0166c182bp-1
+0x1.92da967164984p+0
+0x1.f23f9b19fbc01p+0
+0x1.df287fdc4384ap+0
+0x1.5bb0ca7101971p+0
+0x1.f47ecaffd597ap-2
+-0x1.405ec915647aap-1
+-0x1.d118ec88764dcp+0
+-0x1.5f4dc66e7fbbdp+1
+-0x1.95aa4bbb124f6p+1
+-0x1.7ec4a48cd027cp+1
+-0x1.1dbaa1ec49398p+1
+-0x1.0e004b13d8a0fp+0
+0x1.4990f4ab6309ep-2
+0x1.a1c3687116b4dp+0
+0x1.564b75906f395p+1
+0x1.a2be5fc26772ep+1
+0x1.a854167788ddfp+1
+0x1.6624b23d7bd04p+1
+0x1.ce3963904c7bcp+0
+0x1.028f4ecc11762p-1
+-0x1.c56e941a49228p-1
+-0x1.13b02768d3032p+1
+-0x1.8a7ece9a83825p+1
+-0x1.c079a377c5d15p+1
+-0x1.ab5f14cb6a174p+1
+-0x1.4de8ad0748191p+1
+-0x1.6ef77720ff876p+0
+-0x1.a294f04dc9bf0p-7
+0x1.6c4d343f0ba05p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.e216665627205p-11
+trace.step_qty = 7
+trace.out_max = 29
+trace.t : float64 (3,)
+0x1.e216665627205p-11
+0x1.71192659f5f4cp-4
+0x1.6f370ff39fcdap-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+28
+trace.phase : int64 (3,)
+0
+1
+1
+trace.x : float64 (3,)
+0x0.0p+0
+-0x1.d33c63a1c3801p-2
+0x1.ca99bca6e047ap-1
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.6db5c03c76a31p+7
+-0x1.a32951561987ap+7
+trace.a : float64 (3,)
+0x0.0p+0
+-0x1.a9c67efcc5682p+11
+-0x1.d37742c5b3399p+11
+trace.f_a : float64 (3,)
+0x1.1491bc67045cep+20
+-0x1.918dfc631c880p+17
+0x1.0cd7f153fc31ap+19
+trace.f_b : float64 (3,)
+0x1.1491bc67045cep+20
+0x1.439b090a570fbp+20
+0x1.0cd7f153fc31ap+19
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+-0x1.75ccc896baa0bp+20
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.5719bf294685ap+2
+0x1.5719bf294685ap+2
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.54254ba6d0ec5p+8
+trace.params.stiffness = 0x1.42212fce4619bp+18
+trace.params.damping = 0x1.48d764c183d24p+9
+trace.params.fric_acc = 0x1.e6468410e259ep-17
+trace.params.gap = 0x1.2df4fe13f9a3fp-3
+trace.params.ratio2 = 0x1.18af68603eebfp+2
+## peak_response case 10
+max_static_equivalent_force = 0x1.1aa81341b8d4ep+20
+max_displacement = 0x1.849ba0c5b841cp+0
+max_velocity = 0x1.7a1f2dfc771bfp+5
+max_acceleration = 0x1.ad7c8b801bf35p+11
+max_applied_force = 0x1.34884c7fc3660p+22
+free_decay_samples = 10
+history : float64 (54,)
+0x0.0p+0
+-0x1.d700cd217ccd1p-4
+-0x1.b009f94cb8671p-2
+-0x1.66bd3e2b8b49cp+1
+-0x1.10b1352aa0b0bp+2
+-0x1.418c9a6a2c53ap+3
+-0x1.2b669e9100db3p+4
+-0x1.0130e92a8febcp+5
+-0x1.4f9ecc2b20e19p+5
+-0x1.6ec78c1ae6371p+5
+-0x1.7115f1ea41abcp+5
+-0x1.24b5e18eb4da0p+5
+-0x1.9a125cd7c1663p+4
+-0x1.83b24e7c7cfcdp+4
+-0x1.191d09b40318dp+4
+-0x1.a41cf58fd4b0bp+2
+0x1.1f83c4f2cef2ap+1
+0x1.b196b8f5c05d4p+3
+0x1.5c5d81a6568bdp+3
+0x1.0d85da9a1e96ep+2
+0x1.2cd558e9a57ffp+0
+-0x1.63cda0f279c34p+1
+0x1.817233d05c4eep+1
+0x1.7603f129b58fbp+2
+0x1.3c34dd9ac47afp+2
+0x1.45f3f3e25f318p+3
+0x1.cc69ad79986c4p+3
+0x1.0e41c0e8a9159p+4
+0x1.33565a8c0101bp+4
+0x1.55101e287d1c7p+4
+0x1.7315ae7498452p+4
+0x1.8d17f76271edcp+4
+0x1.a2d2fe1238928p+4
+0x1.b40e9219b4988p+4
+0x1.c09ede53c5cb3p+4
+0x1.c864d7c3fd2b3p+4
+0x1.cb68015eab384p+4
+0x1.c9d551be490dfp+4
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.4015d63e77d80p-10
+trace.step_qty = 4
+trace.out_max = 27
+trace.t : float64 (2,)
+0x1.4015d63e77d80p-10
+0x1.ea21700fa782cp-4
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+25
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+-0x1.501863c6eb155p+0
+trace.v : float64 (2,)
+0x0.0p+0
+0x1.90a862128da05p+2
+trace.a : float64 (2,)
+0x0.0p+0
+0x1.0e0b1ed1f3cb0p+10
+trace.f_a : float64 (2,)
+-0x1.31f2f3704c9d3p+21
+0x1.65172327a4ac6p+20
+trace.f_b : float64 (2,)
+-0x1.31f2f3704c9d3p+21
+0x1.211b97bef6988p+19
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+0x1.a912ae9052c04p+19
+trace.f_friction : float64 (2,)
+0x0.0p+0
+-0x1.01640d3b9ecc7p+11
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.b00526ec59e47p+10
+trace.params.stiffness = 0x1.6050d19a4dccep+19
+trace.params.damping = 0x1.ce303ccdfc07bp+10
+trace.params.fric_acc = 0x1.7d6753bc72e39p-10
+trace.params.gap = 0x1.afe7e33bc2111p-3
+trace.params.ratio2 = 0x1.10f42cdc423fbp+0
+## peak_response case 11
+max_static_equivalent_force = 0x1.4fa0962809e9ap+21
+max_displacement = 0x1.33a24a01df09ap-1
+max_velocity = 0x1.4ee4ceb2f5794p+5
+max_acceleration = 0x1.b1ea0e9e14b89p+11
+max_applied_force = 0x1.ce373414f649dp+20
+free_decay_samples = 6
+history : float64 (54,)
+-0x1.ce4b3453473c1p-56
+-0x1.cda979b0f63d0p-55
+-0x1.50b9a9996dc45p+7
+-0x1.9cc1a9d99d96ap+9
+-0x1.8241f232ad907p+9
+0x1.25623ebe53d8bp+7
+0x1.ca57407fc3e6fp+9
+0x1.7210230d34810p+11
+0x1.2d52825a509d8p+11
+-0x1.bd87fbe124b29p+8
+-0x1.09382108ef2f0p+10
+-0x1.821007da699b7p+10
+-0x1.b5871ef71d2f9p+10
+-0x1.bf6b19479a0e5p+9
+-0x1.da60b98470fd5p+9
+-0x1.43c99a5e97c0ep+11
+-0x1.69e65c7e7e0d8p+10
+0x1.0ce48afb15bd9p+9
+0x1.4031477dc71eap+11
+0x1.96f1bc5e9c607p+11
+0x1.462d1d47199c8p+10
+-0x1.ea8574f7ba650p+9
+-0x1.22f80d0cb2f68p+10
+0x1.acb00e3ef3552p+10
+0x1.98c837e1994c3p+11
+0x1.2bc6b73d75fbep+11
+-0x1.cf0ff90fa0b37p+8
+-0x1.0015e11bae9acp+11
+-0x1.88487b16de88cp+11
+-0x1.b13a9ce031178p+11
+-0x1.70cda410273a9p+11
+-0x1.ad075ffb68e66p+10
+-0x1.f0ec9d3a3b918p+5
+0x1.25e8783b4fc22p+8
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.889a793861538p-12
+trace.step_qty = 16
+trace.out_max = 27
+trace.t : float64 (6,)
+0x1.889a793861538p-12
+0x1.2c9644cf2a83fp-5
+0x1.2b0daa55f222ap-4
+0x1.bfd032444f034p-4
+0x1.2a495d1955f1fp-3
+0x1.74aaa11084624p-3
+trace.sub_step : int64 (6,)
+0
+97
+194
+291
+388
+485
+trace.sample : int64 (6,)
+0
+6
+12
+18
+25
+31
+trace.phase : int64 (6,)
+0
+1
+1
+1
+1
+2
+trace.x : float64 (6,)
+0x0.0p+0
+-0x1.3ff22acd0a1edp-3
+0x1.8754c6e3f8255p-2
+-0x1.0e6f305fc9c14p-2
+-0x1.c37903985e2a2p-3
+0x1.03bcaf5053740p-1
+trace.v : float64 (6,)
+0x0.0p+0
+-0x1.250338759af9cp+3
+0x1.595bc6addfcefp+2
+-0x1.92ca3e49e1d93p+4
+0x1.2f4ec53eb3aedp+4
+-0x1.84902dc1fab52p+4
+trace.a : float64 (6,)
+0x0.0p+0
+0x1.13db725a9b400p+9
+-0x1.c48774aaae208p+10
+0x1.4031477dc71eap+11
+0x1.92e1d45b586b9p+11
+-0x1.61d8d3bead614p+11
+trace.f_a : float64 (6,)
+-0x1.4661f97af8e24p+19
+-0x1.eac0ac677b000p+9
+-0x1.8e601ef103886p+20
+-0x1.713f7e24eb084p+20
+-0x1.6efdd7881c2a4p+19
+0x0.0p+0
+trace.f_b : float64 (6,)
+-0x1.4661f97af8e24p+19
+-0x1.f0dd305e19ef5p+16
+-0x1.aab9cbfecd8cbp+20
+-0x1.429ca82181e26p+21
+-0x1.41b78d5ce94c2p+21
+0x0.0p+0
+trace.f_unbalance : float64 (6,)
+0x0.0p+0
+0x1.ed07af054af95p+16
+0x1.c59ad0dca0450p+16
+0x1.13f9d21e18bc8p+20
+0x1.cbf02ef5c4832p+20
+0x0.0p+0
+trace.f_friction : float64 (6,)
+0x0.0p+0
+0x1.4c65029716be1p+6
+-0x1.4c65029716be1p+6
+0x1.4c650296d6292p+6
+-0x1.4c650296d6292p+6
+0x1.4c650296d6292p+6
+trace.stick : bool (6,)
+1
+0
+0
+0
+0
+0
+trace.d_f : float64 (6,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.8c2c6b3764941p+9
+trace.params.stiffness = 0x1.d85cfe5c08bd9p+19
+trace.params.damping = 0x1.ca5b9d2caaf31p+10
+trace.params.fric_acc = 0x1.496632d03579cp-15
+trace.params.gap = 0x1.ed295b35631cap-4
+trace.params.ratio2 = 0x1.6a8eadb226d5fp+2
+## peak_response case 12
+max_static_equivalent_force = 0x1.271ac8a62d400p+23
+max_displacement = 0x1.1904731dbefe8p+0
+max_velocity = 0x1.9f9c36b790757p+6
+max_acceleration = 0x1.3c76171c5894cp+13
+max_applied_force = 0x1.8031e9b3f46ddp+21
+free_decay_samples = 2
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.e77c55b5b3194p-12
+trace.step_qty = 16
+trace.out_max = 31
+trace.t : float64 (6,)
+0x1.e77c55b5b3194p-12
+0x1.753b319f1d1f5p-5
+0x1.7353b549676c4p-4
+0x1.1604e8e1a0246p-3
+0x1.725ff71e8c92bp-3
+0x1.cebb055b7900fp-3
+trace.sub_step : int64 (6,)
+0
+97
+194
+291
+388
+485
+trace.sample : int64 (6,)
+0
+6
+12
+18
+24
+30
+trace.phase : int64 (6,)
+0
+1
+1
+1
+1
+1
+trace.x : float64 (6,)
+0x0.0p+0
+-0x1.289d31fb0d878p-2
+0x1.01e26cb45a9bbp-1
+0x1.02b7716c15421p-3
+-0x1.baac167808745p-1
+0x1.a8d0a45013f6ap-1
+trace.v : float64 (6,)
+0x0.0p+0
+-0x1.4ba623e53cc47p+4
+-0x1.77102ccf7773cp+5
+0x1.2b8373ab03c69p+6
+-0x1.2f4e6b8164db0p+5
+-0x1.1312d0b8e7addp+6
+trace.a : float64 (6,)
+0x0.0p+0
+0x1.0d2c993141c9fp+10
+-0x1.27d5715e94246p+12
+-0x1.52c10cf0b67e3p+10
+0x1.dc176b3a360b5p+12
+-0x1.d9ee4de9c43d2p+12
+trace.f_a : float64 (6,)
+-0x1.a9ce7aef7cd80p+20
+0x1.28a6dbb1575b4p+18
+-0x1.3a1de3a9eaa46p+20
+0x1.e73454094c64cp+18
+-0x1.c13d14426da06p+18
+-0x1.0889192f6e0b4p+20
+trace.f_b : float64 (6,)
+-0x1.a9ce7aef7cd80p+20
+0x1.4f31e3eeb4b97p+20
+-0x1.d576623f734bap+19
+0x1.46db50cc10999p+20
+-0x1.8e8d36704f57ep+18
+-0x1.0889192f6e0b4p+20
+trace.f_unbalance : float64 (6,)
+0x0.0p+0
+-0x1.05082d025ee2ap+20
+-0x1.3d8aca28c3fa4p+18
+-0x1.9a1c77937b00cp+19
+-0x1.957eee90f2440p+15
+0x0.0p+0
+trace.f_friction : float64 (6,)
+0x0.0p+0
+0x1.12708a761252ep+4
+0x1.12708a761252ep+4
+-0x1.12708a721acf4p+4
+0x1.12708a761252ep+4
+0x1.12708a721acf4p+4
+trace.stick : bool (6,)
+1
+0
+0
+0
+0
+0
+trace.d_f : float64 (6,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.e372235af72ecp+9
+trace.params.stiffness = 0x1.14f3eed0b3524p+20
+trace.params.damping = 0x1.0454a85d8066cp+11
+trace.params.fric_acc = 0x1.14bba09bbcf38p-17
+trace.params.gap = 0x1.0d363c92ca3b1p-4
+trace.params.ratio2 = 0x1.06485859ae2eep+3
+## peak_response case 13
+max_static_equivalent_force = 0x1.3fe7a222ff1b6p+19
+max_displacement = 0x1.de0f8695e790fp-1
+max_velocity = 0x1.82e4e3ce2295bp+4
+max_acceleration = 0x1.125696f98dcdfp+10
+max_applied_force = 0x1.cc5137cffa46bp+19
+free_decay_samples = 21
+history : float64 (64,)
+0x1.356dc5a0f94cfp-9
+0x1.7c1bc7a6049b9p-6
+0x1.152e063fcdf1fp-4
+0x1.10c52e864c698p-3
+0x1.9c710a796eacfp-3
+0x1.ffa6d00d91938p-3
+0x1.177734ad92113p-2
+0x1.237f410e37912p-2
+0x1.3beb6a896e319p-2
+0x1.6433e19f6d9aap-2
+0x1.98766f415b8d2p-2
+0x1.c8c4127636456p-2
+0x1.ef587005d9217p-2
+0x1.02997015a4536p-1
+0x1.07a01fc55a0d3p-1
+0x1.0a616ce3bf182p-1
+0x1.0b699e49f84fap-1
+0x1.0e949dad3ad9ep-1
+0x1.09c60be1f7ef2p-1
+0x1.ee86d14c57b4ep-2
+0x1.af4ec9c67936ep-2
+0x1.63dd32ca99c56p-2
+0x1.21dd049762661p-2
+0x1.ddae21e1b29b5p-3
+0x1.93c00bb6b03a5p-3
+0x1.4c54c97a678dbp-3
+0x1.cc2fab0d7d760p-4
+0x1.4215847bf5638p-5
+-0x1.cb57587358146p-5
+-0x1.5e7df8ca58301p-3
+-0x1.281aa5836e363p-2
+-0x1.9c89707383feap-2
+-0x1.0529ba114be05p-1
+-0x1.37b08f16599eap-1
+-0x1.64e2b29c7ecb8p-1
+-0x1.8be3973def1f8p-1
+-0x1.abf4db2273282p-1
+-0x1.c479e9481d34ap-1
+-0x1.d4faf615c7387p-1
+-0x1.dd2748a20aa9cp-1
+-0x1.dcd79d4f7953dp-1
+-0x1.d41243f1be3f2p-1
+-0x1.c302981852a35p-1
+-0x1.a9fb8be6019c3p-1
+-0x1.8976ecb9cd77bp-1
+-0x1.621312684a7b0p-1
+-0x1.348fdc335df60p-1
+-0x1.01cb0a2ad189ap-1
+-0x1.9578097cabb33p-2
+-0x1.20de4e22366f5p-2
+-0x1.50028c0a073dfp-3
+-0x1.696927a9e10f6p-5
+0x1.36ceab7f68f5dp-4
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.45bc06a338701p-10
+trace.step_qty = 4
+trace.out_max = 32
+trace.t : float64 (3,)
+0x1.45bc06a338701p-10
+0x1.f2c7ea29ee6bap-4
+0x1.f03c721ca7facp-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+24
+48
+trace.phase : int64 (3,)
+0
+1
+2
+trace.x : float64 (3,)
+0x0.0p+0
+0x1.b65239e6d1592p-3
+-0x1.b1b0bb340d26fp-2
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.c383c816fe42ap+2
+0x1.6037a1ebf464bp+4
+trace.a : float64 (3,)
+0x0.0p+0
+0x1.877505cb33928p+8
+0x1.171039c0f3a0fp+8
+trace.f_a : float64 (3,)
+0x1.bb34e0e34a77ep+18
+-0x1.f5b70652d8d46p+15
+0x0.0p+0
+trace.f_b : float64 (3,)
+0x1.bb34e0e34a77ep+18
+-0x1.111a5a0688f26p+19
+0x0.0p+0
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+0x1.e37dd342b6ca3p+18
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.fb907ce1e0409p+9
+-0x1.fb907ce1dd429p+9
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.e74fa2f3c7150p+9
+trace.params.stiffness = 0x1.e74b214b8fb8fp+17
+trace.params.damping = 0x1.c7fd838222673p+9
+trace.params.fric_acc = 0x1.5345bf8405befp-10
+trace.params.gap = 0x1.818004b9e4f53p-4
+trace.params.ratio2 = 0x1.81fe091dbbb8ap+1
+## peak_response case 14
+max_static_equivalent_force = 0x1.e963c00812682p+23
+max_displacement = 0x1.23fca593c1ee6p+1
+max_velocity = 0x1.7d578bbabfdeap+7
+max_acceleration = 0x1.efc6a1be947a0p+13
+max_applied_force = 0x1.3f03d88a29714p+22
+free_decay_samples = 1
+history : float64 (50,)
+-0x1.714f5aa167163p-65
+-0x1.7098810c4414bp-64
+-0x1.5c1edbdb43c94p+3
+-0x1.a6652929fd004p+5
+-0x1.a38d3d0aa3d07p+4
+0x1.193d4bd04ded5p+6
+0x1.cef6b7d606fd1p+6
+0x1.d13a1baf507b5p+5
+-0x1.35ec5361b0a29p+5
+-0x1.d99c284eb1bbfp+6
+-0x1.f3978a35b7a5bp+6
+-0x1.c8a093b63eb17p+4
+0x1.660870ebcd808p+6
+0x1.a67791921fd93p+6
+0x1.cb0df4347bc7ap+5
+-0x1.37b04e8f045f8p+3
+-0x1.55ecacd737b03p+5
+-0x1.bdff2479c7dc9p+5
+-0x1.d736360f54a14p+5
+-0x1.9198f68a8e29bp+5
+0x1.04fc981fc3c6ep+5
+0x1.33e0ddd16aec7p+7
+0x1.0a7bae263ff3cp+7
+-0x1.c479926a468a7p+4
+-0x1.52be9fc94bdd2p+7
+-0x1.5cdae15da2699p+7
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.70abdc87d4261p-11
+trace.step_qty = 16
+trace.out_max = 25
+trace.t : float64 (5,)
+0x1.70abdc87d4261p-11
+0x1.1a4394d7fe6d2p-4
+0x1.18d2e8fb76990p-3
+0x1.a484078aedfb7p-3
+0x1.181a930d32aefp-2
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+6
+12
+18
+24
+trace.phase : int64 (5,)
+0
+1
+1
+1
+1
+trace.x : float64 (5,)
+0x0.0p+0
+-0x1.6173fdc21a811p-2
+-0x1.b703183d26849p+0
+-0x1.fb6a3e0015ffcp-4
+0x1.c708b0a6c7aacp+0
+trace.v : float64 (5,)
+0x0.0p+0
+0x1.8d001811828b8p+6
+0x1.e540c716dd491p+4
+-0x1.c6df075112ac6p+5
+-0x1.defcae2ae5e59p+6
+trace.a : float64 (5,)
+0x0.0p+0
+0x1.4cbbe39939078p+12
+0x1.6a899caa765ebp+13
+-0x1.4ed6f43a96d56p+8
+-0x1.85dfb80bfd004p+13
+trace.f_a : float64 (5,)
+-0x1.ccaa8f8eb5068p+19
+0x1.73da5b7666464p+21
+-0x1.1671eb20cd91ep+21
+-0x1.052b594c94598p+21
+-0x1.5f68bca86aceap+21
+trace.f_b : float64 (5,)
+-0x1.ccaa8f8eb5068p+19
+-0x1.3fba824a57ba0p+17
+-0x1.efa7f17aea4c8p+20
+-0x1.7842e223b22f8p+20
+-0x1.5f68bca86acebp+21
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+0x1.87d6039b0bc1ep+21
+-0x1.e9df263586ba0p+17
+-0x1.2427a0eaed070p+19
+0x1.0000000000000p-31
+trace.f_friction : float64 (5,)
+0x0.0p+0
+-0x1.0cdce6178dce7p+4
+-0x1.0cdce618ed195p+4
+0x1.0cdce61a4c643p+4
+0x1.0cdce6178dce7p+4
+trace.stick : bool (5,)
+1
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.f9e77babc9ba7p+9
+trace.params.stiffness = 0x1.e6833d4da553ap+19
+trace.params.damping = 0x1.83ae2bff9bab8p+11
+trace.params.fric_acc = 0x1.87dc62b25fc4ap-17
+trace.params.gap = 0x1.5b6614e130c78p-4
+trace.params.ratio2 = 0x1.d2846603ecf20p+2
+## peak_response case 15
+max_static_equivalent_force = 0x1.65243d6e582ccp+20
+max_displacement = 0x1.a7dd27151f220p-2
+max_velocity = 0x1.205a7c7831164p+5
+max_acceleration = 0x1.a2e9029238b8dp+11
+max_applied_force = 0x1.c00b2eba045f8p+19
+free_decay_samples = 3
+history : float64 (46,)
+-0x1.5c17498116b3cp-53
+0x1.ec70225a99fadp+5
+0x1.10f328916cf38p+8
+0x1.14f5f682b58cbp+7
+0x1.56974e7c22081p+10
+-0x1.9a764b6905ba5p+9
+-0x1.639ba93e2da78p+10
+-0x1.16e1b8153a195p+9
+-0x1.23cca63cb6655p+10
+-0x1.b72eaea185a82p+6
+-0x1.af6c87222c17dp+8
+0x1.4664d0ced974cp+10
+0x1.e4ecfd0c5ba12p+10
+0x1.3c08fd0922b07p+9
+0x1.083993a2c576ep+10
+0x1.8c76b3b4a6b9cp+6
+-0x1.6192d52819fcbp+8
+-0x1.8077bc1f09b92p+10
+0x1.ca53cda3266e5p+6
+-0x1.190b5533037d3p+11
+-0x1.98719b9cfaea4p+10
+-0x1.cd424dbe7a592p+9
+0x1.2b6f802cd1111p+10
+0x1.77cced3647836p+11
+0x1.8f8e8c4369a4ep+11
+0x1.88d53d40a6215p+10
+-0x1.edee4b9969246p+5
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.987dda25bbe11p-11
+trace.step_qty = 10
+trace.out_max = 23
+trace.t : float64 (3,)
+0x1.987dda25bbe11p-11
+0x1.38c05b04e3d85p-4
+0x1.3727dd2abe1c7p-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+10
+20
+trace.phase : int64 (3,)
+0
+1
+1
+trace.x : float64 (3,)
+0x0.0p+0
+-0x1.578965cecb876p-8
+0x1.2a60921862dd2p-2
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.098e7b100bcfdp+4
+-0x1.8b3dfaaf8a4bep+2
+trace.a : float64 (3,)
+0x0.0p+0
+-0x1.4859aff224e8ap+8
+-0x1.13a137761b060p+11
+trace.f_a : float64 (3,)
+0x1.2835800d8ae2ep+19
+-0x1.e95854ab61dd6p+18
+-0x1.1ef7305ec7893p+19
+trace.f_b : float64 (3,)
+0x1.2835800d8ae2ep+19
+-0x1.5b89a7414226ep+18
+-0x1.1ef7305ec7894p+19
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+-0x1.1b9d5ad43f6d0p+17
+0x1.0000000000000p-33
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.c790176aee2e1p+2
+0x1.c7901769dc9b6p+2
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.b4883d18a2c28p+8
+trace.params.stiffness = 0x1.8f15cce5208f9p+18
+trace.params.damping = 0x1.3068a3b3771adp+8
+trace.params.fric_acc = 0x1.aa4cc3251a9e3p-17
+trace.params.gap = 0x1.2ed1be5232528p-4
+trace.params.ratio2 = 0x1.49f24e32819f9p+3
+## peak_response case 16
+max_static_equivalent_force = 0x1.21e141317f27bp+18
+max_displacement = 0x1.1f6a1d4e4df7cp-1
+max_velocity = 0x1.1644f7fa2326ep+5
+max_acceleration = 0x1.bd5377cf6e2a1p+11
+max_applied_force = 0x1.751c2aa21a425p+19
+free_decay_samples = 10
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.4cf1e5b5cc247p-11
+trace.step_qty = 7
+trace.out_max = 21
+trace.t : float64 (3,)
+0x1.4cf1e5b5cc247p-11
+0x1.fdd267be6097dp-5
+0x1.fb3883f2f4ff8p-4
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+28
+trace.phase : int64 (3,)
+0
+1
+2
+trace.x : float64 (3,)
+0x0.0p+0
+-0x1.1521f0117767bp-6
+-0x1.4f96eb7082caep-2
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.d8a2306494246p+4
+0x1.3433f92a87320p+4
+trace.a : float64 (3,)
+0x0.0p+0
+0x1.2b90c5fec0e20p+10
+0x1.1a07530d1a3fbp+9
+trace.f_a : float64 (3,)
+0x1.33a37c120da00p+13
+0x1.77856667277d8p+18
+0x0.0p+0
+trace.f_b : float64 (3,)
+0x1.33a37c120da00p+13
+0x1.e81d3949409e0p+15
+0x0.0p+0
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+0x1.3a81bf3dff69cp+18
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.cc627d520b929p+5
+-0x1.cc627d520b929p+5
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.1f014c47128d5p+8
+trace.params.stiffness = 0x1.8c21698de5d92p+18
+trace.params.damping = 0x1.76a2982a5618cp+9
+trace.params.fric_acc = 0x1.0b09d4cd01041p-13
+trace.params.gap = 0x1.0fc41b227faaap-4
+trace.params.ratio2 = 0x1.5822e3d563737p+0
+## peak_response case 17
+max_static_equivalent_force = 0x1.7e3d38ed829c6p+14
+max_displacement = 0x1.4239f677ff4f0p-4
+max_velocity = 0x1.2e1185e7185ecp+1
+max_acceleration = 0x1.3f11bd7356de0p+9
+max_applied_force = 0x1.fda8e545c6dfep+17
+free_decay_samples = 0
+history : float64 (62,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+-0x1.128c53d1c4f58p-11
+-0x1.9048f6bbb7defp-9
+-0x1.8e0769896086ap-8
+-0x1.27f63ec9c7e7ap-7
+-0x1.86228c80d94b7p-7
+-0x1.ed0f9a96f6819p-7
+-0x1.3f6150b805208p-6
+-0x1.8b86391e181d5p-6
+-0x1.d4345dca3ea6ap-6
+-0x1.0c6bd8b5842d6p-5
+-0x1.2a672322737b2p-5
+-0x1.3e02dd865734ep-5
+-0x1.4cec5cb8060c6p-5
+-0x1.5912c1cdbfdc4p-5
+-0x1.625ed0fc97b0ap-5
+-0x1.81a79367d37eep-5
+-0x1.de6cde35c5e18p-5
+-0x1.e75ca7917d526p-5
+-0x1.01dfe363b0e26p-4
+-0x1.16433612c491dp-4
+-0x1.2e38e987fd254p-4
+-0x1.3fdd027aa9253p-4
+-0x1.40ec1dcd3bf7ap-4
+-0x1.3839a27a9f724p-4
+-0x1.28c56424d73f2p-4
+-0x1.138f2d275a27ap-4
+-0x1.02a1dc1f93b58p-4
+-0x1.0fadeb64b1ccbp-4
+-0x1.2176c2bc071b8p-4
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.a1596ddd84cf5p-11
+trace.step_qty = 7
+trace.out_max = 31
+trace.t : float64 (3,)
+0x1.a1596ddd84cf5p-11
+0x1.3f88781d99aecp-4
+0x1.3de71eafbc29fp-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+28
+trace.phase : int64 (3,)
+0
+1
+1
+trace.x : float64 (3,)
+0x0.0p+0
+-0x1.3ba720a18af5dp-5
+-0x1.1a21f774d7187p-4
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.77f5f68ce6a8ep-2
+0x1.f527862c97458p-1
+trace.a : float64 (3,)
+0x0.0p+0
+0x1.117ec7ca46cc2p+4
+0x1.309b893f10e56p+5
+trace.f_a : float64 (3,)
+-0x1.1f64d125fba44p+17
+-0x1.83f405251241bp+16
+-0x1.33824fa31ad92p+15
+trace.f_b : float64 (3,)
+-0x1.1f64d125fba44p+17
+-0x1.8f2f5822837b2p+16
+-0x1.33824fa31ad92p+15
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+0x1.676a5fae272e0p+11
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.868d1c77e26ecp+5
+-0x1.868d1c77e3701p+5
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.a382d13ce9825p+8
+trace.params.stiffness = 0x1.ab7414ea3bb12p+16
+trace.params.damping = 0x1.237b37b4d781ep+8
+trace.params.fric_acc = 0x1.8489ecb6a7329p-14
+trace.params.gap = 0x1.e24e87c0b881bp-5
+trace.params.ratio2 = 0x1.0a3de1ccf46dbp+3
+## peak_response case 18
+max_static_equivalent_force = 0x1.fe73e16ff51bdp+14
+max_displacement = 0x1.8c52d5ffeeb9bp-3
+max_velocity = 0x1.daa699598fcbep+2
+max_acceleration = 0x1.be5a8f9bbdeb7p+9
+max_applied_force = 0x1.a01b90ec9f66ep+18
+free_decay_samples = 0
+history : float64 (62,)
+0x0.0p+0
+0x1.326713b0c9621p-1
+0x1.c88db00349989p+0
+0x1.645dbb66bc9bdp+1
+0x1.951bcfd3253dap+1
+0x1.76554a6506e7ap+1
+0x1.a051c97767e66p+1
+0x1.14618c32fa92bp+2
+0x1.55b37b19ef6e0p+2
+0x1.6fecf7d74decbp+2
+0x1.14f4ec048f26ap+2
+0x1.c91e404b88ccep-1
+-0x1.6cd9374f9b670p+1
+-0x1.6bcbda780ee5ap+2
+-0x1.b07858f991930p+2
+-0x1.d89550ecbe8efp+2
+-0x1.cb346f19073e8p+2
+-0x1.5bed60f06d6afp+2
+-0x1.d58be7e38c79ep+1
+-0x1.bd237254ed22bp+1
+-0x1.d1290b5bab3d6p+0
+0x1.1e6174b28a824p-1
+0x1.a467d327f271cp+1
+0x1.e2f2568453c33p+0
+-0x1.09b191c413cc9p+1
+-0x1.3f4cfb2c2e64ap+2
+-0x1.0aafa7b4b3c22p+2
+-0x1.154559a416078p+0
+0x1.5dbaa8fbdbd97p-1
+0x1.a4e20a1fff224p-1
+0x1.e709964d43a21p-1
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.21131c8afceeep-11
+trace.step_qty = 10
+trace.out_max = 31
+trace.t : float64 (4,)
+0x1.21131c8afceeep-11
+0x1.baa543b4d34dcp-5
+0x1.b8631d7bbd53fp-4
+0x1.49b9cc8e88807p-3
+trace.sub_step : int64 (4,)
+0
+97
+194
+291
+trace.sample : int64 (4,)
+0
+9
+19
+29
+trace.phase : int64 (4,)
+0
+1
+1
+1
+trace.x : float64 (4,)
+0x0.0p+0
+0x1.24a46c94cc53ep-3
+-0x1.5d2c137915c31p-6
+-0x1.57ff5ee381b14p-4
+trace.v : float64 (4,)
+0x0.0p+0
+0x1.71dcb6071ef94p+2
+-0x1.0449e0777f2f0p+2
+0x1.6c52a52710817p-1
+trace.a : float64 (4,)
+0x0.0p+0
+-0x1.b2d82500085e4p+0
+0x1.6a85b809c1749p+3
+0x1.9b180ed40c4b0p+4
+trace.f_a : float64 (4,)
+-0x1.14881816faad8p+15
+-0x1.976a4145b95dap+17
+0x1.2db4dd0171275p+16
+-0x1.c2c30fd290214p+16
+trace.f_b : float64 (4,)
+-0x1.14881816faad8p+15
+-0x1.c5dda3a16342ap+17
+0x1.25202ce863cfdp+16
+-0x1.c2c30fd290214p+16
+trace.f_unbalance : float64 (4,)
+0x0.0p+0
+0x1.739b12dd4f280p+14
+0x1.12960321aaf00p+11
+0x0.0p+0
+trace.f_friction : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.stick : bool (4,)
+0
+0
+0
+0
+trace.d_f : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.e4ad4101c72d0p+8
+trace.params.stiffness = 0x1.a0672cbcc078bp+16
+trace.params.damping = 0x1.3741f8cce50f2p+8
+trace.params.fric_acc = 0x0.0p+0
+trace.params.gap = 0x1.2a3697bafa31ep-5
+trace.params.ratio2 = 0x1.b8093f54769bfp+0
+## peak_response case 19
+max_static_equivalent_force = 0x1.c4cc5422d14aap+17
+max_displacement = 0x1.21d1d4dc88cc7p-2
+max_velocity = 0x1.3467d3c719be8p+4
+max_acceleration = 0x1.7e6fa01ca3c73p+11
+max_applied_force = 0x1.7395fb96c374ep+19
+free_decay_samples = 0
+history : float64 (60,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x1.3e29c35a9236fp+10
+0x1.39921bb93be60p+10
+-0x1.35471ff11798ep+10
+-0x1.36c29725989e2p+10
+-0x1.83453a0c7f4f1p+5
+0x1.f8c60c30acee2p+9
+0x1.cb63726376c45p+9
+-0x1.4584bc825d9c6p+7
+-0x1.915cf589e7d28p+7
+-0x1.7369622cf1b11p+8
+-0x1.c8e483c4a753cp+10
+-0x1.77960de5b3d5fp+8
+0x1.f9afda3d7e0dep+9
+-0x1.da139c331e80bp+10
+-0x1.b8dfe7404e90ap+10
+-0x1.70e8dc84bdd33p+5
+-0x1.ddca9cce63a45p+8
+-0x1.61ce4f9468f16p+8
+0x1.2d47fe0da9297p+7
+0x1.951b9694cd5acp+6
+0x1.57e41f1fea7f0p+10
+0x1.7a5e7049eaebcp+11
+0x1.037c2e30c4818p+11
+0x1.01dfd0e8146f9p+9
+0x1.ddd22093afb57p+7
+0x1.5ba1c5090e7cep+5
+0x1.e8da00a0b16a4p+3
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.0f2c7fee2c340p-10
+trace.step_qty = 4
+trace.out_max = 30
+trace.t : float64 (2,)
+0x1.0f2c7fee2c340p-10
+0x1.9f3c23e4b3afap-4
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+24
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+-0x1.de3b77380bd0fp-3
+trace.v : float64 (2,)
+0x0.0p+0
+-0x1.e6a2475b6dd34p+3
+trace.a : float64 (2,)
+0x0.0p+0
+0x1.57e41f1fea7f0p+10
+trace.f_a : float64 (2,)
+0x1.5b030ba8b4842p+18
+0x1.1846f88af8106p+19
+trace.f_b : float64 (2,)
+0x1.5b030ba8b4842p+18
+0x1.f69e022aa67b8p+17
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+0x1.353ef0009ce30p+18
+trace.f_friction : float64 (2,)
+0x0.0p+0
+0x1.3ee625a8da714p+4
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.42eabb185282cp+8
+trace.params.stiffness = 0x1.2f78da9252fe1p+17
+trace.params.damping = 0x1.1ac6e556fcf7bp+9
+trace.params.fric_acc = 0x1.0bccbb920db4ap-14
+trace.params.gap = 0x1.4e503accbb0e8p-3
+trace.params.ratio2 = 0x1.62fa9b02d82b0p+3
+## peak_response case 20
+max_static_equivalent_force = 0x1.4d0d80ce66c08p+19
+max_displacement = 0x1.acbbe5d897973p-2
+max_velocity = 0x1.fb47e7499fc96p+3
+max_acceleration = 0x1.7faa2fccf1e6bp+9
+max_applied_force = 0x1.b587b739adc9bp+18
+free_decay_samples = 5
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.9dbeca7e7a63ap-11
+trace.step_qty = 10
+trace.out_max = 24
+trace.t : float64 (4,)
+0x1.9dbeca7e7a63ap-11
+0x1.3cc61308d5b44p-4
+0x1.3b28543e5739ep-3
+0x1.d7ed9ef84399ap-3
+trace.sub_step : int64 (4,)
+0
+97
+194
+291
+trace.sample : int64 (4,)
+0
+10
+20
+29
+trace.phase : int64 (4,)
+0
+1
+1
+2
+trace.x : float64 (4,)
+0x0.0p+0
+-0x1.9ef8ae822301ep-3
+0x1.0cfd8afd0a3b7p-6
+0x1.7a150f13f990cp-6
+trace.v : float64 (4,)
+0x0.0p+0
+-0x1.d8d1c0037c0edp+2
+0x1.4312e05762facp+3
+-0x1.fb47e7499fc96p+3
+trace.a : float64 (4,)
+0x0.0p+0
+0x1.9144e51747b8ap+7
+0x1.d69db568343a0p+8
+-0x1.44b1dd7b16e25p-1
+trace.f_a : float64 (4,)
+-0x1.63460a6b768dcp+17
+0x1.be3883d870920p+16
+0x1.4afb8c715c682p+18
+0x0.0p+0
+trace.f_b : float64 (4,)
+-0x1.63460a6b768dcp+17
+0x1.00528fe169678p+17
+-0x1.46af7642c7864p+16
+0x0.0p+0
+trace.f_unbalance : float64 (4,)
+0x0.0p+0
+-0x1.09b26fa988f40p+14
+0x1.9ca76a020e49bp+18
+0x0.0p+0
+trace.f_friction : float64 (4,)
+0x0.0p+0
+0x1.e5d9a0fc27ef3p+3
+-0x1.e5d9a0fcb1730p+3
+0x1.e5d9a0fcb1730p+3
+trace.stick : bool (4,)
+1
+0
+0
+0
+trace.d_f : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.bc8067771718fp+9
+trace.params.stiffness = 0x1.226997469d705p+17
+trace.params.damping = 0x1.2a3e862311d13p+8
+trace.params.fric_acc = 0x1.c43b9832a8bfap-17
+trace.params.gap = 0x1.df17bdfc3517cp-4
+trace.params.ratio2 = 0x1.da1e69556f5fep+3
+## peak_response case 21
+max_static_equivalent_force = 0x1.1d0f8dbce138dp+21
+max_displacement = 0x1.1db6f08706896p+1
+max_velocity = 0x1.0e1d7583c723ep+6
+max_acceleration = 0x1.485e542a79031p+12
+max_applied_force = 0x1.169411c3122c2p+22
+free_decay_samples = 24
+history : float64 (48,)
+0x0.0p+0
+0x0.0p+0
+-0x1.cb91fe67a35d5p-8
+-0x1.0bceadf76f18ep-4
+-0x1.5b7b871619d2ep-3
+-0x1.513f8d2cf92f1p-2
+-0x1.07307ca6acac2p-1
+-0x1.5584b2a54a804p-1
+-0x1.971da822d61fbp-1
+-0x1.d30cdc0761387p-1
+-0x1.0bc2dcc9b4278p+0
+-0x1.33577a7aaa036p+0
+-0x1.5944afdedcdf8p+0
+-0x1.74b5049bf1542p+0
+-0x1.84462eaff62abp+0
+-0x1.7fc62ef2f6a52p+0
+-0x1.6937427412948p+0
+-0x1.4231438ce814fp+0
+-0x1.0996e6dce9102p+0
+-0x1.91bc5e9077775p-1
+-0x1.08800047a96cep-1
+-0x1.e74125d09eb98p-3
+0x1.732765d0a7a46p-5
+0x1.4fcfa9e8f200dp-2
+0x1.35f4950f32ef9p-1
+0x1.bf0a330fc4debp-1
+0x1.207746e9ee1e7p+0
+0x1.5cc28e08683aap+0
+0x1.936bdad7da65ep+0
+0x1.c38f5f6ce82fep+0
+0x1.ec644959222dbp+0
+0x1.06a003b5103d8p+1
+0x1.12cc891224133p+1
+0x1.1a8495aca19f3p+1
+0x1.1da785b8b29fep+1
+0x1.1c27bc0c2f5e4p+1
+0x1.160addba3863bp+1
+0x1.0b69b7f393e5cp+1
+0x1.f8dfbcf8ffafap+0
+0x1.d2b5f26a95e40p+0
+0x1.a4f38c9506cf9p+0
+0x1.7055aa90a81abp+0
+0x1.35b6009b80c14p+0
+0x1.ec0ea6bb1c775p-1
+0x1.64a31532e0b71p-1
+0x1.aeb5ae3198ccbp-2
+0x1.1a00658c09880p-3
+-0x1.2e4e885ad3eccp-3
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.15198ea185f72p-10
+trace.step_qty = 4
+trace.out_max = 24
+trace.t : float64 (2,)
+0x1.15198ea185f72p-10
+0x1.a84f226755227p-4
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+24
+trace.phase : int64 (2,)
+0
+2
+trace.x : float64 (2,)
+0x0.0p+0
+0x1.ded11ee004218p-2
+trace.v : float64 (2,)
+0x0.0p+0
+0x1.06aabb4e131d5p+6
+trace.a : float64 (2,)
+0x0.0p+0
+-0x1.a1e8e12364e47p+8
+trace.f_a : float64 (2,)
+-0x1.e0ed32d3e174cp+20
+0x0.0p+0
+trace.f_b : float64 (2,)
+-0x1.e0ed32d3e174cp+20
+0x0.0p+0
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.f_friction : float64 (2,)
+0x0.0p+0
+-0x1.2a0d097303a17p+4
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.1fc6d5ff609a0p+10
+trace.params.stiffness = 0x1.0d3c8d2a54192p+20
+trace.params.damping = 0x1.e479a14900f83p+9
+trace.params.fric_acc = 0x1.1efe2ca617d6cp-16
+trace.params.gap = 0x1.e4e136954d85dp-7
+trace.params.ratio2 = 0x1.e589f75ee374dp-1
+## peak_response case 22
+max_static_equivalent_force = 0x1.014fca84682e9p+18
+max_displacement = 0x1.be2db25782c8fp-1
+max_velocity = 0x1.6d72e7766778fp+4
+max_acceleration = 0x1.a415117c22d7ap+10
+max_applied_force = 0x1.673301032b2bcp+19
+free_decay_samples = 8
+history : float64 (48,)
+0x0.0p+0
+0x1.86c2cfdf2597bp+0
+0x1.9a162b6d62caap+1
+0x1.9ab218f572f29p+2
+0x1.c7d8de16f1cfcp+2
+-0x1.0ef77051237a8p-3
+-0x1.11e6618a4a025p+3
+-0x1.cc1c1fbc28600p+3
+-0x1.ccedaacf6ccb6p+3
+-0x1.5bbc6ab2786f8p+1
+0x1.6101ad90640a6p+3
+0x1.2bf7ead5600e3p+3
+-0x1.2c769287b9f02p-1
+-0x1.4c9c7964d3627p+2
+-0x1.bb29560938fa5p+1
+0x1.a723f44bfb248p-1
+0x1.6b3a4aec0c1d0p+2
+0x1.1db502574390ep+3
+0x1.d56c8382d2fc0p+3
+0x1.4a3e7452b285dp+4
+0x1.6543d4b8e6b35p+4
+0x1.1acd41e383e3ep+4
+0x1.7bf94bbe3106ap+3
+0x1.94eb0fe7fd8a2p+2
+0x1.7f6e708dd8a8ap+0
+-0x1.b4854d49c3236p+1
+-0x1.04e79df2ff956p+3
+-0x1.8fd647abdab4ap+3
+-0x1.03802a047c75ap+4
+-0x1.32397ae1f195bp+4
+-0x1.51c0c90c0d669p+4
+-0x1.6080cd4f06b5fp+4
+-0x1.5d9dd13458d9bp+4
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.d0340ca77fe65p-11
+trace.step_qty = 10
+trace.out_max = 24
+trace.t : float64 (4,)
+0x1.d0340ca77fe65p-11
+0x1.6367d9b03dec5p-4
+0x1.6197a5a3966c7p-3
+0x1.08bdaf3786f16p-2
+trace.sub_step : int64 (4,)
+0
+97
+194
+291
+trace.sample : int64 (4,)
+0
+10
+19
+29
+trace.phase : int64 (4,)
+0
+1
+1
+2
+trace.x : float64 (4,)
+0x0.0p+0
+-0x1.a3d11e41abb2bp-3
+0x1.fc62e20b2975cp-3
+0x1.ee5336c4c4645p-2
+trace.v : float64 (4,)
+0x0.0p+0
+0x1.b695ec84b5133p+0
+0x1.4a3e7452b285dp+4
+-0x1.25b5d0df96d79p+4
+trace.a : float64 (4,)
+0x0.0p+0
+0x1.a2a7eeb99a6b0p+10
+0x1.36f0140c52a85p+9
+-0x1.363127d17c446p+8
+trace.f_a : float64 (4,)
+0x1.274b4b08a443cp+16
+0x1.6da820c1b4801p+18
+-0x1.8a18fd2b614d8p+15
+0x0.0p+0
+trace.f_b : float64 (4,)
+0x1.274b4b08a443cp+16
+-0x1.5c9352bcbca0fp+18
+-0x1.99998f91a7473p+18
+0x0.0p+0
+trace.f_unbalance : float64 (4,)
+0x0.0p+0
+0x1.651db9bf38908p+19
+0x1.68566fec3b1d8p+18
+0x0.0p+0
+trace.f_friction : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.stick : bool (4,)
+0
+0
+0
+0
+trace.d_f : float64 (4,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.da04b037593a3p+8
+trace.params.stiffness = 0x1.30b62bc0b0fddp+18
+trace.params.damping = 0x1.b334fc5ba7129p+7
+trace.params.fric_acc = 0x0.0p+0
+trace.params.gap = 0x1.ff14a88af7376p-6
+trace.params.ratio2 = 0x1.ef8c5d777d31cp-1
+## peak_response case 23
+max_static_equivalent_force = 0x1.aaf3da8c8c322p+16
+max_displacement = 0x1.bf63e61fe3be7p-2
+max_velocity = 0x1.7311bc5906cc3p+3
+max_acceleration = 0x1.57dc0be42a2bbp+10
+max_applied_force = 0x1.18292758af5a2p+20
+free_decay_samples = 19
+history : float64 (58,)
+0x1.1fb248b7a9149p-57
+0x1.82d50f705c98dp+6
+0x1.816d679919e40p+6
+0x1.7580bd9f0da1dp+6
+-0x1.080c1a7a30e5dp+3
+0x1.13a448bf56dd7p+6
+0x1.62922d56d5003p+9
+0x1.56cb13c0419acp+9
+-0x1.6b138c750ef80p+5
+-0x1.c88659c93bc55p+5
+-0x1.6a8f79a92721ap+6
+-0x1.7535ff9225d20p+7
+-0x1.929455bf4f790p+9
+-0x1.ca509d6187f50p+7
+0x1.17a38bfd991b4p+9
+0x1.f5f605ee185bbp+5
+0x1.bc8833280b274p+5
+-0x1.06f3996b000d9p+7
+-0x1.0ca4b30b5ce44p+7
+-0x1.94b57478841ddp+7
+-0x1.ab7df68505ac0p+9
+-0x1.b0b8fd440dedcp+9
+-0x1.3d8887aa0d457p+7
+-0x1.e10957161d49cp+8
+-0x1.2e2bee55521a2p+8
+0x1.57dc0be42a2bbp+10
+0x1.567b575e696f0p+10
+-0x1.6bb14a82ab62bp+6
+-0x1.78aaa87bc4000p+6
+-0x1.828d4ed7d8c1bp+6
+-0x1.899400ea61c7cp+6
+-0x1.8db7e083772e7p+6
+-0x1.8ef766465d6b2p+6
+-0x1.8d565944b5a7dp+6
+-0x1.88e754142c0d5p+6
+-0x1.81b7b057e17e0p+6
+-0x1.77d8b0ee824aap+6
+-0x1.6b62086f9c56dp+6
+-0x1.5c6ff69d7c9eep+6
+-0x1.4b230b24d4998p+6
+-0x1.379fe0f8087dap+6
+-0x1.220ed2d34c675p+6
+-0x1.0a9ba9821405fp+6
+-0x1.e2ea89110e71cp+5
+-0x1.ad9a7bb93b00dp+5
+-0x1.75af12c449a44p+5
+-0x1.3b9421c685a63p+5
+-0x1.ad54c4fc81c1dp+4
+-0x1.39ea14b5bdd47p+2
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.18d0ae7b410fdp-11
+trace.step_qty = 10
+trace.out_max = 29
+trace.t : float64 (5,)
+0x1.18d0ae7b410fdp-11
+0x1.adff8b2cbba03p-5
+0x1.abcde9cfc51e1p-4
+0x1.404e070496361p-3
+0x1.aab5192149dd0p-3
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+10
+20
+29
+39
+trace.phase : int64 (5,)
+0
+1
+1
+1
+2
+trace.x : float64 (5,)
+0x0.0p+0
+0x1.68e8feff6a455p-3
+0x1.b84b6549c9bd8p-2
+0x1.073c7027a42d6p-2
+0x1.e6ae35afee705p-3
+trace.v : float64 (5,)
+0x0.0p+0
+0x1.1497c0ee2595ap+3
+0x1.82e61109e5e7bp+1
+0x1.16184855f0aa3p+1
+-0x1.6618111230fb9p+1
+trace.a : float64 (5,)
+0x0.0p+0
+-0x1.313ab7ed288aap+6
+-0x1.c04c70ccec9a6p+8
+-0x1.828d4ed7d8c1bp+6
+-0x1.5090ea7c182aep+6
+trace.f_a : float64 (5,)
+0x1.e83c18a1748c4p+17
+-0x1.95c8cc438ac96p+18
+-0x1.c92f7319f5602p+18
+-0x1.6eee82b35cf83p+19
+0x0.0p+0
+trace.f_b : float64 (5,)
+0x1.e83c18a1748c4p+17
+-0x1.9d83aa8177e62p+18
+-0x1.b87ce2a6551b2p+17
+-0x1.6eee82b35cf82p+19
+0x0.0p+0
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+0x1.eeb78f7b47300p+12
+-0x1.d9e2038d95a52p+17
+-0x1.0000000000000p-33
+0x0.0p+0
+trace.f_friction : float64 (5,)
+0x0.0p+0
+-0x1.8941084cf4386p+8
+-0x1.8941084cf7095p+8
+-0x1.8941084cf7095p+8
+0x1.8941084cf7095p+8
+trace.stick : bool (5,)
+1
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.8b62258bdc4acp+9
+trace.params.stiffness = 0x1.1ddc053be5c52p+19
+trace.params.damping = 0x1.49ba253b389d8p+10
+trace.params.fric_acc = 0x1.174d85b52263fp-12
+trace.params.gap = 0x1.e30bde1d7f21bp-5
+trace.params.ratio2 = 0x1.5a144a0803942p-2
+## peak_response case 24
+max_static_equivalent_force = 0x1.fb6c6482aa30bp+23
+max_displacement = 0x1.9f27e05b4ec6fp+0
+max_velocity = 0x1.33d2ed66dc4edp+7
+max_acceleration = 0x1.d74f9f735ce04p+13
+max_applied_force = 0x1.18e247c4f3c61p+22
+free_decay_samples = 1
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.cf3d154e0d4ecp-12
+trace.step_qty = 16
+trace.out_max = 25
+trace.t : float64 (5,)
+0x1.cf3d154e0d4ecp-12
+0x1.62aac44fc2305p-5
+0x1.60db873a74230p-4
+0x1.0830d6268396fp-3
+0x1.5ff3e8afcd1c5p-3
+trace.sub_step : int64 (5,)
+0
+97
+194
+291
+388
+trace.sample : int64 (5,)
+0
+6
+12
+18
+24
+trace.phase : int64 (5,)
+0
+1
+1
+1
+1
+trace.x : float64 (5,)
+0x0.0p+0
+-0x1.3e32ba93c6b5dp-3
+-0x1.467701af6227bp-1
+0x1.9029a2fe74114p+0
+-0x1.c9fb7a4eff91cp-1
+trace.v : float64 (5,)
+0x0.0p+0
+0x1.d287e12b76682p+4
+-0x1.9ce78c559521fp+6
+0x1.3d26d819630a4p+5
+0x1.938bde192c63ep+6
+trace.a : float64 (5,)
+0x0.0p+0
+0x1.d6d6d14ce1477p+11
+0x1.1077ce0bf18f6p+11
+-0x1.8e60932438342p+13
+0x1.e75c83fecdc5ep+12
+trace.f_a : float64 (5,)
+0x1.ff9c94a9d6b00p+17
+0x1.96f9d0d1dc0adp+20
+-0x1.3f95ba19eb797p+19
+0x1.84f1af65b93d3p+20
+-0x1.01b23e6b370f7p+21
+trace.f_b : float64 (5,)
+0x1.ff9c94a9d6b00p+17
+-0x1.8897bdc00b0edp+20
+0x1.46e2134174346p+21
+0x1.7068daa18a368p+19
+-0x1.01b23e6b370f7p+21
+trace.f_unbalance : float64 (5,)
+0x0.0p+0
+0x1.8fc8c748f38cdp+21
+-0x1.96c781c7ef12cp+21
+0x1.997a8429e843ep+19
+0x0.0p+0
+trace.f_friction : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.stick : bool (5,)
+0
+0
+0
+0
+0
+trace.d_f : float64 (5,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.2730ce3ed23f7p+10
+trace.params.stiffness = 0x1.1459729cd3e8dp+20
+trace.params.damping = 0x1.cac184a9e08ccp+10
+trace.params.fric_acc = 0x0.0p+0
+trace.params.gap = 0x1.e1217e68dac32p-5
+trace.params.ratio2 = 0x1.2b8b608d9dd0cp+3
+## peak_response case 25
+max_static_equivalent_force = 0x1.086378a799d33p+22
+max_displacement = 0x1.21fdee3a8b9c3p+1
+max_velocity = 0x1.b583a815af220p+6
+max_acceleration = 0x1.a35730c7adcecp+12
+max_applied_force = 0x1.748d9500a2f30p+22
+free_decay_samples = 5
+history : float64 (62,)
+0x1.3b3b9d3178b39p-62
+0x1.3a9e0585ae12dp-61
+0x1.d6fe49b15bc93p-61
+-0x1.f03f499e64bc2p-8
+-0x1.18b23e1f79dd7p-6
+-0x1.a59c04d4bca7dp-4
+-0x1.0dc7498acd6f6p-2
+-0x1.f9d30e46c7a08p-2
+-0x1.83eddd7596922p-1
+-0x1.e8664bb213735p-1
+-0x1.1fd2a3fe864d2p+0
+-0x1.4611e43debf7cp+0
+-0x1.67f46f12dd1dbp+0
+-0x1.90627fd1dcdbbp+0
+-0x1.ab98247972e83p+0
+-0x1.b24ed2913a952p+0
+-0x1.a0abd0de00c3ep+0
+-0x1.6ceda2c8810bfp+0
+-0x1.1bbb56a1d80aep+0
+-0x1.622301e475c84p-1
+-0x1.9de250c680233p-3
+0x1.3314d8f976c21p-2
+0x1.918cc7b769db1p-1
+0x1.3be81757e4b66p+0
+0x1.a212d9e469306p+0
+0x1.f30c420dab3ebp+0
+0x1.15137a2f082cdp+1
+0x1.21645fc0270ffp+1
+0x1.1e280d9f01546p+1
+0x1.0dec74fc80d13p+1
+0x1.e47bad7b70f41p+0
+0x1.9ae513791f317p+0
+0x1.428c15526f633p+0
+0x1.bd08afe6e9136p-1
+0x1.c948a090c3207p-2
+0x1.cadfe6b775ed0p-8
+-0x1.bd597fe386a1ap-2
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.2f0c662043adbp-10
+trace.step_qty = 4
+trace.out_max = 31
+trace.t : float64 (2,)
+0x1.2f0c662043adbp-10
+0x1.d00afc6167a1fp-4
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+25
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+0x1.b881bd5bbfbb7p+0
+trace.v : float64 (2,)
+0x0.0p+0
+0x1.25bbda3ff7f1bp+6
+trace.a : float64 (2,)
+0x0.0p+0
+-0x1.04de28720d9e4p+12
+trace.f_a : float64 (2,)
+-0x1.cf0d54816d5c4p+20
+-0x1.b70589be9afe0p+19
+trace.f_b : float64 (2,)
+-0x1.cf0d54816d5c4p+20
+0x1.90e09ca26b138p+19
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+-0x1.a3f313308308cp+20
+trace.f_friction : float64 (2,)
+0x0.0p+0
+-0x1.071933147437ep+7
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.23238e851a691p+10
+trace.params.stiffness = 0x1.a7c79e74a957fp+19
+trace.params.damping = 0x1.2dc298a3dced3p+9
+trace.params.fric_acc = 0x1.11dc660c7765dp-13
+trace.params.gap = 0x1.8701a35ca5fb9p-4
+trace.params.ratio2 = 0x1.20c24b8529fa1p+1
+## peak_response case 26
+max_static_equivalent_force = 0x1.ce8bd95268f9fp+15
+max_displacement = 0x1.c1ade60dc956ep-2
+max_velocity = 0x1.c65e242f56ad4p+3
+max_acceleration = 0x1.ce93d3f468928p+9
+max_applied_force = 0x1.43a82b297b9aep+18
+free_decay_samples = 21
+history : float64 (64,)
+0x1.9d941fe42b9e7p-68
+-0x1.f4e49efee60eep-3
+-0x1.1455e436da090p-1
+-0x1.0ce5cfad0758fp+0
+-0x1.48209cb50c8c0p+0
+-0x1.a10bdd39e961fp+0
+-0x1.533ee6903d2d7p+2
+-0x1.52be254ee952dp+3
+-0x1.bcc721ffb0fbfp+3
+-0x1.b04290a135db5p+3
+-0x1.0849d0a0c6eb4p+3
+-0x1.23bbc847cc1b8p+1
+0x1.f01f248d91f57p-1
+-0x1.ec46f3fa551c6p-1
+-0x1.a31c132cddcd7p+1
+-0x1.002030ff61849p+2
+-0x1.4202212fe87efp+1
+0x1.21de2ec0f1d3bp+1
+0x1.e14c103f0f635p+2
+0x1.4d8d2b2e53fa3p+3
+0x1.32d4e7abd227fp+3
+0x1.0cdaf2edeb850p+3
+0x1.f93a977b0bcffp+2
+0x1.09f94bd364b44p+3
+0x1.27619280d7104p+3
+0x1.b4d5a0cd5aed5p+2
+0x1.8831778b9522ep+1
+0x1.e096e700bcd2ap-1
+0x1.dcceccbdc78e4p+1
+0x1.b77c73a992fa5p+2
+0x1.092c5fb895699p+3
+0x1.f1c45eb47c60bp+2
+0x1.ca619e491ef43p+2
+0x1.9cd42ace3c2eep+2
+0x1.69d496b7f682dp+2
+0x1.322d84095fc0bp+2
+0x1.ed71120eb55abp+1
+0x1.70b5ccd6fc76bp+1
+0x1.e0086ec23ab23p+0
+0x1.b50333623a0d6p-1
+-0x1.56154f9794ba6p-3
+-0x1.287871d39a841p+0
+-0x1.0f99353580431p+1
+-0x1.85bbe52a80fcep+1
+-0x1.f4ffe591241d4p+1
+-0x1.2def4ee561216p+2
+-0x1.5c7a45b52c437p+2
+-0x1.8582ff119ea40p+2
+-0x1.a8819a163eaeap+2
+-0x1.c505e4d71a691p+2
+-0x1.dab8b837c8405p+2
+-0x1.e95cf3defc6b6p+2
+-0x1.f0ccbf40d07d7p+2
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.a740fda9a7603p-12
+trace.step_qty = 16
+trace.out_max = 32
+trace.t : float64 (9,)
+0x1.a740fda9a7603p-12
+0x1.440dc235e425ap-5
+0x1.426681383a7e4p-4
+0x1.e2c6215582e9bp-4
+0x1.4192e0b965aa9p-3
+0x1.91c2b0c809e05p-3
+0x1.e1f280d6ae160p-3
+0x1.19112872a925ep-2
+0x1.41291079fb40cp-2
+trace.sub_step : int64 (9,)
+0
+97
+194
+291
+388
+485
+582
+679
+776
+trace.sample : int64 (9,)
+0
+6
+12
+18
+24
+30
+36
+42
+48
+trace.phase : int64 (9,)
+0
+1
+1
+1
+1
+1
+2
+2
+2
+trace.x : float64 (9,)
+0x0.0p+0
+-0x1.065bfc3e7e11fp-5
+-0x1.80f65c5225692p-2
+-0x1.abef2e2233386p-2
+-0x1.2ef118b9f114dp-4
+0x1.01b43d7602399p-3
+0x1.82d3f11f920a6p-2
+0x1.a8fd99b6afc5cp-2
+0x1.e2e6822ef08adp-3
+trace.v : float64 (9,)
+0x0.0p+0
+-0x1.af8966229064ap+1
+0x1.2c9f481b9fd91p-1
+0x1.7917f375adbbcp+2
+0x1.271a62c0f7af0p+3
+0x1.09c7c743d6f00p+3
+0x1.fca95a232856ep+1
+-0x1.080619f3b86abp+1
+-0x1.a8819a163eaeap+2
+trace.a : float64 (9,)
+0x0.0p+0
+-0x1.3beff9c43d428p+9
+0x1.a1027f482973cp+8
+0x1.95e5d9b55bba1p+9
+0x1.9228d785b7fafp+6
+0x1.42129661c7529p+5
+-0x1.22cb2857cce83p+7
+-0x1.287c1d424baf3p+7
+-0x1.39b4dff5ff3fbp+6
+trace.f_a : float64 (9,)
+-0x1.533d92177d541p+17
+-0x1.16a61ec63254fp+17
+0x1.d1f0a541d1900p+13
+0x1.4b0fe4bbea126p+16
+-0x1.0217b7e28123cp+16
+-0x1.8ac7bb32c166ep+15
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_b : float64 (9,)
+-0x1.533d92177d541p+17
+0x1.8250adc698046p+16
+-0x1.5a1cdcdb8adf9p+16
+-0x1.3dc7a559095a6p+17
+-0x1.7965be389dba5p+16
+-0x1.5dcd2cd16a38dp+16
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_unbalance : float64 (9,)
+0x0.0p+0
+-0x1.d7ce75a97e572p+17
+0x1.945af183c5119p+16
+0x1.e34f97b6fe639p+17
+0x1.dd381958725a4p+14
+0x1.30d29e70130acp+15
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_friction : float64 (9,)
+0x0.0p+0
+0x1.0aaefc5f1f280p+9
+-0x1.0aaefc5f1ef01p+9
+-0x1.0aaefc5f1e482p+9
+-0x1.0aaefc5f1e482p+9
+-0x1.0aaefc5f1e482p+9
+-0x1.0aaefc5f1f280p+9
+0x1.0aaefc5f1f280p+9
+0x1.0aaefc5f1e482p+9
+trace.stick : bool (9,)
+1
+0
+0
+0
+0
+0
+0
+0
+0
+trace.d_f : float64 (9,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.722cc66893bd1p+8
+trace.params.stiffness = 0x1.626784f3e57f1p+17
+trace.params.damping = 0x1.4ecf1e1837672p+9
+trace.params.fric_acc = 0x1.30ec496240d64p-11
+trace.params.gap = 0x1.b767ca7517906p-5
+trace.params.ratio2 = 0x1.6a1ca520f9a79p-1
+## peak_response case 27
+max_static_equivalent_force = 0x1.8e627242e9e49p+18
+max_displacement = 0x1.eb8ff0136e982p+0
+max_velocity = 0x1.db766987f7938p+4
+max_acceleration = 0x1.c87f78ad7362ep+10
+max_applied_force = 0x1.6bc874168dda5p+20
+free_decay_samples = 33
+history : float64 (62,)
+0x1.8b5d0818454cep+10
+0x1.870a4861644a5p+10
+0x1.4f844f3b10da5p+6
+0x1.b2cbba595d07ep+6
+0x1.4336b1d9282c9p+6
+0x1.783de13fe8546p+10
+-0x1.ada29b2d98a4fp+8
+-0x1.d2ac355be0b1ep+8
+-0x1.f3c612f9e470cp+8
+-0x1.0e03a85192237p+8
+-0x1.bc344c307cbb8p+10
+-0x1.c86bd69794078p+10
+-0x1.c748a1bd4157cp+10
+0x1.2bacd6aea2bacp+10
+0x1.36fc6de32d1f7p+10
+0x1.3627802b57757p+10
+-0x1.5e2375ef5265ep+10
+-0x1.5e0efc1a0c9a7p+10
+-0x1.5b0f49a6a7795p+10
+-0x1.015544d066539p+8
+0x1.b77be4836c55bp+5
+0x1.3b94ac3a6139fp+6
+0x1.98ad5b9a0f62bp+6
+0x1.be3dc50bb7fa7p+7
+-0x1.64b29cb873254p+9
+-0x1.571b49bfc1457p+9
+-0x1.03ddbd69b1143p+10
+-0x1.458417cada3e9p+5
+0x1.51c86ed27bc34p+1
+0x1.804be3baffd22p+5
+0x1.63315a782a27fp+6
+0x1.018bc1ae3a886p+7
+0x1.4f421e5763da0p+7
+0x1.9a16a28c07699p+7
+0x1.e16a83b26d607p+7
+0x1.12534f13ee404p+8
+0x1.319e5ab8623b6p+8
+0x1.4e545086dc9b0p+8
+0x1.6838b1bc91730p+8
+0x1.7f1514806b563p+8
+0x1.92b996317bc9ep+8
+0x1.a2fd3fa709b71p+8
+0x1.afbe5a9079d61p+8
+0x1.b8e2b74345d82p+8
+0x1.be57e266a1c3ap+8
+0x1.c0134a0f03f5dp+8
+0x1.be1256b38761ap+8
+0x1.b85a6a06f3709p+8
+0x1.aef8cb9525e5bp+8
+0x1.a2028f8fb9f76p+8
+0x1.9194676127ab7p+8
+0x1.7dd2623fd0aeep+8
+0x1.66e79e1ca9f0ep+8
+0x1.4d05e99abb4f4p+8
+0x1.306557dc68f4fp+8
+0x1.1143c71175f8bp+8
+0x1.dfc8b5995b90bp+7
+0x1.991dd683cdcd1p+7
+0x1.4f1ed548ce38ep+7
+0x1.026a83e4ccd69p+7
+0x1.674a9a315d97fp+6
+0x1.8ddf502c9d5fbp+5
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.89428a6d7dd55p-12
+trace.step_qty = 16
+trace.out_max = 31
+trace.t : float64 (11,)
+0x1.89428a6d7dd55p-12
+0x1.2d16f1fbd4575p-5
+0x1.2b8daf7166d98p-4
+0x1.c08fe5e4e3875p-4
+0x1.2ac90e2c301a9p-3
+0x1.754a2965ee718p-3
+0x1.bfcb449facc86p-3
+0x1.05262fecb58fap-2
+0x1.2a66bd8994bb2p-2
+0x1.4fa74b2673e69p-2
+0x1.74e7d8c353120p-2
+trace.sub_step : int64 (11,)
+0
+97
+194
+291
+388
+485
+582
+679
+776
+873
+970
+trace.sample : int64 (11,)
+0
+6
+12
+18
+24
+30
+36
+42
+48
+54
+60
+trace.phase : int64 (11,)
+0
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+trace.x : float64 (11,)
+0x0.0p+0
+0x1.1b1eb9f193922p-1
+0x1.4d6760eb67281p+0
+0x1.3d00115a308bcp+0
+0x1.5a8656670ee7cp-1
+-0x1.e3746eac7006cp-3
+-0x1.364ee59a1ad20p+0
+-0x1.d101e59242d2fp+0
+-0x1.df1a9669ec0c2p+0
+-0x1.5d5e8f80c9774p+0
+-0x1.cdc0598a1b477p-2
+trace.v : float64 (11,)
+0x0.0p+0
+0x1.9d9096a0cb01ap+4
+0x1.a4a781234bb99p+0
+-0x1.591eb17a73151p+2
+-0x1.ead3020a90423p+3
+-0x1.d6e6076d91bd5p+4
+-0x1.6dc1f6c8e66a7p+4
+-0x1.30c8315d357d0p+3
+0x1.a39748036a905p+2
+0x1.492a78e7affdcp+4
+0x1.c5d7f053c728bp+4
+trace.a : float64 (11,)
+0x0.0p+0
+0x1.577fabbd0bab4p+10
+-0x1.c87f78ad7362ep+10
+-0x1.5d94e3a9ae7c7p+10
+-0x1.9db959f7d45fap+4
+0x1.fb2554aca114bp+5
+0x1.20515f945deccp+8
+0x1.a9cfefc54e709p+8
+0x1.b385b5f3efd66p+8
+0x1.3b701df81af29p+8
+0x1.98e33fb782ae4p+6
+trace.f_a : float64 (11,)
+0x1.0a53906bd8cf0p+20
+0x1.aaa365029a5f6p+19
+-0x1.12736189382ecp+18
+-0x1.14441adc86e28p+18
+0x1.c5f2acf7299c0p+18
+0x1.e132a2bceb010p+19
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_b : float64 (11,)
+0x1.0a53906bd8cf0p+20
+-0x1.e97cad87371fbp+18
+0x1.0d7282abcfbacp+20
+0x1.630c39d415644p+19
+0x1.5150cbe1972ccp+18
+0x1.e132a2bceb010p+19
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_unbalance : float64 (11,)
+0x0.0p+0
+0x1.4fb0dde31af7ap+20
+-0x1.520f5b0e1dc67p+20
+-0x1.ed2e474258d58p+19
+0x1.d287845649bd0p+16
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.f_friction : float64 (11,)
+0x0.0p+0
+-0x1.fe624594f0ecdp+2
+-0x1.fe624598fe434p+2
+0x1.fe62459992742p+2
+0x1.fe62459992742p+2
+0x1.fe624594f0ecdp+2
+0x1.fe624594f0ecdp+2
+0x1.fe62459992742p+2
+-0x1.fe62459992742p+2
+-0x1.fe624594f0ecdp+2
+-0x1.fe624594f0ecdp+2
+trace.stick : bool (11,)
+1
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+trace.d_f : float64 (11,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.c74b39e28bcfap+9
+trace.params.stiffness = 0x1.fe860a34dfbe0p+17
+trace.params.damping = 0x1.f78b3a4ea88a3p+7
+trace.params.fric_acc = 0x1.b8d80acb91852p-19
+trace.params.gap = 0x1.ccc10a62405eep-5
+trace.params.ratio2 = 0x1.9d4181fc4ede2p-1
+## peak_response case 28
+max_static_equivalent_force = 0x1.92ba9980e02f1p+18
+max_displacement = 0x1.0170a155cd016p-3
+max_velocity = 0x1.46ce0ed07d07ep+3
+max_acceleration = 0x1.686647789b60fp+10
+max_applied_force = 0x1.c453417c49866p+19
+free_decay_samples = 1
+history = None
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.5bdf6e059d4cbp-11
+trace.step_qty = 7
+trace.out_max = 29
+trace.t : float64 (3,)
+0x1.5bdf6e059d4cbp-11
+0x1.0a57103c4c6ebp-4
+0x1.08fb30ce46d17p-3
+trace.sub_step : int64 (3,)
+0
+97
+194
+trace.sample : int64 (3,)
+0
+14
+27
+trace.phase : int64 (3,)
+0
+1
+1
+trace.x : float64 (3,)
+0x0.0p+0
+0x1.ce553c060af25p-4
+-0x1.aa0224d8edce7p-4
+trace.v : float64 (3,)
+0x0.0p+0
+-0x1.831432fa27dc9p+2
+-0x1.08341ff31095bp-4
+trace.a : float64 (3,)
+0x0.0p+0
+-0x1.5cf703faa235bp+10
+0x1.54d22b0bc7a65p+8
+trace.f_a : float64 (3,)
+0x1.0dad23fb335d0p+15
+-0x1.295ff0ce0459ap+19
+0x1.1cc074ddabd1ap+19
+trace.f_b : float64 (3,)
+0x1.0dad23fb335d0p+15
+0x1.35e6a15c8a598p+18
+0x1.1cc074ddabd1ap+19
+trace.f_unbalance : float64 (3,)
+0x0.0p+0
+-0x1.c453417c49866p+19
+0x0.0p+0
+trace.f_friction : float64 (3,)
+0x0.0p+0
+0x1.d15be6b9f3108p+8
+0x1.d15be6b9f0cffp+8
+trace.stick : bool (3,)
+1
+0
+0
+trace.d_f : float64 (3,)
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.d04ff710964cep+9
+trace.params.stiffness = 0x1.5f83694f769c8p+18
+trace.params.damping = 0x1.cba620a34f6e1p+8
+trace.params.fric_acc = 0x1.5ca82c5d56481p-12
+trace.params.gap = 0x1.1dd23aac240bbp-5
+trace.params.ratio2 = 0x1.876b6b2766efcp+3
+## peak_response case 29
+max_static_equivalent_force = 0x1.59888532ca054p+17
+max_displacement = 0x1.72124757b9786p-2
+max_velocity = 0x1.fc46e0f82ef6ap+3
+max_acceleration = 0x1.541a49bb606c4p+11
+max_applied_force = 0x1.36648b02ee892p+20
+free_decay_samples = 0
+history : float64 (54,)
+0x0.0p+0
+-0x1.3349cd2ea8bbap-11
+-0x1.78dd108813631p-8
+-0x1.0865ae919f9dep-6
+-0x1.8bca33b3476dfp-6
+-0x1.4a7662e30750cp-8
+0x1.7017f38372d29p-5
+0x1.9b240b99af1ccp-4
+0x1.384e53b7e0305p-3
+0x1.9d2da48b14017p-3
+0x1.fc56a1fa9102ep-3
+0x1.2a3cb670d1892p-2
+0x1.51a93d3b881d4p-2
+0x1.6f9d0c8f19d11p-2
+0x1.67d3503735409p-2
+0x1.3576857aaa3eep-2
+0x1.eab8a97a2d408p-3
+0x1.6854f4f70e9c2p-3
+0x1.060aecd6c8eb6p-3
+0x1.9af03d5404808p-4
+0x1.5d30efaea3ebap-4
+0x1.43fb1c8eb46abp-4
+0x1.308b664e47998p-4
+0x1.1354b9af0ca5ap-4
+0x1.8d82c883dd63dp-5
+0x1.14b6afd0fac74p-6
+-0x1.2500c4e81b03fp-6
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+trace.solver = 'peak_response'
+trace.trace_every = 97
+trace.dt = 0x1.0d525e7c89db1p-10
+trace.step_qty = 4
+trace.out_max = 27
+trace.t : float64 (2,)
+0x1.0d525e7c89db1p-10
+0x1.9c6620aeb3177p-4
+trace.sub_step : int64 (2,)
+0
+97
+trace.sample : int64 (2,)
+0
+24
+trace.phase : int64 (2,)
+0
+1
+trace.x : float64 (2,)
+0x0.0p+0
+0x1.e8f32c29f6ab7p-5
+trace.v : float64 (2,)
+0x0.0p+0
+-0x1.236a8c01c34b7p+2
+trace.a : float64 (2,)
+0x0.0p+0
+-0x1.adff07265451ap+9
+trace.f_a : float64 (2,)
+0x1.16f3181eaa26ep+18
+-0x1.87b8f872f09edp+18
+trace.f_b : float64 (2,)
+0x1.16f3181eaa26ep+18
+0x1.07d529854a420p+15
+trace.f_unbalance : float64 (2,)
+0x0.0p+0
+-0x1.a8b39da399e71p+18
+trace.f_friction : float64 (2,)
+0x0.0p+0
+0x1.3d9821b57acd5p+5
+trace.stick : bool (2,)
+1
+0
+trace.d_f : float64 (2,)
+0x0.0p+0
+0x0.0p+0
+trace.n_cells = 0
+trace.pivot_seg_qty = 0
+trace.pipe_seg_qty = 0
+trace.ext_qty = 0
+trace.p_cells = None
+trace.v_cells = None
+trace.cell_position = None
+trace.cell_kind = None
+trace.moving_fraction = None
+trace.params.mass = 0x1.0ab88eeff126bp+9
+trace.params.stiffness = 0x1.a175b447932fdp+18
+trace.params.damping = 0x1.1804d2ef20c79p+10
+trace.params.fric_acc = 0x1.40b0efc615679p-14
+trace.params.gap = 0x1.c2dc935eb496cp-5
+trace.params.ratio2 = 0x1.2bd4e6ad748b7p+0

@@ -1,0 +1,212 @@
+## peak_response output_type=0
+max_static_equivalent_force = 0x1.4c609ca8f11f2p+25
+max_displacement = 0x1.d80beebd33e50p+1
+max_velocity = 0x1.2fe35da9a5530p+9
+max_acceleration = 0x1.b5ff26e00518dp+16
+max_applied_force = 0x1.e601fd249961cp+23
+free_decay_samples = 2
+history = None
+## peak_response output_type=1
+max_static_equivalent_force = 0x1.4c609ca8f11f2p+25
+max_displacement = 0x1.d80beebd33e50p+1
+max_velocity = 0x1.2fe35da9a5530p+9
+max_acceleration = 0x1.b5ff26e00518dp+16
+max_applied_force = 0x1.e601fd249961cp+23
+free_decay_samples = 2
+history : float64 (60,)
+0x1.1e3f5153f249cp-77
+0x1.1d74b43ae5892p-76
+-0x1.3904041aa4f50p-3
+-0x1.a002c8dc392d3p-1
+-0x1.87d2e90b99fcep+0
+-0x1.7ee32a936d3e7p+0
+-0x1.74a0a402e3039p-2
+0x1.02ae895758cd0p+1
+0x1.d1f63468d4478p+1
+0x1.69a1e4c7e1e29p+1
+0x1.73ff451863e99p-4
+-0x1.4845987404440p+1
+-0x1.5b0ef22d8bb5ap+1
+-0x1.3ee627ac537c8p-2
+0x1.bfade6f8c69d0p+0
+0x1.5708c14d1305ep+0
+-0x1.150d89992bb35p+0
+-0x1.7f9de15520dccp+1
+-0x1.f51c8c4e1ac1bp+0
+0x1.31cc4b12cb4fdp+0
+0x1.b3d72ea0a000ap+1
+0x1.5048d8648830ap+1
+-0x1.49462f5626ee0p-2
+-0x1.5647587d1b860p+1
+-0x1.268bf1bcbeb3ep+1
+-0x1.694e9465d7d50p-2
+0x1.ebce8d226480fp-1
+0x1.87df1468c40ebp-2
+-0x1.5aa28bbe44153p+0
+-0x1.ed62c0c4453fap+0
+-0x1.3757e33da55e4p-1
+0x1.49563a6fe904ap+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+## peak_response output_type=2
+max_static_equivalent_force = 0x1.4c609ca8f11f2p+25
+max_displacement = 0x1.d80beebd33e50p+1
+max_velocity = 0x1.2fe35da9a5530p+9
+max_acceleration = 0x1.b5ff26e00518dp+16
+max_applied_force = 0x1.e601fd249961cp+23
+free_decay_samples = 2
+history : float64 (60,)
+-0x1.1e7a66829c234p-77
+-0x1.1daf9f978b3f4p-76
+-0x1.4ac39fdfcfd10p+6
+-0x1.3c5d3bb8278ffp+7
+-0x1.32e10c52f6981p+6
+0x1.789bf9a45f637p+6
+0x1.54591ad405626p+8
+0x1.b766b944a1839p+8
+0x1.6c256f7886259p+6
+-0x1.6cfe0133348d1p+8
+-0x1.1a6f5ed384b55p+9
+-0x1.313bcb6a10c77p+8
+0x1.00537983778e9p+8
+0x1.f6e0c2210f973p+8
+0x1.60c32a0187e32p+7
+-0x1.3532b58043cb0p+8
+-0x1.e6d86d0afcf81p+8
+-0x1.be0c96b7e7cacp+6
+0x1.c645018b1a35bp+8
+0x1.2265e4c0f4d05p+9
+0x1.2c2a583011533p+7
+-0x1.936923a93142bp+8
+-0x1.1d4015055c286p+9
+-0x1.8fbab174762fap+7
+0x1.1aafdc4cf739cp+8
+0x1.6153ab9ea33b8p+8
+0x1.3e076f3ac4be3p+6
+-0x1.0c0dc79d3fd68p+8
+-0x1.0e37add33d2dfp+8
+0x1.48589991790e2p+6
+0x1.5d2a3ee926af9p+8
+0x1.1263a978a8138p+8
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+## peak_response output_type=3
+max_static_equivalent_force = 0x1.4c609ca8f11f2p+25
+max_displacement = 0x1.d80beebd33e50p+1
+max_velocity = 0x1.2fe35da9a5530p+9
+max_acceleration = 0x1.b5ff26e00518dp+16
+max_applied_force = 0x1.e601fd249961cp+23
+free_decay_samples = 2
+history : float64 (60,)
+-0x1.f8e1fc4ae9cc7p-65
+-0x1.f77c9da18556dp-64
+-0x1.b4e234d37dcbap+14
+0x1.545ad165a9e5bp+5
+0x1.98b17f1690e33p+14
+0x1.df26770d3f5d2p+14
+0x1.ab9f67e9bcda7p+15
+-0x1.b84e0f92072a6p+14
+-0x1.4ed7edae7e2e9p+16
+-0x1.f338014f98315p+15
+-0x1.2720eda14cc7ep+11
+0x1.5e62111e27271p+16
+0x1.6f61089e9332cp+16
+-0x1.0b604853dbd5fp+14
+-0x1.56a562c838c97p+16
+-0x1.1810266a85c05p+16
+0x1.8d19a4a2748ddp+13
+0x1.b06df06d21672p+16
+0x1.26efc6751f90ap+16
+-0x1.08f39378ade4ep+15
+-0x1.9db0a0f83f972p+16
+-0x1.29566579f4ca4p+16
+0x1.23aecd71edaecp+14
+0x1.904e70ec4ff61p+16
+0x1.8cae45db9be80p+15
+-0x1.71986a7f00dedp+14
+-0x1.07cd780fc6ad2p+16
+-0x1.692da7a423a5bp+15
+0x1.7414509c04a36p+15
+0x1.0825e069539aep+16
+0x1.3625b5b68f3d0p+14
+-0x1.61311b9f8ab75p+15
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0

@@ -1,0 +1,290 @@
+## peak_response_jc output_type=0
+max_static_equivalent_force = 0x1.4f3c72201d376p+17
+max_displacement = 0x1.4e8a0ef0183adp+0
+max_velocity = 0x1.28645eec61620p+4
+max_acceleration = 0x1.94d10b5a12897p+10
+max_applied_force = 0x1.3c3cd25c46f10p+19
+free_decay_samples = 18
+history = None
+## peak_response_jc output_type=1
+max_static_equivalent_force = 0x1.4f3c72201d376p+17
+max_displacement = 0x1.4e8a0ef0183adp+0
+max_velocity = 0x1.28645eec61620p+4
+max_acceleration = 0x1.94d10b5a12897p+10
+max_applied_force = 0x1.3c3cd25c46f10p+19
+free_decay_samples = 18
+history : float64 (86,)
+0x0.0p+0
+0x0.0p+0
+0x1.510b1280fbdf7p-7
+0x1.87f277c1b822ap-7
+0x1.37e71b04a5566p-4
+0x1.7f37fa9c54a7ap-3
+0x1.49942d94de411p-2
+0x1.bb4165bc4fac4p-2
+0x1.0c442196b3c6ap-1
+0x1.344690da6af4fp-1
+0x1.4c86c9c6389cbp-1
+0x1.52234733618dbp-1
+0x1.4f1a62117d76ap-1
+0x1.68d8f01ba8d20p-1
+0x1.9e37571856e9ep-1
+0x1.d583fb646d22bp-1
+0x1.ce42d6c455ab9p-1
+0x1.8ebcf1db3655ap-1
+0x1.3799941c40792p-1
+0x1.f687bdfe4ebd6p-2
+0x1.e044f208428c8p-2
+0x1.02b343cfd9508p-1
+0x1.1f4a7c8b3582bp-1
+0x1.29bc102c45b04p-1
+0x1.22ebeb1283aefp-1
+0x1.f431437e5e65ep-2
+0x1.6e05cd12697f5p-2
+0x1.9083d57fd101ap-3
+0x1.cbd50cabbd4ebp-5
+-0x1.2eb1e08f0957cp-4
+-0x1.a19b898b5bac8p-3
+-0x1.4ab118b5a64bcp-2
+-0x1.85fbc5436f6d0p-2
+-0x1.905d66c77a524p-2
+-0x1.c20f034b30853p-2
+-0x1.2573463757d76p-1
+-0x1.8167dfb52823dp-1
+-0x1.c10a502a0e8ecp-1
+-0x1.c91b531b40445p-1
+-0x1.b180e0cefdd24p-1
+-0x1.b2bc29b2bc423p-1
+-0x1.e670fff8a43a9p-1
+-0x1.18e34e0085840p+0
+-0x1.30fb9d21445edp+0
+-0x1.3c8e9499ccff5p+0
+-0x1.4413b58f2a13dp+0
+-0x1.4b00ec93a8e57p+0
+-0x1.4e816422c9f3dp+0
+-0x1.4beeba12910e0p+0
+-0x1.43581134bd416p+0
+-0x1.3603ed9bd8b0fp+0
+-0x1.24c70bff1e1e7p+0
+-0x1.0fca93389b495p+0
+-0x1.ee3300558d51ap-1
+-0x1.b606c9feec77cp-1
+-0x1.781ba03994a6fp-1
+-0x1.358767919e47cp-1
+-0x1.de8633ce6c75cp-2
+-0x1.4c79fb0c7d1a7p-2
+-0x1.6dbae71f48655p-3
+-0x1.fcd083245524cp-6
+0x1.d1513a943ce54p-4
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+## peak_response_jc output_type=2
+max_static_equivalent_force = 0x1.4f3c72201d376p+17
+max_displacement = 0x1.4e8a0ef0183adp+0
+max_velocity = 0x1.28645eec61620p+4
+max_acceleration = 0x1.94d10b5a12897p+10
+max_applied_force = 0x1.3c3cd25c46f10p+19
+free_decay_samples = 18
+history : float64 (86,)
+0x0.0p+0
+0x0.0p+0
+0x1.985e230ef4973p+1
+0x1.c1816b0489028p+1
+0x1.20d24fee18499p+3
+0x1.9f128502bff2fp+3
+0x1.96aaa7bc4a006p+3
+0x1.3a9f14c99b913p+3
+0x1.1296c8047460ap+3
+0x1.a2c46f92182f4p+2
+0x1.750149dcb4593p+1
+-0x1.5e9c7e2d3ec43p-1
+0x1.7d4821c4c274dp+0
+0x1.042f3230df128p+3
+0x1.8b894a7b232a6p+3
+0x1.7611b6eb59e20p+2
+-0x1.f31ef9ee7bba2p+2
+-0x1.0262b8b1b9a22p+4
+-0x1.f85f2cae8dac0p+3
+-0x1.b6d98470a6dc3p+2
+0x1.72561978f0d1fp+0
+0x1.5ca8627ab7ee6p+2
+0x1.0b3acd453d6c7p+2
+0x1.1adef960f74b9p-1
+-0x1.1a8ba4c34b24bp+2
+-0x1.5b0a46009cad2p+3
+-0x1.eb845bebf986dp+3
+-0x1.ee93e7dd936c1p+3
+-0x1.a3d7dd67dfd29p+3
+-0x1.9ea21cef786e0p+3
+-0x1.a26e492a4a565p+3
+-0x1.2c78880d175c2p+3
+-0x1.32be7b915d3e7p+1
+-0x1.94b24f3b70bacp+0
+-0x1.2111d1e8cfec4p+3
+-0x1.1087eba908adfp+4
+-0x1.0b51d6f8533fcp+4
+-0x1.c39f112b497dbp+2
+0x1.8970c799d4e06p+1
+0x1.dfa97fb46f0cdp+1
+-0x1.4e616b845d104p+2
+-0x1.c13452d9afe5bp+3
+-0x1.9e72f6d6b8700p+3
+-0x1.98b967c851073p+2
+-0x1.a2343564a4550p+1
+-0x1.6e167aeb138b5p+1
+-0x1.2572dc23c2489p+1
+-0x1.073f3a4a10339p-2
+0x1.202508791a60ap+1
+0x1.1729b1ad3cf8cp+2
+0x1.7fd125f60e08bp+2
+0x1.ddb339f0c8bedp+2
+0x1.1dce248f23c18p+3
+0x1.4ad08fb8c7913p+3
+0x1.723662209906ep+3
+0x1.92a09c642b4e0p+3
+0x1.ac9c638186e38p+3
+0x1.c0c4827174707p+3
+0x1.cf044008ef25ap+3
+0x1.d6fd0e15b29b6p+3
+0x1.d6feb1ae2c687p+3
+0x1.c36dfb8aefb7dp+3
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+## peak_response_jc output_type=3
+max_static_equivalent_force = 0x1.4f3c72201d376p+17
+max_displacement = 0x1.4e8a0ef0183adp+0
+max_velocity = 0x1.28645eec61620p+4
+max_acceleration = 0x1.94d10b5a12897p+10
+max_applied_force = 0x1.3c3cd25c46f10p+19
+free_decay_samples = 18
+history : float64 (86,)
+0x0.0p+0
+0x0.0p+0
+0x1.4435e904541a2p+9
+0x1.3f6209d19d03bp+9
+0x1.d00fb964647a3p+8
+0x1.5557ae2db7ffcp+8
+-0x1.7eeaa2db0d07fp+8
+-0x1.797995a254f46p+7
+-0x1.1c7168d25e8f4p+6
+-0x1.6aeff7088b432p+8
+-0x1.704ee1257d47bp+8
+-0x1.5a9c34979d8e7p+8
+0x1.8ca65e5cadd53p+9
+0x1.0c031d33a6bf0p+9
+0x1.41971b1ae6cb6p+8
+-0x1.94d10b5a12897p+10
+-0x1.14820cead71fdp+10
+-0x1.2787f838ed916p+9
+0x1.366fdc6b9e525p+9
+0x1.21f1692ec2eeep+10
+0x1.0a7f9fcfa827fp+9
+0x1.4433a628e953cp+8
+-0x1.16b0016b62fb7p+9
+-0x1.659f0d6811f39p+7
+-0x1.acf6927fa1e24p+9
+-0x1.cdd640295d12bp+8
+-0x1.c54436aa380cfp+8
+0x1.b2f5a12dea519p+8
+0x1.574062e01bc88p+5
+-0x1.1124855cf001bp+1
+-0x1.255e558ba523dp+3
+0x1.7a0474fb734e0p+9
+0x1.3dbc69a8c57e6p+9
+-0x1.e71b49eed6ad1p+8
+-0x1.f2ad411eadb38p+9
+-0x1.2f372e88592cap+9
+0x1.4314913f002eap+9
+0x1.3c41a525b4a4ap+10
+0x1.837cb8a05b5f4p+9
+-0x1.2e1220f68a704p+9
+-0x1.23be89478f9efp+10
+-0x1.32e149aeea965p+9
+0x1.8a2a83868d90bp+9
+0x1.e5127630926cep+8
+0x1.1b114acf82e65p+7
+-0x1.d7ecfe863a04bp+2
+0x1.0eb948e94b9a6p+7
+0x1.ebbe02ec13deap+7
+0x1.df2b968517a67p+7
+0x1.6e423abe63940p+7
+0x1.2ca779eb5690fp+7
+0x1.243ab37423d96p+7
+0x1.23ca27e0113e4p+7
+0x1.0b0a5d159d98cp+7
+0x1.c206ed763e593p+6
+0x1.6c6db23cf6b33p+6
+0x1.214fe276cab68p+6
+0x1.b31176c7eae7cp+5
+0x1.1b4e8b212c975p+5
+0x1.ef2f31ffd46dcp+3
+-0x1.b263a834a6964p+4
+-0x1.624c41f3a5ae6p+6
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
+0x0.0p+0
