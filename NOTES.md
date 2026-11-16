@@ -6,6 +6,25 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.0 (clean-code review set-up, 2026-11-16, branch `review/clean-code`) **done**: no
+solver change (`src/` is byte-identical to `177c8b1`). Added `docs/review/charter.md` (scope,
+change rules, gates, findings scale, the mutation results), `docs/style.md` (the owner's style
+guide, verbatim), the snapshot oracle (`tests/test_review_snapshot.py`,
+`tools/review_snapshot.py`, `tests/review_snapshot/`: 34 documents, 245 solver calls, every
+output as `float.hex()` text, exact equality, about 1 s compiled and 2 s in pure Python),
+`docs/review/baseline.md` with `tools/review_baseline.py` (ruff and radon per function; radon
+added to the `dev` extra with the owner's approval), the two reviewer agents
+(`.claude/agents/clean-code-reviewer.md`, `finding-verifier.md`: Read, Grep, Glob only) and
+the review section of `CLAUDE.md`, which on this branch moves the `-m slow` gate from every
+commit touching `src/` to the end of every session. Mutation checks: the three required
+operand swaps (`moc.step`, `structure.step_scalars`, `loads.unbalance_force`) fail 14 / 25 /
+25 of 36 snapshot tests; four further mutations survived the first case set and the set was
+extended until they fail (charter, "It bites"). Gates on the tree: lint clean; `make
+test-both` 1041 passed + 24 skipped (Numba) / 1040 passed + 25 skipped (pure Python), the 24
+being the viewer's browser tests (this container ships Chromium build 1243, the pinned
+playwright 1.56.0 wants 1194); `-m slow` and `tools/bench.py` were still running when this
+entry was committed; their results follow in the next commit.
+
 Session H.3 (handover fixes from an independent fresh-machine review, 2026-10-29) **done**:
 docs only, no `src/` change. Tag names corrected to the pushed tags; the README entry-point
 table lists `fraction_profile`; one install command (`pip install -e ".[dev,plots]"`); timing
@@ -120,6 +139,49 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Open issues
 
+* **Review R.0, style-guide conflicts for the owner** (`docs/style.md` against the code and
+  the tooling; none is resolved, the guide is saved unchanged):
+  1. `docs/nomenclature.md`, which §2 relies on twice, does not exist yet.
+  2. §3 "keyword-only after the first two" cannot be applied to a compiled function that
+     another compiled function calls: on Numba 0.68.1 a jit-to-jit call of a function with
+     keyword-only parameters fails to type (`Cannot bind ... to signature '(col, *, d_f)'`;
+     measured in this session). `moc.step` and `structure.step_scalars` are public, compiled
+     and called from `_integrate_kernel`. NamedTuple arguments with arrays updated in place
+     (§4) and `IntEnum` members do compile.
+  3. §2 allows symbols (`x, v, a, dt`) inside a kernel but never in a public signature; the
+     public compiled kernels and helpers take exactly those (`step_scalars(x, v, a, ...,
+     dt)`, `moc.step(even, a_dt, p_a, ...)`, `effective_displacement(x, gap, ratio2)`,
+     `grid_size(..., dt)`). Either they become private (the differential tests call them)
+     or the allowance covers kernel signatures.
+  4. §3 "no argument that selects behaviour or return shape by code" against `CLAUDE.md`
+     "Flags", which requires `vav_denominator`, `parity`, `fraction_profile` as string
+     flags with the named values, and against `output_type` 0-3, the VBA argument.
+  5. §2 "no VBA spellings" against names kept on purpose so that the keyword matches the VBA
+     argument (`fluid_densty`, `step_qty`, ...; `docs/handover.md`), against
+     `pressure.get_pressure_response`, whose parameter names a test pins to
+     `legacy_port`'s, and against the data files: `meta.inputs` echoes the keyword names
+     and `params` carries `fric_acc`, `ratio2`, `step_qty` (`docs/data_format.md`, the
+     committed files under `docs/viz/data/`, one read in the viewer). Renaming them is a
+     schema change, not a mechanical edit.
+  6. §6 against §5: several unit factors are spread over operands (`pipe_area * 60 * 60`,
+     `flow_rate * 1000000 / ...`, `(density / 1000) * 100000`, `0.5 * mu * 9.81 * dt`).
+     Each literal can be named in place; folding two into one constant (3600) changes the
+     grouping and is a behaviour change. "0, 1 and 2 are fine" leaves `4 / 3`, `12`,
+     `0.5 + 1.5 (...)`, `0.25` as literals that need a constant or an exception.
+  7. Targets against the tools: ruff's PLR0913 default is 5 arguments and does not tell
+     private from public (guide: 6, private only); PLR1702's default is 5 nested blocks
+     (guide: 3); ruff and radon disagree on complexity (`_integrate` 10 against 22,
+     `_integrate_kernel` 23 against 32) and the guide does not say which counts.
+  8. Nothing enforces §7, §8 or §9 today: no `D` or `ANN` rule is selected (51 missing
+     annotations, 38 numpy-convention docstring findings in scope), `E501` is ignored and
+     five lines in scope exceed 100 columns (ruff format does not wrap comments or
+     docstrings). `vba_min` / `vba_max` are untyped on purpose (they return the second
+     argument with its type).
+  9. `.claude/hooks/format_py.py` formats with the `ruff` on PATH (0.16.9 here) while
+     `make lint` checks with the venv's (0.17.5).
+  10. Google's import rule (modules only) against `from surge_sdof.trace import F_X, ...`
+      and `from surge_sdof.structure import SdofParams, step_scalars` in `response.py`.
+
 * **W.1, for the lead author:** `docs/data_format.md` defines the sweep columns' semantics for
   the first time. `f_peak_lumped` / `f_peak_jc` are `max_applied_force`, which both solvers
   compute as `max |forceA − forceB|` without the junction force, so on one history they are
@@ -158,7 +220,12 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Stage 6**, when the lead author wants it.
+**Review session R.1** on `review/clean-code`: the owner's answers to the ten conflicts
+above, then `docs/nomenclature.md`, then the `clean-code-reviewer` agent on one module at a
+time with each finding passed to `finding-verifier`, findings recorded under `docs/review/`.
+Refactoring starts with the R0 / R1 classes. Rules and gates: `docs/review/charter.md`.
+
+**Stage 6** (unchanged), when the lead author wants it.
 
 * Remove `legacy_port.py` / `vba_compat.py` when the reference is no longer wanted (the
   `tests/test_quirks.py` pins move to the live modules); any extension beyond the VBA needs the
