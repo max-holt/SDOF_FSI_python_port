@@ -22,8 +22,9 @@ operand swaps (`moc.step`, `structure.step_scalars`, `loads.unbalance_force`) fa
 extended until they fail (charter, "It bites"). Gates on the tree: lint clean; `make
 test-both` 1041 passed + 24 skipped (Numba) / 1040 passed + 25 skipped (pure Python), the 24
 being the viewer's browser tests (this container ships Chromium build 1243, the pinned
-playwright 1.56.0 wants 1194); `-m slow` and `tools/bench.py` were still running when this
-entry was committed; their results follow in the next commit.
+playwright 1.56.0 wants 1194); `-m slow` 150 passed; `tools/bench.py --skip-full-python`
+(`docs/bench/afead1d.json`, the review's reference row): digests all equal to the literal
+port, Numba / literal 0.097 on the Example lumped case, the full JC golden cases 1.0-1.2 s.
 
 Session H.3 (handover fixes from an independent fresh-machine review, 2026-10-29) **done**:
 docs only, no `src/` change. Tag names corrected to the pushed tags; the README entry-point
