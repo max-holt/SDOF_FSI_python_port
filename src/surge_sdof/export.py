@@ -283,17 +283,17 @@ def is_capped(result: PeakResponse) -> bool:
         With a trace.
     """
     trace = result.trace
-    decay = trace.phase == PHASE_FREE_DECAY
-    if not decay.any():
+    in_free_decay = trace.phase == PHASE_FREE_DECAY
+    if not in_free_decay.any():
         return False
-    forced_sample_count = int(trace.sample[decay].min())
+    forced_sample_count = int(trace.sample[in_free_decay].min())
     return forced_sample_count + int(result.free_decay_samples) > 2 * int(trace.out_max)
 
 
 def _frames(trace: Trace) -> dict:
     """The thirteen columns with the synthetic rest frame first (``t = 0``, ``sub_step =
     sample = -1``, the rest phase, zeros)."""
-    rest = {
+    rest_frame = {
         "t": 0.0,
         "sub_step": -1,
         "sample": -1,
@@ -302,21 +302,21 @@ def _frames(trace: Trace) -> dict:
     }
     out = {}
     for name in FRAME_COLUMNS:
-        traced = getattr(trace, name)
-        first = rest.get(name, 0.0)
-        out[name] = _column(np.concatenate([[first], traced]), name)
+        frame_values = getattr(trace, name)
+        rest_value = rest_frame.get(name, 0.0)
+        out[name] = _column(np.concatenate([[rest_value], frame_values]), name)
     return out
 
 
 def _cells(trace: Trace) -> dict:
     grid_point_count = int(trace.p_cells.shape[1])
-    rest = np.zeros((1, grid_point_count))
+    rest_frame = np.zeros((1, grid_point_count))
     blocks = {}
     for name, arr in (("p", trace.p_cells), ("v", trace.v_cells)):
-        full = np.concatenate([rest, arr], axis=0)
-        if not np.all(np.isfinite(full)):
+        frame_values = np.concatenate([rest_frame, arr], axis=0)
+        if not np.all(np.isfinite(frame_values)):
             raise ValueError(f"cells.{name}: non-finite value (the format has no NaN)")
-        blocks[name] = array_block(full)
+        blocks[name] = array_block(frame_values)
     return blocks
 
 
@@ -354,8 +354,8 @@ def to_trace_dict(
     if trace is None:
         raise ValueError("the result has no trace; run the solver with trace_every > 0")
     layout = layout_from_trace(trace)
-    jc = trace.p_cells is not None
-    p = trace.params
+    is_junction_coupled = trace.p_cells is not None
+    sdof_params = trace.params
     doc = {
         "kind": KIND_TRACE,
         "schema_version": SCHEMA_VERSION,
@@ -364,12 +364,12 @@ def to_trace_dict(
             "solver": str(trace.solver),
             "inputs": _jsonable(dict(trace.inputs), "inputs"),
             "params": {
-                "mass": _finite(float(p.mass), "params.mass"),
-                "stiffness": _finite(float(p.stiffness), "params.stiffness"),
-                "damping": _finite(float(p.damping), "params.damping"),
-                "fric_acc": _finite(float(p.friction_velocity_step), "params.fric_acc"),
-                "gap": _finite(float(p.support_gap), "params.gap"),
-                "ratio2": _finite(float(p.closed_gap_stiffness_ratio), "params.ratio2"),
+                "mass": _finite(float(sdof_params.mass), "params.mass"),
+                "stiffness": _finite(float(sdof_params.stiffness), "params.stiffness"),
+                "damping": _finite(float(sdof_params.damping), "params.damping"),
+                "fric_acc": _finite(float(sdof_params.friction_velocity_step), "params.fric_acc"),
+                "gap": _finite(float(sdof_params.support_gap), "params.gap"),
+                "ratio2": _finite(float(sdof_params.closed_gap_stiffness_ratio), "params.ratio2"),
                 "dt": _finite(float(trace.dt), "params.dt"),
                 "step_qty": int(trace.step_qty),
                 "out_max": int(trace.out_max),
@@ -387,14 +387,14 @@ def to_trace_dict(
                 "free_decay_samples": int(result.free_decay_samples),
             },
             "n_frames": int(trace.n_frames) + 1,
-            "n_cells": int(trace.n_cells) if jc else 0,
+            "n_cells": int(trace.n_cells) if is_junction_coupled else 0,
             "git_sha": git_sha() if sha is True else sha,
             "created_utc": created if created is not None else created_utc(),
         },
         "geometry": _geometry(layout),
         "frames": _frames(trace),
     }
-    if jc:
+    if is_junction_coupled:
         doc["cells"] = _cells(trace)
     return doc
 
