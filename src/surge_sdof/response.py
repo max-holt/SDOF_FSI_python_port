@@ -31,7 +31,7 @@ into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbala
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
 
 Session V.1 (trace): both solvers take ``trace_every: int = 0``. With ``k > 0`` every
-``k``-th sub-step is recorded into preallocated arrays the kernel takes (``trace.allocate``)
+``k``-th sub-step is recorded into preallocated arrays the kernel takes (``trace.allocate_frames``)
 and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kernel takes
 empty arrays and the recording branch is never entered. The recording reads the state and
 writes to the trace arrays only, so the ``PeakResponse`` values of a traced run are bitwise
@@ -639,7 +639,8 @@ def _integrate(
 
     Session V.1: with ``trace_every > 0`` the elbow forces of ``meta.elbows`` are
     flattened like ``unbalance_force_samples``, the trace arrays are allocated
-    (``trace.check_memory``, ``trace.allocate``) and the kernel fills them; ``trace.build`` makes the ``Trace``.
+    (``trace.check_memory``, ``trace.allocate_frames``) and the kernel fills them;
+    ``trace.build_trace`` makes the ``Trace``.
     With 0 the kernel takes empty arrays."""
     substep_duration = float(substep_duration)
     unbalance_force_samples = list(unbalance_force_samples)
@@ -678,7 +679,7 @@ def _integrate(
             count=forced_substep_count,
         )
         delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
-        cap = tracing.check_memory(
+        frame_capacity = tracing.check_memory(
             forced_substep_count,
             len(unbalance_force_samples),
             int(nominal_forced_sample_count),
@@ -688,8 +689,8 @@ def _integrate(
         )
     else:
         flat_a = flat_b = np.zeros(0)
-        cap = 0
-    tr_f, tr_i, tr_p, tr_v = tracing.allocate(cap, grid_point_count)
+        frame_capacity = 0
+    tr_f, tr_i, tr_p, tr_v = tracing.allocate_frames(frame_capacity, grid_point_count)
     if coupling is not None:
         jc: JunctionCoupling = coupling
         column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)
@@ -745,7 +746,7 @@ def _integrate(
     )
     trace = None
     if trace_every > 0:
-        trace = tracing.build(
+        trace = tracing.build_trace(
             meta.solver,
             meta.inputs,
             trace_every,

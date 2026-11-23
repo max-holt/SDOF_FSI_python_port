@@ -22,7 +22,7 @@ and 2 in free decay. Frame 0 is the end of sub-step 0: a column at rest with
 
 Free decay is traced for as long as the history records it (``totInd <= outMax * 2``, the
 ``_record`` guard of the kernel); later free-decay sub-steps are integrated but not traced,
-as the history drops them. The arrays are allocated once for that window (``capacity``)
+as the history drops them. The arrays are allocated once for that window (``frame_capacity``)
 and sliced to the frames written.
 
 ``f_friction = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old +
@@ -63,11 +63,11 @@ __all__ = [
     "PHASE_FORCED",
     "PHASE_FREE_DECAY",
     "Trace",
-    "capacity",
+    "frame_capacity",
     "check_memory",
-    "allocate",
+    "allocate_frames",
     "interleave",
-    "build",
+    "build_trace",
 ]
 
 PHASE_TRANSIT = 0
@@ -82,8 +82,8 @@ I_SUB_STEP, I_SAMPLE, I_PHASE, I_STICK = range(4)
 N_INT_COLUMNS = 4
 
 MAX_TRACE_VALUES = 50_000_000
-"""Memory guard: the largest number of 8-byte values (``capacity * (float columns + int
-columns + 2 * n_cells)``, 400 MB) a trace may allocate; ``check_memory`` raises
+"""Memory guard: the largest number of 8-byte values (``frame_capacity * (float columns +
+int columns + 2 * n_cells)``, 400 MB) a trace may allocate; ``check_memory`` raises
 ``ValueError`` above it and names the smallest stride that fits."""
 
 
@@ -171,7 +171,7 @@ class Trace:
         return int(self.t.shape[0])
 
 
-def capacity(
+def frame_capacity(
     forced_substep_count: int,
     forced_sample_count: int,
     nominal_forced_sample_count: int,
@@ -222,68 +222,73 @@ def check_memory(
     ----------
     forced_substep_count, forced_sample_count, nominal_forced_sample_count, substep_count,
     trace_every
-        As ``capacity``.
+        As ``frame_capacity``.
     grid_point_count : int
         ``2N + 1`` for a JC run, 0 for lumped.
 
     Returns
     -------
     int
-        ``capacity(...)``.
+        ``frame_capacity(...)``.
 
     Raises
     ------
     ValueError
-        When ``capacity * (N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count)``
+        When ``frame_capacity * (N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count)``
         exceeds ``MAX_TRACE_VALUES`` (this includes the ``n_frames * grid_point_count`` of
         each column array); the message names the smallest ``trace_every`` that fits.
     """
-    per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count
-    cap = capacity(
+    values_per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count
+    needed_frames = frame_capacity(
         forced_substep_count,
         forced_sample_count,
         nominal_forced_sample_count,
         substep_count,
         trace_every,
     )
-    if cap * per_frame <= MAX_TRACE_VALUES:
-        return cap
-    stride = max(trace_every + 1, math.ceil(cap * trace_every * per_frame / MAX_TRACE_VALUES))
-    while capacity(
+    if needed_frames * values_per_frame <= MAX_TRACE_VALUES:
+        return needed_frames
+    fitting_stride = max(
+        trace_every + 1,
+        math.ceil(needed_frames * trace_every * values_per_frame / MAX_TRACE_VALUES),
+    )
+    while frame_capacity(
         forced_substep_count,
         forced_sample_count,
         nominal_forced_sample_count,
         substep_count,
-        stride,
-    ) * per_frame > (MAX_TRACE_VALUES):
-        stride += 1
+        fitting_stride,
+    ) * values_per_frame > (MAX_TRACE_VALUES):
+        fitting_stride += 1
     raise ValueError(
-        f"trace_every={trace_every} would record {cap} frames x {per_frame} values "
-        f"({cap * per_frame:.3g} > {MAX_TRACE_VALUES:.3g} 8-byte values, "
-        f"{cap * grid_point_count:.3g} per column array); use trace_every >= {stride}"
+        f"trace_every={trace_every} would record {needed_frames} frames x "
+        f"{values_per_frame} values "
+        f"({needed_frames * values_per_frame:.3g} > {MAX_TRACE_VALUES:.3g} 8-byte values, "
+        f"{needed_frames * grid_point_count:.3g} per column array); "
+        f"use trace_every >= {fitting_stride}"
     )
 
 
-def allocate(
-    cap: int, grid_point_count: int
+def allocate_frames(
+    frame_capacity: int, grid_point_count: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(tr_f, tr_i, tr_p, tr_v)`` zeroed for the kernel: ``(cap, N_FLOAT_COLUMNS)``
     float64, ``(cap, N_INT_COLUMNS)`` int64 and two ``(cap, grid_point_count)`` float64
-    (``grid_point_count`` is 0 for lumped; both are ``(0, 0)`` when ``cap`` is 0).
+    (``grid_point_count`` is 0 for lumped; both are ``(0, 0)`` when ``frame_capacity`` is 0).
 
     Parameters
     ----------
-    cap : int
-        From ``capacity`` / ``check_memory``.
+    frame_capacity : int
+        From ``frame_capacity`` / ``check_memory``.
     grid_point_count : int
         ``2N + 1`` or 0.
     """
-    cells = grid_point_count if cap > 0 else 0
+    allocated_grid_point_count = grid_point_count if frame_capacity > 0 else 0
     return (
-        np.zeros((cap, N_FLOAT_COLUMNS)),
-        np.zeros((cap, N_INT_COLUMNS), dtype=np.int64),
-        np.zeros((cap, cells)),
-        np.zeros((cap, cells)),
+        np.zeros((frame_capacity, N_FLOAT_COLUMNS)),
+        np.zeros((frame_capacity, N_INT_COLUMNS), dtype=np.int64),
+        np.zeros((frame_capacity, allocated_grid_point_count)),
+        np.zeros((frame_capacity, allocated_grid_point_count)),
     )
 
 
@@ -312,7 +317,7 @@ def interleave(a_nodes: np.ndarray, b_cells: np.ndarray) -> np.ndarray:
     return out
 
 
-def build(
+def build_trace(
     solver: str,
     inputs: dict,
     trace_every: int,
@@ -340,7 +345,7 @@ def build(
     n_frames : int
         Frames the kernel wrote.
     tr_f, tr_i, tr_p, tr_v : numpy.ndarray
-        From ``allocate``, filled by the kernel.
+        From ``allocate_frames``, filled by the kernel.
     jc : coupling.JunctionCoupling or None
         The junction of a JC run (its grid and moving fractions), None for lumped.
     celerity : float
@@ -348,9 +353,9 @@ def build(
     ext_qty : int
         ``moc.INACTIVE_END_CELL_COUNT`` for a JC run.
     """
-    f = tr_f[:n_frames]
-    ints = tr_i[:n_frames]
-    sub_step = ints[:, I_SUB_STEP].copy()
+    frame_state = tr_f[:n_frames]
+    frame_index_columns = tr_i[:n_frames]
+    sub_step = frame_index_columns[:, I_SUB_STEP].copy()
     fields = {
         "solver": solver,
         "trace_every": int(trace_every),
@@ -361,17 +366,17 @@ def build(
         "inputs": inputs,
         "t": (sub_step + 1) * float(substep_duration),
         "sub_step": sub_step,
-        "sample": ints[:, I_SAMPLE].copy(),
-        "phase": ints[:, I_PHASE].copy(),
-        "x": f[:, F_X].copy(),
-        "v": f[:, F_V].copy(),
-        "a": f[:, F_A].copy(),
-        "f_a": f[:, F_FA].copy(),
-        "f_b": f[:, F_FB].copy(),
-        "f_unbalance": f[:, F_FU].copy(),
-        "f_friction": f[:, F_FFRIC].copy(),
-        "stick": ints[:, I_STICK] != 0,
-        "d_f": f[:, F_DF].copy(),
+        "sample": frame_index_columns[:, I_SAMPLE].copy(),
+        "phase": frame_index_columns[:, I_PHASE].copy(),
+        "x": frame_state[:, F_X].copy(),
+        "v": frame_state[:, F_V].copy(),
+        "a": frame_state[:, F_A].copy(),
+        "f_a": frame_state[:, F_FA].copy(),
+        "f_b": frame_state[:, F_FB].copy(),
+        "f_unbalance": frame_state[:, F_FU].copy(),
+        "f_friction": frame_state[:, F_FFRIC].copy(),
+        "stick": frame_index_columns[:, I_STICK] != 0,
+        "d_f": frame_state[:, F_DF].copy(),
     }
     if jc is not None:
         column_cell_count = int(jc.n_seg)

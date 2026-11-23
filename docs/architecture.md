@@ -284,9 +284,9 @@ docstring of `trace.py` is the reference; the design points:
   fric_acc`, the `stick` flag) gives the momentum the stick removed, the holding force.
 * **Window and capacity.** Phase 3's length is unknown before the run, so the trace follows
   the history's own cap: free decay is traced while `totInd <= outMax · 2` (the `_record`
-  guard), later sub-steps are integrated but not traced. `trace.capacity` allocates once for
+  guard), later sub-steps are integrated but not traced. `trace.frame_capacity` allocates once for
   `forced sub-steps + max(0, outMax · 2 − forced samples) · stepQTY` sub-steps at the stride; the
-  kernel returns the frames written and `trace.build` slices. `trace.check_memory` raises
+  kernel returns the frames written and `trace.build_trace` slices. `trace.check_memory` raises
   `ValueError` before allocating when `capacity · (8 float columns + 4 int columns + 2 ·
   n_cells)` 8-byte values would exceed `MAX_TRACE_VALUES` (50e6, 400 MB; this contains the
   `n_frames · n_cells` of each column array), naming the smallest stride that fits.

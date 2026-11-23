@@ -393,13 +393,15 @@ def test_memory_guard_names_a_stride_that_fits(monkeypatch):
 
 
 def test_capacity_arithmetic():
-    assert tracing.capacity(100, 10, 12, 5, 0) == 0
+    assert tracing.frame_capacity(100, 10, 12, 5, 0) == 0
     # forced 100 sub-steps + (24 - 10) samples x 5 = 170 sub-steps
-    assert tracing.capacity(100, 10, 12, 5, 1) == 170
-    assert tracing.capacity(100, 10, 12, 5, 7) == -(-170 // 7) == 25
-    assert tracing.capacity(100, 30, 12, 5, 1) == 100  # window already spent
-    assert tracing.allocate(0, 9)[2].shape == (0, 0)
-    assert tracing.allocate(3, 9)[2].shape == (3, 9) and tracing.allocate(3, 0)[3].shape == (3, 0)
+    assert tracing.frame_capacity(100, 10, 12, 5, 1) == 170
+    assert tracing.frame_capacity(100, 10, 12, 5, 7) == -(-170 // 7) == 25
+    assert tracing.frame_capacity(100, 30, 12, 5, 1) == 100  # window already spent
+    assert tracing.allocate_frames(0, 9)[2].shape == (0, 0)
+    assert tracing.allocate_frames(3, 9)[2].shape == (3, 9) and tracing.allocate_frames(3, 0)[
+        3
+    ].shape == (3, 0)
 
 
 def test_jc_short_pipe_fallback_trace_is_lumped():
