@@ -329,6 +329,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     )
     dt = 1 / (SAMPLE_FREQ * STEP_QTY)
     n_seg, pivot = moc.grid_size(case.length_m, height, CELERITY, dt)
+    # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
+    # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
+    # Written for the single expansion-loop shape.
     mass_total = (case.length_m + height * 4 / 3) * p.mass_per_unit_len
     row = dict.fromkeys(COLUMNS)
     row.update(

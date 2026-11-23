@@ -110,6 +110,9 @@ def grid_size(
         height in cells; ``CLng`` rounds half to even).
     """
     pivot_seg_qty = EXT_QTY + clng(portal_frame_height / (2 * celerity * dt))
+    # Proposed derivation, for Ben to confirm: a grid segment is 2 * celerity * dt long, and
+    # the count is halved, rounded and doubled so the number of segments is even:
+    # L / (4 c dt) is half the span's segment count.
     pipe_seg_qty = 2 + clng(physical_length / (4 * celerity * dt) + pivot_seg_qty) * 2
     return pipe_seg_qty, pivot_seg_qty
 

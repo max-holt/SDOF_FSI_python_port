@@ -150,9 +150,18 @@ def solve_portal_height(
     """
     omega2 = (2 * VBA_PI * nat_freq) ** 2
     var_b = physical_length * mass_per_unit_len
+    # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
+    # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
+    # Written for the single expansion-loop shape.
     var_c = mass_per_unit_len * 4 / 3
+    # Proposed derivation, for Ben to confirm: 12 * EI / h^3 is the lateral stiffness of a leg
+    # of height h fixed against rotation at both ends.
     h = solve_poly(-12 * flexural_rigidity_ei / omega2, var_b, var_c)
     for _i in range(0, 10 + 1):
+        # Proposed derivation, for Ben to confirm: 0.5 + 1.5 * (h / (L + h))^2 is a factor on that
+        # stiffness, running from 0.5 when the legs are short against the span (two legs acting as
+        # cantilevers, 2 * 3EI/h^3) to 2 when they are long (two legs fixed at both ends,
+        # 2 * 12EI/h^3). The squared ratio is an interpolation between the two.
         h = solve_poly(
             -12 * flexural_rigidity_ei * (0.5 + 1.5 * ((h / (physical_length + h)) ** 2)) / omega2,
             var_b,
@@ -208,6 +217,9 @@ def lumped_params(
     ``jc_params`` is the ``GetPeakResponseJC`` variant (core fluid removed from the
     mass); the two are kept as separate functions, not a flag.
     """
+    # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
+    # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
+    # Written for the single expansion-loop shape.
     mass = (physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len
     stiffness = ((nat_freq * 2 * VBA_PI) ** 2) * mass
     damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / 100
@@ -278,6 +290,10 @@ def jc_params(
     The expressions keep the VBA's left-to-right association, which differs from
     ``lumped_params`` (there ``stiffness = w2 * mass``; here ``w2 * (L + h * 4 / 3) * m'``).
     """
+    # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
+    # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
+    # Written for the single expansion-loop shape.
+    # The same factor in the three total-mass terms below.
     mass = (portal_frame_height * 4 / 3) * mass_per_unit_len + physical_length * (
         mass_per_unit_len - fluid_densty * fluid_area
     )  # remove core fluid to get rigid mass

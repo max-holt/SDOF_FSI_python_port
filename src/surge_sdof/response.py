@@ -634,6 +634,9 @@ def _integrate(
     flat = np.fromiter(
         itertools.chain.from_iterable(samples), dtype=np.float64, count=int(offsets[-1])
     )
+    # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
+    # the forced samples and an equal allowance for free decay; later free decay is integrated
+    # but not recorded.
     history = np.zeros(out_max * 2 if output_type > 0 else 0)
     kind = coupling.KIND
 
@@ -902,6 +905,9 @@ def _integrate_kernel(
         if legacy_parity:
             off = (tot_ind - 1) * step_qty + 1 - n
         for _k in range(step_qty):
+            # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
+            # the forced samples and an equal allowance for free decay; later free decay is integrated
+            # but not recorded.
             rec = (
                 trace_every > 0 and n % trace_every == 0 and frame < cap and tot_ind <= out_max * 2
             )
@@ -970,6 +976,9 @@ def _integrate_kernel(
                 x_max = abs(x)
             if _decay_test(x, x_zero) <= 0.01:
                 x_zero = 0.0
+        # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
+        # the forced samples and an equal allowance for free decay; later free decay is integrated
+        # but not recorded.
         if output_type > 0 and tot_ind <= out_max * 2:
             _record(history, output_type, tot_ind - 1, x, v, a)
 

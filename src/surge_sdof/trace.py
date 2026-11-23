@@ -195,6 +195,9 @@ def capacity(
     """
     if trace_every <= 0:
         return 0
+    # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
+    # the forced samples and an equal allowance for free decay; later free decay is integrated
+    # but not recorded.
     decay_substeps = max(0, out_max * 2 - forced_samples) * step_qty
     return -(-(forced_substeps + decay_substeps) // trace_every)  # ceil
 
