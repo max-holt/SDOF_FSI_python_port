@@ -100,104 +100,136 @@ class LoopLayout:
 # ------------------------------------------------------------------ geometry
 
 
-def _segments(moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
+def _segments(grid_point_moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
     """``(inlet_end, run_start, run_end, outlet_start)`` from the fraction profile: the
     fraction-1 block is the run; the last fraction-0 cell before it and the first after it
     are the upper elbows. With the F-4 profile both legs hold ``2 pivot - 10`` interleaved
     cells and every inlet / outlet cell has fraction 0; with the legacy profile the inlet
     leg is one cell longer and D-4's ``n < 3`` cell (B(3), fraction ``1 / (pivot - 4)^2``)
     is a moving cell on the horizontal inlet (B(4) = 0 is the last zero before the run)."""
-    ones = np.flatnonzero(moving_fraction == 1.0)
-    if ones.size == 0:
+    fully_moving = np.flatnonzero(grid_point_moving_fraction == 1.0)
+    if fully_moving.size == 0:
         raise ValueError("no fraction-1 cell: the profile has no run")
-    run_start, run_end = int(ones[0]), int(ones[-1])
-    before = np.flatnonzero(moving_fraction[:run_start] == 0.0)
-    after = np.flatnonzero(moving_fraction[run_end + 1 :] == 0.0)
-    if before.size == 0 or after.size == 0:
+    run_start_index, run_end_index = int(fully_moving[0]), int(fully_moving[-1])
+    still_before_run = np.flatnonzero(grid_point_moving_fraction[:run_start_index] == 0.0)
+    still_after_run = np.flatnonzero(grid_point_moving_fraction[run_end_index + 1 :] == 0.0)
+    if still_before_run.size == 0 or still_after_run.size == 0:
         raise ValueError("no fraction-0 cell at an end: the profile has no inlet or outlet")
-    return int(before[-1]), run_start, run_end, run_end + 1 + int(after[0])
+    return (
+        int(still_before_run[-1]),
+        run_start_index,
+        run_end_index,
+        run_end_index + 1 + int(still_after_run[0]),
+    )
 
 
 def loop_layout(
-    cell_position: np.ndarray,
-    cell_kind: np.ndarray,
-    moving_fraction: np.ndarray,
+    grid_point_position: np.ndarray,
+    grid_point_kind: np.ndarray,
+    grid_point_moving_fraction: np.ndarray,
     end_to_elbow_cell_count: int,
     column_cell_count: int,
     ext_qty: int,
     cell_length: float,
-    portal_height: float,
+    portal_frame_height: float,
 ) -> LoopLayout:
-    """Lay the interleaved column on the expansion loop, uniformly by ``cell_position``.
+    """Lay the interleaved column on the expansion loop, uniformly by ``grid_point_position``.
 
     The centreline runs: inlet (horizontal, leftwards from the inlet elbow cell at ``(0,
     leg_height)``), leg 1 (down ``x = 0``), the run (``y = 0`` from ``x = 0`` to ``x =
     run_length``), leg 2 (up ``x = run_length``), outlet (horizontal, rightwards from the
     outlet elbow cell at ``(run_length, leg_height_2)``). The elbows are sharp corners at
     the elbow cells (``_segments``): the model has no bends, and the cells either side of
-    a corner are one spacing from the corner cell along its two segments. A cell ``s``
-    along the column is at centreline length ``s``, so every inlet / outlet cell is at its
-    pipe height and every run cell at ``y = 0``.
+    a corner are one spacing from the corner cell along its two segments. A grid point at
+    ``centreline_position`` along the column is at that centreline length, so every inlet /
+    outlet point is at its pipe height and every run point at ``y = 0``.
 
     Parameters
     ----------
-    cell_position, cell_kind, moving_fraction : numpy.ndarray
+    grid_point_position, grid_point_kind, grid_point_moving_fraction : numpy.ndarray
         Length ``2N + 1`` (``Trace`` layout).
     end_to_elbow_cell_count, column_cell_count, ext_qty : int
     cell_length : float
         ``2 * celerity * dt``, m.
-    portal_height : float
+    portal_frame_height : float
         m.
 
     Returns
     -------
     LoopLayout
     """
-    s = np.asarray(cell_position, dtype=np.float64)
-    frac = np.asarray(moving_fraction, dtype=np.float64)
-    inlet_end, run_start, run_end, outlet_start = _segments(frac)
-    spacing = float(s[1] - s[0]) if s.shape[0] > 1 else float(cell_length) / 2
-    s1, s2, s3, s4 = s[inlet_end], s[run_start], s[run_end], s[outlet_start]
-    run_length = float(s3 - s2)
-    height1 = float(s2 - s1)
-    height2 = float(s4 - s3)
-    x = np.empty_like(s)
-    y = np.empty_like(s)
-    inlet = s <= s1
-    leg1 = (s > s1) & (s <= s2)
-    run = (s > s2) & (s <= s3)
-    leg2 = (s > s3) & (s <= s4)
-    outlet = s > s4
-    x[inlet], y[inlet] = s[inlet] - s1, height1  # leftwards, the elbow cell at x = 0
-    x[leg1], y[leg1] = 0.0, height1 - (s[leg1] - s1)
-    x[run], y[run] = s[run] - s2, 0.0
-    x[leg2], y[leg2] = run_length, s[leg2] - s3
-    x[outlet], y[outlet] = run_length + (s[outlet] - s4), height2
+    centreline_position = np.asarray(grid_point_position, dtype=np.float64)
+    moving_fraction_array = np.asarray(grid_point_moving_fraction, dtype=np.float64)
+    inlet_elbow_index, run_start_index, run_end_index, outlet_elbow_index = _segments(
+        moving_fraction_array
+    )
+    grid_point_spacing = (
+        float(centreline_position[1] - centreline_position[0])
+        if centreline_position.shape[0] > 1
+        else float(cell_length) / 2
+    )
+    inlet_elbow_position, run_start_position, run_end_position, outlet_elbow_position = (
+        centreline_position[inlet_elbow_index],
+        centreline_position[run_start_index],
+        centreline_position[run_end_index],
+        centreline_position[outlet_elbow_index],
+    )
+    run_length = float(run_end_position - run_start_position)
+    inlet_leg_height = float(run_start_position - inlet_elbow_position)
+    outlet_leg_height = float(outlet_elbow_position - run_end_position)
+    x_at_rest = np.empty_like(centreline_position)
+    y_at_rest = np.empty_like(centreline_position)
+    on_inlet = centreline_position <= inlet_elbow_position
+    on_inlet_leg = (centreline_position > inlet_elbow_position) & (
+        centreline_position <= run_start_position
+    )
+    on_run = (centreline_position > run_start_position) & (centreline_position <= run_end_position)
+    on_outlet_leg = (centreline_position > run_end_position) & (
+        centreline_position <= outlet_elbow_position
+    )
+    on_outlet = centreline_position > outlet_elbow_position
+    x_at_rest[on_inlet], y_at_rest[on_inlet] = (
+        centreline_position[on_inlet] - inlet_elbow_position,
+        inlet_leg_height,
+    )  # leftwards, the elbow cell at x = 0
+    x_at_rest[on_inlet_leg], y_at_rest[on_inlet_leg] = (
+        0.0,
+        inlet_leg_height - (centreline_position[on_inlet_leg] - inlet_elbow_position),
+    )
+    x_at_rest[on_run], y_at_rest[on_run] = centreline_position[on_run] - run_start_position, 0.0
+    x_at_rest[on_outlet_leg], y_at_rest[on_outlet_leg] = (
+        run_length,
+        centreline_position[on_outlet_leg] - run_end_position,
+    )
+    x_at_rest[on_outlet], y_at_rest[on_outlet] = (
+        run_length + (centreline_position[on_outlet] - outlet_elbow_position),
+        outlet_leg_height,
+    )
     return LoopLayout(
-        cell_position=s,
-        cell_kind=np.asarray(cell_kind),
-        moving_fraction=frac,
+        cell_position=centreline_position,
+        cell_kind=np.asarray(grid_point_kind),
+        moving_fraction=moving_fraction_array,
         pivot_seg_qty=int(end_to_elbow_cell_count),
         pipe_seg_qty=int(column_cell_count),
         ext_qty=int(ext_qty),
         cell_length=float(cell_length),
-        portal_height=float(portal_height),
-        spacing=spacing,
-        inlet_end=inlet_end,
-        run_start=run_start,
-        run_end=run_end,
-        outlet_start=outlet_start,
+        portal_height=float(portal_frame_height),
+        spacing=grid_point_spacing,
+        inlet_end=inlet_elbow_index,
+        run_start=run_start_index,
+        run_end=run_end_index,
+        outlet_start=outlet_elbow_index,
         elbow_pairs=(
-            (inlet_end, inlet_end + 1),
-            (run_start - 1, run_start),
-            (run_end, run_end + 1),
-            (outlet_start - 1, outlet_start),
+            (inlet_elbow_index, inlet_elbow_index + 1),
+            (run_start_index - 1, run_start_index),
+            (run_end_index, run_end_index + 1),
+            (outlet_elbow_index - 1, outlet_elbow_index),
         ),
-        x_nominal=x,
-        y_nominal=y,
+        x_nominal=x_at_rest,
+        y_nominal=y_at_rest,
         run_length=run_length,
-        leg_height=height1,
-        leg_height_2=height2,
+        leg_height=inlet_leg_height,
+        leg_height_2=outlet_leg_height,
     )
 
 
@@ -258,11 +290,11 @@ def lumped_grid(
         column_cell_count, end_to_elbow_cell_count
     )
     grid_point_count = 2 * column_cell_count + 1
-    position = np.arange(grid_point_count, dtype=np.float64) * (
+    grid_point_position = np.arange(grid_point_count, dtype=np.float64) * (
         float(inputs["celerity"]) * float(substep_duration)
     )
     return (
-        position,
+        grid_point_position,
         np.arange(grid_point_count) % 2,
         interleave(moving_fraction_a, moving_fraction_b),
         column_cell_count,
@@ -302,13 +334,18 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
             cell_length,
             portal_frame_height,
         )
-    position, kind, fraction, column_cell_count, end_to_elbow_cell_count, portal_frame_height = (
-        lumped_grid(inputs, trace.dt)
-    )
+    (
+        grid_point_position,
+        grid_point_kind,
+        grid_point_moving_fraction,
+        column_cell_count,
+        end_to_elbow_cell_count,
+        portal_frame_height,
+    ) = lumped_grid(inputs, trace.dt)
     return loop_layout(
-        position,
-        kind,
-        fraction,
+        grid_point_position,
+        grid_point_kind,
+        grid_point_moving_fraction,
         end_to_elbow_cell_count,
         column_cell_count,
         moc.INACTIVE_END_CELL_COUNT,
