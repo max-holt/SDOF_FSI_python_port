@@ -316,8 +316,9 @@ def test_restoring_force_matches_the_legacy_expression():
 
 @pytest.mark.parametrize("idx", range(N_CASES), ids=SWEEP_IDS)
 def test_step_replays_the_legacy_substeps(idx):
-    """Feed each legacy sub-step's pre-state and applied force through ``structure.step``
-    and compare the post-state; this isolates the kernel from the force scheduling."""
+    """Feed each legacy sub-step's pre-state and applied force through
+    ``structure.step_scalars`` and compare the post-state; this isolates the kernel from the
+    force scheduling."""
     case, trace = sweep_cases()[idx], sweep_trace(idx)
     kw, su = case.kw, trace.setup
     params = structure.SdofParams(
@@ -332,7 +333,8 @@ def test_step_replays_the_legacy_substeps(idx):
     posts = []
     for s in trace.substeps:
         f = 0.0 if s.free_decay else float(s.f)
-        post = structure.step(tuple(float(q) for q in s.pre), f, params, dt)
+        x, v, a = (float(q) for q in s.pre)
+        post = structure.step_scalars(x, v, a, f, *params, dt)
         assert all(type(q) is float for q in post)
         posts.append(post)
     assert_close(posts, [s.post for s in trace.substeps])

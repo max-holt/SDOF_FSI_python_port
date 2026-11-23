@@ -6,14 +6,13 @@ Behaviour is that of ``GetPeakResponse`` in ``legacy/vba/Existing Code.bas`` (VB
 function against ``legacy_port.py`` bitwise on the golden inputs and a seeded sweep.
 
 This module knows nothing about force histories, transit delays, fluid coupling, sample
-bookkeeping, max trackers or output types: ``step`` takes the already-summed applied
-force and returns the new state. See ``docs/architecture.md``.
+bookkeeping, max trackers or output types: ``step_scalars`` takes the already-summed
+applied force and returns the new state. See ``docs/architecture.md``.
 
 State and parameters
 --------------------
-``State = (x, v, a)`` is a plain tuple of Python floats; ``SdofParams`` is a named tuple
-so the kernel can unpack it in one operation. Python floats (not numpy scalars) are used
-on purpose: the arithmetic is IEEE double either way (``**`` calls C ``pow`` on both),
+The state ``(x, v, a)`` is a plain tuple of Python floats; ``SdofParams`` is a named
+tuple. Python floats (not numpy scalars) are used on purpose: the arithmetic is IEEE double either way (``**`` calls C ``pow`` on both),
 and the Stage 4.0 profile showed numpy-scalar overhead at about a third of the lumped
 wall time.
 
@@ -36,7 +35,6 @@ import numba
 
 __all__ = [
     "VBA_PI",
-    "State",
     "SdofParams",
     "solve_poly",
     "solve_portal_height",
@@ -44,7 +42,6 @@ __all__ = [
     "jc_params",
     "effective_displacement",
     "restoring_force",
-    "step",
     "step_scalars",
 ]
 
@@ -52,12 +49,9 @@ __all__ = [
 # substitution would not be bit-preserving, port_review §1.1).
 VBA_PI = 3.14159265358979
 
-State = tuple[float, float, float]
-"""``(x, v, a)``: displacement, velocity, acceleration at the end of a sub-step."""
-
 
 class SdofParams(NamedTuple):
-    """Constants of the SDOF update, in the order ``step`` unpacks them.
+    """Constants of the SDOF update, in the order ``step_scalars`` takes them.
 
     Attributes
     ----------
@@ -354,7 +348,7 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
     -----
     The VBA helpers' ladders (``max`` lines 11-17, ``minUnsigned`` 19-33, ``sign``
     51-59) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
-    cases; ``step`` inlines the same code.
+    cases; ``step_scalars`` inlines the same code.
     """
     ax = abs(x)
     # minUnsigned(gap, x)
@@ -401,46 +395,6 @@ def restoring_force(x: float, k: float, gap: float, ratio: float) -> float:
     return effective_displacement(float(x), float(gap), float(ratio) ** 2) * float(k)
 
 
-def step(state: State, f_applied: float, params: SdofParams, dt: float) -> State:
-    """One VBA sub-step (lines 424-432) of the SDOF proxy.
-
-    Explicit ``aNew`` from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``, and
-    stick (``|v| < fricAcc``) / slip Coulomb friction. The arithmetic is
-    ``step_scalars``; this is the interface that unpacks the state tuple and the
-    ``SdofParams`` for it (Stage 5).
-
-    Parameters
-    ----------
-    state : State
-        ``(x, v, a)`` at the end of the previous sub-step: m, m/s, m/s².
-    f_applied : float
-        Everything the caller adds to the restoring and damping terms, N: ``forceA -
-        forceB`` plus the coupling force ``dF``, or ``dF`` alone in free decay.
-    params : SdofParams
-        From ``lumped_params`` or ``jc_params``.
-    dt : float
-        Sub-step, s.
-
-    Returns
-    -------
-    State
-        ``(x, v, a)`` at the end of this sub-step: m, m/s, m/s².
-
-    Notes
-    -----
-    * The scheme is explicit in the acceleration (not average-acceleration Newmark):
-      with zero damping the amplitude grows about 2.5 % per cycle at ``omega dt`` of
-      0.016 (NOTES.md "Findings worth knowing").
-    * VBA quirk D-20 preserved: the slip branch uses ``sign(v, 0.000001)``, so for
-      ``fricAcc <= |v| < 1e-6`` no friction is applied in that sub-step.
-    * ``(a + aNew) * dt / 2`` is computed as ``(a + aNew) * half_dt``; scaling by a
-      power of two commutes with rounding, so the doubles are identical to the VBA's.
-    """
-    x, v, a = state
-    mass, stiffness, damping, fric_acc, gap, ratio2 = params
-    return step_scalars(x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt)
-
-
 @numba.njit(cache=True)
 def step_scalars(
     x: float,
@@ -454,19 +408,21 @@ def step_scalars(
     gap: float,
     ratio2: float,
     dt: float,
-) -> State:
-    """The SDOF sub-step of ``step`` on scalars only (Stage 5 Numba kernel).
+) -> tuple[float, float, float]:
+    """One VBA sub-step (lines 424-432) of the SDOF proxy.
 
-    Compiled with ``numba.njit(cache=True)`` (no fastmath); with
-    ``NUMBA_DISABLE_JIT=1`` it is this Python function. Called per sub-step from
-    ``response._integrate_kernel``; ``step`` is the tuple/``SdofParams`` interface.
+    Explicit ``aNew`` from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``, and
+    stick (``|v| < fricAcc``) / slip Coulomb friction. Compiled with
+    ``numba.njit(cache=True)`` (no fastmath; Stage 5); with ``NUMBA_DISABLE_JIT=1`` it is
+    this Python function. Called per sub-step from ``response._integrate_kernel``.
 
     Parameters
     ----------
     x, v, a : float
         State at the end of the previous sub-step: m, m/s, m/s².
     f_applied : float
-        Applied force, N (see ``step``).
+        Everything the caller adds to the restoring and damping terms, N: ``forceA -
+        forceB`` plus the coupling force ``dF``, or ``dF`` alone in free decay.
     mass, stiffness, damping, fric_acc, gap, ratio2 : float
         The ``SdofParams`` fields, in order (kg, N/m, N·s/m, m/s, m, dimensionless).
     dt : float
@@ -476,6 +432,16 @@ def step_scalars(
     -------
     tuple of float
         ``(x, v, a)`` at the end of this sub-step: m, m/s, m/s².
+
+    Notes
+    -----
+    * The scheme is explicit in the acceleration (not average-acceleration Newmark):
+      with zero damping the amplitude grows about 2.5 % per cycle at ``omega dt`` of
+      0.016 (NOTES.md "Findings worth knowing").
+    * VBA quirk D-20 preserved: the slip branch uses ``sign(v, 0.000001)``, so for
+      ``fricAcc <= |v| < 1e-6`` no friction is applied in that sub-step.
+    * ``(a + aNew) * dt / 2`` is computed as ``(a + aNew) * half_dt``; scaling by a
+      power of two commutes with rounding, so the doubles are identical to the VBA's.
     """
     half_dt = dt / 2
 
