@@ -12,16 +12,16 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - Descriptive by default. A name says what the quantity is physically, not how it was computed or what type holds it: closed_gap_stiffness_ratio, not ratio2; transit_delay_samples, not unb. No array, flat, tmp, data, val.
 - The wider the scope, the fuller the name. One-letter names only for a loop index used within a few lines.
 - Symbols. Inside a kernel, a quantity with an established symbol may use it (x, v, a, dt, rho_c) if it is listed in docs/nomenclature.md with its meaning and unit. A compiled kernel may use listed symbols in its signature too. Never in a public signature. (Google 3.16.5.)
-- Public signature means the user-facing entry points: the solver entry points in response, histories.canonical and the export.to_*_dict functions (owner's ruling, R.1b). A function that other modules or the tests call is not public in this sense.
+- Public signature means the user-facing entry points: the solver entry points in response, histories.canonical, every function in histories.py that a tool calls, and the export.to_*_dict functions (owner's rulings, R.1b and R.3). A function that other modules or the tests call is not public in this sense.
 - Units. Quantities are SI. A quantity that is not SI carries its unit in the name: pressure_drop_bar, flow_rate_m3_per_h.
 - Kinds. Counts end in _count, positions in _index, per-substep increments say so (friction_velocity_step). Booleans read as predicates (is_short_pipe, record_frame).
 - One word per concept, used everywhere: sample, substep (one word), frame; node, cell; segment.
-- Vocabulary (owner's ruling, R.1b). The two staggered half-grids are A and B (pressure_a, velocity_b). The elbows are A and B. The load phases are transit, forced and free decay.
+- Vocabulary (owner's rulings, R.1b and R.3). The two staggered half-grids are A and B (pressure_a, velocity_b): node for A, cell for B. An entry of the interleaved display grid is a grid point. The elbows are A and B: elbow A is the one the pressure wave reaches first (the inlet side of the run), elbow B is reached after the transit delay. The load phases are transit, forced and free decay.
 - No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name. Internal names change in the renames session; public keywords and the names in exported files change in the public API session, and stay as they are until then.
 
 ## 3. Functions
 - One job at one level of abstraction. Set-up, stepping and recording are separate functions.
-- At most 6 parameters, as ruff counts them (PLR0913). Beyond that, group them into a NamedTuple or dataclass named for the thing it describes (the fluid column, the run settings), not for its type. The limit is enforced in the public API session; before it, it is a target.
+- At most 6 parameters, as ruff counts them (PLR0913); keyword-only parameters count (owner's ruling, R.3). Beyond that, group them into a NamedTuple or dataclass named for the thing it describes (the fluid column, the run settings), not for its type. The limit is enforced in the public API session; before it, it is a target.
 - The user-facing Python entry points take keyword-only arguments after the first two. Compiled functions do not: they take positional parameter objects, because on Numba 0.68 a compiled function with keyword-only parameters cannot be called from another compiled function.
 - No argument that selects behaviour or return shape by number or string code where two functions would do. An on/off choice is a plain flag. The junction-coupling flags (vav_denominator, parity, fraction_profile) and output_type are the known cases: both flag paths must keep working, their form is redesigned in the public API session and is not touched before it.
 - Readability over abstraction (owner's ruling, R.1b). No protocol, base class, enum or wrapper layer unless it has two real users today. A function or class that only tests call is removed, and its tests are pointed at the code that actually runs, with their assertions unchanged. A NamedTuple or dataclass parameter object (above, and section 4) is not a layer in this sense.
@@ -39,6 +39,7 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 ## 5. Arithmetic is behaviour
 - Operand order, grouping, literal type and the form of a power are part of the result. Structural changes move expressions verbatim.
 - Any change to an expression is a behaviour change: its own commit, a DEVIATIONS.md row and a test that pins the new value.
+- The rule is about floating point. Precomputing an exact integer product (out_max * 2) is not an expression change (owner's ruling, R.3).
 
 ## 6. Constants and units
 - No bare literal with physical or numerical meaning. Module-level ALL_CAPS constants, each with a comment giving meaning, unit and source. 0, 1 and 2 inside a formula are fine.
@@ -62,4 +63,4 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - One refactoring per commit, named in the message. Gates as in docs/review/charter.md. Revert on red.
 
 ## 11. Recorded exceptions
-- Add a line here, with the reason, for any function that keeps a deliberate departure from this guide.
+- Add a line here, with the reason, for any function that keeps a deliberate departure from this guide. A user-facing entry point that still exceeds the 6-argument limit after the public API session is recorded here (owner's ruling, R.3).

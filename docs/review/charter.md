@@ -102,6 +102,53 @@ the rest of the review; `docs/style.md` carries the ones about the code.
 12. **Committed sweep CSVs at the schema bump** (`docs/sweep/*.csv`): the headers are
     renamed by a one-off script and every data row stays byte-identical.
 
+## Rulings (owner, recorded in session R.3, 23 Nov 2026)
+
+The renames session. The owner's answers to `NOTES.md` (R.2) and to the questions of the
+second review (`docs/review/plan_r2.md`). They bind the rest of the review alongside 1-12.
+
+13. **`vba_compat`.** `vba_compat.py` stays frozen and is imported as it is until Stage 6.
+    Nothing replaces `_vba_semantics.py` (R.1 Q-1; C-13 is closed without a change).
+14. **The friction `0.5`.** The `0.5` in the friction velocity step
+    (`0.5 * dynamic_fric * 9.81 * dt`) is the share of the pipe's weight carried on the
+    moving part. It goes into the derivation comments, for Ben to confirm (R.1 Q-4).
+15. **Grid point.** An entry of the interleaved display grid (A node, B cell, A node, ...)
+    is a "grid point" (the open half of R.1 Q-6). Node stays A, cell stays B.
+16. **Fluid coupling** on or off is a plain boolean flag, as planned in `plan.md` 2.2. The
+    load phase labels are still named constants (2.1).
+17. **The 6-argument limit.** Keyword-only arguments count towards it. A user-facing entry
+    point that still exceeds it after the public API session gets a recorded exception
+    (`docs/style.md` §11).
+18. **`histories.py`.** Every function in `histories.py` that a tool calls is a user-facing
+    entry point (extends ruling 4).
+19. **Pressure remnants.** The legacy port's own pressure tests and the pressure part of
+    `tools/extract_fixtures.py` stay until Stage 6.
+20. **Suspected defects.** The remaining suspected defects are not investigated in this
+    review. The list stays in `docs/review/findings.md`, for the lead author.
+21. **Kernel-signature names.** Where `plan.md` moves kernel-signature names to the
+    parameter-objects group, `plan.md` is followed: `docs/nomenclature.md` proposes those
+    names now, and they are applied then.
+22. **The two reviews.** The independent review was run a second time by mistake (R.2).
+    The first (R.1) stays the governing list: `docs/review/findings.md` and
+    `docs/review/plan.md`. R.2 is kept as `findings_r2.md` and `plan_r2.md`; only what R.1
+    lacks is brought across (its confirmed Design and Readability findings with no R.1
+    match, unless the fix adds an abstraction layer or concerns a tool no test runs; the
+    wrong-documentation fixes, done early; three order changes; the Numba rule for the
+    parameter-object commits; the possible defects not in `DEVIATIONS.md`).
+23. **Orphaned assertions.** The assertions orphaned by removing `coupling_force` are
+    restated against `moc.step`. One that only asserts a property of the removed wrapper
+    itself is dropped and listed in `NOTES.md` (extends ruling 6).
+24. **Ungated tools** stay rename-only, and their findings stay open (ruling 3 confirmed).
+25. **Exact integer products.** Precomputing an exact integer product such as
+    `out_max * 2` is not an expression change. Rule 2 and `docs/style.md` §5 are about
+    floating point.
+26. **Elbow A** is the one the pressure wave reaches first: force A is applied at once and
+    force B after the transit delay. It is the inlet side of the run.
+27. **`P_CAP_FACTOR = 1.33`** is the sweep's peak pressure as a multiple of design
+    pressure, set by the lead author on 22 Oct 2026. A comment asks Ben to confirm its
+    basis.
+28. **Units** stay "SI unless suffixed", in code and in exported names.
+
 ## Gates
 
 | when | gate |
