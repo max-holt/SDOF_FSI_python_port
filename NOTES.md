@@ -6,6 +6,35 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.1b (owner's decisions applied, 2026-11-23, branch
+`claude/solver-review-charter-oe8gtr`, where the rest of the review now runs) **done**; no
+refactoring. (1) The pressure solver is removed: `pressure.py` (with the
+`get_pressure_response` alias), `_vba_semantics.py` (used by nothing else), their 107
+differential tests, the seven snapshot documents `pressure_a..e`, `pressure_sweep`,
+`tie_rules` (27 documents / 227 calls remain, unchanged), the two pressure bench cases and
+every reference in tools and current documents; findings about it alone closed as
+"removed" (10). Kept on purpose: `legacy_port.get_pressure_response` (frozen) with its
+tests (the Example golden case, `test_smoke`, `test_structure`) and
+`tools/extract_fixtures.py`, which writes the committed Example fixture that holds the
+pressure case. (2) The JC-equals-lumped property test pins its 1.27e-12 counterexample as
+an `@example` (force `-1428049.2002131606`, the full-precision value behind the recorded
+digits) at rtol 5e-12, approved by the lead author on 17 Nov 2026. (3) The sweep-row check
+runs on stored histories (`tests/review_support/sweep_histories.txt`) and is exact on
+every host; the history check is exact on the stored `X86_V4` kernel and at 1e-12 elsewhere
+and prints its mode in every run's summary; checked with `NPY_DISABLE_CPU_FEATURES=X86_V4`
+and mutation S3. (4) The owner's rulings are in the charter ("Rulings", 1-12),
+`docs/style.md`, `plan.md` (answers under each question; commits 3.0a-3.0d remove the
+test-only interfaces; 2.2 makes the coupling a plain flag; group 7 holds the two edge-case
+fixes) and `findings.md` (90 accepted, 40 rejected: the 39 Nits and S-17, 10 removed).
+(5) "Proposed derivation, for Ben to confirm:" comments at every use of `12 EI / h^3`, the
+end-fixity factor, `4 / 3`, `out_max * 2` and `4 * celerity * dt`. (6) A "For Ben to
+review:" comment at the odd-substep junction force in `moc.step` and DEVIATIONS D-24.
+Gates on the final tree: lint clean; `make test-both` 950 passed + 24 skipped (Numba) /
+948 passed + 26 skipped (pure Python), down from 1063 / 1061 by the 107 differential tests
+and 7 snapshot documents removed and up by one new support test; `-m slow` 150 passed;
+`tools/bench.py --skip-full-python` (`docs/bench/64b171d.json`): digests all equal to the
+literal port and results the same as `253210a`, the full JC golden cases 0.85-1.09 s.
+
 Session R.1 (independent review, 2026-11-16) **done**: findings and plan only, no code
 change (`src/`, `tools/` and `tests/` are byte-identical to `6b31f71`). Six blind
 `clean-code-reviewer` passes (architecture, functions, names and documentation; solver
@@ -286,10 +315,20 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Owner:** answer Q-1 to Q-11 in `docs/review/plan.md` (Q-6, the vocabulary, and Q-2, the
-test-only interfaces, block the first commits) and the R.0b questions above. **Then review
-session R.2:** `docs/nomenclature.md` (plan 0.1), then group 1 of the plan (renames, R0),
-one refactoring per commit. Rules and gates: `docs/review/charter.md`.
+**Review session R.2:** `docs/nomenclature.md` (plan 0.1) from the vocabulary of charter
+ruling 1, and the rename table, written to `docs/review/rename_table.md` and shown to the
+owner before the first rename (ruling 10); then group 1 of the plan (renames, R0), one
+refactoring per commit. Rules, rulings and gates: `docs/review/charter.md`.
+
+**Still open for the owner** (none blocks R.2): Q-1 (`vba_compat` removal and the home of
+the C-13 copies now that `_vba_semantics` is gone); the derivation of the friction `0.5`
+(Q-4); one word for an interleaved entry of the display grid (Q-6); ruling 3 names "kind
+constants" while ruling 2 makes the coupling a plain flag (plan 2.2 reads it as the flag:
+confirm); Q-11 apart from defects 1, 2, 4, 9; R.0b questions 3 (keyword-only arguments in
+the argument limit), 4 (`histories.step*`), 5 (the `docs/viz/data/` files and the viewer's
+old schema) and 8 (lint rules); whether the legacy port's pressure tests and the pressure
+part of `tools/extract_fixtures.py` stay until Stage 6. For Ben: the five derivation
+comments and D-24.
 
 **Stage 6** (unchanged), when the lead author wants it.
 
