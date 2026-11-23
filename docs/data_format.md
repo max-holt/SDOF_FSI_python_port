@@ -248,7 +248,7 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 | `rho_c` | float | `fluidDensity × celerity`, Pa·s/m |
 | `portal_height_m` | float | `structure.solve_portal_height` of the case, m |
 | `mass_total_kg` | float | `(L + 4h/3) × massPerUnitLen`: the mass the natural frequency is modelled on (pipe and contents, VBA 727), used for the momentum and kinetic energy of both solvers; the MoC column's fluid momentum is not added |
-| `pipe_seg_qty` | int | `moc.grid_size`: MoC cells between the elbows |
+| `pipe_seg_qty` | int | `moc.grid_size`: MoC cells in the whole column (the span, about `L / (2 c dt)` cells, plus `pivot_seg_qty + 1` cells at each end), not only between the elbows |
 | `pivot_seg_qty` | int | `moc.grid_size`: cells from each end to the pivot |
 | `jc_short_pipe` | int | 1 when `moc.is_short_pipe` holds and the JC call fell back to the lumped solver (none in Tier 1) |
 | `history_peak` | float | `max \|F\|` of the force history `p × A`, N |

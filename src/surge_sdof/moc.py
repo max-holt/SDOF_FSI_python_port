@@ -7,7 +7,8 @@ through ``step`` bitwise.
 
 Grid
 ----
-``pipeSegQTY = N`` cells of length ``2 c dt`` between the elbows, ``pivotSegQTY`` cells
+``pipeSegQTY = N`` cells of length ``2 c dt`` along the whole modelled column (the span,
+both legs and the end cells, not only the span between the elbows), ``pivotSegQTY`` cells
 from each end to the portal-frame pivot, ``extQTY = 4`` end cells that receive no mass
 acceleration. Two staggered half-grids: the A nodes ``0 .. N`` (pressure ``p_a``,
 velocity ``v_a``) and the B cells ``0 .. N-1`` (``p_b``, ``v_b``), the VBA
@@ -105,7 +106,8 @@ def grid_size(
     Returns
     -------
     tuple of int
-        ``pipeSegQTY`` (cells between the elbows, even by construction) and
+        ``pipeSegQTY`` (cells in the whole column: the span, about ``L / (2 c dt)`` cells,
+        plus ``pivotSegQTY + 1`` cells at each end; even by construction) and
         ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
         height in cells; ``CLng`` rounds half to even).
     """

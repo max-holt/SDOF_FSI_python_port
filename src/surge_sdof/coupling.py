@@ -40,7 +40,7 @@ class JunctionCoupling:
     Parameters
     ----------
     pipe_seg_qty : int
-        ``pipeSegQTY``, cells between the elbows (from ``moc.grid_size``).
+        ``pipeSegQTY``, cells in the whole column (from ``moc.grid_size``).
     pivot_seg_qty : int
         ``pivotSegQTY``, cells from each end to the portal-frame pivot.
     dt : float
