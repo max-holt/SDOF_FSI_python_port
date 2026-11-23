@@ -110,7 +110,7 @@ of cells of that grid (equal to `meta.n_cells` for a JC run).
 | `y_nominal_m` | float[n] | As above |
 | `run_length_m` | float | `cell_position_m[run_end] - cell_position_m[run_start]` |
 | `leg_height_m` | float | Height of the inlet pipe above the run (centreline length between the inlet elbow cells), m |
-| `leg_height_2_m` | float | The same for the outlet side (one cell shorter: the VBA B profile ramps one cell longer on the inlet side) |
+| `leg_height_2_m` | float | The same for the outlet side (equal to `leg_height_m` with the default fraction profile; one cell shorter with `fraction_profile="legacy"`, whose B profile ramps one cell longer on the inlet side) |
 | `portal_height_m` | float | `structure.solve_portal_height` of the case, m (printed, not used for the layout) |
 | `spacing_m` | float | Distance between consecutive cells along the centreline, m (`c dt`) |
 | `cell_length_m` | float | `2 c dt`, m |

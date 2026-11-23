@@ -336,8 +336,8 @@ def step_sine(
     f_osc : float
         Sine frequency, Hz.
     decay_cycles, decay_fraction : float, optional
-        The envelope reaches ``1 - decay_fraction`` (default 0.2) after ``decay_cycles``
-        (default 10) cycles of ``f_osc``.
+        The envelope falls by ``decay_fraction`` (default 0.8), to ``1 - decay_fraction``
+        (0.2 by default), after ``decay_cycles`` (default 10) cycles of ``f_osc``.
     sample_freq, lead_in_s, transit_s, tail_s : float, optional
         As ``step``; the duration adds ``decay_cycles / f_osc``.
 
