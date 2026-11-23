@@ -608,7 +608,7 @@ def _integrate(
     forces,
     params: SdofParams,
     substep_duration: float,
-    step_qty: int,
+    substep_count: int,
     coupling: JunctionCoupling | None,
     out_max: int,
     output_type: int,
@@ -666,7 +666,7 @@ def _integrate(
         )
         delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
         cap = tracing.check_memory(
-            n_sub, len(samples), int(out_max), int(step_qty), trace_every, n_cells
+            n_sub, len(samples), int(out_max), int(substep_count), trace_every, n_cells
         )
     else:
         flat_a = flat_b = np.zeros(0)
@@ -692,7 +692,7 @@ def _integrate(
             params.support_gap,
             params.closed_gap_stiffness_ratio,
             substep_duration,
-            int(step_qty),
+            int(substep_count),
             int(out_max),
             int(output_type),
             bool(legacy_parity),
@@ -732,7 +732,7 @@ def _integrate(
             meta.inputs,
             trace_every,
             substep_duration,
-            step_qty,
+            substep_count,
             out_max,
             params,
             int(n_frames),
