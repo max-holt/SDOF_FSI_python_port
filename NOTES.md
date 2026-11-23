@@ -6,6 +6,39 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.3, part 2 (the renames, 2026-11-23) **done**. The owner approved
+`docs/nomenclature.md` with two changes and answered Q-N1 to Q-N8 (charter rulings 29-38;
+the nomenclature records the answers). Then, one quantity or family per commit across
+`src/`, `tests/` and `tools/`: the "For Ben to review" comment at the transit walk's column
+bound (ruling 31); the `LoopLayout` elbow A / B docstring (ruling 34); every rename the
+nomenclature marks R (internal names, module constants, NamedTuple fields, and every
+non-entry-point function with its parameters, ruling 29): `SdofParams` fields,
+`solve_quartic`, the set-up parameters of `structure`, `loads`, `moc`, the moving-fraction
+functions, `column_at_rest`, `mean_velocity_divisor`, `end_pressure_decay_factor`, the two
+`moc` constants and `moc.step` locals, the grid counts, the loads walk (transit delay,
+positions, weights, elbow forces, bookkeeping), the load phases (`PHASE_FORCED`),
+`substep_duration`, `substep_count`, `nominal_forced_sample_count`, the forced counts,
+`grid_point_count`, the trace helpers and frame-column constants, the `response`, `export`,
+`viz/geometry` and `histories` locals and helper parameters, and the gated tools
+(`sweep_jc` constants, `Pipe`, `Case`, `run_case`; `cases.py`). Kernel-signature names wait
+for plan group 3 (ruling 21); public keywords, returned dataclass fields and exported names
+for the public API session. `docs/nomenclature.md` lists seven places where the code departs
+from the table's wording (name clashes) and what was left on purpose; `docs/architecture.md`,
+`findings.md` (done / partly done) and `plan.md` (progress) follow.
+
+Two mistakes in this session, both caught by the gates before anything was pushed, and
+taken out of the history (the branch was rebuilt locally by cherry-picking, so every commit
+on it is green on its own): (a) the renaming tool also renamed a keyword argument, so
+`PeakResponse(history=...)` became `response_history=` and every run with `output_type > 0`
+or a trace raised `TypeError`; (b) one call site of `moc.decay_factor` in
+`tests/test_differential.py` was missed. Since then every commit is prechecked (lint and the
+compiled fast suite) before it is made, and the full gate runs on a worktree of the commit.
+
+Gates: every commit `make lint` and the fast suite compiled and with `NUMBA_DISABLE_JIT=1`
+after a cache wipe, run on a worktree of the commit (949 passed + 24 skipped / 947 + 26
+throughout; no test count changed in part 2); session gates on the final tree: `-m slow`
+150 passed; `tools/bench.py` see below.
+
 Session R.3 (renames session, part 1, 2026-11-23) **stopped at the rename table**, as the
 brief asks: nothing is renamed yet. (1) The owner's rulings 13-28 are in the charter and
 `docs/style.md`. (2) The two reviews reconciled (ruling 22): R.1 is again
@@ -365,21 +398,19 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**R.3, part 2 (after the owner's approval):** the owner edits and approves
-`docs/nomenclature.md` and answers its questions Q-N1 to Q-N8 (Q-N1, which functions count
-as public for this session, decides the scope of the "when" column). Then group 1 of
-`docs/review/plan.md`: one quantity or one tightly related family per commit, across `src/`
-and the call sites in `tests/` and `tools/`; docstrings and comments in the same commit
-(comments quoting VBA lines stay verbatim); `make clean-cache` before the tests when a
-compiled function or its callers change; the snapshot and support adapters absorb renamed
-attributes (charter rules 5, 6). Kernel-signature names wait for group 3 (ruling 21);
-public names, dataclass fields returned to users and exported names for the public API
-session. At the end: `-m slow`, `tools/bench.py`, findings marked done in `findings.md`,
-`docs/architecture.md` where names changed, NOTES.
+**Group 2 of `docs/review/plan.md`** (constants, units, control flow): 2.1 the phase
+constants defined once and imported (the bare 0 / 1 tags of `loads`), 2.2 the plain
+`is_fluid_coupled` flag (ruling 16), 2.4 to 2.7 the core literals, 2.9 the supporting-code
+conversions, 2.10, 2.11, then the schedule clean-up 2.13 to 2.15. Rules: one literal per
+commit for 2.4 to 2.7; `make clean-cache` before tests whenever a compiled function or a
+constant it reads changes. Then stop before group 3 and write
+`docs/review/parameter_objects.md` (ruling 10); group 3 applies the kernel names fixed in
+`docs/nomenclature.md`.
 
 **Still open for the owner:** R.0b question 5 (the `docs/viz/data/` files and the viewer's
 old schema at the bump) and 8 (lint rules for style §7-§9); for Ben: the derivation
-comments (now including the friction `0.5`), `P_CAP_FACTOR`'s basis and D-24; for the lead
+comments (now including the friction `0.5`), `P_CAP_FACTOR`'s basis (now
+`PEAK_TO_DESIGN_PRESSURE_RATIO`), the transit walk's column bound and D-24; for the lead
 author: the suspected defects of `findings.md` (ruling 20).
 
 **Stage 6** (unchanged), when the lead author wants it.
