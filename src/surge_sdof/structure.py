@@ -216,6 +216,9 @@ def lumped_params(
     mass = (physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len
     stiffness = ((nat_freq * 2 * VBA_PI) ** 2) * mass
     damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / 100
+    # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
+    # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
+    # substep 0.5 * mu * g * dt.
     fric_acc = 0.5 * dynamic_fric * 9.81 * dt
     return SdofParams(
         float(mass),
@@ -304,6 +307,9 @@ def jc_params(
         * damping_percent
         / 100
     )  # assume critical damping is relative to total mass
+    # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
+    # on the moving part (as in lumped_params). The weight is that of the total mass (pipe and
+    # contents) while the velocity step acts on the rigid mass, hence total mass / rigid mass.
     fric_acc = (
         0.5
         * dynamic_fric
