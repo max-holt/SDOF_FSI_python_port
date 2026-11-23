@@ -342,7 +342,7 @@ def build_trace(
     tr_v: np.ndarray,
     jc=None,
     celerity: float = 0.0,
-    ext_qty: int = 0,
+    inactive_end_cell_count: int = 0,
 ) -> Trace:
     """Assemble the ``Trace`` from the kernel's arrays, sliced to ``n_frames`` (copies, so
     the unused capacity is released).
@@ -360,7 +360,7 @@ def build_trace(
         The junction of a JC run (its grid and moving fractions), None for lumped.
     celerity : float
         Pressure-wave speed, m/s (cell positions); unused for lumped.
-    ext_qty : int
+    inactive_end_cell_count : int
         ``moc.INACTIVE_END_CELL_COUNT`` for a JC run.
     """
     frame_state = tr_f[:n_frames]
@@ -395,7 +395,7 @@ def build_trace(
             n_cells=grid_point_count,
             pivot_seg_qty=int(jc.pivot),
             pipe_seg_qty=column_cell_count,
-            ext_qty=int(ext_qty),
+            ext_qty=int(inactive_end_cell_count),
             p_cells=tr_p[:n_frames].copy(),
             v_cells=tr_v[:n_frames].copy(),
             cell_position=np.arange(grid_point_count, dtype=np.float64)

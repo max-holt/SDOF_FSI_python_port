@@ -781,7 +781,7 @@ def _integrate(
             tr_v,
             jc=junction_coupling,
             celerity=trace_request.celerity,
-            ext_qty=moc.INACTIVE_END_CELL_COUNT,
+            inactive_end_cell_count=moc.INACTIVE_END_CELL_COUNT,
         )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent_force_max),

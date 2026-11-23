@@ -45,9 +45,9 @@ class JunctionCoupling:
         ``pivotSegQTY``, cells from each end to the portal-frame pivot.
     substep_duration : float
         Sub-step, s.
-    rho_c : float
+    characteristic_impedance : float
         Acoustic impedance ``fluidDensty * celerity``, Pa·s/m (kg/(m²·s)).
-    fluid_area : float
+    flow_area : float
         Internal cross-sectional area of the pipe, m².
     end_pressure_decay_factor : float
         ``dacayFactor`` from ``moc.end_pressure_decay_factor``, dimensionless, per even
@@ -103,8 +103,8 @@ class JunctionCoupling:
         column_cell_count: int,
         end_to_elbow_cell_count: int,
         substep_duration: float,
-        rho_c: float,
-        fluid_area: float,
+        characteristic_impedance: float,
+        flow_area: float,
         end_pressure_decay_factor: float,
         vav_denominator: str = "fixed",
         fraction_profile: str = "fixed",
@@ -114,8 +114,8 @@ class JunctionCoupling:
         self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
         self.p_a, self.v_a, self.p_b, self.v_b = moc.column_at_rest(self.n_seg)
         self.dt = float(substep_duration)
-        self.rho_c = float(rho_c)
-        self.fluid_area = float(fluid_area)
+        self.rho_c = float(characteristic_impedance)
+        self.fluid_area = float(flow_area)
         self.decay = float(end_pressure_decay_factor)
         self.vav_div = moc.mean_velocity_divisor(self.n_seg, vav_denominator)
         self.d_f = 0.0
