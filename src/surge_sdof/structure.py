@@ -121,7 +121,7 @@ def solve_quartic(
 
 # VBA lines 384-387
 def solve_portal_height(
-    physical_length: float, flexural_rigidity_ei: float, mass_per_unit_len: float, nat_freq: float
+    span_length: float, flexural_rigidity: float, mass_per_length: float, natural_frequency: float
 ) -> float:
     """Leg height of the portal-frame proxy (VBA lines 384-387).
 
@@ -132,13 +132,13 @@ def solve_portal_height(
 
     Parameters
     ----------
-    physical_length : float
+    span_length : float
         Length between elbows, m.
-    flexural_rigidity_ei : float
+    flexural_rigidity : float
         Flexural rigidity ``E * I``, N·m².
-    mass_per_unit_len : float
+    mass_per_length : float
         Mass per unit length (pipe and contents), kg/m.
-    nat_freq : float
+    natural_frequency : float
         Natural frequency with the gaps open, Hz.
 
     Returns
@@ -146,16 +146,16 @@ def solve_portal_height(
     float
         ``portalFrameHeight``, m.
     """
-    omega_squared = (2 * VBA_PI * nat_freq) ** 2
-    cubic_coefficient = physical_length * mass_per_unit_len
+    omega_squared = (2 * VBA_PI * natural_frequency) ** 2
+    cubic_coefficient = span_length * mass_per_length
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    quartic_coefficient = mass_per_unit_len * 4 / 3
+    quartic_coefficient = mass_per_length * 4 / 3
     # Proposed derivation, for Ben to confirm: 12 * EI / h^3 is the lateral stiffness of a leg
     # of height h fixed against rotation at both ends.
     portal_frame_height = solve_quartic(
-        -12 * flexural_rigidity_ei / omega_squared, cubic_coefficient, quartic_coefficient
+        -12 * flexural_rigidity / omega_squared, cubic_coefficient, quartic_coefficient
     )
     for _i in range(0, 10 + 1):
         # Proposed derivation, for Ben to confirm: 0.5 + 1.5 * (h / (L + h))^2 is a factor on that
@@ -164,8 +164,8 @@ def solve_portal_height(
         # 2 * 12EI/h^3). The squared ratio is an interpolation between the two.
         portal_frame_height = solve_quartic(
             -12
-            * flexural_rigidity_ei
-            * (0.5 + 1.5 * ((portal_frame_height / (physical_length + portal_frame_height)) ** 2))
+            * flexural_rigidity
+            * (0.5 + 1.5 * ((portal_frame_height / (span_length + portal_frame_height)) ** 2))
             / omega_squared,
             cubic_coefficient,
             quartic_coefficient,
@@ -175,37 +175,37 @@ def solve_portal_height(
 
 # VBA lines 389-392
 def lumped_params(
-    physical_length: float,
+    span_length: float,
     portal_frame_height: float,
-    mass_per_unit_len: float,
+    mass_per_length: float,
     damping_percent: float,
-    dynamic_fric: float,
-    nat_freq: float,
+    friction_coefficient: float,
+    natural_frequency: float,
     dt: float,
-    gap: float,
-    restrain_freq_ratio: float,
+    support_gap: float,
+    closed_gap_frequency_ratio: float,
 ) -> SdofParams:
     """Mass, stiffness, damping and friction increment of the lumped proxy (VBA 389-392).
 
     Parameters
     ----------
-    physical_length : float
+    span_length : float
         Length between elbows, m.
     portal_frame_height : float
         From ``solve_portal_height``, m.
-    mass_per_unit_len : float
+    mass_per_length : float
         Mass per unit length, kg/m.
     damping_percent : float
         Damping as a percentage of critical, %.
-    dynamic_fric : float
+    friction_coefficient : float
         Coulomb friction coefficient, dimensionless (the VBA fixes m and s here).
-    nat_freq : float
+    natural_frequency : float
         Natural frequency with the gaps open, Hz.
     dt : float
         Sub-step, s (``1 / (sampleFreq * stepQTY)``).
-    gap : float
+    support_gap : float
         Support gap, m.
-    restrain_freq_ratio : float
+    closed_gap_frequency_ratio : float
         Natural frequency with the gaps closed over that with them open, dimensionless.
 
     Returns
@@ -213,7 +213,7 @@ def lumped_params(
     SdofParams
         ``mass = (L + 4h/3) m'`` (kg), ``stiffness = (2 pi f)^2 mass`` (N/m),
         ``damping = 2 sqrt(k m) zeta / 100`` (N·s/m), ``friction_velocity_step = 0.5 mu 9.81 dt``
-        (m/s), ``gap`` (m), ``restrain_freq_ratio^2``.
+        (m/s), ``support_gap`` (m), ``closed_gap_frequency_ratio^2``.
 
     Notes
     -----
@@ -223,36 +223,36 @@ def lumped_params(
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    mass = (physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len
-    stiffness = ((nat_freq * 2 * VBA_PI) ** 2) * mass
+    mass = (span_length + portal_frame_height * 4 / 3) * mass_per_length
+    stiffness = ((natural_frequency * 2 * VBA_PI) ** 2) * mass
     damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / 100
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
-    friction_velocity_step = 0.5 * dynamic_fric * 9.81 * dt
+    friction_velocity_step = 0.5 * friction_coefficient * 9.81 * dt
     return SdofParams(
         float(mass),
         float(stiffness),
         float(damping),
         float(friction_velocity_step),
-        float(gap),
-        float(restrain_freq_ratio) ** 2,
+        float(support_gap),
+        float(closed_gap_frequency_ratio) ** 2,
     )
 
 
 # VBA lines 726-729 (GetPeakResponseJC)
 def jc_params(
-    physical_length: float,
+    span_length: float,
     portal_frame_height: float,
-    mass_per_unit_len: float,
-    fluid_densty: float,
-    fluid_area: float,
+    mass_per_length: float,
+    fluid_density: float,
+    flow_area: float,
     damping_percent: float,
-    dynamic_fric: float,
-    nat_freq: float,
+    friction_coefficient: float,
+    natural_frequency: float,
     dt: float,
-    gap: float,
-    restrain_freq_ratio: float,
+    support_gap: float,
+    closed_gap_frequency_ratio: float,
 ) -> SdofParams:
     """Mass, stiffness, damping and friction increment of the junction-coupling proxy
     (VBA lines 726-729).
@@ -262,27 +262,27 @@ def jc_params(
 
     Parameters
     ----------
-    physical_length : float
+    span_length : float
         Length between elbows, m.
     portal_frame_height : float
         From ``solve_portal_height``, m.
-    mass_per_unit_len : float
+    mass_per_length : float
         Mass per unit length of pipe *and* fluid, kg/m.
-    fluid_densty : float
+    fluid_density : float
         Fluid density, kg/m³ (VBA spelling kept).
-    fluid_area : float
+    flow_area : float
         Internal cross-sectional (pressure) area of the pipe, m².
     damping_percent : float
         Damping as a percentage of critical, %.
-    dynamic_fric : float
+    friction_coefficient : float
         Coulomb friction coefficient, dimensionless (m and s fixed by the VBA).
-    nat_freq : float
+    natural_frequency : float
         Natural frequency with the gaps open, Hz (modelled with the fluid mass included).
     dt : float
         Sub-step, s.
-    gap : float
+    support_gap : float
         Support gap, m.
-    restrain_freq_ratio : float
+    closed_gap_frequency_ratio : float
         Natural frequency with the gaps closed over that with them open, dimensionless.
 
     Returns
@@ -301,20 +301,17 @@ def jc_params(
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
     # The same factor in the three total-mass terms below.
-    mass = (portal_frame_height * 4 / 3) * mass_per_unit_len + physical_length * (
-        mass_per_unit_len - fluid_densty * fluid_area
+    mass = (portal_frame_height * 4 / 3) * mass_per_length + span_length * (
+        mass_per_length - fluid_density * flow_area
     )  # remove core fluid to get rigid mass
     stiffness = (
-        ((nat_freq * 2 * VBA_PI) ** 2)
-        * (physical_length + portal_frame_height * 4 / 3)
-        * mass_per_unit_len
+        ((natural_frequency * 2 * VBA_PI) ** 2)
+        * (span_length + portal_frame_height * 4 / 3)
+        * mass_per_length
     )  # assume total mass has same bases as natural frequency (fluid is included in CAESAR)
     damping = (
         2
-        * (
-            (stiffness * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len))
-            ** 0.5
-        )
+        * ((stiffness * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)) ** 0.5)
         * damping_percent
         / 100
     )  # assume critical damping is relative to total mass
@@ -323,10 +320,10 @@ def jc_params(
     # contents) while the velocity step acts on the rigid mass, hence total mass / rigid mass.
     friction_velocity_step = (
         0.5
-        * dynamic_fric
+        * friction_coefficient
         * 9.81
         * dt
-        * ((physical_length + portal_frame_height * 4 / 3) * mass_per_unit_len)
+        * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)
         / mass
     )  # mass correction from frictional to inertial
     return SdofParams(
@@ -334,8 +331,8 @@ def jc_params(
         float(stiffness),
         float(damping),
         float(friction_velocity_step),
-        float(gap),
-        float(restrain_freq_ratio) ** 2,
+        float(support_gap),
+        float(closed_gap_frequency_ratio) ** 2,
     )
 
 
