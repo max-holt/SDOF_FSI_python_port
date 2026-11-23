@@ -9,8 +9,9 @@ the code started.
 
 Widened on 16 Nov 2026 (session R.0b) from the solver modules to two areas.
 
-* **The solver core:** `moc.py`, `structure.py`, `coupling.py`, `loads.py`, `response.py`,
-  `pressure.py`, `_vba_semantics.py`.
+* **The solver core:** `moc.py`, `structure.py`, `coupling.py`, `loads.py`, `response.py`.
+  `pressure.py` and `_vba_semantics.py` were in scope until session R.1b removed them with
+  the unused `GetPressureResponse` port.
 * **The supporting Python:** `trace.py`, `export.py`, `histories.py`, `viz/geometry.py` and
   `tools/`.
 * **The data format** (`docs/data_format.md`: the `trace` and `sweep` documents and the
@@ -27,7 +28,7 @@ Two sessions are fixed points for the rulings in `docs/style.md`:
 | session | what changes there, and not before |
 |---|---|
 | renames | internal names, the VBA spellings among them |
-| public API | public keywords, the `get_pressure_response` alias, the form of the junction-coupling flags and of `output_type`, the names in exported files (the schema bump), and the 6-argument limit becomes enforced |
+| public API | public keywords, the form of the junction-coupling flags and of `output_type`, the names in exported files (the schema bump), and the 6-argument limit becomes enforced |
 
 ## Change rules
 
@@ -70,12 +71,14 @@ function extraction; **R4** kernel signature or loop structure.
 
 ## The snapshot oracle
 
-`tests/test_review_snapshot.py` runs 34 documents (245 solver calls) through today's code
+`tests/test_review_snapshot.py` runs 27 documents (227 solver calls) through today's code
 and compares every output as `float.hex()` text with `tests/review_snapshot/` (2.0 MB):
 lumped and junction-coupling cases at `output_type` 0 to 3, with the default and the
-legacy flags; a short-pipe fallback; traced runs of both solvers; valve-closure cases;
-seeded sweeps per solver; and three targeted documents (friction dead zone D-20, a `-0.0`
-force, the VBA `min` / `max` tie rules). `tools/review_snapshot.py` checks the files and,
+legacy flags; a short-pipe fallback; traced runs of both solvers; seeded sweeps per solver;
+and two targeted documents (friction dead zone D-20, a `-0.0` force). Until session R.1b
+it also held the valve-closure cases of `pressure_response`, a pressure sweep and the VBA
+`min` / `max` tie rules (34 documents, 245 calls); they went with the pressure solver, and
+the counts in "It bites" below are of that set. `tools/review_snapshot.py` checks the files and,
 with `--write`, rewrites them.
 
 ### It bites (16 Nov 2026)

@@ -3,20 +3,19 @@
 One line per module: what it is responsible for, and what it must not know about.
 The structure was fixed at the start of Stage 4 and filled in module by module (4.1:
 `structure`, `loads`, `coupling` (`NoCoupling` only), `response` lumped path; 4.2: `moc`, the
-JC coupling; 4.3: `pressure`, `_vba_semantics`; 4.4: hygiene, no behaviour change; 5: the three
+JC coupling; 4.3: `pressure`, `_vba_semantics` (both removed in review session R.1b with the unused `GetPressureResponse` port); 4.4: hygiene, no behaviour change; 5: the three
 inner loops compiled with Numba, see "Stage 5 — compiled kernels"; Session V.1: the
 sub-step trace for visualisation, see "Session V.1 — the trace"; W.1 / W.2: the data files and
 the viewer; 5b: `histories`; F-4 / F-4b: the corrected moving-fraction profile). This document
 describes the code as it stands at the handover (Session H.1). `legacy_port.py` stays the reference
 implementation until Stage 6 and every new module is proved against it by
-`tests/test_differential.py`. Every public function and dataclass of the six live modules
+`tests/test_differential.py`. Every public function and dataclass of the live modules
 carries a numpy-style docstring with the unit of each physical argument and return and the
 DEVIATIONS id of each VBA quirk it preserves.
 
 ```
 src/surge_sdof/
   vba_compat.py        # frozen (Stage 1 VBA runtime semantics; no edits)
-  _vba_semantics.py    # live home for VBA tie/NaN comparison semantics (vba_min, vba_max)
   legacy_port.py       # frozen; reference implementation until Stage 6
   moc.py               # 1-D MoC fluid column: state arrays, half-step update, boundary conditions
   structure.py         # SDOF: portal-frame proxy, restoring force with gap, Coulomb friction, time-step kernel
@@ -26,13 +25,11 @@ src/surge_sdof/
   trace.py             # Session V.1: the Trace dataclass of a traced run (trace_every > 0) and its allocation / assembly helpers
   viz/geometry.py      # Session W.1: the expansion-loop layout of a Trace (LoopLayout, loop_layout, lumped_grid, layout_from_trace); numpy only
   export.py            # Session W.1: the trace / sweep data documents for the JS viewer (docs/data_format.md) and their JSON / gzip writer; tools/export.py drives it
-  pressure.py          # pressure_response (valve/pump MoC) as a standalone driver; get_pressure_response is a thin alias
 ```
 
 | module | responsibility | must not know about |
 |---|---|---|
-| `vba_compat.py` | VBA runtime semantics (`CLng`, `floor`, `modDbl`, `sign`, `min/maxUnsigned`, padded 1-based arrays). **Frozen**: no edits; new modules may import from it, but any VBA semantic it lacks goes into `_vba_semantics.py`. | any solver quantity |
-| `_vba_semantics.py` | The live home for VBA comparison semantics: `vba_min`/`vba_max` (the module-level VBA `min`/`max`, lines 3-17: on a tie or with NaN the **second** argument is returned, with its type and sign of zero; Python's built-ins return the first). One copy, used by `pressure.py`, surviving the Stage 6 removal of `legacy_port.py` (whose `min`/`max` are the same functions). | any solver quantity |
+| `vba_compat.py` | VBA runtime semantics (`CLng`, `floor`, `modDbl`, `sign`, `min/maxUnsigned`, padded 1-based arrays). **Frozen**: no edits; new modules may import from it. | any solver quantity |
 | `legacy_port.py` | Line-for-line Stage 1 transcription of the VBA; the oracle for the differential tests. Frozen (no edits, no imports *from* it in new modules except in tests). | the new modules |
 | `structure.py` | The SDOF pipe proxy: `solve_portal_height` (seed + 11 `solve_poly` passes), `lumped_params` (mass, stiffness, damping, `fricAcc`), `restoring_force(x, k, gap, ratio)` (bilinear support gap), and `step(state, f_applied, params, dt)` — exactly the VBA update (explicit `aNew` from the old state, trapezoidal `v` and `x`, stick/slip Coulomb friction) on Python floats with the clamp/sign ladders inlined. Stage 5: the arithmetic is `step_scalars(x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt)`, compiled with `numba.njit(cache=True)`; `step` unpacks the tuple and the `SdofParams` for it. One kernel, called from one loop. | where `f_applied` comes from (force histories, transit delay, fluid coupling), sample/phase bookkeeping, max trackers, output types |
 | `loads.py` | The elbow-to-elbow unbalance force `forceA − forceB` from a force history: `transit_delay` (`unballanceStepQTY`), the `kOverlap` sub-sample offset and the three-phase scheduling (delay phase with `forceA` held, ramp phase with both forces interpolated, no force in free decay), walked column-major over 2-D histories exactly as the VBA. Yields one list of per-sub-step values per sample. Session V.1: the index walk is one private per-sample `_schedule` generator; `unbalance_force` (inner `k` loops unchanged) and `elbow_forces` (the two forces apart, with the sample's phase, for the trace) consume it. | the structure state, stiffness or damping, fluid coupling, what the caller does with each sample (result histories, free decay) |
@@ -42,7 +39,6 @@ src/surge_sdof/
 | `trace.py` | Session V.1. `Trace`, the frozen dataclass of a traced run (per-frame arrays `t, sub_step, sample, phase, x, v, a, f_a, f_b, f_unbalance, f_friction, stick, d_f`; JC only `p_cells`, `v_cells` and the column geometry; one-off `solver`, `trace_every`, `dt`, `step_qty`, `out_max`, `params`, `inputs`), the frame-array column constants the kernel writes (`F_*`, `I_*`), `capacity` (frames to allocate: the forced sub-steps plus free decay up to the history window), `check_memory` (`MAX_TRACE_VALUES`, `ValueError` naming the smallest stride that fits), `allocate`, `interleave` (the staggered grid as `A0 B0 A1 … AN`) and `build` (slices and copies the kernel arrays into a `Trace`). | the solver loop, `loads`, `moc.step` (it only lays out what the kernel copied) |
 | `viz/geometry.py` | Session W.1 (code of V.2b / V.2c, moved). `LoopLayout`, `_segments`, `loop_layout`, `lumped_grid`, `layout_from_trace`: the expansion-loop layout of a trace's interleaved column (the rules under "The picture", pinned by `tests/test_geometry.py`), written into every trace file by the exporter; numpy only, no plotly. The plotly-python animation that once consumed it (`viz/animate.py`) was retired in Session H.1. | the solvers, plotly, the file format |
 | `export.py` | Session W.1. `to_trace_dict(result, case_id)` (the `trace` document: meta with inputs as given, the resolved `SdofParams` + run scalars, the five maxima, provenance; the `LoopLayout` as `geometry`; the thirteen frame columns with the synthetic rest frame first, `sub_step = sample = -1`; JC `p` / `v` as row-major `{shape, data}` blocks), `to_sweep_dict(rows, ...)` (the `sweep` document: thirty fixed columns, regen template, reference block), `dumps` / `write_json` / `read_json` (compact JSON, floats via `repr`, `allow_nan=False`, UTF-8, LF, gzip by suffix). `docs/data_format.md` is the contract and `tests/test_export.py` parses it. Also `is_capped` (the run decayed past the traced window) and the rest-frame phase, moved here from the retired animation. Reads a `PeakResponse`; never runs a solver (`tools/export.py` does). | the solvers, the viewer, plotly |
-| `pressure.py` | `pressure_response(...)` (Stage 4.3): the valve/pump water-hammer MoC (`GetPressureResponse`) as a standalone driver. `setup` computes the run constants once (`PressureSetup`: `outMax`, `pipeSegQTY` via `grid_size` with the `outMax` truncation D-22, `factor`, `rhoC`, `velocityInitial`, `valveLoss`, `valveDPInitial`, `pipeLoss`); `initial_column` builds the steady column in four contiguous arrays `p_a, v_a, p_b, v_b` (length `N + 1`, `B[N]` is the pump boundary) and `velAtPump`; per iteration (two time steps) `valve_closure` walks the pattern column-major with linear interpolation (D-10), `valve_boundary` (open / fully-closed at `closure >= 0.999999999`), `half_step_a_from_b` (clamp `0.9`), `pump_boundary` (ramp on the reverse-flow-clipped velocity), `half_step_b_from_a` (clamp `0.9 * rhoC`): the two half-loops keep their D-6 asymmetry literally. Scalar loop bodies over the arrays, `sysMat` as two locals, numpy element reads as in the legacy, the run under `np.errstate(raise)`. Not compiled in Stage 5: a run is milliseconds (bench case (h): about 5 ms), so it is not a bottleneck and keeps its numpy-scalar `errstate` semantics. Returns the 0-based `resultArray(0 To outMax)` unchanged. `get_pressure_response(...)` is a thin alias with the legacy signature (bench case (d), legacy callers). | the peak-response solvers, `structure`, `loads` beyond `as_history_2d`, `coupling`, `moc` |
 
 ## Data flow for one sub-step
 
@@ -83,11 +79,6 @@ or the VBA per-phase index `n + off` (`parity="per_phase"`, D-19); the coupling 
 its parity. The loop runs under `np.errstate(raise)` so a zero `rhoC` or a fluid overflow
 raises mid-run (D-9 as a raise).
 
-**Pressure path** (`pressure_response`, for completeness). Independent of the above: `setup`
-once, `initial_column` once, then per loop iteration (two time steps) `valve_closure` →
-`valve_boundary` → `half_step_a_from_b` → `pump_boundary` → `half_step_b_from_a`, and
-`p_a[0]` is the sample (Pa). The module docstring of `pressure.py` has the detail.
-
 ## Interfaces
 
 Interfaces fixed in Stage 4.1 so that later sessions write against them:
@@ -123,14 +114,6 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   V.1) is a generator like `unbalance_force`: one `(phase, forceA list, forceB list)` per
   sample, `phase` 0 for the delay samples and 1 for the ramp samples, `forceA[k] -
   forceB[k]` bitwise the `unbalance_force` value.
-* `pressure.pressure_response(valve_pattern, closure_time, celerity, density, time_step,
-  pressure_drop_from_pump, flow_rate, pipe_area, valve_cv, length_to_pump,
-  pump_ramp_pressure) -> np.ndarray` (Stage 4.3): the 0-based valve pressure history,
-  `outMax + 1` samples at `2 * timeStep`, identical to `legacy_port.get_pressure_response`;
-  `pressure.get_pressure_response` is the alias. Set-up pieces: `pressure.setup(...) ->
-  PressureSetup`, `pressure.initial_column(setup) -> (p_a, v_a, p_b, v_b, vel_at_pump)`,
-  `pressure.valve_closure(pattern_2d, tot_ind, factor) -> float`, and the four in-place
-  updates `valve_boundary`, `half_step_a_from_b`, `pump_boundary`, `half_step_b_from_a`.
 * `response.PeakResponse` fields: `max_static_equivalent_force`, `max_displacement`,
   `max_velocity`, `max_acceleration`, `max_applied_force`, `history` (None for
   `output_type = 0`; otherwise a 0-based array of length `outMax * 2`, element `t − 1` =
@@ -162,14 +145,6 @@ observed bitwise:
   branch, including the `* ±1.0` products (exact) and the int-0 → `0.0` case.
 * `0.0 + F` / `0.0 − R` from `NoCoupling` differ from `F` / `−R` only in the sign of an
   exact zero.
-* `pressure.py` (Stage 4.3): the column arrays are numpy and every element read is a
-  `numpy.float64`, as in the legacy's `(2, N + 1)` arrays, so each operation is the same
-  IEEE double operation in the same order; `sysMat(0)`/`sysMat(1)` as two locals hold the
-  same doubles; `vba_min`/`vba_max` keep the VBA tie rule (second argument) that the legacy's
-  `min`/`max` had, including `max(0, x)` returning the int `0` that becomes `0.0` in the
-  array and `min(0, v) / velAtPump` giving `-0.0`. Proved bitwise on the Example case and 49
-  of 50 sweep cases; the 50th overflows identically (`FloatingPointError` under
-  `np.errstate(raise)`) in both.
 * Stage 4.4 (hygiene): the inlined `max(0, |x| − gap)` test is written `excess < 0` instead
   of the VBA-shaped `0 > excess` (ruff SIM300); the two are the same comparison for every
   double, NaN included (both false). The duplicated per-sample history write became
@@ -212,8 +187,7 @@ the Stage 4 code; what changed is the calling convention:
   is exact. Measured on the full differential sweep under Numba (lumped sweep 100
   comparisons, JC sweep 100, JC small 16, Example cases): 216/216 bitwise equal to
   `legacy_port`; the differential rtol 1e-12 is unchanged (NOTES.md "Stage 5 — done").
-* **Not compiled.** `pressure.pressure_response` (milliseconds per run, not a bottleneck;
-  it keeps its numpy-scalar `errstate` semantics), the set-up (`solve_portal_height`,
+* **Not compiled.** The set-up (`solve_portal_height`,
   `lumped_params` / `jc_params`, `grid_size`, `interp_fractions`, `decay_factor`) and
   `loads.unbalance_force`, which is now the dominant cost of a compiled lumped run (the
   generator is Python; Stage 5b candidate).

@@ -58,11 +58,11 @@ change; the snapshot and support adapters absorb the renamed attributes.
 | 1.5 | Unbalance force: `f`, `f_u`, `forces` outside the kernel signature; `f_applied` | C-26 |
 | 1.6 | Elbow forces in `loads` (`force_a`, `fa`, `fb`); `F_A` to an acceleration name; `moc.py:338` `fa, fb` | C-25 |
 | 1.7 | `structure` solver locals (`var_a..c`, `len_val`, `error_val`, `ax`, `av`) | C-38 |
-| 1.8 | `pressure` locals and `PressureSetup` fields (`factor`, `sys0` / `sys1`, `loss`), with the test's name map | C-39 |
-| 1.9 | `pressure.grid_size` renamed; `tot_ind` and `out_max` inside `pressure` | C-21, C-29 |
+| 1.8 | ~~`pressure` locals and `PressureSetup` fields~~: removed with the pressure solver (R.1b) | C-39 |
+| 1.9 | ~~`pressure.grid_size` renamed; `tot_ind` and `out_max` inside `pressure`~~: removed (R.1b); the `loads` / `response` part of C-29 is 1.13 | C-21, C-29 |
 | 1.10 | Internal `fluid_densty`, `h`, `time_step` / `dt` in `structure`, `moc`, `coupling` | C-31 |
 | 1.11 | `d_f` descriptions, `DAMPING_A`, `vav_div` / `vav_divisor` (internal) | C-45 |
-| 1.12 | `history` (response history against force history), `decay`, `frac` in `loads` and `pressure` | C-43 |
+| 1.12 | `history` (response history against force history), `decay`, `frac` in `loads` | C-43 |
 | 1.13 | Counts and indices outside kernel signatures: `_count`, `_index`, one spelling of sub-step | C-28, S-40, C-N17 |
 | 1.14 | Supporting code: `jc`, `cap`, `p`, `h`, `kind` reused; booleans as predicates; computation names in `sweep_jc`, `geometry`, `profile_delta`; tool argparse `dest` names | S-44, S-46, S-47, S-48, C-N15 |
 
@@ -75,7 +75,7 @@ files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, b
 |---|---|---|---|
 | 2.1 | One named phase pair, used in `loads`, `response`, `trace`, the tests | C-09 | R1 |
 | 2.2 | One named coupling-kind pair, module-level ints, used in `coupling` and the kernels | C-09 | R1 |
-| 2.3 | Unit factors in `pressure.setup` and `pump_boundary`, one constant per commit | C-33 | R1 |
+| 2.3 | ~~Unit factors in `pressure.setup` and `pump_boundary`~~: removed (R.1b) | C-33 | R1 |
 | 2.4 | `/ 100` percent of critical in `structure` | C-33 | R1 |
 | 2.5 | `9.81`; the friction dead band; the Newton tolerance, relaxation and pass counts | C-34 | R1 |
 | 2.6 | Free-decay threshold `0.01`; the result capacity `out_max * 2` named once | C-34, C-N08 | R1 |
@@ -86,7 +86,7 @@ files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, b
 | 2.11 | Trace request as one optional object in `_integrate` | C-23 | R2 |
 | 2.12 | Small control-flow nits: `valve_closure`, `_schedule` attribute access, re-coercion | C-N03, C-N04, C-N06 | R2 |
 
-2.3 needs Q-5; 2.6 and 2.8 need Q-4. The charter's mutation tests showed that a regrouped
+2.6 and 2.8 need Q-4 (2.3 and Q-5 went with the pressure solver). The charter's mutation tests showed that a regrouped
 set-up value can hide from a peak, so 2.3 to 2.7 are one literal per commit and the
 snapshot runs in both modes each time.
 
@@ -106,7 +106,7 @@ on it.
 | 3.6 | Grid description passed to `trace.build` in place of the coupling object; annotate it | C-14, S-08 | R3 |
 | 3.7 | Span, restraint and fluid objects for `lumped_params` / `jc_params`; shared return block | C-17 | R3 |
 | 3.8 | Grid and fluid-constant objects for `JunctionCoupling.__init__` | C-18 | R3 |
-| 3.9 | `pressure` column NamedTuple; run constants onto `PressureSetup`; `pump_boundary` loses `p_a` | C-16, C-N02 | R3 |
+| 3.9 | ~~`pressure` column NamedTuple~~: removed (R.1b) | C-16, C-N02 | R3 |
 | 3.10 | Entry points: extract the sample grid and the trace wrapper; keyword arguments in the short-pipe fallback | C-11 | R3 |
 | 3.11 | One set-up query in the core (sub-step, portal height, grid), used by `response` | S-06 (core half) | R3 |
 
@@ -131,7 +131,7 @@ that makes this worth trying; it is not evidence for the real kernel.
 | 4.10 | `_integrate` split into prepare, run, build result | C-06 | R3 |
 | 4.11 | `loads`: per-sample helpers shared by the two generators; `_schedule` items as NamedTuples; the three identical index blocks extracted | C-07, C-08 | R3 |
 | 4.12 | Flattening of the schedule moved into `loads`; the run-time cross-check of the two walks removed | C-22, C-07 | R3 |
-| 4.13 | `pressure`: the shared characteristic solve | C-N01 | R3 |
+| 4.13 | ~~`pressure`: the shared characteristic solve~~: removed (R.1b) | C-N01 | R3 |
 
 4.2 and 4.4 change tests that patch or replay `moc.step` (Q-9). 4.11 can slow the untraced
 lumped path, where the Python generator is already the dominant cost: bench it on its own.
@@ -159,7 +159,7 @@ Gated code first.
 | 5.13 | Remove the `sys.path` inserts and private loaders the earlier commits made unnecessary | S-02 | R3 |
 | 5.14 | Dead code and small items: `estimate_bytes`, unused constants, `build_viewer.build` parameters, `review_snapshot.main` | S-30, S-34, S-N01, S-N12, S-N22 | R0-R3 |
 | 5.15 | Ungated tools, if at all: `bench.py`, the plots and report, `extract_fixtures.py`, `golden_report.py`, `profile_delta.py` | S-13, S-14, S-19 to S-22, S-24, S-25, S-28 | R3 |
-| 5.16 | `vba_compat` helpers copied into `_vba_semantics` with a pinning test; imports repointed | C-13 | R3 |
+| 5.16 | `vba_compat` helpers copied into a live module with a pinning test; imports repointed (`_vba_semantics.py`, the module this row first named, was removed in R.1b) | C-13 | R3 |
 
 5.3 and 5.4 are the preparation for the schema bump: with one table per document the bump
 is an edit of two tables. 5.12 must keep `tools/sweep_jc.py` a runnable script and the
@@ -171,7 +171,7 @@ of everything else. S-11 and S-36 are not listed: they change output on edge inp
 | # | commit | findings |
 |---|---|---|
 | 6.1 | Form of `output_type` and of the three junction-coupling flags; one validation at the entry; both flag paths kept | C-12, C-N05 |
-| 6.2 | Keyword-only entry points; public keyword renames; the `get_pressure_response` alias | C-11, C-16, C-31, C-32, C-N11, C-N21 |
+| 6.2 | Keyword-only entry points; public keyword renames (the `get_pressure_response` alias went with the pressure solver, R.1b) | C-11, C-31, C-N21 |
 | 6.3 | `PeakResponse` and `Trace` field renames; `Trace` column sub-record | C-26, C-43, S-08 |
 | 6.4 | Public signatures of `histories` and `export`; `__all__` trimmed | S-17, S-33, C-N10, S-N02 |
 | 6.5 | **The schema bump**, one commit: exported keys and CSV columns renamed through the two tables, viewer keys with them, `tests/review_support/` rewritten with `--write`, values shown unchanged | S-31, S-32, S-37 to S-43, S-46 to S-49, C-25, C-28, C-30 |
@@ -185,8 +185,9 @@ of everything else. S-11 and S-36 are not listed: they change output on edge inp
 
 * **Q-1.** `NOTES.md` and `CLAUDE.md` say Stage 6 removes `vba_compat.py` with
   `legacy_port.py`; `docs/architecture.md` lets live modules import `clng`, `vba_floor`,
-  `mod_dbl` and `vba_2d` from it. Confirm the removal, so that C-13 (literal copies in
-  `_vba_semantics`) is done in this review and not at Stage 6.
+  `mod_dbl` and `vba_2d` from it. Confirm the removal, so that C-13 (literal copies in a
+  live module; `_vba_semantics` itself was removed in R.1b) is done in this review and not
+  at Stage 6.
 * **Q-2.** `JunctionCoupling.coupling_force`, the `Coupling` protocol, `structure.step`,
   `State` and `restoring_force` are called only by tests. Keep them as thin wrappers over
   the shared compiled functions, or remove them and re-point the tests?
@@ -195,8 +196,8 @@ of everything else. S-11 and S-36 are not listed: they change output on edge inp
 * **Q-4.** Derivations the code does not hold: the factor 2 in `out_max * 2`; the `0.5` in
   `0.5 * dynamic_fric * 9.81 * dt`; `4 / 3` on the portal-frame height; `12` and
   `0.5 + 1.5 * (...)` in the end-fixity formula; `4 * celerity * dt` in the grid size.
-* **Q-5.** In `60 * 60` (`pressure.py:177`, `179`), which factor is seconds per minute and
-  which minutes per hour, or may both be named by position?
+* **Q-5.** ~~In `60 * 60` (`pressure.py:177`, `179`), which factor is seconds per minute and
+  which minutes per hour?~~ Moot: `pressure.py` was removed in R.1b.
 * **Q-6.** Vocabulary for `docs/nomenclature.md`: elbows A / B as inlet / outlet or kept as
   A / B; "node" and "cell" for the two half-grids and one word for an interleaved entry;
   "transit" and "history" for the two forced phases; `sub_step` or `substep`.
@@ -206,8 +207,8 @@ of everything else. S-11 and S-36 are not listed: they change output on edge inp
   kernel's count (differs for a stride above `step_qty`), and `size_in` no longer read from
   a directory name (a moved CSV exports a value where it exports null today). Wanted?
 * **Q-9.** The charter allows only rename-forced edits in `tests/`. Groups 3 and 4 change
-  call sites in tests that call `moc.step`, `jc_params`, `pressure.setup` and
-  `initial_column` directly, and the test that patches `moc.step` to record the half-grid
+  call sites in tests that call `moc.step` and `jc_params` directly (`pressure.setup` and
+  `initial_column` went in R.1b), and the test that patches `moc.step` to record the half-grid
   sequence. Are signature-forced edits covered?
 * **Q-10.** `Trace` is returned to users. May its column fields move into a sub-record in
   the public API session, or must the flat attributes stay?

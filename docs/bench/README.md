@@ -22,6 +22,8 @@ Full `GetPeakResponseJC` golden cases against Excel (25135 samples, stepQTY 40).
 
 ## Stage 5 runs (literal -> refactored -> Numba)
 
+Cases (d) and (h), the Example-sheet `GetPressureResponse` call through the literal port and through `pressure.pressure_response`, were removed with the pressure solver in review session R.1b; the sections before that keep them as recorded.
+
 One section per `tools/bench.py` run since Stage 5. Rows: the literal port (pure Python), the Stage 4 modules as plain Python (`NUMBA_DISABLE_JIT=1`) and the same modules compiled by Numba (steady state; the first call and the compile are given separately). Every cell is the median of the timed repeats in seconds and, in brackets, the ratio to case (a), the literal lumped r20 case run in the same session. Details in `<sha>.json`.
 
 ### 2026-10-22T02:26:41+00:00 · b9597a3-dirty · Intel(R) Xeon(R) Processor @ 2.80GHz · python 3.13.16 · numpy 2.5.4 · numba 0.68.0 · llvmlite 0.50.0

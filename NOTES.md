@@ -225,9 +225,8 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
      schema as well as the new? The viewer tests do not run in this container (playwright
      1.56.0 wants Chromium build 1194, the container has 1243), so a change to the keys the
      viewer reads cannot be verified here.
-  6. Removing the `get_pressure_response` alias and the VBA keywords removes the subject of
-     `tests/test_differential.py::test_get_pressure_response_is_a_thin_alias`; the hard
-     rule "never delete a test" needs the owner's word for that test in that session.
+  6. Answered by R.1b: the alias, `pressure.py` and its tests were removed with the
+     owner's approval (the pressure solver was unused legacy code).
   7. Tools without a check: `tools/sweep_jc.py plot` (plots and the report text),
      `tools/bench.py`, `tools/extract_fixtures.py`, `tools/golden_report.py`,
      `tools/profile_delta.py`. Reviewed by reading only, or first given a check
@@ -261,9 +260,9 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
   phase-2 `k` loop where the VBA (line 491) reads it only inside the loop; in the D-8
   configuration with `kOverlap = stepQTY` the VBA runs on while the restructured modules raise
   `IndexError`. D-8's Python column says "Identical"; a sentence there is for the owner.
-* `GetPressureResponse` has one Excel golden case (the Example sheet); multi-column valve
-  patterns and the pump / friction branches at other operating points are covered only by the
-  differential sweep against the literal port. Rows 100–101 of `curve_10in` hold pasted numbers
+* `GetPressureResponse` survives only in the frozen `legacy_port` (the live port went in
+  R.1b), checked against its one Excel golden case (the Example sheet) and by the smoke and
+  structure tests. Rows 100–101 of `curve_10in` hold pasted numbers
   (no formula) and were not extracted.
 * The viewer carries the full plotly.js 4.1.1 bundle (4.8 MB; no partial bundle ships with the
   package and nothing is fetched); `tools/build_viewer.py --plotly <file>` rebuilds at ~1 MB

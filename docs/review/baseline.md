@@ -25,7 +25,8 @@ file list of the groups asked for) and joins their JSON by function:
 ```
 
 `<files>` is, by group: **core** `src/surge_sdof/` `moc.py`, `structure.py`, `coupling.py`,
-`loads.py`, `response.py`, `pressure.py`, `_vba_semantics.py`; **supporting**
+`loads.py`, `response.py` (`pressure.py` and `_vba_semantics.py` until session R.1b);
+**supporting**
 `src/surge_sdof/` `trace.py`, `export.py`, `histories.py`, `viz/geometry.py`; **tools**
 every `tools/*.py`.
 
@@ -55,7 +56,11 @@ for an outer function radon's complexity can be the lower one (`tools/bench.buil
 
 ## The solver core
 
-52 functions; over target: 14 with more than 6 arguments, 2 with complexity over 10, 2 with more than 50 statements, 2 nested deeper than 3, 10 longer than 40 lines after the docstring.
+40 functions; over target: 10 with more than 6 arguments, 2 with complexity over 10, 2 with more than 50 statements, 2 nested deeper than 3, 9 longer than 40 lines after the docstring.
+
+As measured in R.0 there were 52 (14 / 2 / 2 / 2 / 10); the twelve rows of `pressure.py` and
+`_vba_semantics.py` were taken out when session R.1b removed the pressure solver. The line
+numbers are those of the R.0 tree.
 
 | function | line | args | cc (ruff) | cc (radon) | branches | statements | nesting | length | code lines |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -99,18 +104,6 @@ for an outer function radon's complexity can be the lower one (`tools/bench.buil
 | `response._trace_frame` (njit) | 549 | **23** | 3 | 4 | 2 | 20 | 2 | 49 | **45** |
 | `response._integrate` | 600 | **10** | 10 | 22 | 11 | 44 | 2 | 143 | **126** |
 | `response._integrate_kernel` (njit) | 747 | **36** | **23** | 32 | 24 | **75** | 3 | 230 | **212** |
-| `pressure.grid_size` | 105 | 4 | 1 | 1 | 0 | 1 | 0 | 21 | 2 |
-| `pressure.setup` | 129 | **11** | 1 | 1 | 0 | 9 | 0 | 63 | 32 |
-| `pressure.initial_column` | 196 | 1 | 2 | 2 | 1 | 11 | 1 | 30 | 13 |
-| `pressure.valve_closure` | 229 | 3 | 5 | 7 | 6 | 18 | 2 | 51 | 24 |
-| `pressure.valve_boundary` | 283 | 6 | 2 | 2 | 2 | 7 | 1 | 29 | 10 |
-| `pressure.half_step_a_from_b` | 315 | 6 | 2 | 2 | 1 | 10 | 1 | 29 | 13 |
-| `pressure.pump_boundary` | 347 | **8** | 1 | 1 | 0 | 4 | 0 | 38 | 21 |
-| `pressure.half_step_b_from_a` | 388 | 6 | 2 | 2 | 1 | 10 | 1 | 29 | 13 |
-| `pressure.pressure_response` | 419 | **11** | 2 | 2 | 1 | 13 | 2 | 94 | **46** |
-| `pressure.get_pressure_response` | 515 | **11** | 1 | 1 | 0 | 1 | 0 | 26 | 25 |
-| `_vba_semantics.vba_min` | 25 | 2 | 2 | 2 | 2 | 3 | 1 | 6 | 5 |
-| `_vba_semantics.vba_max` | 33 | 2 | 2 | 2 | 2 | 3 | 1 | 6 | 5 |
 
 ### The five furthest from the targets
 
@@ -210,7 +203,7 @@ only to the arrays of `trace.allocate`, through `response._trace_frame`).
 All `tools/*.py`, the three scripts of the review among them (`review_baseline.py`,
 `review_snapshot.py`, `review_support.py`).
 
-129 functions; over target: 1 with more than 6 arguments, 2 with complexity over 10, 1 with more than 50 statements, 7 nested deeper than 3, 17 longer than 40 lines after the docstring.
+128 functions (129 in R.0b; `bench.build_cases.pressure_case` went with the pressure solver in R.1b); over target: 1 with more than 6 arguments, 2 with complexity over 10, 1 with more than 50 statements, 7 nested deeper than 3, 17 longer than 40 lines after the docstring.
 
 | function | line | args | cc (ruff) | cc (radon) | branches | statements | nesting | length | code lines |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -220,7 +213,6 @@ All `tools/*.py`, the three scripts of the review among them (`review_baseline.p
 | `tools/bench.build_cases` | 179 | 0 | 7 | 3 | 1 | 19 | 1 | 133 | **132** |
 | `tools/bench.build_cases.peak_case` | 185 | **8** | 3 | 13 | 2 | 8 | 1 | 30 | 30 |
 | `tools/bench.build_cases.peak_response_summary` | 217 | 1 | 1 | 1 | 0 | 0 | 0 | 2 | 2 |
-| `tools/bench.build_cases.pressure_case` | 220 | 4 | 1 | 1 | 0 | 0 | 0 | 17 | 17 |
 | `tools/bench.example_lumped_call` | 314 | 0 | 1 | 3 | 0 | 3 | 0 | 6 | 4 |
 | `tools/bench.git` | 325 | 0 | 2 | 2 | 1 | 2 | 1 | 7 | 7 |
 | `tools/bench.cpu_model` | 334 | 0 | 4 | 6 | 3 | 5 | **4** | 9 | 9 |

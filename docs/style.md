@@ -12,11 +12,11 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - Descriptive by default. A name says what the quantity is physically, not how it was computed or what type holds it: closed_gap_stiffness_ratio, not ratio2; transit_delay_samples, not unb. No array, flat, tmp, data, val.
 - The wider the scope, the fuller the name. One-letter names only for a loop index used within a few lines.
 - Symbols. Inside a kernel, a quantity with an established symbol may use it (x, v, a, dt, rho_c) if it is listed in docs/nomenclature.md with its meaning and unit. A compiled kernel may use listed symbols in its signature too. Never in a public signature. (Google 3.16.5.)
-- Public signature means the user-facing entry points in response and pressure. A function that other modules or the tests call is not public in this sense.
+- Public signature means the user-facing entry points in response. A function that other modules or the tests call is not public in this sense.
 - Units. Quantities are SI. A quantity that is not SI carries its unit in the name: pressure_drop_bar, flow_rate_m3_per_h.
 - Kinds. Counts end in _count, positions in _index, per-sub-step increments say so (friction_velocity_step). Booleans read as predicates (is_short_pipe, record_frame).
 - One word per concept, used everywhere: sample, sub-step, frame; node, cell; segment.
-- No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name. Internal names change in the renames session; public keywords, the get_pressure_response alias and the names in exported files change in the public API session, and stay as they are until then.
+- No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name. Internal names change in the renames session; public keywords and the names in exported files change in the public API session, and stay as they are until then.
 
 ## 3. Functions
 - One job at one level of abstraction. Set-up, stepping and recording are separate functions.
@@ -61,4 +61,3 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 
 ## 11. Recorded exceptions
 - Add a line here, with the reason, for any function that keeps a deliberate departure from this guide.
-- _vba_semantics.vba_min and vba_max stay without type annotations (section 9): they return the second argument itself on a tie or a NaN, with whatever type it has, and an annotation would claim more than the VBA rule does.

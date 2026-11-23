@@ -33,19 +33,20 @@ history of how it was built is in git; `NOTES.md` keeps a short summary.
 method-of-characteristics (MoC) water-hammer model and a single-degree-of-freedom (SDOF)
 pipe-response model with Coulomb friction, support gaps and MoC junction-coupling
 fluid-structure interaction. It has two layers. `legacy_port.py` and `vba_compat.py` are the
-frozen line-for-line transcription of the VBA, verified against Excel. `response.py`,
-`pressure.py` and the modules behind them (`structure`, `loads`, `coupling`, `moc`,
-`histories`) are the restructured solver, value-identical to the transcription when run with
+frozen line-for-line transcription of the VBA, verified against Excel. `response.py`
+and the modules behind it (`structure`, `loads`, `coupling`, `moc`, `histories`) are the
+restructured solver, value-identical to the transcription when run with
 the legacy flags (bitwise on the differential suite) and compiled with Numba (the three full
 junction-coupling golden cases run in about a second each, down from 13–30 minutes). Runtime
 dependencies are numpy and numba only. `docs/architecture.md` describes the modules.
 
-## The three entry points
+## The two entry points
 
-All three take the VBA arguments, by the VBA names in snake case, and return 0-based numpy
-results (no 1-based pad). Units are consistent SI for the two peak solvers; `pressure_response`
-keeps the VBA's mixed units (s, m/s, kg/m³, bar, m³/h, mm², Cv in US gpm). The docstrings give
-the unit of every argument; the common ones are inline below.
+Both take the VBA arguments, by the VBA names in snake case, and return 0-based numpy results
+(no 1-based pad). Units are consistent SI. The docstrings give the unit of every argument; the
+common ones are inline below. The VBA's third function, `GetPressureResponse` (valve / pump
+water hammer), was unused legacy code: its live port was removed in review session R.1b, and
+only the frozen `legacy_port.get_pressure_response` keeps it.
 
 * `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length,
   flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq,
@@ -84,10 +85,6 @@ the unit of every argument; the common ones are inline below.
   With the defaults the junction-coupling results differ from Excel by about 2e-3 on the golden
   cases (up to 4.5e-2 on the coarsest sweep case), almost entirely from the profile correction;
   the measured deltas are in DEVIATIONS D-4 and `docs/jc_sweep.md`.
-* `surge_sdof.pressure.pressure_response(valve_pattern, closure_time, celerity, density,
-  time_step, pressure_drop_from_pump, flow_rate, pipe_area, valve_cv, length_to_pump,
-  pump_ramp_pressure)` is `GetPressureResponse`: the valve pressure after each loop iteration of
-  two time steps. No flags; it preserves the VBA as found.
 
 `trace_every=k > 0` on either peak solver also records every `k`-th sub-step (state, elbow
 forces, friction force, the MoC column) as `PeakResponse.trace`; the maxima are unchanged.
@@ -219,9 +216,6 @@ the VBA: 23 rows, each with the VBA and Python locations, both behaviours, the s
 * **The free-decay threshold is absolute.** Phase 3 runs only while `x · x0 > 0.01`, i.e.
   `|x| > 0.1` in model units; metre-scale pipework never enters it, and with zero damping and
   friction it would not terminate (D-21, as in the VBA).
-* **The pressure solver's friction clamps differ between its two half-loops** (`0.9` and
-  `0.9 · ρc`, D-6) and both saturate in a sweep: the first at low flow, the second where the
-  local initial velocity passes through zero. Intent unknown; preserved.
 * **A frame mixes the two half-grids.** Each MoC sub-step updates one staggered half-grid, so
   the interleaved column in a trace frame holds the half-grid just updated beside the other one
   from the sub-step before; the two are half a step apart in time. The structure state is the
