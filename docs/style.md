@@ -12,17 +12,19 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - Descriptive by default. A name says what the quantity is physically, not how it was computed or what type holds it: closed_gap_stiffness_ratio, not ratio2; transit_delay_samples, not unb. No array, flat, tmp, data, val.
 - The wider the scope, the fuller the name. One-letter names only for a loop index used within a few lines.
 - Symbols. Inside a kernel, a quantity with an established symbol may use it (x, v, a, dt, rho_c) if it is listed in docs/nomenclature.md with its meaning and unit. A compiled kernel may use listed symbols in its signature too. Never in a public signature. (Google 3.16.5.)
-- Public signature means the user-facing entry points in response. A function that other modules or the tests call is not public in this sense.
+- Public signature means the user-facing entry points: the solver entry points in response, histories.canonical and the export.to_*_dict functions (owner's ruling, R.1b). A function that other modules or the tests call is not public in this sense.
 - Units. Quantities are SI. A quantity that is not SI carries its unit in the name: pressure_drop_bar, flow_rate_m3_per_h.
-- Kinds. Counts end in _count, positions in _index, per-sub-step increments say so (friction_velocity_step). Booleans read as predicates (is_short_pipe, record_frame).
-- One word per concept, used everywhere: sample, sub-step, frame; node, cell; segment.
+- Kinds. Counts end in _count, positions in _index, per-substep increments say so (friction_velocity_step). Booleans read as predicates (is_short_pipe, record_frame).
+- One word per concept, used everywhere: sample, substep (one word), frame; node, cell; segment.
+- Vocabulary (owner's ruling, R.1b). The two staggered half-grids are A and B (pressure_a, velocity_b). The elbows are A and B. The load phases are transit, forced and free decay.
 - No VBA spellings or VBA naming patterns. docs/nomenclature.md maps each code name to its VBA name. Internal names change in the renames session; public keywords and the names in exported files change in the public API session, and stay as they are until then.
 
 ## 3. Functions
 - One job at one level of abstraction. Set-up, stepping and recording are separate functions.
 - At most 6 parameters, as ruff counts them (PLR0913). Beyond that, group them into a NamedTuple or dataclass named for the thing it describes (the fluid column, the run settings), not for its type. The limit is enforced in the public API session; before it, it is a target.
 - The user-facing Python entry points take keyword-only arguments after the first two. Compiled functions do not: they take positional parameter objects, because on Numba 0.68 a compiled function with keyword-only parameters cannot be called from another compiled function.
-- No argument that selects behaviour or return shape by number or string code where two functions or an enum would do. The junction-coupling flags (vav_denominator, parity, fraction_profile) and output_type are the known cases: both flag paths must keep working, their form is redesigned in the public API session and is not touched before it.
+- No argument that selects behaviour or return shape by number or string code where two functions would do. An on/off choice is a plain flag. The junction-coupling flags (vav_denominator, parity, fraction_profile) and output_type are the known cases: both flag paths must keep working, their form is redesigned in the public API session and is not touched before it.
+- Readability over abstraction (owner's ruling, R.1b). No protocol, base class, enum or wrapper layer unless it has two real users today. A function or class that only tests call is removed, and its tests are pointed at the code that actually runs, with their assertions unchanged. A NamedTuple or dataclass parameter object (above, and section 4) is not a layer in this sense.
 - Guard clauses and early returns in place of nested if-blocks.
 - No repeated block longer than about five lines.
 - Targets: cyclomatic complexity 10, 50 statements, nesting depth 3, and a second look at anything over about 40 lines (Google 3.18). A function that misses a target carries a one-line reason.

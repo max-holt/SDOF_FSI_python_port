@@ -212,9 +212,9 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
   3. Argument limit 6 as ruff counts it (PLR0913) includes keyword-only arguments:
      `peak_response` has 14 and `peak_response_jc` 19. Parameter objects for the
      entry points, or an exception for keyword-only arguments?
-  4. "Public signature" names `response` and `pressure` only. Are `histories.canonical`,
-     `histories.step*`, `export.to_trace_dict` / `to_sweep_dict` user-facing entry points
-     for the keyword-only rule and the symbol rule, or internal?
+  4. Answered (R.1b, charter ruling 4): the user-facing entry points are the solver entry
+     points of `response`, `histories.canonical` and the `export.to_*_dict` functions.
+     Still open: whether `histories.step`, `step_sine`, `step_noise` count as well.
   5. The schema bump against the committed files: `docs/viz/data/` (five files, one of
      13.9 MB) and `docs/sweep/*.csv` (the Tier 2 file, 21.8 MB, from the owner's machine)
      carry today's names. Re-export and rewrite the headers by script, rerun, or leave the
@@ -222,6 +222,9 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
      schema as well as the new? The viewer tests do not run in this container (playwright
      1.56.0 wants Chromium build 1194, the container has 1243), so a change to the keys the
      viewer reads cannot be verified here.
+     Answered in part (R.1b, ruling 12): the committed sweep CSVs get their headers renamed
+     by a one-off script, every data row byte-identical. Still open: the `docs/viz/data/`
+     files and whether the viewer reads the old schema too.
   6. Answered by R.1b: the alias, `pressure.py` and its tests were removed with the
      owner's approval (the pressure solver was unused legacy code).
   7. Tools without a check: `tools/sweep_jc.py plot` (plots and the report text),
@@ -229,12 +232,16 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
      `tools/profile_delta.py`. Reviewed by reading only, or first given a check
      (`extract_fixtures.py` could write to a temporary directory and be compared with
      `tests/fixtures/`; the report tables of `sweep_jc.py` are plain text)?
-  8. Still open from R.0: `docs/nomenclature.md` does not exist (first job of R.1);
+     Answered (R.1b, ruling 3): rename-only edits.
+  8. Still open from R.0: `docs/nomenclature.md` does not exist (plan 0.1; the vocabulary
+     it needs is ruled, charter ruling 1);
      nesting depth 3 against ruff's PLR1702, which is a preview rule with default 5
      (reported only, or `preview = true`?); nothing enforces §7 to §9 (no `D` or `ANN`
      rule, `E501` ignored): when, if at all, do they become lint rules?
   9. Readings made in this session, to confirm: the schema bump happens in the public API
      session; `tests/` stays "mechanical edits only"; the session is called R.0b.
+     Superseded for `tests/` (R.1b, ruling 6): a test may change how it calls a function,
+     never what it asserts.
   Notes for the renames session, not questions: the frame keys of a `trace` document are
   the `Trace` attribute names (`export._frames` uses `getattr(trace, name)` over
   `FRAME_COLUMNS`), `meta.inputs` echoes the public keywords, and the history columns of

@@ -1,6 +1,8 @@
 # Clean-code review of the solver — charter
 
-Set up on 16 Nov 2026 on branch `review/clean-code`. The solver is verified against the VBA
+Set up on 16 Nov 2026 on branch `review/clean-code`. From session R.1b (23 Nov 2026) the
+rest of the review works on branch `claude/solver-review-charter-oe8gtr`, which carries the
+whole history of `review/clean-code`. The solver is verified against the VBA
 but hard to read; later sessions review and refactor it. Every refactoring leaves the
 results bit-identical. `docs/style.md` is the target; `docs/review/baseline.md` is where
 the code started.
@@ -20,7 +22,9 @@ Widened on 16 Nov 2026 (session R.0b) from the solver modules to two areas.
   stays byte-identical.
 * **The viewer** (`docs/viewer/viewer.src.html`) is in scope only for the keys it reads from
   a data file. Its JavaScript structure is not reviewed.
-* **Mechanical edits only**, the ones a rename forces: `tests/`.
+* **`tests/`:** a test may change how it calls a function, never what it asserts (ruling,
+  R.1b; it widens the R.0 "mechanical edits only, the ones a rename forces"). A test whose
+  subject is removed goes only with the owner's word (as for the pressure solver, R.1b).
 * **Untouched:** `legacy_port.py`, `vba_compat.py`, `legacy/`, `tests/fixtures/`.
 
 Two sessions are fixed points for the rulings in `docs/style.md`:
@@ -38,6 +42,10 @@ Two sessions are fixed points for the rulings in `docs/style.md`:
    Expressions move verbatim.
 3. If a gate fails, revert the commit. Do not debug forward.
 4. Behaviour changes are out of scope. They go to `NOTES.md` as questions for the owner.
+   The owner has approved three, each to be made as a recorded deviation (a DEVIATIONS.md
+   row and a test that pins it), never inside a refactoring commit: flag validation at the
+   entry (public API session), and the two edge-case output fixes after the refactoring
+   ("Rulings" below).
 5. `tests/review_snapshot/` is never regenerated to make a refactoring pass; only an
    approved behaviour change (a DEVIATIONS.md row) rewrites it. A rename is absorbed in the
    adapter of `tests/test_review_snapshot.py` (`run_solver` and its field tables), nowhere
@@ -48,6 +56,51 @@ Two sessions are fixed points for the rulings in `docs/style.md`:
    The values must not change in it: the history documents stay untouched, and the commit
    shows that the stored CSV differs in its header line only. A rename before the bump is
    absorbed in the adapter section of `tests/test_review_support.py`.
+
+## Rulings (owner, recorded in session R.1b, 23 Nov 2026)
+
+The answers to the questions of `docs/review/plan.md` and of `NOTES.md` (R.0b). They bind
+the rest of the review; `docs/style.md` carries the ones about the code.
+
+1. **Vocabulary.** The two staggered half-grids stay A and B (`pressure_a`, `velocity_b`);
+   the elbows are A and B; the load phases are *transit*, *forced* and *free decay*;
+   "substep" is one word (`substep`, `substep_count`). `docs/nomenclature.md` is written
+   from this before any rename.
+2. **Readability over abstraction.** No protocol, base class, enum or wrapper layer unless
+   it has two real users today. The `Coupling` protocol, `coupling_force` (with
+   `NoCoupling` and the unused `JunctionCoupling.column`) and the other wrappers that only
+   tests call (`structure.step`, `State`, `restoring_force`) are removed; their tests are
+   pointed at the code that actually runs (`moc.step`, `structure.step_scalars`,
+   `structure.effective_displacement`, the solver entry points) with their assertions
+   unchanged. Fluid coupling on or off is a plain flag, not a kind code. Parameter objects
+   (NamedTuples, `docs/style.md` §3, §4) are not a layer in this sense.
+3. **The plan's order is accepted** (`docs/review/plan.md`, "The order"): the nomenclature
+   before any rename; kernel-signature names change with the parameter objects; the phase
+   and kind constants open the constants group; tools without a check get rename-only
+   edits.
+4. **User-facing entry points** (for the keyword-only and the symbol rules) are the solver
+   entry points of `response`, `histories.canonical` and the `export.to_*_dict` functions.
+5. **Flags are validated at the entry** in the public API session, as a recorded deviation
+   (an unknown flag value then raises on every path, the short pipe and `rho_c == 0`
+   included, where today it is accepted silently there).
+6. **Tests** may change how they call a function, never what they assert (scope, above).
+7. **`Trace`** may gain a column sub-record in the public API session.
+8. **Findings.** Every Design and Readability finding is accepted, except one whose
+   proposed fix adds an abstraction layer that ruling 2 forbids: those are rejected with
+   that reason. Every Nit is rejected. Applied in `docs/review/findings.md` (S-17 rejected).
+9. **Reference platform.** The exact-equality checks (the snapshot, the supporting-code
+   checks, the bitwise differential tests) are authoritative on the CI Linux runner and in
+   this cloud environment. A failure on another machine with no code change is not
+   evidence against a refactor.
+10. **Approvals in files.** Where a later session is told to stop and show the owner
+    something (the rename table, the parameter-object groups, the substep designs, the
+    public interface), it also writes it to a file under `docs/review/`, so it can be
+    reviewed outside the session.
+11. **Two edge-case output fixes approved**, as recorded behaviour changes made after the
+    refactoring: `is_capped` from the kernel's forced-sample count (S-11), and `size_in`
+    no longer read from a directory name (S-36).
+12. **Committed sweep CSVs at the schema bump** (`docs/sweep/*.csv`): the headers are
+    renamed by a one-off script and every data row stays byte-identical.
 
 ## Gates
 
