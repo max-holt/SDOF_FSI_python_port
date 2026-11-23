@@ -89,13 +89,13 @@ included) or the lead author's corrected functions (approved fix F-4)."""
 
 # VBA lines 733-734
 def grid_size(
-    physical_length: float, portal_frame_height: float, celerity: float, dt: float
+    span_length: float, portal_frame_height: float, celerity: float, dt: float
 ) -> tuple[int, int]:
     """``(pipeSegQTY, pivotSegQTY)`` of the MoC grid (VBA lines 733-734).
 
     Parameters
     ----------
-    physical_length : float
+    span_length : float
         Length between elbows, m.
     portal_frame_height : float
         From ``structure.solve_portal_height``, m.
@@ -118,9 +118,7 @@ def grid_size(
     # Proposed derivation, for Ben to confirm: a grid segment is 2 * celerity * dt long, and
     # the count is halved, rounded and doubled so the number of segments is even:
     # L / (4 c dt) is half the span's segment count.
-    column_cell_count = (
-        2 + clng(physical_length / (4 * celerity * dt) + end_to_elbow_cell_count) * 2
-    )
+    column_cell_count = 2 + clng(span_length / (4 * celerity * dt) + end_to_elbow_cell_count) * 2
     return column_cell_count, end_to_elbow_cell_count
 
 
@@ -142,7 +140,7 @@ def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
 
 
 # VBA line 731
-def end_pressure_decay_factor(celerity: float, dt: float, physical_length: float) -> float:
+def end_pressure_decay_factor(celerity: float, dt: float, span_length: float) -> float:
     """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)`` (VBA line 731).
 
     Parameters
@@ -151,7 +149,7 @@ def end_pressure_decay_factor(celerity: float, dt: float, physical_length: float
         Pressure-wave speed, m/s.
     dt : float
         Sub-step, s.
-    physical_length : float
+    span_length : float
         Length between elbows, m.
 
     Returns
@@ -162,7 +160,7 @@ def end_pressure_decay_factor(celerity: float, dt: float, physical_length: float
         updates, ``2 L / c`` seconds, it makes a factor of 2: a half-life of two transits
         of the length ``L``, not one.
     """
-    return 2 ** ((celerity * dt) / physical_length)
+    return 2 ** ((celerity * dt) / span_length)
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
