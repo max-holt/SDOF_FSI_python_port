@@ -2,8 +2,8 @@
 
 ``peak_response`` reproduces ``GetPeakResponse`` (``legacy/vba/Existing Code.bas``
 line 309) from the Stage 4 modules: ``structure`` (portal-frame proxy, SDOF kernel),
-``loads`` (unbalance force schedule) and ``coupling`` (``NoCoupling``). Set-up is done
-here per solver; the sample loop, max trackers, result history, free-decay phase and
+``loads`` (unbalance force schedule), with no fluid coupling. Set-up is done here per
+solver; the sample loop, max trackers, result history, free-decay phase and
 output-type switch live in one shared ``_integrate``. ``peak_response_jc`` reproduces
 ``GetPeakResponseJC`` (line 622): its own fluid-corrected set-up (``structure.jc_params``,
 ``moc.grid_size``, the short-pipe fallback to ``peak_response``) and the
@@ -23,8 +23,8 @@ the profile once (``moc.interp_fractions``).
 Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
 ``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
-sample offsets, unpacks ``SdofParams`` and the coupling (``Coupling.KIND``: 0 = none, 1 =
-junction with its column arrays and scalars), runs the kernel, writes ``dF`` back to the
+sample offsets, unpacks ``SdofParams`` and the coupling (``None`` for the lumped solver,
+kind 0; a ``JunctionCoupling`` with its column arrays and scalars, kind 1), runs the kernel, writes ``dF`` back to the
 coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
 arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
@@ -74,7 +74,7 @@ import numpy as np
 
 from surge_sdof import loads, moc, structure
 from surge_sdof import trace as tracing
-from surge_sdof.coupling import Coupling, JunctionCoupling, NoCoupling
+from surge_sdof.coupling import JunctionCoupling
 from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.trace import (
     F_A,
@@ -294,7 +294,7 @@ def peak_response(
         params,
         dt,
         step_qty,
-        NoCoupling(),
+        None,
         out_max,
         output_type,
         trace_every=trace_every,
@@ -602,7 +602,7 @@ def _integrate(
     params: SdofParams,
     dt: float,
     step_qty: int,
-    coupling: Coupling,
+    coupling: JunctionCoupling | None,
     out_max: int,
     output_type: int,
     legacy_parity: bool = False,
@@ -614,8 +614,9 @@ def _integrate(
     ``x * xZero > 0.01``; max trackers; result history per sample.
 
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens ``forces`` once,
-    unpacks ``params`` and ``coupling`` (``Coupling.KIND`` 0 or 1; the junction's arrays
-    are updated in place and its ``d_f`` written back), builds the ``PeakResponse``.
+    unpacks ``params`` and ``coupling`` (``None``: no fluid coupling, kind 0; a
+    ``JunctionCoupling``: kind 1, its arrays are updated in place and its ``d_f`` written
+    back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
@@ -638,10 +639,10 @@ def _integrate(
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
     history = np.zeros(out_max * 2 if output_type > 0 else 0)
-    kind = coupling.KIND
+    kind = int(coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
-    n_cells = 2 * coupling.n_seg + 1 if kind == JunctionCoupling.KIND else 0
+    n_cells = 2 * coupling.n_seg + 1 if coupling is not None else 0
     delay_substeps = 0
     if trace_every > 0:
         if meta is None:
@@ -664,16 +665,14 @@ def _integrate(
         flat_a = flat_b = np.zeros(0)
         cap = 0
     tr_f, tr_i, tr_p, tr_v = tracing.allocate(cap, n_cells)
-    if kind == JunctionCoupling.KIND:
+    if coupling is not None:
         jc: JunctionCoupling = coupling
         column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)
         scalars = (jc.n_seg, jc.pivot, jc.rho_c, jc.decay, jc.vav_div, jc.fluid_area, jc.d_f)
-    elif kind == NoCoupling.KIND:
+    else:
         empty = np.zeros(0)
         column = (empty, empty, empty, empty, empty, empty)
         scalars = (0, 0, 0.0, 1.0, 1, 0.0, 0.0)
-    else:
-        raise TypeError(f"unknown coupling kind {kind!r}")
 
     (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, n_frames) = (
         _integrate_kernel(
@@ -704,7 +703,7 @@ def _integrate(
             tr_v,
         )
     )
-    if kind == JunctionCoupling.KIND:
+    if coupling is not None:
         jc.d_f = float(d_f)
 
     if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
@@ -729,7 +728,7 @@ def _integrate(
             tr_i,
             tr_p,
             tr_v,
-            jc=coupling if kind == JunctionCoupling.KIND else None,
+            jc=coupling,
             celerity=meta.celerity,
             ext_qty=moc.EXT_QTY,
         )
@@ -790,7 +789,7 @@ def _integrate_kernel(
     ``flat[offsets[s]:offsets[s + 1]]`` holds sample ``s``'s per-sub-step unbalance
     values. ``kind`` 1 advances the MoC column (``moc.step`` on the half-grid selected by
     the parity of ``n + off``) before each SDOF sub-step and adds ``dF``; ``kind`` 0 adds
-    ``0.0`` (the ``NoCoupling`` of Stage 4). Returns ``(x_max, v_max, a_max, f_max, x, v,
+    ``0.0`` (no fluid coupling). Returns ``(x_max, v_max, a_max, f_max, x, v,
     a, tot_ind, forced_samples, d_f, n_frames)``; ``history`` is filled in place for
     ``output_type`` 1-3.
 

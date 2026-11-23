@@ -826,10 +826,6 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
     assert np.any(jc.v_a != 0.0)  # the column still moves with the mass
 
 
-def test_no_coupling_is_unchanged():
-    assert coupling.NoCoupling().coupling_force((1.0, 2.0, 3.0), 7) == 0.0
-
-
 # ------------------------------------------------------------------ response.py (JC)
 
 LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase", "fraction_profile": "legacy"}
