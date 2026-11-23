@@ -324,15 +324,15 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     h = case_history(case, p.p_design)
     force = h.force(p.fluid_area)
     kw = solver_kwargs(case, p)
-    height = structure.solve_portal_height(
+    portal_frame_height = structure.solve_portal_height(
         case.length_m, p.ei, p.mass_per_unit_len, case.nat_freq_hz
     )
     dt = 1 / (SAMPLE_FREQ * STEP_QTY)
-    n_seg, pivot = moc.grid_size(case.length_m, height, CELERITY, dt)
+    n_seg, pivot = moc.grid_size(case.length_m, portal_frame_height, CELERITY, dt)
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    mass_total = (case.length_m + height * 4 / 3) * p.mass_per_unit_len
+    mass_total = (case.length_m + portal_frame_height * 4 / 3) * p.mass_per_unit_len
     row = dict.fromkeys(COLUMNS)
     row.update(
         case_id=case.case_id,
@@ -359,7 +359,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         mass_per_unit_len=p.mass_per_unit_len,
         ei=p.ei,
         rho_c=RHO_FLUID * CELERITY,
-        portal_height_m=height,
+        portal_height_m=portal_frame_height,
         mass_total_kg=mass_total,
         pipe_seg_qty=n_seg,
         pivot_seg_qty=pivot,

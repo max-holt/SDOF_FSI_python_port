@@ -241,14 +241,14 @@ def lumped_grid(
     """
     from surge_sdof.trace import interleave
 
-    h = structure.solve_portal_height(
+    portal_frame_height = structure.solve_portal_height(
         inputs["physical_length"],
         inputs["flexural_rigidity_ei"],
         inputs["mass_per_unit_len"],
         inputs["nat_freq"],
     )
     pipe_seg_qty, pivot_seg_qty = moc.grid_size(
-        inputs["physical_length"], h, inputs["celerity"], dt
+        inputs["physical_length"], portal_frame_height, inputs["celerity"], dt
     )
     frac_a, frac_b = _interp_fractions_display(pipe_seg_qty, pivot_seg_qty)
     n_cells = 2 * pipe_seg_qty + 1
@@ -259,7 +259,7 @@ def lumped_grid(
         interleave(frac_a, frac_b),
         pipe_seg_qty,
         pivot_seg_qty,
-        h,
+        portal_frame_height,
     )
 
 
@@ -278,7 +278,7 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
     inputs = trace.inputs
     cell_length = 2.0 * float(inputs["celerity"]) * float(trace.dt)
     if trace.p_cells is not None:
-        h = structure.solve_portal_height(
+        portal_frame_height = structure.solve_portal_height(
             inputs["physical_length"],
             inputs["flexural_rigidity_ei"],
             inputs["mass_per_unit_len"],
@@ -292,7 +292,9 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
             trace.pipe_seg_qty,
             trace.ext_qty,
             cell_length,
-            h,
+            portal_frame_height,
         )
-    position, kind, fraction, n_seg, pivot, h = lumped_grid(inputs, trace.dt)
-    return loop_layout(position, kind, fraction, pivot, n_seg, moc.EXT_QTY, cell_length, h)
+    position, kind, fraction, n_seg, pivot, portal_frame_height = lumped_grid(inputs, trace.dt)
+    return loop_layout(
+        position, kind, fraction, pivot, n_seg, moc.EXT_QTY, cell_length, portal_frame_height
+    )

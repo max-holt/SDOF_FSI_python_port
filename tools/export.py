@@ -49,10 +49,10 @@ def estimated_cells(kw: dict, solver: str) -> int:
     if solver != "jc":
         return 0
     dt = 1.0 / (kw["sample_freq"] * kw["step_qty"])
-    h = structure.solve_portal_height(
+    portal_frame_height = structure.solve_portal_height(
         kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
     )
-    n_seg, pivot = moc.grid_size(kw["physical_length"], h, kw["celerity"], dt)
+    n_seg, pivot = moc.grid_size(kw["physical_length"], portal_frame_height, kw["celerity"], dt)
     return 0 if moc.is_short_pipe(n_seg, pivot) else 2 * n_seg + 1
 
 

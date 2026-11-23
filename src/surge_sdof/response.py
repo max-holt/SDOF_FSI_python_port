@@ -252,12 +252,12 @@ def peak_response(
     out_max = history.shape[0] * history.shape[1] + clng(unb)  # VBA line 377
     dt = 1 / (sample_freq * step_qty)
 
-    h = structure.solve_portal_height(
+    portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
     params = structure.lumped_params(
         physical_length,
-        h,
+        portal_frame_height,
         mass_per_unit_len,
         damping_percent,
         dynamic_fric,
@@ -412,13 +412,13 @@ def peak_response_jc(
     out_max = history.shape[0] * history.shape[1] + clng(unb)  # VBA line 714
     dt = 1 / (sample_freq * step_qty)
 
-    h = structure.solve_portal_height(
+    portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
     # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
     params = structure.jc_params(
         physical_length,
-        h,
+        portal_frame_height,
         mass_per_unit_len,
         fluid_densty,
         fluid_area,
@@ -430,7 +430,7 @@ def peak_response_jc(
         restrain_freq_ratio,
     )
     decay = moc.decay_factor(celerity, dt, physical_length)
-    pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, h, celerity, dt)
+    pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, portal_frame_height, celerity, dt)
     if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
         # insufficient length, use lumped mass (VBA 736-740)
         return peak_response(

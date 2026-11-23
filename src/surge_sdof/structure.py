@@ -146,26 +146,31 @@ def solve_portal_height(
     float
         ``portalFrameHeight``, m.
     """
-    omega2 = (2 * VBA_PI * nat_freq) ** 2
-    var_b = physical_length * mass_per_unit_len
+    omega_squared = (2 * VBA_PI * nat_freq) ** 2
+    cubic_coefficient = physical_length * mass_per_unit_len
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    var_c = mass_per_unit_len * 4 / 3
+    quartic_coefficient = mass_per_unit_len * 4 / 3
     # Proposed derivation, for Ben to confirm: 12 * EI / h^3 is the lateral stiffness of a leg
     # of height h fixed against rotation at both ends.
-    h = solve_quartic(-12 * flexural_rigidity_ei / omega2, var_b, var_c)
+    portal_frame_height = solve_quartic(
+        -12 * flexural_rigidity_ei / omega_squared, cubic_coefficient, quartic_coefficient
+    )
     for _i in range(0, 10 + 1):
         # Proposed derivation, for Ben to confirm: 0.5 + 1.5 * (h / (L + h))^2 is a factor on that
         # stiffness, running from 0.5 when the legs are short against the span (two legs acting as
         # cantilevers, 2 * 3EI/h^3) to 2 when they are long (two legs fixed at both ends,
         # 2 * 12EI/h^3). The squared ratio is an interpolation between the two.
-        h = solve_quartic(
-            -12 * flexural_rigidity_ei * (0.5 + 1.5 * ((h / (physical_length + h)) ** 2)) / omega2,
-            var_b,
-            var_c,
+        portal_frame_height = solve_quartic(
+            -12
+            * flexural_rigidity_ei
+            * (0.5 + 1.5 * ((portal_frame_height / (physical_length + portal_frame_height)) ** 2))
+            / omega_squared,
+            cubic_coefficient,
+            quartic_coefficient,
         )
-    return h
+    return portal_frame_height
 
 
 # VBA lines 389-392
