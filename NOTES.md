@@ -6,6 +6,39 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.3 (renames session, part 1, 2026-11-23) **stopped at the rename table**, as the
+brief asks: nothing is renamed yet. (1) The owner's rulings 13-28 are in the charter and
+`docs/style.md`. (2) The two reviews reconciled (ruling 22): R.1 is again
+`docs/review/findings.md` / `plan.md`, R.2 kept as `findings_r2.md` / `plan_r2.md`; brought
+across from R.2: SP-15, SP-35, SP-36, SP-41 (accepted; SP-25 not, a tool no test runs),
+possible defects 15-24 for the lead author, the order changes (group 0 removals first,
+schedule clean-up 2.13-2.15, bench after every group-4 commit), the Numba rule (group 3) and
+the early wrong-document fixes; C-13 closed by ruling 13. (3) Group 0, the ruling-2
+removals, one commit each: `JunctionCoupling.coupling_force` and `column()` (3.0a), the
+`Coupling` protocol and `NoCoupling` (3.0b: `_integrate` takes a `JunctionCoupling` or
+`None`; the kernel still gets the kind 0 / 1 until plan 2.2), `structure.step` and `State`
+(3.0c), `structure.restoring_force` (3.0d); `docs/architecture.md` follows. Dropped under
+ruling 23, because they asserted the removed wrapper's own behaviour:
+`test_differential.py::test_junction_coupling_reproduces_the_legacy_df_sequence` lost
+`type(d_f) is float` (the wrapper's `float()` cast; `moc.step` returns `numpy.float64` in
+pure Python) and `jc.d_f == d_fs[-1]` (the wrapper's write-back);
+`test_differential.py::test_no_coupling_is_unchanged` (one assertion, `NoCoupling`'s return
+value) was removed. Restated against `moc.step` through the test helper
+`test_differential.advance_column`: the `dF` and column sequences, the exact positive zero
+with no fluid area, the column moving with the mass, and the trace replay in
+`test_trace.py`. (4) Wrong documents corrected (plan 0.2-0.5): the grid count covers the
+whole column; the outlet leg is shorter on the legacy profile only; the `step_sine`
+defaults; where `vav_denominator` is checked; the `decay_factor` half-life is `2 L / c`.
+Comments (0.6, 0.7): the friction `0.5` (ruling 14) and `P_CAP_FACTOR` (ruling 27), for Ben
+to confirm. (5) `docs/nomenclature.md` written (plan 0.1), with questions Q-N1 to Q-N8;
+`docs/review/rename_table.md` points at it (ruling 10). Gates: every code commit `make lint`
+and `make test-both` (949 passed + 24 skipped compiled / 947 + 26 pure Python after 3.0b,
+one test fewer); documents-only commits `make lint` (no test reads the charter, style guide,
+review files or nomenclature; the commits touching `docs/data_format.md`, which
+`tests/test_export.py` parses, ran `make test-both`). Session gates on `b92e840`: `-m slow`
+150 passed; `tools/bench.py --skip-full-python` (`docs/bench/b92e840.json`): digests all
+equal to the literal port, results the same as `64b171d`, no case slower (0.72x-1.03x).
+
 Session R.2 (second independent review, 2026-11-23) **done**: findings and plan only, no
 code change. The R.1 lists are kept unchanged as `docs/review/findings_r1.md` and
 `docs/review/plan_r1.md` (the charter's rulings cite their ids; the charter and the
@@ -254,9 +287,13 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
   3. Argument limit 6 as ruff counts it (PLR0913) includes keyword-only arguments:
      `peak_response` has 14 and `peak_response_jc` 19. Parameter objects for the
      entry points, or an exception for keyword-only arguments?
+     Answered (R.3, ruling 17): keyword-only arguments count; an entry point still over
+     the limit after the public API session gets a recorded exception.
   4. Answered (R.1b, charter ruling 4): the user-facing entry points are the solver entry
      points of `response`, `histories.canonical` and the `export.to_*_dict` functions.
      Still open: whether `histories.step`, `step_sine`, `step_noise` count as well.
+     Answered (R.3, ruling 18): every `histories` function a tool calls is user-facing
+     (today `canonical`, `from_params`, `p_cap`); `step`, `step_sine`, `step_noise` are not.
   5. The schema bump against the committed files: `docs/viz/data/` (five files, one of
      13.9 MB) and `docs/sweep/*.csv` (the Tier 2 file, 21.8 MB, from the owner's machine)
      carry today's names. Re-export and rewrite the headers by script, rerun, or leave the
@@ -276,7 +313,7 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
      `tests/fixtures/`; the report tables of `sweep_jc.py` are plain text)?
      Answered (R.1b, ruling 3): rename-only edits.
   8. Still open from R.0: `docs/nomenclature.md` does not exist (plan 0.1; the vocabulary
-     it needs is ruled, charter ruling 1);
+     it needs is ruled, charter ruling 1) — written in R.3, awaiting approval;
      nesting depth 3 against ruff's PLR1702, which is a preview rule with default 5
      (reported only, or `preview = true`?); nothing enforces §7 to §9 (no `D` or `ANN`
      rule, `E501` ignored): when, if at all, do they become lint rules?
@@ -328,24 +365,22 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**After R.2:** the owner answers `docs/review/plan.md` Q-1 to Q-11 (Q-1, Q-2, Q-4 block
-work); then group 0 (ruling-2 removals) and the nomenclature (plan 1.0). The paragraph
-below is the pre-R.2 next action, superseded by the R.2 plan's order.
+**R.3, part 2 (after the owner's approval):** the owner edits and approves
+`docs/nomenclature.md` and answers its questions Q-N1 to Q-N8 (Q-N1, which functions count
+as public for this session, decides the scope of the "when" column). Then group 1 of
+`docs/review/plan.md`: one quantity or one tightly related family per commit, across `src/`
+and the call sites in `tests/` and `tools/`; docstrings and comments in the same commit
+(comments quoting VBA lines stay verbatim); `make clean-cache` before the tests when a
+compiled function or its callers change; the snapshot and support adapters absorb renamed
+attributes (charter rules 5, 6). Kernel-signature names wait for group 3 (ruling 21);
+public names, dataclass fields returned to users and exported names for the public API
+session. At the end: `-m slow`, `tools/bench.py`, findings marked done in `findings.md`,
+`docs/architecture.md` where names changed, NOTES.
 
-**Formerly planned as R.2:** `docs/nomenclature.md` (plan 0.1) from the vocabulary of charter
-ruling 1, and the rename table, written to `docs/review/rename_table.md` and shown to the
-owner before the first rename (ruling 10); then group 1 of the plan (renames, R0), one
-refactoring per commit. Rules, rulings and gates: `docs/review/charter.md`.
-
-**Still open for the owner** (none blocks R.2): Q-1 (`vba_compat` removal and the home of
-the C-13 copies now that `_vba_semantics` is gone); the derivation of the friction `0.5`
-(Q-4); one word for an interleaved entry of the display grid (Q-6); ruling 3 names "kind
-constants" while ruling 2 makes the coupling a plain flag (plan 2.2 reads it as the flag:
-confirm); Q-11 apart from defects 1, 2, 4, 9; R.0b questions 3 (keyword-only arguments in
-the argument limit), 4 (`histories.step*`), 5 (the `docs/viz/data/` files and the viewer's
-old schema) and 8 (lint rules); whether the legacy port's pressure tests and the pressure
-part of `tools/extract_fixtures.py` stay until Stage 6. For Ben: the five derivation
-comments and D-24.
+**Still open for the owner:** R.0b question 5 (the `docs/viz/data/` files and the viewer's
+old schema at the bump) and 8 (lint rules for style §7-§9); for Ben: the derivation
+comments (now including the friction `0.5`), `P_CAP_FACTOR`'s basis and D-24; for the lead
+author: the suspected defects of `findings.md` (ruling 20).
 
 **Stage 6** (unchanged), when the lead author wants it.
 
