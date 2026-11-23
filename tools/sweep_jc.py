@@ -109,25 +109,35 @@ def curve_sheet_nat_freqs() -> tuple[float, ...]:
 
 class Pipe(NamedTuple):
     size_in: int
-    od_mm: float
-    thk_mm: float
-    fluid_area: float  # m²
-    mass_per_unit_len: float  # kg/m, pipe + contents
-    ei: float  # N·m²
-    p_design: float  # Pa
+    outside_diameter_mm: float
+    wall_thickness_mm: float
+    flow_area: float  # m²
+    mass_per_length: float  # kg/m, pipe + contents
+    flexural_rigidity: float  # N·m²
+    design_pressure: float  # Pa
 
 
 def pipe(size_in: int) -> Pipe:
     """The curve_10in sheet's formulas for one size (H11, H13, H15, J15) and the hoop-stress
     design pressure ``2 t S / OD``."""
     od_mm, thk_mm = PIPES[size_in]
-    r_in = (od_mm / 2 - thk_mm) / 1000
-    r_out = od_mm / 2000
-    fluid_area = math.pi * r_in**2
-    mass = math.pi * (r_in**2 * FLUID_DENSITY + (r_out**2 - r_in**2) * PIPE_DENSITY)
-    inertia = (math.pi / 4) * (r_out**4 - r_in**4)
-    p_design = 2 * (thk_mm / 1000) * ALLOWABLE_STRESS / (od_mm / 1000)
-    return Pipe(size_in, od_mm, thk_mm, fluid_area, mass, YOUNGS_MODULUS * inertia, p_design)
+    inside_radius = (od_mm / 2 - thk_mm) / 1000
+    outside_radius = od_mm / 2000
+    flow_area = math.pi * inside_radius**2
+    mass_per_length = math.pi * (
+        inside_radius**2 * FLUID_DENSITY + (outside_radius**2 - inside_radius**2) * PIPE_DENSITY
+    )
+    second_moment_of_area = (math.pi / 4) * (outside_radius**4 - inside_radius**4)
+    design_pressure = 2 * (thk_mm / 1000) * ALLOWABLE_STRESS / (od_mm / 1000)
+    return Pipe(
+        size_in,
+        od_mm,
+        thk_mm,
+        flow_area,
+        mass_per_length,
+        YOUNGS_MODULUS * second_moment_of_area,
+        design_pressure,
+    )
 
 
 def check_pipe_table(verbose: bool = True) -> None:
@@ -136,7 +146,7 @@ def check_pipe_table(verbose: bool = True) -> None:
     import json
 
     for size, expected in P_DESIGN_EXPECTED_BAR.items():
-        got = pipe(size).p_design / PA_PER_BAR
+        got = pipe(size).design_pressure / PA_PER_BAR
         assert abs(got - expected) <= 0.1, f"{size} in: p_design {got:.2f} bar, expected {expected}"
         if verbose:
             print(
@@ -146,9 +156,9 @@ def check_pipe_table(verbose: bool = True) -> None:
     params = json.loads((REPO / "tests/fixtures/curve_10in/params.json").read_text())
     p10 = pipe(10)
     for mine, key in (
-        (p10.fluid_area, "fluid_area"),
-        (p10.mass_per_unit_len, "mass_per_unit_len"),
-        (p10.ei, "flexural_rigidity_ei"),
+        (p10.flow_area, "fluid_area"),
+        (p10.mass_per_length, "mass_per_unit_len"),
+        (p10.flexural_rigidity, "flexural_rigidity_ei"),
     ):
         assert math.isclose(mine, params[key], rel_tol=1e-9), (key, mine, params[key])
     if verbose:
@@ -300,9 +310,9 @@ def solver_kwargs(case: Case, p: Pipe) -> dict:
         "step_qty": SUBSTEP_COUNT,
         "sample_freq": SAMPLE_RATE,
         "physical_length": case.length_m,
-        "flexural_rigidity_ei": p.ei,
+        "flexural_rigidity_ei": p.flexural_rigidity,
         "celerity": CELERITY,
-        "mass_per_unit_len": p.mass_per_unit_len,
+        "mass_per_unit_len": p.mass_per_length,
         "damping_percent": DAMPING_PERCENT,
         "dynamic_fric": case.mu,
         "nat_freq": case.nat_freq_hz,
@@ -323,11 +333,11 @@ def _timed(fn, *args, **kwargs):
 def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     """Both solvers on one case; the CSV row."""
     p = pipe(case.size_in)
-    h = case_history(case, p.p_design)
-    force = h.force(p.fluid_area)
+    h = case_history(case, p.design_pressure)
+    force = h.force(p.flow_area)
     kw = solver_kwargs(case, p)
     portal_frame_height = structure.solve_portal_height(
-        case.length_m, p.ei, p.mass_per_unit_len, case.nat_freq_hz
+        case.length_m, p.flexural_rigidity, p.mass_per_length, case.nat_freq_hz
     )
     substep_duration = 1 / (SAMPLE_RATE * SUBSTEP_COUNT)
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
@@ -336,21 +346,21 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    mass_total = (case.length_m + portal_frame_height * 4 / 3) * p.mass_per_unit_len
+    mass_total = (case.length_m + portal_frame_height * 4 / 3) * p.mass_per_length
     row = dict.fromkeys(COLUMNS)
     row.update(
         case_id=case.case_id,
         tier=tier,
         subset=subset,
         size_in=case.size_in,
-        od_mm=p.od_mm,
-        thk_mm=p.thk_mm,
+        od_mm=p.outside_diameter_mm,
+        thk_mm=p.wall_thickness_mm,
         length_m=case.length_m,
         nat_freq_hz=case.nat_freq_hz,
         amplitude_fraction=case.amplitude_fraction,
         mu=case.mu,
-        p_design_bar=p.p_design / PA_PER_BAR,
-        p_cap_bar=histories.p_cap(p.p_design, case.amplitude_fraction) / PA_PER_BAR,
+        p_design_bar=p.design_pressure / PA_PER_BAR,
+        p_cap_bar=histories.p_cap(p.design_pressure, case.amplitude_fraction) / PA_PER_BAR,
         p_peak_bar=h.peak / PA_PER_BAR,
         p_mean_bar=h.mean / PA_PER_BAR,
         p_rms_bar=h.rms / PA_PER_BAR,
@@ -359,9 +369,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         duration_s=h.duration_s,
         n_samples=h.n_samples,
         histories_version=h.version,
-        fluid_area_m2=p.fluid_area,
-        mass_per_unit_len=p.mass_per_unit_len,
-        ei=p.ei,
+        fluid_area_m2=p.flow_area,
+        mass_per_unit_len=p.mass_per_length,
+        ei=p.flexural_rigidity,
         rho_c=FLUID_DENSITY * CELERITY,
         portal_height_m=portal_frame_height,
         mass_total_kg=mass_total,
@@ -383,12 +393,12 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     if err:
         errors.append(f"lumped: {err}")
     jc, row["t_jc_s"], err = _timed(
-        response.peak_response_jc, force, fluid_densty=FLUID_DENSITY, fluid_area=p.fluid_area, **kw
+        response.peak_response_jc, force, fluid_densty=FLUID_DENSITY, fluid_area=p.flow_area, **kw
     )
     if err:
         errors.append(f"jc: {err}")
-    d2 = (p.od_mm / 1000) ** 2
-    p_peak_a = h.peak * p.fluid_area
+    d2 = (p.outside_diameter_mm / 1000) ** 2
+    p_peak_a = h.peak * p.flow_area
     for name, r in (("lumped", lumped), ("jc", jc)):
         if r is None:
             continue

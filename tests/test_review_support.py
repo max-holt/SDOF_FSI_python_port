@@ -225,7 +225,7 @@ def generated_sweep_histories() -> dict:
         case = sweep_jc.Case(
             size_in, None, None, history_type, f_osc_hz, seed, amplitude_fraction, None
         )
-        out[key] = sweep_jc.case_history(case, sweep_jc.pipe(size_in).p_design)
+        out[key] = sweep_jc.case_history(case, sweep_jc.pipe(size_in).design_pressure)
     return out
 
 

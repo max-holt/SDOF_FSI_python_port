@@ -27,11 +27,11 @@ def test_pipe_table_reproduces_the_owners_design_pressures_and_the_10in_fixture(
     sw.check_pipe_table(verbose=False)
     params = json.loads((REPO / "tests/fixtures/curve_10in/params.json").read_text())
     p10 = sw.pipe(10)
-    assert math.isclose(p10.fluid_area, params["fluid_area"], rel_tol=1e-12)
-    assert math.isclose(p10.mass_per_unit_len, params["mass_per_unit_len"], rel_tol=1e-12)
-    assert math.isclose(p10.ei, params["flexural_rigidity_ei"], rel_tol=1e-12)
+    assert math.isclose(p10.flow_area, params["fluid_area"], rel_tol=1e-12)
+    assert math.isclose(p10.mass_per_length, params["mass_per_unit_len"], rel_tol=1e-12)
+    assert math.isclose(p10.flexural_rigidity, params["flexural_rigidity_ei"], rel_tol=1e-12)
     for size, bar in sw.P_DESIGN_EXPECTED_BAR.items():
-        assert abs(sw.pipe(size).p_design / 1e5 - bar) <= 0.1
+        assert abs(sw.pipe(size).design_pressure / 1e5 - bar) <= 0.1
 
 
 def test_tier_grids():
@@ -79,9 +79,9 @@ def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path)
     sw.write_csv(path, [row])
     (back,) = sw.read_csv(path)
     h = sw.history_from_row(back)
-    direct = sw.case_history(case, sw.pipe(case.size_in).p_design)
+    direct = sw.case_history(case, sw.pipe(case.size_in).design_pressure)
     assert np.array_equal(h.pressure, direct.pressure)
-    assert float(back["history_peak"]) == float(np.abs(direct.force(sw.pipe(10).fluid_area)).max())
+    assert float(back["history_peak"]) == float(np.abs(direct.force(sw.pipe(10).flow_area)).max())
 
 
 def test_data_format_sweep_columns_are_the_tool_columns_in_order():
