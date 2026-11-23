@@ -199,21 +199,19 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
      only on a host with the same kernel: the Tier 1 file (this container's Xeon) and the
      Tier 2 file (i5-13600KF) were made with different ones. The solver snapshot and the
      exports are not affected.
-  2. **A property test holds only by the choice of examples.**
-     `tests/test_properties.py::test_jc_without_fluid_area_equals_lumped` (rtol 1e-12) has
-     a counterexample at 1.27e-12 in one history sample: force 17 zeros then 17 samples of
-     -1428049.20021316 N, `step_qty` 6, `sample_freq` 184, `physical_length` 18,
+  2. **Answered (lead author, 17 Nov 2026; done in session R.1b).**
+     `tests/test_properties.py::test_jc_without_fluid_area_equals_lumped` held at rtol 1e-12
+     only by the choice of examples (hypothesis seeds its examples with the numeric
+     constants of every imported project module, so a new literal anywhere moved them). The
+     counterexample is now pinned with `@example` (force 17 zeros then 17 samples of
+     `-1428049.2002131606` N, the value whose 15-digit rounding was recorded here; the
+     other inputs as recorded: `step_qty` 6, `sample_freq` 184, `physical_length` 18,
      `flexural_rigidity_ei` 64601, `celerity` 576, `mass_per_unit_len` 84,
      `damping_percent` 1, `dynamic_fric` 0.005, `nat_freq` 4.891204503212263, ratio
-     1.390625, gap fraction 0.8125, `output_type` 1. Hypothesis 6.170 seeds its examples
-     with the numeric constants of every project module in `sys.modules`, `derandomize` or
-     not, so a new float in any imported module moves the examples: the first version of
-     `tests/test_review_support.py` did, and the test failed with no solver change. The
-     new test now keeps its numbers in `tests/review_support_cases.json` and loads the
-     tools without registering them, and the suite is green, but a refactoring that adds a
-     literal value to `src/` or `tests/` can turn it red again. The test was not touched
-     (hard rule). Wanted: a tolerance for this property, or the example pinned as a known
-     difference.
+     1.390625, gap fraction 0.8125, `output_type` 1; it differs by 1.265e-12 in one
+     history sample), and that test's tolerance is 5e-12 (`JC_EQUALS_LUMPED_RTOL`), as
+     approved by the lead author on 17 Nov 2026. Checked: at 1e-12 the pinned example
+     fails, at 5e-12 it passes.
   3. Argument limit 6 as ruff counts it (PLR0913) includes keyword-only arguments:
      `peak_response` has 14 and `peak_response_jc` 19. Parameter objects for the
      entry points, or an exception for keyword-only arguments?

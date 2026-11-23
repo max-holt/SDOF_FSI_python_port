@@ -23,7 +23,7 @@ Properties
    comparison stops at the shorter run and the summaries are compared conditionally.
 3. Every maximum is finite and non-negative and the history finite over the sampled
    parameter space (friction, engaged gaps and ratios != 1 included).
-4. ``peak_response_jc`` with ``fluidArea = 0`` equals ``peak_response`` within 1e-12: the
+4. ``peak_response_jc`` with ``fluidArea = 0`` equals ``peak_response`` within 5e-12: the
    junction force stays exactly 0 and the fluid-corrected set-up (``jc_params``) reduces
    to the lumped one up to the association of ``mass`` (rounding level). Short spans take
    the lumped fallback and are trivially equal (reported as a hypothesis event).
@@ -39,7 +39,7 @@ import math
 
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, assume, event, given, settings
+from hypothesis import HealthCheck, assume, event, example, given, settings
 from hypothesis import strategies as st
 
 from surge_sdof import moc, response, structure
@@ -234,6 +234,27 @@ def test_maxima_are_finite_and_non_negative(case, ratio, gap_fraction, output_ty
 # ------------------------------------------------------------------ 4. JC with fluidArea = 0
 
 
+# rtol of property 4. The JC set-up associates ``mass`` differently from the lumped one, and
+# the rounding-level difference can grow over a run: the example pinned below differs by
+# 1.27e-12 in one history sample. 5e-12 approved by the lead author on 17 Nov 2026.
+JC_EQUALS_LUMPED_RTOL = 5e-12
+# The counterexample found at 1e-12 (NOTES.md, R.0b): 17 zero samples, then 17 of one level.
+KNOWN_DIFFERENCE_CASE = (
+    np.array([0.0] * 17 + [-1428049.2002131606] * 17),
+    {
+        "step_qty": 6,
+        "sample_freq": 184.0,
+        "physical_length": 18.0,
+        "flexural_rigidity_ei": 64601.0,
+        "celerity": 576.0,
+        "mass_per_unit_len": 84.0,
+        "damping_percent": 1.0,
+        "dynamic_fric": 0.005,
+        "nat_freq": 4.891204503212263,
+    },
+)
+
+
 @SETTINGS
 @given(
     case=lumped_cases(),
@@ -241,6 +262,7 @@ def test_maxima_are_finite_and_non_negative(case, ratio, gap_fraction, output_ty
     gap_fraction=st.floats(0.1, 1.5),
     output_type=st.integers(0, 3),
 )
+@example(case=KNOWN_DIFFERENCE_CASE, ratio=1.390625, gap_fraction=0.8125, output_type=1)
 def test_jc_without_fluid_area_equals_lumped(case, ratio, gap_fraction, output_type):
     force, kw = case
     kw_jc = jc_kw(kw, 0.0)
@@ -253,10 +275,10 @@ def test_jc_without_fluid_area_equals_lumped(case, ratio, gap_fraction, output_t
     jc = response.peak_response_jc(
         force, **kw_jc, restrain_freq_ratio=ratio, gap=gap, output_type=output_type
     )
-    np.testing.assert_allclose(jc.summary(), lumped.summary(), rtol=1e-12, atol=0)
+    np.testing.assert_allclose(jc.summary(), lumped.summary(), rtol=JC_EQUALS_LUMPED_RTOL, atol=0)
     assert jc.free_decay_samples == lumped.free_decay_samples
     if output_type > 0:
-        np.testing.assert_allclose(jc.history, lumped.history, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(jc.history, lumped.history, rtol=JC_EQUALS_LUMPED_RTOL, atol=0)
 
 
 @SETTINGS
