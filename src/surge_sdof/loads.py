@@ -161,6 +161,10 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     # For jB = 1 To 1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))
     #     For iB = 1 To UBound(forceHistory, 1)
     # jB and iB are read after the loops and keep VBA's post-loop values.
+    # For Ben to review: the bound divides the transit delay in samples by the number of
+    # history columns (UBound(forceHistory, 2)), where the samples per column are the rows.
+    # The walk exits earlier, on totInd > unballanceStepQTY, in every tested case, so the
+    # bound has not been seen to matter. The expression is the VBA's and stays.
     jb_to = 1 + clng(unb / u2)
     jb = 1
     while jb <= jb_to:
