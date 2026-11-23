@@ -24,8 +24,8 @@ Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kern
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
 ``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
 sample offsets, unpacks ``SdofParams`` and the coupling (``None`` for the lumped solver,
-kind 0; a ``JunctionCoupling`` with its column arrays and scalars, kind 1), runs the kernel, writes ``dF`` back to the
-coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
+kind 0; a ``JunctionCoupling`` with its column arrays and scalars, kind 1), runs the kernel,
+writes ``dF`` back to the coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
 arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
