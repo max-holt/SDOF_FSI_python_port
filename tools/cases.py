@@ -53,14 +53,18 @@ def golden_case(case_id: str):
 
 
 def step_case(args):
-    """A plain step: zero for ``lead_in`` s (at least one sample), then ``amplitude`` bar x
-    fluid area for ``duration`` s."""
+    """A plain step: zero for ``lead_in_s`` (at least one sample), then ``amplitude_bar`` x
+    flow area for ``duration_s``."""
     params = tg.load_params()
-    area = args.area if args.area else math.pi * (args.size / 1000.0) ** 2 / 4.0
-    n_lead = max(1, int(round(args.lead_in * args.sample_freq)))
-    n_hold = max(1, int(round(args.duration * args.sample_freq)))
-    force = np.full((n_lead + n_hold, 1), args.amplitude * 1e5 * area)
-    force[:n_lead, 0] = 0.0
+    flow_area = (
+        args.area if args.area else math.pi * (args.internal_diameter_mm / 1000.0) ** 2 / 4.0
+    )
+    lead_in_sample_count = max(1, int(round(args.lead_in_s * args.sample_freq)))
+    hold_sample_count = max(1, int(round(args.duration_s * args.sample_freq)))
+    force = np.full(
+        (lead_in_sample_count + hold_sample_count, 1), args.amplitude_bar * 1e5 * flow_area
+    )
+    force[:lead_in_sample_count, 0] = 0.0
     kw = {
         "step_qty": args.step_qty,
         "sample_freq": args.sample_freq,
@@ -73,16 +77,16 @@ def step_case(args):
         "nat_freq": args.nat_freq,
         "restrain_freq_ratio": params["restrain_freq_ratio"],
         "gap": params["gap"],
-        "fluid_densty": args.density,
-        "fluid_area": area,
+        "fluid_densty": args.fluid_density,
+        "fluid_area": flow_area,
     }
     return force, kw, args.solver
 
 
 def step_name(args) -> str:
     return (
-        f"step {args.amplitude:g} bar at t = {args.lead_in:g} s, "
-        + (f"area {args.area:g} m², " if args.area else f"{args.size:g} mm, ")
+        f"step {args.amplitude_bar:g} bar at t = {args.lead_in_s:g} s, "
+        + (f"area {args.area:g} m², " if args.area else f"{args.internal_diameter_mm:g} mm, ")
         + f"L = {args.length:g} m, "
         f"{args.nat_freq:g} Hz, mu = {args.mu:g} ({args.solver})"
     )
@@ -121,23 +125,37 @@ def add_source_arguments(ap) -> None:
     )
     ap.add_argument("--trace-frames", type=int, default=TRACE_FRAMES, help=argparse.SUPPRESS)
     ap.add_argument("--solver", choices=("lumped", "jc"), default="jc", help="--step only")
-    ap.add_argument("--amplitude", type=float, default=5.0, help="--step: bar")
-    ap.add_argument("--size", type=float, default=254.0, help="--step: internal diameter, mm")
+    ap.add_argument(
+        "--amplitude", dest="amplitude_bar", type=float, default=5.0, help="--step: bar"
+    )
+    ap.add_argument(
+        "--size",
+        dest="internal_diameter_mm",
+        type=float,
+        default=254.0,
+        help="--step: internal diameter, mm",
+    )
     ap.add_argument("--area", type=float, help="--step: fluid area, m² (overrides --size)")
     ap.add_argument(
-        "--lead-in", type=float, default=0.1, help="--step: zero force before the step, s"
+        "--lead-in",
+        dest="lead_in_s",
+        type=float,
+        default=0.1,
+        help="--step: zero force before the step, s",
     )
     ap.add_argument("--length", type=float, default=12.0, help="--step: span between elbows, m")
     ap.add_argument("--nat-freq", type=float, default=3.0, help="--step: Hz")
     ap.add_argument("--mu", type=float, default=0.005, help="--step: dynamicFric")
-    ap.add_argument("--duration", type=float, default=1.0, help="--step: history length, s")
+    ap.add_argument(
+        "--duration", dest="duration_s", type=float, default=1.0, help="--step: history length, s"
+    )
     curve = tg.load_params()
     ap.add_argument("--sample-freq", type=float, default=curve["sample_freq"])
     ap.add_argument("--step-qty", type=int, default=curve["step_qty"])
     ap.add_argument("--celerity", type=float, default=curve["celerity"])
     ap.add_argument("--mass-per-len", type=float, default=curve["mass_per_unit_len"])
     ap.add_argument("--ei", type=float, default=curve["flexural_rigidity_ei"])
-    ap.add_argument("--density", type=float, default=curve["fluid_densty"])
+    ap.add_argument("--density", dest="fluid_density", type=float, default=curve["fluid_densty"])
     ap.add_argument("--damping", type=float, default=curve["damping_percent"])
 
 
