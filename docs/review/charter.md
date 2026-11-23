@@ -107,13 +107,15 @@ the same bits on every case. Rule 2 forbids them all the same; equal bits here i
 Added on 16 Nov 2026 (session R.0b) with the wider scope. `tests/test_review_support.py`
 compares three things with `tests/review_support/` (20 files, 1.85 MB), each exactly; the
 cases are fixed command lines and the numbers in `tests/review_support_cases.json`.
-`tools/review_support.py` checks the files and, with `--write`, rewrites them.
+`tools/review_support.py` checks the files and, with `--write`, rewrites them. Session R.1b
+added a 21st file, `sweep_histories.txt` (1.5 MB): the fourteen pressure histories of the
+sweep rows, which (a) is now fed instead of generating them.
 
 | | what runs | compared with | how |
 |---|---|---|---|
-| (a) sweep rows | `tools/sweep_jc.py run --tier 1 --subset 0.01 --jobs 1`: 16 cases, every level of every Tier 1 dimension, both solvers | `sweep_tier1_subset1.csv` | every cell as text, except the four columns that record the run (`t_lumped_s`, `t_jc_s`, `cpu`, `git_sha`); the CSV prints floats with `repr`, so equal text is equal bits |
+| (a) sweep rows | `tools/sweep_jc.py run --tier 1 --subset 0.01 --jobs 1`: 16 cases, every level of every Tier 1 dimension, both solvers, on the stored histories of `sweep_histories.txt` (the adapter replaces `sweep_jc.case_history` and runs the tool's process pool with the fork start method so the workers see it) | `sweep_tier1_subset1.csv` | every cell as text, except the four columns that record the run (`t_lumped_s`, `t_jc_s`, `cpu`, `git_sha`); the CSV prints floats with `repr`, so equal text is equal bits |
 | (b) exports | `tools/export.py trace` on six cases (two Example-sheet cases, a round-number step and a step with no round number in it, lumped and junction coupling, with the default stride, the budget stride and an explicit one) and `tools/export.py sweep` on the golden case table and on the stored CSV | eight `.json` files | byte for byte, with `meta.git_sha` and `meta.created_utc` held fixed |
-| (c) histories | every generator of `histories.py` (`canonical` for the three kinds, `step`, `step_sine`, `step_noise`, `from_params`, and `p_cap` / `decay_rate` / `envelope` on their own) | ten `.txt` documents | every parameter, statistic and array element as `float.hex()` text |
+| (c) histories | every generator of `histories.py` (`canonical` for the three kinds, `step`, `step_sine`, `step_noise`, `from_params`, and `p_cap` / `decay_rate` / `envelope` on their own), and the sweep's fourteen histories through `sweep_jc.case_history` | ten `.txt` documents and `sweep_histories.txt` | every parameter, statistic and array element as `float.hex()` text: exactly where numpy uses the stored `sin` / `exp` kernel, elsewhere each float at the relative tolerance 1e-12 (`history_rtol`) and every other line exactly |
 
 Added time: 5 s compiled (3 s of it the sweep), under 1 s in pure Python. The 16 stored
 rows equal the same cases of the committed Tier 1 file `docs/sweep/tier1_83d23ef_f4b.csv`
@@ -123,13 +125,18 @@ Limits, each stated by the test when it applies:
 
 * **(a) runs compiled only.** One sweep case takes 25 to 105 s in pure Python. The sweep
   tool holds no compiled code, and the snapshot test proves the solvers equal in both modes.
-* **(a) and (c) depend on the host's CPU.** numpy picks its `sin` / `exp` kernel by CPU,
-  and the AVX-512 kernel (`X86_V4`, this container, where the files were stored) rounds
-  differently from the others: with `NPY_DISABLE_CPU_FEATURES=X86_V4` eight of the ten
-  history documents and the sweep rows differ, with no code change. On such a host those
-  two checks skip, with that reason, and `--write` refuses. (b) and the solver snapshot do
-  not depend on it: they pass unchanged with the kernel switched off. Open question for the
-  owner in `NOTES.md`.
+* **(c) depends on the host's CPU; (a) no longer does** (session R.1b, the owner's
+  ruling). numpy picks its `sin` / `exp` kernel by CPU, and the AVX-512 kernel (`X86_V4`,
+  this container, where the files were stored) rounds differently from the others: with
+  `NPY_DISABLE_CPU_FEATURES=X86_V4` (kernel `X86_V3`) 214 lines of the history documents
+  differ in the last bits, with no code change. (a) runs on the stored histories and is
+  exact on every host. (c) is exact where the kernel matches and compares at 1e-12
+  elsewhere; neither skips, and the run's summary prints which mode ran (`review support:
+  ...` lines, from `tests/conftest.py`); `tools/review_support.py` prints the same. In the
+  tolerance mode a last-bit regrouping in `histories.py` (H1 to H6 below) can pass: the
+  exact mode on a reference platform is the one that decides. `--write` refuses on another
+  kernel. (b) and the solver snapshot do not depend on the kernel. Checked in R.1b: the
+  sweep rows equal the stored CSV in both modes, and mutation S3 fails in both.
 * **Not covered:** the plots and the report of `tools/sweep_jc.py plot`, `tools/bench.py`,
   `tools/extract_fixtures.py`, `tools/golden_report.py`, `tools/profile_delta.py` (no test
   runs them), and gzip output (its header carries the time). `tools/build_viewer.py` is

@@ -10,19 +10,26 @@ code as it stood before the review. Every comparison is exact:
   of every dimension, both solvers) writes a CSV whose cells equal the stored CSV's as
   text, except the four columns that record the run and not the case (the two timings, the
   CPU and the git sha). The CSV writer prints a float with ``repr``, which round-trips, so
-  equal text is equal bits. Compiled runs only: one case takes 25 to 105 s in pure Python,
-  and the sweep tool itself contains no compiled code.
+  equal text is equal bits. The run takes its pressure histories from the stored document
+  ``sweep_histories.txt`` instead of generating them, so the check does not depend on
+  numpy's ``sin`` / ``exp`` kernels; the generators themselves are pinned by the history
+  documents. Compiled runs only: one case takes 25 to 105 s in pure Python, and the sweep
+  tool itself contains no compiled code.
 * **exports**: ``tools/export.py trace`` on fixed cases and ``tools/export.py sweep`` on
   the golden case table and on the stored sweep CSV write files that are byte-identical to
   the stored ones, with ``meta.git_sha`` and ``meta.created_utc`` held fixed.
 * **histories**: the generators of ``surge_sdof.histories`` reproduce the stored arrays
   and statistics as ``float.hex()`` text.
 
-The histories, and the sweep rows computed from them, depend on the host: numpy picks its
-``sin`` / ``exp`` kernel by CPU, and the AVX-512 kernel (``X86_V4``, the one the files were
-stored with) rounds differently from the others in the last bit. On a host where numpy
-picks another kernel those two checks skip with that reason; the exports do not depend on
-it and always run. ``NPY_DISABLE_CPU_FEATURES=X86_V4`` reproduces such a host.
+The generated histories depend on the host: numpy picks its ``sin`` / ``exp`` kernel by
+CPU, and the AVX-512 kernel (``X86_V4``, the one the files were stored with) rounds
+differently from the others in the last bit. Where numpy uses the stored kernel the history
+documents are compared exactly; elsewhere every float in them is compared at the relative
+tolerance ``history_rtol`` of ``tests/review_support_cases.json`` (1e-12) and every other
+line exactly. Neither mode skips: the run's summary says which one ran. The exact checks
+are authoritative on the reference platforms (the CI Linux runner and the cloud
+environment, charter "Reference platform"). ``NPY_DISABLE_CPU_FEATURES=X86_V4`` reproduces
+a host without the stored kernel.
 
 Every call into the code under review goes through the adapter section, the one place a
 later rename is absorbed (the stored files keep their names and, until the schema bump the
@@ -32,14 +39,18 @@ behaviour or of the data format, never to make a refactoring pass.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import csv
+import dataclasses
 import functools
 import importlib.util
 import io
 import json
+import multiprocessing
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -83,13 +94,16 @@ def numpy_kernel() -> str:
     return "/".join(sorted(current))
 
 
-other_kernel = pytest.mark.skipif(
-    numpy_kernel() != STORED_KERNEL,
-    reason=(
-        f"numpy uses its {numpy_kernel()} kernel for sin / exp here and the stored histories "
-        f"come from {STORED_KERNEL}: the last bits differ whatever the code does"
-    ),
-)
+def history_mode() -> str:
+    """How the history documents are compared on this host: ``"exact"`` with the stored
+    kernel, ``"tolerance"`` with any other."""
+    return "exact" if numpy_kernel() == STORED_KERNEL else "tolerance"
+
+
+REPORT: list[str] = []
+"""Lines for the run's summary (``tests/conftest.py`` prints them): which mode ran."""
+if PURE_PYTHON:
+    REPORT.append("sweep rows: not run with NUMBA_DISABLE_JIT (a case takes 25 to 105 s)")
 
 FIXED_SHA = "0" * 40
 FIXED_CREATED = "2026-11-16T00:00:00Z"
@@ -97,6 +111,8 @@ FIXED_CREATED = "2026-11-16T00:00:00Z"
 # ------------------------------------------------------------------ the adapter
 
 SWEEP_CSV = "sweep_tier1_subset1.csv"
+# The pressure histories the sweep run is fed, one per distinct history of its rows.
+SWEEP_HISTORIES = "sweep_histories.txt"
 SWEEP_ARGV = ("run", "--tier", "1", "--subset", "0.01", "--jobs", "1")
 # Columns that record the run (timings, machine, checkout), not the case.
 RUN_COLUMNS = ("t_lumped_s", "t_jc_s", "cpu", "git_sha")
@@ -177,15 +193,123 @@ def _in_repo():
         os.chdir(before)
 
 
-def run_sweep(out_dir: Path) -> Path:
-    """Run the small sweep through the tool's command line; the CSV it wrote."""
+def _history_key(size_in, history_type, f_osc_hz, seed, amplitude_fraction) -> tuple:
+    """What a sweep case's pressure history depends on (the design pressure follows from
+    the size)."""
+    return (int(size_in), history_type, f_osc_hz, seed, float(amplitude_fraction))
+
+
+def _key_of_row(row: dict) -> tuple:
+    """The history key of a stored CSV row (cells as text)."""
+    return _history_key(
+        row["size_in"],
+        row["history_type"],
+        float(row["f_osc_hz"]) if row["f_osc_hz"] else None,
+        int(row["seed"]) if row["seed"] else None,
+        row["amplitude_fraction"],
+    )
+
+
+def _label(key: tuple) -> str:
+    size_in, history_type, f_osc_hz, seed, amplitude_fraction = key
+    return f"size {size_in} {history_type} f_osc {f_osc_hz!r} seed {seed!r} amplitude {amplitude_fraction!r}"
+
+
+def generated_sweep_histories() -> dict:
+    """Each distinct history of the stored sweep rows, from the generators (host-dependent:
+    written with ``--write`` on the stored kernel only)."""
+    keys = dict.fromkeys(_key_of_row(row) for row in _stored_sweep_rows())
+    out = {}
+    for key in keys:
+        size_in, history_type, f_osc_hz, seed, amplitude_fraction = key
+        case = sweep_jc.Case(
+            size_in, None, None, history_type, f_osc_hz, seed, amplitude_fraction, None
+        )
+        out[key] = sweep_jc.case_history(case, sweep_jc.pipe(size_in).p_design)
+    return out
+
+
+def render_sweep_histories(by_key: dict) -> str:
+    """The sweep's histories as text: every ``History`` field, floats as ``float.hex()``,
+    the pressure one element a line (``time`` is not stored: no sweep column reads it)."""
+    lines = ["# review support snapshot: the pressure histories the sweep check runs on"]
+    for key, history in by_key.items():
+        lines.append(f"## {_label(key)}")
+        for field in dataclasses.fields(history):
+            if field.name != "time":
+                lines.extend(_lines(field.name, getattr(history, field.name)))
+    return "\n".join(lines) + "\n"
+
+
+def _parse_scalar(text: str):
+    if text == "None":
+        return None
+    if text.startswith("'"):
+        return ast.literal_eval(text)
+    if text.lstrip("-").startswith(("0x", "inf", "nan")):
+        return float.fromhex(text)
+    return int(text)
+
+
+@functools.cache
+def stored_sweep_histories() -> dict:
+    """The stored sweep histories as ``History`` objects, keyed like the rows."""
+    labels = {_label(key): key for key in dict.fromkeys(map(_key_of_row, _stored_sweep_rows()))}
+    text = (SUPPORT_DIR / SWEEP_HISTORIES).read_text(encoding="utf-8").splitlines()[1:]
+    out, fields, lines = {}, None, iter(text)
+    for line in lines:
+        if line.startswith("## "):
+            fields = {}
+            out[labels[line[3:]]] = fields
+        elif " : " in line:
+            name, spec = line.split(" : ")
+            count = int(spec.split("(")[1].rstrip(",)"))
+            fields[name] = np.array([float.fromhex(next(lines)) for _ in range(count)])
+        else:
+            name, value = line.split(" = ", 1)
+            fields[name] = _parse_scalar(value)
+    histories_ = {}
+    for key, fields in out.items():
+        # ``time`` is rebuilt as the generators build it; nothing in a sweep row reads it
+        fields["time"] = np.arange(fields["n_samples"]) / fields["sample_freq"]
+        histories_[key] = histories.History(**fields)
+    return histories_
+
+
+def _stored_history(case, p_design: float) -> histories.History:
+    """``sweep_jc.case_history`` replaced: the stored history of the case (``p_design``
+    follows from ``case.size_in``, which is part of the key)."""
+    return stored_sweep_histories()[
+        _history_key(
+            case.size_in, case.history_type, case.f_osc_hz, case.seed, case.amplitude_fraction
+        )
+    ]
+
+
+def _pool(max_workers: int):
+    """The tool's process pool with the fork start method, so that the workers inherit the
+    stored histories; a thread pool where the platform cannot fork."""
+    if "fork" in multiprocessing.get_all_start_methods():
+        return ProcessPoolExecutor(max_workers, mp_context=multiprocessing.get_context("fork"))
+    return ThreadPoolExecutor(max_workers)
+
+
+def run_sweep(out_dir: Path, stored_histories: bool = True) -> Path:
+    """Run the small sweep through the tool's command line; the CSV it wrote. With
+    ``stored_histories`` the cases take their pressure histories from
+    ``SWEEP_HISTORIES`` instead of the generators."""
     # the tool's process pool pickles its worker by module name, so the module is
     # importable for the duration of the run and no longer
     sys.modules["sweep_jc"] = sweep_jc
+    saved = sweep_jc.case_history, sweep_jc.ProcessPoolExecutor
+    if stored_histories:
+        stored_sweep_histories()  # parsed once, before the workers fork
+        sweep_jc.case_history, sweep_jc.ProcessPoolExecutor = _stored_history, _pool
     try:
         with _in_repo():
             sweep_jc.main([*SWEEP_ARGV, "--out", str(out_dir)])
     finally:
+        sweep_jc.case_history, sweep_jc.ProcessPoolExecutor = saved
         del sys.modules["sweep_jc"]
     (path,) = Path(out_dir).glob("*.csv")
     return path
@@ -262,12 +386,43 @@ def _stored_sweep() -> list[list[str]]:
     return sweep_cells(SUPPORT_DIR / SWEEP_CSV)
 
 
+def _stored_sweep_rows() -> list[dict]:
+    header, *rows = _stored_sweep()
+    return [dict(zip(header, row, strict=True)) for row in rows]
+
+
+def history_difference(name: str, expected: str, actual: str) -> str | None:
+    """Where history document ``name`` differs from the stored text, or None. In the
+    ``"tolerance"`` mode a float line passes within ``history_rtol``."""
+    if actual == expected:
+        return None
+    ours, theirs = actual.splitlines(), expected.splitlines()
+    if len(ours) != len(theirs):
+        return f"{name}: {len(ours)} lines, the stored document has {len(theirs)}"
+    rtol = CASES["history_rtol"]
+    for at, (a, b) in enumerate(zip(ours, theirs, strict=True)):
+        if a == b:
+            continue
+        if history_mode() == "tolerance":
+            left, right = a.rpartition(" = ")[2], b.rpartition(" = ")[2]
+            if a[: len(a) - len(left)] == b[: len(b) - len(right)]:
+                try:
+                    x, y = float.fromhex(left), float.fromhex(right)
+                except ValueError:
+                    pass
+                else:
+                    if abs(x - y) <= rtol * abs(y):
+                        continue
+        return f"{name}: line {at + 1} is {a!r} and the stored document has {b!r}"
+    return None
+
+
 # ------------------------------------------------------------------ the tests
 
 
-@other_kernel
 @pytest.mark.skipif(PURE_PYTHON, reason="a sweep case takes 25 to 105 s in pure Python")
 def test_sweep_rows_equal_the_stored_csv(tmp_path):
+    REPORT.append("sweep rows: run on the stored histories, compared exactly")
     stored = _stored_sweep()
     cells = sweep_cells(run_sweep(tmp_path))
     assert cells[0] == stored[0], "the CSV header changed"
@@ -296,25 +451,38 @@ def test_export_is_byte_identical_to_the_stored_file(name, tmp_path):
         )
 
 
-@other_kernel
 @pytest.mark.parametrize("name", HISTORY_DOCUMENTS)
 def test_history_equals_the_stored_document(name):
+    line = (
+        f"histories: {history_mode()} comparison (numpy uses its {numpy_kernel()} kernel for "
+        f"sin / exp here, the stored documents come from {STORED_KERNEL})"
+    )
+    if line not in REPORT:
+        REPORT.append(line)
     stored = (SUPPORT_DIR / f"{name}.txt").read_text(encoding="utf-8")
-    actual = render_history(name)
-    if actual != stored:
-        ours, theirs = actual.splitlines(), stored.splitlines()
-        at = next(
-            (i for i, (a, b) in enumerate(zip(ours, theirs, strict=False)) if a != b),
-            min(len(ours), len(theirs)),
-        )
-        pytest.fail(
-            f"{name}: line {at + 1} is {ours[at : at + 1]} and the stored document has "
-            f"{theirs[at : at + 1]}"
-        )
+    difference = history_difference(name, stored, render_history(name))
+    if difference:
+        pytest.fail(difference)
+
+
+def test_stored_sweep_histories_are_the_generators_output():
+    """The histories the sweep check is fed are what ``tools/sweep_jc.py`` generates for its
+    rows, compared like the history documents (exactly on the stored kernel)."""
+    stored = (SUPPORT_DIR / SWEEP_HISTORIES).read_text(encoding="utf-8")
+    generated = render_sweep_histories(generated_sweep_histories())
+    difference = history_difference(SWEEP_HISTORIES, stored, generated)
+    if difference:
+        pytest.fail(difference)
+    assert set(stored_sweep_histories()) == {_key_of_row(row) for row in _stored_sweep_rows()}
 
 
 def test_the_stored_files_are_the_documents_and_nothing_else():
-    expected = {SWEEP_CSV, *EXPORT_ARGV, *(f"{name}.txt" for name in HISTORY_DOCUMENTS)}
+    expected = {
+        SWEEP_CSV,
+        SWEEP_HISTORIES,
+        *EXPORT_ARGV,
+        *(f"{name}.txt" for name in HISTORY_DOCUMENTS),
+    }
     assert {path.name for path in SUPPORT_DIR.iterdir()} == expected
 
 

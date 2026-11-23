@@ -187,18 +187,15 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
   limit is 6, enforced in the public API session. 8 (in part) `vba_min` / `vba_max` stay
   untyped, a recorded exception. 9 done. 10 left for the reviewers to raise.
 * **Review R.0b, open questions for the owner:**
-  1. **The history and sweep checks depend on the CPU.** numpy 2.5.5 dispatches `sin` /
-     `exp` to an AVX-512 kernel (`X86_V4`) on this container; with it switched off
-     (`NPY_DISABLE_CPU_FEATURES=X86_V4`, i.e. what a CPU without AVX-512 such as the
-     i5-13600KF runs) eight of ten history documents and the sweep rows differ in the last
-     bits. Today those two checks skip on such a host. Options: (a) pin the whole suite and
-     the write tool to the non-AVX-512 kernel through that variable in `tests/conftest.py`,
-     so every x86 host computes the same bits (needs a rewrite of the stored histories and
-     CSV; untested across operating systems); (b) store one set per kernel; (c) keep the
-     skip. The same fact means `histories.from_params` rebuilds a row's history "bitwise"
-     only on a host with the same kernel: the Tier 1 file (this container's Xeon) and the
-     Tier 2 file (i5-13600KF) were made with different ones. The solver snapshot and the
-     exports are not affected.
+  1. **Answered (owner; done in session R.1b): the CPU dependence.** The sweep-row check
+     runs on stored histories (`tests/review_support/sweep_histories.txt`, the fourteen
+     histories of its rows, 1.5 MB) and is exact on any host. The history check is exact
+     where numpy's `sin` / `exp` kernel matches the stored files (`X86_V4`) and compares
+     each float at 1e-12 elsewhere; it never skips, and the summary of every pytest run
+     prints which mode ran. The exact checks are authoritative on the CI Linux runner and
+     in this cloud environment (charter, "Reference platform"). Still true:
+     `histories.from_params` rebuilds a row's history bitwise only on a host with the same
+     kernel (the Tier 1 and Tier 2 files were made with different ones).
   2. **Answered (lead author, 17 Nov 2026; done in session R.1b).**
      `tests/test_properties.py::test_jc_without_fluid_area_equals_lumped` held at rtol 1e-12
      only by the choice of examples (hypothesis seeds its examples with the numeric
