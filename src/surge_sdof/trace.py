@@ -172,21 +172,21 @@ class Trace:
 
 
 def capacity(
-    forced_substeps: int,
-    forced_samples: int,
+    forced_substep_count: int,
+    forced_sample_count: int,
     nominal_forced_sample_count: int,
     substep_count: int,
     trace_every: int,
 ) -> int:
-    """Frames to allocate: the forced phases (``forced_substeps`` sub-steps, known from the
+    """Frames to allocate: the forced phases (``forced_substep_count`` sub-steps, known from the
     unbalance schedule) plus free decay up to the history window (``outMax * 2`` samples
     in all), every ``trace_every``-th sub-step; 0 when not tracing.
 
     Parameters
     ----------
-    forced_substeps : int
+    forced_substep_count : int
         Sub-steps of the transit and forced phases (the length of the flat unbalance array).
-    forced_samples : int
+    forced_sample_count : int
         Samples of the transit and forced phases.
     nominal_forced_sample_count : int
         The VBA ``outMax``.
@@ -204,13 +204,13 @@ def capacity(
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
-    decay_substeps = max(0, nominal_forced_sample_count * 2 - forced_samples) * substep_count
-    return -(-(forced_substeps + decay_substeps) // trace_every)  # ceil
+    decay_substeps = max(0, nominal_forced_sample_count * 2 - forced_sample_count) * substep_count
+    return -(-(forced_substep_count + decay_substeps) // trace_every)  # ceil
 
 
 def check_memory(
-    forced_substeps: int,
-    forced_samples: int,
+    forced_substep_count: int,
+    forced_sample_count: int,
     nominal_forced_sample_count: int,
     substep_count: int,
     trace_every: int,
@@ -220,7 +220,8 @@ def check_memory(
 
     Parameters
     ----------
-    forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, trace_every
+    forced_substep_count, forced_sample_count, nominal_forced_sample_count, substep_count,
+    trace_every
         As ``capacity``.
     n_cells : int
         ``2N + 1`` for a JC run, 0 for lumped.
@@ -239,13 +240,21 @@ def check_memory(
     """
     per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * n_cells
     cap = capacity(
-        forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, trace_every
+        forced_substep_count,
+        forced_sample_count,
+        nominal_forced_sample_count,
+        substep_count,
+        trace_every,
     )
     if cap * per_frame <= MAX_TRACE_VALUES:
         return cap
     stride = max(trace_every + 1, math.ceil(cap * trace_every * per_frame / MAX_TRACE_VALUES))
     while capacity(
-        forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, stride
+        forced_substep_count,
+        forced_sample_count,
+        nominal_forced_sample_count,
+        substep_count,
+        stride,
     ) * per_frame > (MAX_TRACE_VALUES):
         stride += 1
     raise ValueError(

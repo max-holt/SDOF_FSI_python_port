@@ -286,8 +286,8 @@ def is_capped(result: PeakResponse) -> bool:
     decay = trace.phase == PHASE_FREE_DECAY
     if not decay.any():
         return False
-    forced_samples = int(trace.sample[decay].min())
-    return forced_samples + int(result.free_decay_samples) > 2 * int(trace.out_max)
+    forced_sample_count = int(trace.sample[decay].min())
+    return forced_sample_count + int(result.free_decay_samples) > 2 * int(trace.out_max)
 
 
 def _frames(trace: Trace) -> dict:

@@ -267,7 +267,9 @@ def peak_response(
         gap,
         restrain_freq_ratio,
     )
-    forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
+    unbalance_force_samples = loads.unbalance_force(
+        history, sample_freq, physical_length, celerity, step_qty
+    )
     meta = None
     if trace_every:
         meta = _TraceMeta(
@@ -291,7 +293,7 @@ def peak_response(
             loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
         )
     return _integrate(
-        forces,
+        unbalance_force_samples,
         params,
         substep_duration,
         step_qty,
@@ -471,7 +473,9 @@ def peak_response_jc(
         vav_denominator,
         fraction_profile,
     )
-    forces = loads.unbalance_force(history, sample_freq, physical_length, celerity, step_qty)
+    unbalance_force_samples = loads.unbalance_force(
+        history, sample_freq, physical_length, celerity, step_qty
+    )
     meta = None
     if trace_every:
         meta = _TraceMeta(
@@ -500,7 +504,7 @@ def peak_response_jc(
             loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
         )
     return _integrate(
-        forces,
+        unbalance_force_samples,
         params,
         substep_duration,
         step_qty,
@@ -607,7 +611,7 @@ def _trace_frame(
 
 
 def _integrate(
-    forces,
+    unbalance_force_samples,
     params: SdofParams,
     substep_duration: float,
     substep_count: int,
@@ -619,13 +623,14 @@ def _integrate(
     meta: _TraceMeta | None = None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
-    driven by ``forces`` (one list of per-sub-step unbalance values per sample), then free
-    decay while ``x * xZero > 0.01``; max trackers; result history per sample.
+    driven by ``unbalance_force_samples`` (one list of per-sub-step unbalance values per
+    sample), then free decay while ``x * xZero > 0.01``; max trackers; result history per
+    sample.
 
-    Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens ``forces`` once,
-    unpacks ``params`` and ``coupling`` (``None``: no fluid coupling, kind 0; a
-    ``JunctionCoupling``: kind 1, its arrays are updated in place and its ``d_f`` written
-    back), builds the ``PeakResponse``.
+    Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
+    ``unbalance_force_samples`` once, unpacks ``params`` and ``coupling`` (``None``: no fluid
+    coupling, kind 0; a ``JunctionCoupling``: kind 1, its arrays are updated in place and its
+    ``d_f`` written back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
@@ -633,16 +638,18 @@ def _integrate(
     with ``off`` fixed per sample (D-19, approved fix F-2).
 
     Session V.1: with ``trace_every > 0`` the elbow forces of ``meta.elbows`` are
-    flattened like ``forces``, the trace arrays are allocated (``trace.check_memory``,
-    ``trace.allocate``) and the kernel fills them; ``trace.build`` makes the ``Trace``.
+    flattened like ``unbalance_force_samples``, the trace arrays are allocated
+    (``trace.check_memory``, ``trace.allocate``) and the kernel fills them; ``trace.build`` makes the ``Trace``.
     With 0 the kernel takes empty arrays."""
     substep_duration = float(substep_duration)
-    samples = list(forces)
-    offsets = np.zeros(len(samples) + 1, dtype=np.int64)
-    for i, sample in enumerate(samples):
+    unbalance_force_samples = list(unbalance_force_samples)
+    offsets = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
+    for i, sample in enumerate(unbalance_force_samples):
         offsets[i + 1] = offsets[i] + len(sample)
     flat = np.fromiter(
-        itertools.chain.from_iterable(samples), dtype=np.float64, count=int(offsets[-1])
+        itertools.chain.from_iterable(unbalance_force_samples),
+        dtype=np.float64,
+        count=int(offsets[-1]),
     )
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
@@ -657,19 +664,23 @@ def _integrate(
         if meta is None:
             raise TypeError("trace_every > 0 needs the trace meta")
         elbows = list(meta.elbows)
-        if [len(fa) for _ph, fa, _fb in elbows] != [len(s) for s in samples]:
+        if [len(fa) for _ph, fa, _fb in elbows] != [len(s) for s in unbalance_force_samples]:
             raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
-        n_sub = int(offsets[-1])
+        forced_substep_count = int(offsets[-1])
         flat_a = np.fromiter(
-            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbows), np.float64, count=n_sub
+            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbows),
+            np.float64,
+            count=forced_substep_count,
         )
         flat_b = np.fromiter(
-            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbows), np.float64, count=n_sub
+            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbows),
+            np.float64,
+            count=forced_substep_count,
         )
         delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
         cap = tracing.check_memory(
-            n_sub,
-            len(samples),
+            forced_substep_count,
+            len(unbalance_force_samples),
             int(nominal_forced_sample_count),
             int(substep_count),
             trace_every,
@@ -688,7 +699,7 @@ def _integrate(
         column = (empty, empty, empty, empty, empty, empty)
         scalars = (0, 0, 0.0, 1.0, 1, 0.0, 0.0)
 
-    (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, n_frames) = (
+    (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_sample_count, d_f, n_frames) = (
         _integrate_kernel(
             flat,
             offsets,
@@ -759,7 +770,7 @@ def _integrate(
         max_applied_force=float(f_max),
         history=history if output_type > 0 else None,
         output_type=output_type,
-        free_decay_samples=int(tot_ind - forced_samples),
+        free_decay_samples=int(tot_ind - forced_sample_count),
         trace=trace,
     )
 

@@ -88,7 +88,7 @@ def step_name(args) -> str:
     )
 
 
-def forced_substeps(force, kw) -> int:
+def forced_substep_count(force, kw) -> int:
     """Sub-steps of the forced phases (transit + history), as the trace capacity counts them."""
     transit_delay_samples = loads.transit_delay(
         kw["physical_length"], kw["celerity"], kw["sample_freq"]
@@ -98,7 +98,7 @@ def forced_substeps(force, kw) -> int:
 
 def default_trace_every(force, kw, target_frames: int) -> int:
     """The stride that records about ``target_frames`` frames of the forced phases."""
-    return max(1, math.ceil(forced_substeps(force, kw) / target_frames))
+    return max(1, math.ceil(forced_substep_count(force, kw) / target_frames))
 
 
 def run(force, kw, solver: str, trace_every: int):

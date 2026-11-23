@@ -72,7 +72,7 @@ def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: fl
     (``tools/cases.default_trace_every``), or the coarser stride whose estimated JSON fits
     ``budget_mb`` (forced phases only; free decay adds frames)."""
     stride = cases.default_trace_every(force, kw, target_frames)
-    substeps = cases.forced_substeps(force, kw)
+    substeps = cases.forced_substep_count(force, kw)
     n_cells = estimated_cells(kw, solver)
     n_samples = int(force.size)
     per_frame = BYTES_PER_FLOAT * (len(export.FRAME_COLUMNS) + 2 * n_cells)
