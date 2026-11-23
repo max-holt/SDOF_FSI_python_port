@@ -3,7 +3,7 @@
 The clean-code review (``docs/review/charter.md``) refactors the solver modules and every
 refactoring must leave the results bit-identical. The differential suite compares at rtol
 1e-12 and only the legacy-flag path has a reference (``legacy_port``); this test closes
-both gaps. A seeded set of cases is run through the three public solvers and every output
+both gaps. A seeded set of cases is run through the two public solvers and every output
 is compared, as ``float.hex()`` text, with the files under ``tests/review_snapshot/``,
 which were written by ``tools/review_snapshot.py --write`` from the code as it stood before
 the review. Equality is exact: text equality of hex floats is bit equality (the sign of
@@ -11,8 +11,8 @@ zero included; a NaN payload is the one thing ``float.hex`` does not carry).
 
 Covered: ``peak_response`` and ``peak_response_jc`` with the default flags (F-1, F-2,
 F-4b) and with the legacy flags, ``output_type`` 0 to 3 on every case, one traced run of
-each solver (every ``Trace`` field except the ``inputs`` echo), a short-pipe fallback case
-and ``pressure_response``; besides the hand-set cases, a seeded sweep of short runs per
+each solver (every ``Trace`` field except the ``inputs`` echo) and a short-pipe fallback
+case; besides the hand-set cases, a seeded sweep of short runs per
 solver varies every set-up argument and pins the resolved set-up itself (the trace's
 ``SdofParams``, ``dt``, grid and fractions, and the transit delay, portal-frame height and
 decay factor through the adapter), and one case sits in the friction dead zone (D-20).
@@ -38,7 +38,7 @@ from typing import NamedTuple
 import numpy as np
 import pytest
 
-from surge_sdof import _vba_semantics, loads, moc, pressure, response, structure
+from surge_sdof import loads, moc, response, structure
 
 SNAPSHOT_DIR = Path(__file__).parent / "review_snapshot"
 SEED = 20261116
@@ -102,23 +102,14 @@ def run_solver(solver: str, history, params: dict, options: dict) -> dict:
     """Run one solver on one case and return its outputs under the snapshot's own keys.
 
     With its helper ``_setup_values`` the only place in this file that touches
-    ``surge_sdof``: ``solver`` is ``"peak_response"``, ``"peak_response_jc"``,
-    ``"pressure_response"``, ``"setup"`` (the set-up scalars of a case) or ``"tie_rules"``
-    (the VBA ``min`` / ``max`` on the operand pairs given as ``history``), ``history`` the
-    force history (N) or the valve pattern, ``params`` the case's physical arguments and
+    ``surge_sdof``: ``solver`` is ``"peak_response"``, ``"peak_response_jc"`` or
+    ``"setup"`` (the set-up scalars of a case), ``history`` the force history (N),
+    ``params`` the case's physical arguments and
     ``options`` the run's switches (``output_type``, ``trace_every``, the JC flags), all
     under today's keyword names.
     """
-    if solver == "pressure_response":
-        return {"valve_pressure": pressure.pressure_response(history, **params, **options)}
     if solver == "setup":
         return _setup_values(params)
-    if solver == "tie_rules":
-        return {
-            f"{name}({a!r}, {b!r})": rule(a, b)
-            for name, rule in (("min", _vba_semantics.vba_min), ("max", _vba_semantics.vba_max))
-            for a, b in history
-        }
     if solver == "peak_response":
         result = response.peak_response(history, **params, **options)
     elif solver == "peak_response_jc":
@@ -292,68 +283,6 @@ JC_SHAPES = {
 # The span is shorter than the MoC grid needs: ``peak_response_jc`` returns ``peak_response``.
 JC_SHORT_PIPE = ({"physical_length": 1.5, "gap": 0.05}, 60, 1, 3.0e5)
 
-# Valve-closure cases of ``pressure_response`` (the VBA's mixed units: s, m/s, kg/m3, bar,
-# m3/h, mm2, US gpm Cv, m). The first is the Example sheet's operating point.
-PRESSURE_BASE = {
-    "closure_time": 1.2,
-    "celerity": 1400.0,
-    "density": 1000.0,
-    "time_step": 0.01,
-    "pressure_drop_from_pump": 0.0001,
-    "flow_rate": 500.0,
-    "pipe_area": 31415.926535897932,
-    "valve_cv": 1800.0,
-    "length_to_pump": 400.0,
-    "pump_ramp_pressure": 2.0,
-}
-# id -> (overrides of PRESSURE_BASE, pattern samples, pattern columns, final closure, shape)
-PRESSURE_SHAPES = {
-    "pressure_a": ({}, 13, 1, 1.0, "linear"),
-    "pressure_b": (
-        {"closure_time": 0.8, "time_step": 0.004, "density": 850.0, "length_to_pump": 1500.0},
-        12,
-        2,
-        1.0,
-        "smooth",
-    ),
-    "pressure_c": (
-        {"pressure_drop_from_pump": 1.5, "flow_rate": 40.0, "pump_ramp_pressure": 0.0},
-        9,
-        3,
-        0.7,
-        "stepped",
-    ),
-    "pressure_d": (
-        {"pressure_drop_from_pump": 0.0, "flow_rate": 1800.0, "valve_cv": 300.0},
-        20,
-        1,
-        1.0,
-        "early",
-    ),
-    "pressure_e": (
-        {"celerity": 950.0, "length_to_pump": 30.0, "pressure_drop_from_pump": 0.4},
-        16,
-        2,
-        0.95,
-        "smooth",
-    ),
-}
-
-
-def _valve_pattern(n: int, cols: int, end: float, shape: str) -> np.ndarray:
-    t = np.linspace(0.0, 1.0, n - n % cols)
-    if shape == "linear":
-        closure = t
-    elif shape == "smooth":
-        closure = 3 * t**2 - 2 * t**3
-    elif shape == "early":  # closed at 40 % of the pattern and held
-        closure = np.minimum(t / 0.4, 1.0)
-    else:  # "stepped"
-        closure = np.floor(t * 4) / 4
-    flat = closure * end
-    return flat if cols == 1 else flat.reshape(-1, cols, order="F")
-
-
 # The friction dead zone (D-20): with ``fric_acc`` below the VBA's ``sign`` tolerance of
 # 1e-6 m/s, a sub-step whose velocity lies between the two slips without friction. A tiny
 # friction coefficient and millinewton forces keep the velocity in that band.
@@ -371,26 +300,8 @@ DEAD_ZONE_PARAMS = {
 DEAD_ZONE_AMPLITUDE = 0.1  # N
 SIGN_TOLERANCE = 0.000001  # m/s, the VBA ``sign(v, 0.000001)`` of the slip branch
 
-# Operand pairs of the VBA ``min`` / ``max``: ties, signed zeros, mixed int / float and
-# NaN, where the second argument (with its type and sign) is what comes back.
-TIE_PAIRS = (
-    (0, 0.0),
-    (0.0, 0),
-    (0, -0.0),
-    (-0.0, 0.0),
-    (0.0, -0.0),
-    (1.5, 1.5),
-    (math.nan, 1.0),
-    (1.0, math.nan),
-    (0, 1.5),
-    (0, -1.5),
-    (0.9, 0.25),
-    (0.25, 0.9),
-)
-
 SWEEP_CASES = 30  # per sweep document: short runs that vary every set-up argument
 SWEEP_STRIDE = 97  # sub-steps between the trace frames of a sweep run
-PRESSURE_SWEEP_CASES = 12
 
 
 def _log_uniform(rng: random.Random, low: float, high: float) -> float:
@@ -428,29 +339,6 @@ def _sweep_case(rng: random.Random, with_fluid: bool):
         rng, rng.randint(18, 30), rng.choice([1, 2, 3]), deflection * stiffness_approx
     )
     return history, params
-
-
-def _pressure_sweep_case(rng: random.Random):
-    cols = rng.choice([1, 1, 2, 3])
-    end = 1.0 if rng.random() < 0.5 else rng.uniform(0.3, 0.99)
-    pattern = _valve_pattern(
-        rng.randint(6, 30), cols, end, rng.choice(["linear", "smooth", "early", "stepped"])
-    )
-    closure_time = rng.uniform(0.2, 3.0)
-    pipe_diameter_mm = rng.uniform(50.0, 600.0)
-    params = {
-        "closure_time": closure_time,
-        "celerity": rng.uniform(900.0, 1500.0),
-        "density": rng.uniform(800.0, 1100.0),
-        "time_step": closure_time / rng.randint(20, 150),
-        "pressure_drop_from_pump": 0.0 if rng.random() < 0.2 else rng.uniform(0.01, 2.0),
-        "flow_rate": _log_uniform(rng, 2.0, 2000.0),
-        "pipe_area": math.pi * pipe_diameter_mm**2 / 4,
-        "valve_cv": rng.uniform(100.0, 5000.0),
-        "length_to_pump": rng.uniform(5.0, 2000.0),
-        "pump_ramp_pressure": 0.0 if rng.random() < 0.3 else rng.uniform(0.5, 5.0),
-    }
-    return pattern, params
 
 
 def _output_type_runs(solver: str, history, params: dict, flags: dict) -> list[Run]:
@@ -536,13 +424,6 @@ def documents() -> dict[str, list[Run]]:
             {"output_type": 3, "trace_every": 1},
         )
     ]
-    docs["tie_rules"] = [Run("vba min max", "tie_rules", TIE_PAIRS, {}, {})]
-
-    for case_id, (overrides, n, cols, end, shape) in PRESSURE_SHAPES.items():
-        pattern = _valve_pattern(n, cols, end, shape)
-        docs[case_id] = [
-            Run("valve", "pressure_response", pattern, dict(PRESSURE_BASE, **overrides), {})
-        ]
 
     # Set-up sweeps: many short runs, each sweep on its own generator so that adding a
     # case to one never moves the draws of another. The output type cycles 0 .. 3. The
@@ -575,11 +456,6 @@ def documents() -> dict[str, list[Run]]:
         Run(f"{kind} case {i:02d}", "setup", *case, {})
         for kind, cases in (("lumped", lumped_sweep), ("jc", jc_sweep))
         for i, case in enumerate(cases)
-    ]
-    rng = random.Random(SEED + 3)
-    docs["pressure_sweep"] = [
-        Run(f"case {i:02d}", "pressure_response", *_pressure_sweep_case(rng), {})
-        for i in range(PRESSURE_SWEEP_CASES)
     ]
     return docs
 
@@ -738,7 +614,6 @@ def test_case_set_reaches_the_branches_a_refactoring_can_break():
         "lumped_sweep",
         "jc_sweep_default",
         "jc_sweep_legacy",
-        "pressure_sweep",
         "setup_sweep",
     ):
         assert not any("raises" in out for out in outputs(name))
@@ -749,9 +624,3 @@ def test_case_set_reaches_the_branches_a_refactoring_can_break():
         for a, b in zip(outputs("jc_sweep_default"), outputs("jc_sweep_legacy"), strict=True)
     ]
     assert all(differing)  # none of the sweep's spans took the lumped fallback
-
-    # the pressure cases close the valve fully and partially, and none is trivial
-    finals = [float(docs[n][0].history.ravel(order="F")[-1]) for n in PRESSURE_SHAPES]
-    assert 1.0 in finals and any(f < 1.0 for f in finals)
-    for name in PRESSURE_SHAPES:
-        assert len(set(_first(name)["valve_pressure"].tolist())) > 5

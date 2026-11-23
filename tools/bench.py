@@ -7,7 +7,7 @@ Run from the repository root at the end of every Stage 4/5 session::
     .venv/bin/python tools/bench.py            # 3 timed runs per case
     .venv/bin/python tools/bench.py --profile  # ... plus one cProfile run per pure-Python case
 
-Cases (all inputs come from the golden fixtures and the source workbook; nothing is
+Cases (all inputs come from the golden fixtures; nothing is
 synthetic). Literal (``legacy_port``, pure Python, run in this process):
 
 * ``lumped_r20``  - golden lumped case ``source_row`` 20 (L = 3 m, f = 2 Hz): case (a),
@@ -16,12 +16,8 @@ synthetic). Literal (``legacy_port``, pure Python, run in this process):
 * ``jc_r96_n2000`` - golden JC case ``source_row`` 96 (L = 24 m, f = 3 Hz) with the force
   history truncated to the first 2000 samples of ``history_B`` so that it finishes in
   pure Python. Its result is therefore *not* the golden value.
-* ``pressure_example`` - the ``Example`` sheet ``GetPressureResponse`` call of the source
-  workbook (``Example!C3:C123``): valve pattern ``B3:B7``, parameters ``J33:J42``,
-  ``pipeArea = PI()*(J39^2/4)``. Transcribed here because ``tools/extract_fixtures.py``
-  does not extract that sheet.
 
-Refactored (``response`` / ``pressure``), run twice in child processes, once with
+Refactored (``response``), run twice in child processes, once with
 ``NUMBA_DISABLE_JIT=1`` (mode ``python``) and once compiled into a fresh
 ``NUMBA_CACHE_DIR`` (mode ``numba``, so the first call of each case is a true
 first call and the compile time is measured, not a cache load):
@@ -31,8 +27,6 @@ first call and the compile time is measured, not a cache load):
 * ``response_jc_r96_n2000`` - the truncated JC case through ``response.peak_response_jc``
   with the legacy flags (``vav_denominator="legacy"``, ``parity="per_phase"``,
   ``fraction_profile="legacy"``); digest must equal ``jc_r96_n2000``.
-* ``response_pressure_example`` - the Example call through ``pressure.pressure_response``;
-  digest must equal ``pressure_example``. (``pressure.py`` is not compiled: milliseconds.)
 * ``response_jc_r96_full``, ``response_jc_r97_full``, ``response_jc_r98_full`` - the three
   full JC golden cases (25135 samples, stepQTY 40) through ``peak_response_jc`` with the
   legacy flags, compared with the Excel fixture (``golden_max_rel_err``). In mode
@@ -102,27 +96,12 @@ sys.path.insert(0, str(REPO / "tests"))
 import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
 
 from surge_sdof import legacy_port as lp  # noqa: E402
-from surge_sdof import moc, pressure, response, structure  # noqa: E402
+from surge_sdof import moc, response, structure  # noqa: E402
 
 BENCH_DIR = REPO / "docs" / "bench"
 README = BENCH_DIR / "README.md"
 TOP_N = 15
 
-# Example!B3:B7 and J33:J42 of tests/fixtures/source/surge_force_data.xlsm, as cached by
-# Excel. pipe_area is the formula PI()*(J39^2/4) with J39 = 200 (mm).
-EXAMPLE_VALVE_PATTERN = np.array([0.0, 0.2, 0.5, 0.8, 1.0]).reshape(-1, 1)
-EXAMPLE_PRESSURE_KW = {
-    "closure_time": 1.2,
-    "celerity": 1400.0,
-    "density": 1000.0,
-    "time_step": 0.01,
-    "pressure_drop_from_pump": 0.0001,
-    "flow_rate": 500.0,
-    "pipe_area": math.pi * (200.0**2 / 4),
-    "valve_cv": 1800.0,
-    "length_to_pump": 400.0,
-    "pump_ramp_pressure": 2.0,
-}
 JC_TRUNCATE = 2000
 FULL_JC_ROWS = ("96", "97", "98")
 REFERENCE_CASE = "lumped_r20"  # case (a): always run, every case is also a ratio to it
@@ -133,7 +112,6 @@ DIGEST_PAIRS = (
     ("response_r20", "lumped_r20"),
     ("response_r80", "lumped_r80"),
     ("response_jc_r96_n2000", "jc_r96_n2000"),
-    ("response_pressure_example", "pressure_example"),
 )
 MODES = ("literal", "python", "numba")
 MODE_LABELS = {
@@ -146,7 +124,6 @@ COLUMNS = (
     ("(a) lumped r20", "lumped_r20", "response_r20"),
     ("(b) lumped r80", "lumped_r80", "response_r80"),
     ("(c) jc r96 n2000", "jc_r96_n2000", "response_jc_r96_n2000"),
-    ("(d) pressure example", "pressure_example", "response_pressure_example"),
     ("jc r96 full", None, "response_jc_r96_full"),
     ("jc r97 full", None, "response_jc_r97_full"),
     ("jc r98 full", None, "response_jc_r98_full"),
@@ -217,35 +194,10 @@ def build_cases():
     def peak_response_summary(res):
         return res.summary()
 
-    def pressure_case(cid, solver, group, description):
-        return {
-            "id": cid,
-            "group": group,
-            "description": description,
-            "run": lambda: solver(EXAMPLE_VALVE_PATTERN, **EXAMPLE_PRESSURE_KW),
-            "substeps": None,
-            "cells": None,
-            "expected": None,
-            "digest": lambda res: {
-                "first": float(res[0]),
-                "max": float(np.max(res)),
-                "last": float(res[-1]),
-                "len": int(res.shape[0]),
-            },
-            "profile_ok": True,
-            "full": False,
-        }
-
     cases = [
         peak_case("lumped_r20", "20", lp.get_peak_response, "literal"),
         peak_case("lumped_r80", "80", lp.get_peak_response, "literal"),
         peak_case("jc_r96_n2000", "96", lp.get_peak_response_jc, "literal", n=JC_TRUNCATE),
-        pressure_case(
-            "pressure_example",
-            lp.get_pressure_response,
-            "literal",
-            "Example sheet GetPressureResponse (Example!C3:C123)",
-        ),
         peak_case(
             "response_r20",
             "20",
@@ -268,12 +220,6 @@ def build_cases():
             n=JC_TRUNCATE,
             summary=peak_response_summary,
             flags=LEGACY_FLAGS,
-        ),
-        pressure_case(
-            "response_pressure_example",
-            pressure.pressure_response,
-            "refactored",
-            "Example sheet GetPressureResponse via surge_sdof.pressure.pressure_response",
         ),
     ]
     for row in FULL_JC_ROWS:

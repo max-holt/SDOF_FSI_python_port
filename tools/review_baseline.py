@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-CORE = ("moc", "structure", "coupling", "loads", "response", "pressure", "_vba_semantics")
+CORE = ("moc", "structure", "coupling", "loads", "response")
 SUPPORTING = ("trace", "export", "histories", "viz/geometry")
 GROUPS = {
     "core": [f"src/surge_sdof/{name}.py" for name in CORE],

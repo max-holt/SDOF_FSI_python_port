@@ -51,8 +51,7 @@ def as_history_2d(history) -> np.ndarray:
     Parameters
     ----------
     history : array_like
-        Force history, N, 1-D or 2-D (``pressure.py`` reuses this for the dimensionless
-        valve pattern).
+        Force history, N, 1-D or 2-D.
 
     Returns
     -------
