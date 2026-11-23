@@ -10,6 +10,15 @@ plain flag; the ungated tools get rename-only edits; Nits are rejected, so a nit
 a reference only and its fix is not a commit of its own; S-17 is rejected; the two edge-case
 fixes are group 7. The answers are under each question at the end.
 
+**Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
+(charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
+across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
+the schedule clean-up in the control-flow group, 2.13 to 2.15; `tools/bench.py` after every
+commit of group 4), its Numba rule for the parameter-object commits (group 3), the
+wrong-documentation fixes done early (0.2 to 0.5), and rows for the four findings brought
+across (SP-15, SP-35, SP-36, SP-41). Rulings 13 to 28 answer Q-1, the friction half of Q-4,
+the rest of Q-6 and Q-11; 5.16 is dropped (ruling 13).
+
 **Approvals in files (ruling 10).** Where a session is to stop and show the owner
 something, it also writes it under `docs/review/`: the rename table
 (`docs/review/rename_table.md`, before group 1), the parameter-object groups
@@ -48,15 +57,37 @@ Two things I would not move although it is tempting: docstrings stay last (rewri
 docstring of a function that is about to be split is wasted), and the exported names stay
 in the single schema bump.
 
+## Group 0 — the ruling-2 removals (from R.2's order; before the renames)
+
+Moved here from the head of group 3 (R.3, ruling 22): group 1 would otherwise rename
+`coupling_force`, `State` and `restoring_force` only for group 3 to delete them. The one
+structural change of the renames session. One commit each; the tests that called the
+removed code are pointed at the code that runs, assertions unchanged, except those that
+asserted a property of the removed wrapper itself (ruling 23: dropped and listed in
+`NOTES.md`).
+
+| # | commit | findings | risk |
+|---|---|---|---|
+| 3.0a | Remove `JunctionCoupling.coupling_force` and `column()`; the tests that call them drive `moc.step` on the coupling's arrays | C-03, C-N13 | R3 |
+| 3.0b | Remove the `Coupling` protocol and `NoCoupling`; `_integrate` takes `JunctionCoupling` or `None` and passes the kernel its kind as `int(coupling is not None)`, so the kernel is unchanged until the plain flag of 2.2 | C-03 | R3 |
+| 3.0c | Remove `structure.step` and `State`; their tests call `step_scalars` | C-10 | R3 |
+| 3.0d | Remove `structure.restoring_force`; its tests call `effective_displacement` | C-10 | R3 |
+
 ## Before group 1
 
 | # | commit | findings | risk |
 |---|---|---|---|
 | 0.1 | Write `docs/nomenclature.md`: symbol or name, meaning, unit, VBA name, for every kernel symbol kept and every name group 1 introduces | C-24 | R0 |
 | 0.2 | Correct the two descriptions of what the grid count covers (`moc.py:108`, `docs/data_format.md:251`) | S-38 | R0 |
+| 0.3 | Correct `docs/data_format.md:113` (the outlet leg is one cell shorter on the legacy profile only) and the `step_sine` docstring's defaults | SP-41 | R0 |
+| 0.4 | `peak_response_jc` docstring: an unknown `vav_denominator` raises only where the MoC grid is built (not on a short pipe); the entry check is 6.1 | C-12 | R0 |
+| 0.5 | `moc.decay_factor` docstring to its formula: applied once per even update (every `2 dt`), it halves the end-node pressure over `2 L / c` | R.2 defect 8 | R0 |
+| 0.6 | Derivation comment for the friction `0.5`: the share of the pipe's weight carried on the moving part (ruling 14), for Ben to confirm | C-35 | R0 |
+| 0.7 | `P_CAP_FACTOR` comment: the sweep's peak pressure as a multiple of design pressure, set by the lead author on 22 Oct 2026 (ruling 27); Ben to confirm its basis | S-45 | R0 |
 
-Q-6 is answered (ruling 1). 0.2 is a docstring and a document line; it is here because group 1 names the
-quantity.
+Q-6 is answered (rulings 1, 15). 0.2 to 0.5 are docstrings and document lines that state
+something the code does not do (R.2's order change: wrong documentation is corrected now,
+not in 6.6; a doc-only commit cannot move a bit). 0.6 and 0.7 are comments.
 
 ## Group 1 — names (R0)
 
@@ -79,11 +110,13 @@ change; the snapshot and support adapters absorb the renamed attributes.
 | 1.12 | `history` (response history against force history), `decay`, `frac` in `loads` | C-43 |
 | 1.13 | Counts and indices outside kernel signatures: `_count`, `_index`, one spelling of sub-step | C-28, S-40, C-N17 |
 | 1.14 | Supporting code: `jc`, `cap`, `p`, `h`, `kind` reused; booleans as predicates; computation names in `sweep_jc`, `geometry`, `profile_delta`; tool argparse `dest` names | S-44, S-46, S-47, S-48, C-N15 |
+| 1.15 | "Moving fraction" for the per-cell weight: prose, `frac_a` / `frac_b` outside the kernel signature, the `interp_fraction_*` set-up functions (the kernel parameters with group 3, ruling 21) | SP-36 |
+| 1.16 | `LoopLayout` docstring: which drawn corner is elbow A (ruling 26) | SP-35 |
 
 Each row is one commit, or one per module where the rename crosses more than about ten
 files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, both modes.
 
-## Group 2 — constants, units, control flow (R1, R2)
+## Group 2 — constants, units, control flow (R1, R2, R3)
 
 | # | commit | findings | risk |
 |---|---|---|---|
@@ -99,30 +132,41 @@ files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, b
 | 2.10 | `rho_c == 0` guard to the first statement of the coupling constructor | C-19 | R2 |
 | 2.11 | Trace request as one optional object in `_integrate` | C-23 | R2 |
 | 2.12 | ~~Small control-flow nits~~: Nits rejected (ruling 8) | C-N03, C-N04, C-N06 | R2 |
+| 2.13 | `loads._schedule`: the three identical "next index with column wrap" blocks extracted (integer only) | C-08 | R3 |
+| 2.14 | `_schedule` items as two NamedTuples | C-08 | R1 |
+| 2.15 | One schedule walk: per-sample helpers shared by `unbalance_force` and `elbow_forces` (`unbalance_force` forms the one subtraction from the pair); the run-time cross-check of the two walks removed | C-07 | R3 |
 
 2.6 needs Q-4 only for its comment, now written; the friction `0.5` of 2.8 still needs it
 (2.3 and Q-5 went with the pressure solver). The charter's mutation tests showed that a
 regrouped set-up value can hide from a peak, so 2.4 to 2.7 are one literal per commit and the
 snapshot runs in both modes each time.
 
+2.13 to 2.15 are the schedule clean-up, moved here from 4.11 / 4.12 (R.2's order change,
+ruling 22): control flow in pure Python, gated by the snapshot, and they remove the double
+walk before 4.10 splits `_integrate`. K-6 holds throughout: both generators stay lazy and
+D-8's `IndexError` surfaces at the first ramp sample.
+
 ## Group 3 — parameter objects (R3, R4)
 
 Q-2 is answered (ruling 2): the test-only interfaces are removed first, one per commit,
-their tests pointed at the code that actually runs with the assertions unchanged. Before
-3.1, write `docs/review/parameter_objects.md` (the groups) and stop for the owner.
+their tests pointed at the code that actually runs with the assertions unchanged (now group
+0). Before 3.1, write `docs/review/parameter_objects.md` (the groups) and stop for the owner.
+
+**Numba rule (from R.2, its constraint K-1).** Unpack a NamedTuple column once per kernel
+call, or pass it at most one call deep per substep. On R.2's toy kernel every other pattern
+was as fast as the flat signatures, but the column tuple passed on from the per-substep
+function into a further call cost 1.46x (60 cells) and 1.16x (300 cells). The kernel-signature
+names change here, as fields, under the names `docs/nomenclature.md` proposes (ruling 21).
 
 | # | commit | findings | risk |
 |---|---|---|---|
-| 3.0a | Remove `JunctionCoupling.coupling_force` and `column()`; the tests that call them drive `moc.step` or the solver instead | C-03, C-N13 | R3 |
-| 3.0b | Remove the `Coupling` protocol and `NoCoupling`; `_integrate` takes the plain flag of 2.2 | C-03 | R3 |
-| 3.0c | Remove `structure.step` and `State`; their tests call `step_scalars` | C-10 | R3 |
-| 3.0d | Remove `structure.restoring_force`; its tests call `effective_displacement` | C-10 | R3 |
+| 3.0a-d | Moved to group 0 (R.3) | | |
 | 3.1 | `step_scalars` takes `SdofParams`; the kernel receives it whole | C-10, C-01 | R4 |
 | 3.2 | Fluid-column NamedTuple (four state arrays, two weight arrays, counts, `rho_c`, decay factor, divisor, area) built by `JunctionCoupling`; `moc.step` and the kernel take it; a named constructor for the empty column with today's literal types | C-01, C-03, C-04, C-N07, C-N13 | R4 |
-| 3.3 | Trace-buffers NamedTuple returned by `trace.allocate`, taken by the kernel and `trace.build` | C-01, C-15, S-08 | R4 |
+| 3.3 | Trace-buffers NamedTuple returned by `trace.allocate`, taken by the kernel and `trace.build` | C-01, C-15, S-08, SP-15 | R4 |
 | 3.4 | Run-settings NamedTuple (`dt`, sub-steps per sample, capacity, `output_type`, parity flag) | C-01 | R4 |
 | 3.5 | NamedTuple return of the kernel | C-01 | R4 |
-| 3.6 | Grid description passed to `trace.build` in place of the coupling object; annotate it | C-14, S-08 | R3 |
+| 3.6 | Grid description passed to `trace.build` in place of the coupling object, and its run fields as one object; annotate it | C-14, S-08, SP-15 | R3 |
 | 3.7 | Span, restraint and fluid objects for `lumped_params` / `jc_params`; shared return block | C-17 | R3 |
 | 3.8 | Grid and fluid-constant objects for `JunctionCoupling.__init__` | C-18 | R3 |
 | 3.9 | ~~`pressure` column NamedTuple~~: removed (R.1b) | C-16, C-N02 | R3 |
@@ -148,12 +192,16 @@ that makes this worth trying; it is not evidence for the real kernel.
 | 4.8 | `_trace_frame` and its writers moved to `trace.py` | C-14 | R3 |
 | 4.9 | The sub-step body as one function called from the forced loop and the free-decay loop; the `f_applied` forms stay in the loops | C-02 | R4 |
 | 4.10 | `_integrate` split into prepare, run, build result | C-06 | R3 |
-| 4.11 | `loads`: per-sample helpers shared by the two generators; `_schedule` items as NamedTuples; the three identical index blocks extracted | C-07, C-08 | R3 |
-| 4.12 | Flattening of the schedule moved into `loads`; the run-time cross-check of the two walks removed | C-22, C-07 | R3 |
+| 4.11 | Moved to group 2 (2.13 to 2.15, R.3) | C-07, C-08 | |
+| 4.12 | Flattening of the schedule moved into `loads` (the cross-check went with 2.15) | C-22 | R3 |
 | 4.13 | ~~`pressure`: the shared characteristic solve~~: removed (R.1b) | C-N01 | R3 |
 
 Before 4.1, write `docs/review/substep_design.md` (the substep designs) and stop for the
 owner.
+
+`tools/bench.py` runs after every commit of this group, not only at the session end (R.2's
+order change): the extracted helpers create exactly the call depth the Numba rule of group
+3 warns about, and a session-end bench would not show which commit did it.
 
 4.2 and 4.4 change tests that patch or replay `moc.step` (Q-9). 4.11 can slow the untraced
 lumped path, where the Python generator is already the dominant cost: bench it on its own.
@@ -181,12 +229,12 @@ Gated code first.
 | 5.13 | Remove the `sys.path` inserts and private loaders the earlier commits made unnecessary | S-02 | R3 |
 | 5.14 | Dead code and small items: `estimate_bytes`, unused constants, `build_viewer.build` parameters, `review_snapshot.main` | S-30, S-34, S-N01, S-N12, S-N22 | R0-R3 |
 | 5.15 | Ungated tools (`bench.py`, the plots and report of `sweep_jc.py`, `extract_fixtures.py`, `golden_report.py`, `profile_delta.py`): **rename-only edits** (ruling 3, Q-7), made with the renames of group 1; no restructuring | S-13, S-14, S-19 to S-22, S-24, S-25, S-28 | R0 |
-| 5.16 | `vba_compat` helpers copied into a live module with a pinning test; imports repointed (`_vba_semantics.py`, the module this row first named, was removed in R.1b) | C-13 | R3 |
+| 5.16 | ~~`vba_compat` helpers copied into a live module~~: dropped (ruling 13: `vba_compat.py` stays frozen and imported as it is until Stage 6) | C-13 | |
 
 5.3 and 5.4 are the preparation for the schema bump: with one table per document the bump
 is an edit of two tables. 5.12 must keep `tools/sweep_jc.py` a runnable script and the
 worker picklable (K-11). 5.16 needs Q-1 and is placed here only because it is independent
-of everything else. S-11 and S-36 are group 7: they change output on edge inputs (Q-8).
+of everything else (dropped in R.3). S-11 and S-36 are group 7: they change output on edge inputs (Q-8).
 
 ## Group 6 — public API, data format, docstrings, lint limits
 
@@ -196,7 +244,7 @@ of everything else. S-11 and S-36 are group 7: they change output on edge inputs
 | 6.2 | Keyword-only entry points; public keyword renames (the `get_pressure_response` alias went with the pressure solver, R.1b) | C-11, C-31, C-N21 |
 | 6.3 | `PeakResponse` and `Trace` field renames; `Trace` column sub-record (approved, ruling 7) | C-26, C-43, S-08 |
 | 6.4 | Public signatures of `histories.canonical` and `export.to_*_dict` (user-facing entry points, ruling 4: keyword-only, no symbols) | S-33 |
-| 6.5 | **The schema bump**, one commit: exported keys and CSV columns renamed through the two tables, viewer keys with them, `tests/review_support/` rewritten with `--write`, values shown unchanged; the committed sweep CSVs (`docs/sweep/*.csv`) get their headers renamed by a one-off script, every data row byte-identical (ruling 12) | S-31, S-32, S-37 to S-43, S-46 to S-49, C-25, C-28, C-30 |
+| 6.5 | **The schema bump**, one commit: exported keys and CSV columns renamed through the two tables, viewer keys with them, `tests/review_support/` rewritten with `--write`, values shown unchanged; the committed sweep CSVs (`docs/sweep/*.csv`) get their headers renamed by a one-off script, every data row byte-identical (ruling 12); units stay "SI unless suffixed" (ruling 28) | S-31, S-32, S-37 to S-43, S-46 to S-49, C-25, C-28, C-30, SP-35 (leg heights), SP-36 (`fraction_profile`) |
 | 6.6 | Docstrings: numpy sections, units, shapes; VBA references and ids to Notes; first lines in model terms | C-40, C-41, S-49, S-50 |
 | 6.7 | Annotations | C-42, S-51 |
 | 6.8 | Lint limits in `pyproject.toml` (PLR0913 at 6, C901 at 10, the statement and nesting targets), with a one-line reason on each function that still misses | style 3 |
@@ -224,6 +272,7 @@ rewritten in that commit only.
   live module; `_vba_semantics` itself was removed in R.1b) is done in this review and not
   at Stage 6.
   **Answer (R.1b):** open; not answered in R.1b.
+  **Answer (R.3):** `vba_compat.py` stays frozen and imported as it is until Stage 6; nothing replaces `_vba_semantics.py` (ruling 13). C-13 is closed and 5.16 dropped.
 * **Q-2.** `JunctionCoupling.coupling_force`, the `Coupling` protocol, `structure.step`,
   `State` and `restoring_force` are called only by tests. Keep them as thin wrappers over
   the shared compiled functions, or remove them and re-point the tests?
@@ -235,6 +284,7 @@ rewritten in that commit only.
   `0.5 * dynamic_fric * 9.81 * dt`; `4 / 3` on the portal-frame height; `12` and
   `0.5 + 1.5 * (...)` in the end-fixity formula; `4 * celerity * dt` in the grid size.
   **Answer (R.1b):** the owner's proposed derivations of `12`, `0.5 + 1.5 (...)`, `4 / 3`, `out_max * 2` and `4 * celerity * dt` are written at each site as "Proposed derivation, for Ben to confirm:" comments (R.1b); the friction `0.5` is still open.
+  **Answer (R.3):** the friction `0.5` is the share of the pipe's weight carried on the moving part (ruling 14); its comment is 0.6.
 * **Q-5.** ~~In `60 * 60` (`pressure.py:177`, `179`), which factor is seconds per minute and
   which minutes per hour?~~ Moot: `pressure.py` was removed in R.1b.
   **Answer (R.1b):** moot.
@@ -242,6 +292,7 @@ rewritten in that commit only.
   A / B; "node" and "cell" for the two half-grids and one word for an interleaved entry;
   "transit" and "history" for the two forced phases; `sub_step` or `substep`.
   **Answer (R.1b):** the grids stay A and B (`pressure_a`, `velocity_b`); the elbows are A and B; the phases are transit, forced and free decay; `substep` is one word (ruling 1). One word for an interleaved entry of the display grid is not yet ruled.
+  **Answer (R.3):** an entry of the interleaved display grid is a "grid point" (ruling 15); elbow A is the one the pressure wave reaches first, the inlet side of the run (ruling 26).
 * **Q-7.** The ungated tools (5.15): refactor without a gate, add characterisation checks
   first, or leave them as they are?
   **Answer (R.1b):** rename-only edits (ruling 3); 5.15.
@@ -260,3 +311,4 @@ rewritten in that commit only.
 * **Q-11.** The fourteen suspected defects listed at the end of the findings: which, if
   any, should be looked into, and by whom?
   **Answer (R.1b):** open, except no. 2 (the odd-substep junction tap: a "For Ben to review" comment in `moc.step` and DEVIATIONS D-24, R.1b), no. 1 (Q-3) and no. 9 (S-11, group 7); no. 4 went with the pressure solver.
+  **Answer (R.3):** the remaining suspected defects are not investigated in this review; the list stays in `findings.md` for the lead author (ruling 20).

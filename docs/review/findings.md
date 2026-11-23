@@ -7,13 +7,27 @@ Session R.1b (23 Nov 2026) removed the pressure solver (`pressure.py`, `_vba_sem
 findings about it alone have the status **removed**, and the rows that also name other
 modules say which part went. Line numbers stay those of the R.1 tree.
 
+**Reconciled with the second review in session R.3 (23 Nov 2026; charter ruling 22).** The
+independent review was run a second time by mistake (R.2, `docs/review/findings_r2.md`,
+`docs/review/plan_r2.md`, ids `SC-`, `SP-`, `N-`). This list stays the governing one: its
+findings are already accepted or rejected and the charter cites its ids. From R.2 only what
+this list lacked is brought across: five confirmed findings that R.2's cross-reference shows
+no R.1 match for, four of them accepted ("Brought across from R.2", below; SP-25 concerns a
+tool no test runs and is not brought across); the wrong-documentation fixes, scheduled early
+(`plan.md`, "Before group 1"); and the possible defects that are neither here nor in
+`DEVIATIONS.md` (nos. 15 to 24 under "Suspected defects"). R.2's order changes and its Numba
+rule are in `plan.md`.
+
 **Disposition (owner's rulings, recorded in R.1b; `docs/review/charter.md`, "Rulings").**
 Every Design and Readability finding is **accepted**, except one whose proposed fix adds an
 abstraction layer that the readability rule forbids (no protocol, base class, enum or
 wrapper layer unless it has two real users today): **S-17**, **rejected**. Every Nit is
 **rejected**. The notes column records where a ruling narrows an accepted fix (C-03, C-09,
 C-10: the test-only interfaces go; the ungated tools: renames only). Of the 140 findings:
-90 accepted, 40 rejected (39 Nits and S-17), 10 removed with the pressure solver.
+90 accepted, 40 rejected (39 Nits and S-17), 10 removed with the pressure solver. Since
+R.3: C-13 is closed without a change (ruling 13: `vba_compat` stays imported as it is until
+Stage 6), and four findings brought across from R.2 are accepted (144 in all: 93 accepted,
+1 closed by ruling, 40 rejected, 10 removed).
 
 ## How this list was made
 
@@ -60,7 +74,7 @@ file or is a public keyword and changes only in the public API session.
 | C-10 | `structure.py:343-360`, `468-483`, `388-441` | The gap restraint ladder is written twice (16 lines). `step_scalars` takes 11 loose scalars, six of them `SdofParams` field by field. `step`, `State` and `restoring_force` have test callers only. | `step_scalars` calls a compiled `effective_displacement`; it takes `SdofParams` positionally. Compiling `effective_displacement` is its own commit. | Design | R4 | accepted | K-1, K-5, Q-2; `step`, `State`, `restoring_force` removed (readability ruling); their tests point at `step_scalars` / `effective_displacement`, assertions unchanged |
 | C-11 | `response.py:241-253` / `396-410`, `270-291` / `466-492`, `431-448` | The two entry points repeat coercion, the sample grid and the trace echo; the short-pipe fallback re-passes 14 positional arguments and repeats the set-up, the portal-height solve included. | Extract Function for the trace wrapper and the sample grid; keyword arguments in the fallback call. Each `inputs` dict literal stays (its key order reaches exported bytes). No reordering of the set-up. | Design | R3 | accepted | K-4, K-7 |
 | C-12 | `response.py:174`, `323-325`, `390-395`, `501`, `536-545`, `637`, `739`, `894`, `973`; `moc.py:328`, `392-396` | `output_type` reaches a compiled helper as a raw code and decides what `PeakResponse.history` means. The three string flags are validated in three places (`fraction_profile` twice, `vav_denominator` only after the short-pipe return). | Reported only: the form belongs to the public API session. A single entry check is a behaviour change on error paths (Q-3). | Design | R4 | accepted | bump; D-17, D-19; flags validated once at the entry in the public API session, as a recorded deviation (ruling) |
-| C-13 | `moc.py:58`, `loads.py:37`, `response.py:97`, `pressure.py:45`; `_vba_semantics.py:3-5` | VBA rounding has two homes: every live module imports `clng`, `vba_floor`, `mod_dbl` or `vba_2d` from the frozen `vba_compat`, while `vba_min` / `vba_max` live in `_vba_semantics`. | Move Function: literal copies into `_vba_semantics` with a test pinning them to `vba_compat`; repoint 11 call sites. | Design | R3 | accepted | K-8, Q-1; the `_vba_semantics` and `pressure.py` parts removed (R.1b); the copies need another live home; Q-1 still open |
+| C-13 | `moc.py:58`, `loads.py:37`, `response.py:97`, `pressure.py:45`; `_vba_semantics.py:3-5` | VBA rounding has two homes: every live module imports `clng`, `vba_floor`, `mod_dbl` or `vba_2d` from the frozen `vba_compat`, while `vba_min` / `vba_max` live in `_vba_semantics`. | Move Function: literal copies into `_vba_semantics` with a test pinning them to `vba_compat`; repoint 11 call sites. | Design | R3 | closed (ruling 13) | K-8, Q-1; the `_vba_semantics` and `pressure.py` parts removed (R.1b); **closed without a change (R.3, ruling 13)**: `vba_compat.py` stays frozen and imported as it is until Stage 6; nothing replaces `_vba_semantics.py` |
 | C-14 | `response.py:79-96`, `548-597`, `874-875`, `953-954`; `trace.py:268-290`, `306`, `355` | The frame writer lives in `response`, its column layout and cell order in `trace`. The kernel rebuilds the friction force and the stick flag from values `step_scalars` computes and drops. `trace.build` takes the coupling object untyped. | Move Function `_trace_frame` to `trace.py`; Extract Function for the friction and stick derivation next to `step_scalars`, verbatim; pass `build` a grid description. | Design | R3 | accepted | K-9; makes `trace.py` a Numba module |
 
 ## Solver core — Readability
@@ -87,7 +101,7 @@ file or is a public keyword and changes only in the public API session.
 | C-32 | `pressure.py:136-139`, `353-354`, `425-430` | Bar, m³/h, mm² and US gpm quantities carry no unit in their names; `setup` and `pump_boundary` mix bar and Pa in one expression. | Unit suffixes. All five are public keywords and fixture keys; only `pump_boundary` can change before the bump. | Readability | R0 | removed | bump; pressure solver removed (R.1b) |
 | C-33 | `pressure.py:177`, `179`, `182`, `378`; `structure.py:213`, `296` | Unit conversions are bare literals: `1000000`, `60 * 60`, `100000`, `0.865`, `/ 100`; `1000` in `density / 1000` is a reference density. | Replace Magic Literal with Named Constant, in place, same literal type, never folded. | Readability | R1 | accepted | Q-5; `pressure` part removed (R.1b): `structure.py:213`, `296` remain |
 | C-34 | `structure.py:114`, `116`, `118`, `155`, `214`, `301`, `492`, `494`; `response.py:900`, `971`; `pressure.py:303`, `337`, `410`; `moc.py:212` | `9.81`, the friction dead band and the Newton tolerance (both `0.000001`), `0.25`, `100 + 1`, `10 + 1`, the free-decay threshold `0.01` (m²), `0.999999999`, `0.9`, `n < 3`. | Named constants with meaning, unit and source; forms such as `NAME + 1` and `NAME * rho_c` kept. | Readability | R1 | accepted | D-4, D-6, D-20, D-21 give sources; `pressure` part removed (R.1b) |
-| C-35 | `structure.py:131-132`, `153-157`, `211`, `214`, `299`; `moc.py:113` | `4 / 3`, `12`, `0.5 + 1.5 * (...)`, the friction `0.5` and `4 * celerity * dt` have no derivation anywhere in the code. | A derivation comment at each site; the coefficient stays inline. | Readability | R0 | accepted | Q-4; derivation comments added in R.1b for `12`, `0.5 + 1.5 (...)`, `4 / 3`, `4 * celerity * dt`; the friction `0.5` still needs one (Q-4) |
+| C-35 | `structure.py:131-132`, `153-157`, `211`, `214`, `299`; `moc.py:113` | `4 / 3`, `12`, `0.5 + 1.5 * (...)`, the friction `0.5` and `4 * celerity * dt` have no derivation anywhere in the code. | A derivation comment at each site; the coefficient stays inline. | Readability | R0 | accepted | Q-4; derivation comments added in R.1b for `12`, `0.5 + 1.5 (...)`, `4 / 3`, `4 * celerity * dt`; the friction `0.5` answered in R.3 (ruling 14: the share of the pipe's weight carried on the moving part), its comment is `plan.md` 0.6 |
 | C-36 | `response.py:550-553`, `748`, `780-783`, `810-828`, `905`; `moc.py:401` | Kernel locals are type-coded or single letters at function scope: `tr_f`, `tr_i`, `flat`, `n` (155 lines), `off`, `rec`, `cap`, `i`; booleans `rec`, `stick`, `legacy_parity`, `even` are not predicates. | Rename, together with the parameter objects of C-01 so each name changes once. | Readability | R0 | accepted |  |
 | C-37 | `loads.py:121-129`, `157-229`, `284-306` | The index walk keeps `fh`, `u1`, `u2`, `ib`, `jb`, `ibmax`, `jbmax`, `fb2_cur`; each needs its trailing comment or the VBA. | Rename; `_Run` is built positionally, so field order stays. | Readability | R0 | accepted |  |
 | C-38 | `structure.py:90`, `114-121`, `151`, `343`, `468`, `486` | `var_a..c`, `len_val`, `error_val`; `ax` is `abs(x)` while `av` is the trapezoidal velocity increment. | Rename (five of them inside the compiled `step_scalars`). | Readability | R0 | accepted |  |
@@ -179,13 +193,28 @@ file or is a public keyword and changes only in the public API session.
 | S-42 | `trace.py:77-80`, `150-155`, `328-329`; `export.py:59-71`, `315` | Symbol and type-coded names outside a kernel, also as JSON keys: `t`, `x`, `v`, `a`, `d_f`, `cells.p`, `cells.v`; `frames.v` and `cells.v` are different velocities. | Internal names now; keys at the bump (the viewer validates all thirteen). | Readability | R0 | accepted | bump |
 | S-43 | `export.py:82-144`, `246-265`, `367-373`; `histories.py:132-140`; `tools/sweep_jc.py:64`, `110-115` | SI quantities carry a unit suffix in some names and not in others; `BAR = 1e5` does not say which way it converts. | Decide one rule for exported names at the bump; name the constant. | Readability | R0 | accepted | bump |
 | S-44 | `tools/bench.py:114-125`; `tools/cases.py:59-62`, `122-123`; `tools/sweep_jc.py:125-126`, `137-138`, `1118` | Bar and mm values under unit-less names; `size` is inches in one tool and millimetres in the next; `mass` holds kg/m. | Rename variables and argparse `dest` only; the flag strings are pinned. | Readability | R0 | accepted |  |
-| S-45 | `tools/cases.py:59`, `62`; `tools/sweep_jc.py:122-127`, `142`, `332`, `383`, `635-636`, `885-886`; `histories.py:320-321`, `397-398`, `510-512`, `561`, `569`; `tools/export.py:73` | Bare conversions (`/ 1000`, `* 1e5`, `1e6`) and convention values (`1.33`, `0.5 * cap`, `10.0`, `0.8`, the 0.05 and 0.8 report thresholds in four places). | Named constants in place, as divisors of the same literal type. | Readability | R1 | accepted | about half are in gated expressions |
+| S-45 | `tools/cases.py:59`, `62`; `tools/sweep_jc.py:122-127`, `142`, `332`, `383`, `635-636`, `885-886`; `histories.py:320-321`, `397-398`, `510-512`, `561`, `569`; `tools/export.py:73` | Bare conversions (`/ 1000`, `* 1e5`, `1e6`) and convention values (`1.33`, `0.5 * cap`, `10.0`, `0.8`, the 0.05 and 0.8 report thresholds in four places). | Named constants in place, as divisors of the same literal type. | Readability | R1 | accepted | about half are in gated expressions; the basis of `1.33` answered in R.3 (ruling 27), its comment is `plan.md` 0.7 |
 | S-46 | `trace.py:122`, `154`; `export.py:119`, `357`, `377`, `521`; `tools/bench.py:213-214` | Booleans that are not predicates: `stick`, `capped`, `jc_short_pipe`, `jc`, `gzip`. | Rename the internal ones. | Readability | R0 | accepted | bump for three keys |
 | S-47 | `trace.py:232`, `306`; `export.py:55-56`, `357-358`; `histories.py:70`, `549`; `tools/sweep_jc.py:323-324`, `378` | `jc`, `cap`, `kind`, `solver`, `p`, `h` each name unrelated things; `solver` has two value sets in one document family. | Rename; one value set at the bump. | Readability | R0 | accepted | bump for `solver` values |
 | S-48 | `tools/sweep_jc.py:110-111`, `383-384`, `395`; `export.py:113-114`, `125-142`; `viz/geometry.py:84-88`, `155-165`; `tools/profile_delta.py:133-152` | Computation names and abbreviations: `d2`, `p_peak_a`, `f_eq_over_LD2_*`, `ratio_f_eq`, `daf_*`, `thk_mm`, `leg_height_2`, `height1`, `s1..s4`. | Rename; exported columns at the bump. | Readability | R0 | accepted | bump |
 | S-49 | `trace.py:1`, `32`, `105`; `export.py:1`, `54`; `histories.py:1`, `59`; `viz/geometry.py:1`, `10-11`, `200-203`; `tools/cases.py:192-193`, `209`; `tools/sweep_jc.py:978-986` | Docstrings define things by session label, fix id or VBA name; two session labels reach exported files. | Physical meaning first; ids in Notes; the exported strings at the bump. | Readability | R0 | accepted | bump for two strings |
 | S-50 | `trace.py:192-195`, `214-215`, `315-316`; `histories.py:155-195`, `535-536`; `export.py:164-192`; most functions in `tools/` | Docstrings without Parameters / Returns, units, shapes or dtypes; many tool functions have none. | Numpy sections, last. | Readability | R0 | accepted |  |
 | S-51 | `trace.py:306`; `export.py:192`, `206`, `405`, `436`, `515-535`; `histories.py:192`, `210`, `230`; `tools/bench.py:157-746`; `tools/sweep_jc.py:312-1126` | Signatures without annotations. | Add them; untyped dicts of solver inputs need the parameter objects first. | Readability | R0 | accepted |  |
+
+## Brought across from R.2 (session R.3, ruling 22)
+
+Confirmed Design and Readability findings of the second review (`findings_r2.md`) that its
+cross-reference table matches with no R.1 finding. Ids and line numbers are R.2's (tree
+`83471ec`). Accepted under ruling 8; none of the four fixes adds an abstraction layer.
+Not brought across: **SP-25** (`tools/review_baseline.py`, `collect` at complexity 12),
+which concerns a tool no test runs.
+
+| id | file:line | finding | proposed refactoring | sev | risk | status | notes |
+|---|---|---|---|---|---|---|---|
+| SP-15 | `trace.py:250-268`, `296-312`; `response.py:666`, `719-735` | `trace.build` takes 15 parameters, four of them the buffers `allocate` returned, plus an untyped `jc=None`; `celerity` and `ext_qty` mean something only with `jc`. | Introduce Parameter Object: the buffers (returned by `allocate`; a NamedTuple keeps the tests' positional indexing), the run fields, the JC grid (`None` for lumped). Passing the buffers whole to the kernel is C-01 (R4). | Readability | R3 | accepted | with `plan.md` 3.3 and 3.6 (C-14, C-15, S-08) |
+| SP-35 | `viz/geometry.py:7`, `52-67`, `87-88`, `157-170`, `185-190`; `export.py:261-262`; `docs/data_format.md:112-125`; viewer `:365`, `489` | The layout describes four drawn corners and legs 1 / 2; nothing says which corner is elbow A (where `f_a` acts) or B. The field name `leg_height_2` does not say outlet (the docstrings do). | State the elbow A / B mapping in the `LoopLayout` docstring; rename the leg heights to inlet / outlet at the bump. | Readability | R0 | accepted | elbow A answered in R.3 (ruling 26: the one the pressure wave reaches first, the inlet side of the run); docstring `plan.md` 1.16; field names: bump |
+| SP-36 | `trace.py:42-44`, `131-133`, `325`, `368`; `viz/geometry.py:42`, `199-213`; `moc.py:160-298`; `docs/data_format.md:104` | One per-cell value is "moving fraction" (the exported key), "interp fraction" (the docstrings describing that key) and "weighting of the mass acceleration" (`moc.py:161`, `193`); "interp" names the computation and is the VBA spelling. | Use "moving fraction" throughout; `frac_a` / `frac_b` to the nomenclature's names; `interp_fraction_*` renamed (kernel parameters with the parameter objects, ruling 21). `fraction_profile` is a related concept and a public flag (bump). | Readability | R0 | accepted | `plan.md` 1.15; `legacy_port.interp_fraction_*` frozen |
+| SP-41 | `docs/data_format.md:113`; `histories.py:338-340` | `data_format.md:113` says the outlet leg is "one cell shorter" without qualification; with the default profile both legs are equal (pinned by `test_geometry.py:117`); only the legacy profile shortens it. The `step_sine` docstring's "(default 0.2)" sits where `decay_fraction`'s default (0.8) would go. | Correct `data_format.md:113`; reword the docstring. | Readability | R0 | accepted | wrong documentation: `plan.md` 0.3, done early |
 
 ## Supporting Python — Nits
 
@@ -297,6 +326,14 @@ refactoring.
 Raised by the reviewers as possible numerical or logic defects. None was investigated
 beyond reading, and none is part of the refactoring. Each is a question for the owner.
 
+**Ruling 20 (R.3):** the remaining suspected defects are not investigated in this review;
+the list stays here for the lead author. Nos. 15 to 24 were found by the second review
+(`findings_r2.md`, "Possible defects", its number in brackets; line numbers of `83471ec`)
+and are neither in this list nor in `DEVIATIONS.md`. R.2's other items are here already
+(its 1, 3, 11 are nos. 3, 1, 11), are recorded (its 9 is D-24), or are decided: its 8, the
+`decay_factor` half-life, is a wrong docstring and is corrected to the formula (`plan.md`
+0.5).
+
 1. `response.py:431-448`: an unknown `vav_denominator` is accepted silently on a short pipe
    and when `rho_c == 0`; the docstring promises `ValueError`. Confirmed by reading.
 2. `moc.py:514` against `497`: on odd sub-steps the junction force reads `p_b[pivot]` and
@@ -327,3 +364,23 @@ beyond reading, and none is part of the refactoring. Each is a question for the 
     Example constants that no longer holds.
 14. `histories.py:352`, `459`: a zero frequency raises `ZeroDivisionError` before the
     documented `ValueError`.
+15. (R.2 2) `response.py:247`, `404`, `540-545`: `output_type` above 3 returns an all-zero
+    history and a negative value returns `None`, silently.
+16. (R.2 4) `structure.py:297-299`, `320`: the JC rigid mass `L (m' - rho A) + ...` is zero or
+    negative when `rho A >= m'`; nothing guards it before it divides.
+17. (R.2 5) `response.py:902-903`: if `x` is exactly 0 at the end of the forced phase, free
+    decay runs no samples whatever the velocity (`x * xZero = 0`). Related to D-21, not
+    recorded there.
+18. (R.2 6) `structure.py:361` / `368`, `485` / `491`: the clamp test uses `abs(gap)` while
+    `excess = ax - gap` uses the signed gap; a negative gap takes inconsistent branches.
+19. (R.2 7) `structure.py:118`: `error_val / var_a` divides by zero when EI = 0.
+20. (R.2 10) `tools/golden_report.py:62-66`: `next(...)` without a default raises
+    `StopIteration` when a case fails on a NaN.
+21. (R.2 12) `tools/sweep_jc.py:858-862`: `_band` files `f <= 0` under "> 16 Hz".
+22. (R.2 13) `export.py:418`: an int column whose CSV text is `"10.0"` raises, though the
+    float `10.0` is accepted.
+23. (R.2 14) `tools/build_viewer.py:77-79`: the provenance comment names the installed plotly
+    version even when `--plotly` supplies another bundle.
+24. (R.2 15) `tools/cases.py:94`, `tools/bench.py:143`: the forced-substep estimate is not
+    checked against the length of the `loads` schedule (which uses the `CLng` overlap);
+    possibly off by one at a rounding boundary.

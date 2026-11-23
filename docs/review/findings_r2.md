@@ -1,10 +1,19 @@
 # Clean-code review — findings (second independent review, R.2)
 
 Session R.2, 23 Nov 2026, on the tree at `83471ec`. Independent review of the solver core and
-the supporting Python against `docs/style.md`; no code was changed. `docs/review/plan.md`
+the supporting Python against `docs/style.md`; no code was changed. `docs/review/plan_r2.md`
 orders the fixes. The first review (R.1, 16 Nov 2026) and its plan, which the charter's
-rulings cite (for example S-17, S-11, S-36), are kept unchanged as
-`docs/review/findings_r1.md` and `docs/review/plan_r1.md`. Ids here are new (`SC-`, `SP-`,
+rulings cite (for example S-17, S-11, S-36), are `docs/review/findings.md` and
+`docs/review/plan.md`.
+
+**Superseded in session R.3 (charter ruling 22).** The second review was run by mistake.
+R.1 stays the governing list; this file is kept for reference, with the R.2 statuses as
+they were. What R.1 lacked was brought across: SP-15, SP-35, SP-36 and SP-41 (accepted,
+under "Brought across from R.2" in `findings.md`; SP-25 not, a tool no test runs), the
+wrong-documentation fixes, the possible defects not in `DEVIATIONS.md`, and in `plan.md`
+the order changes and the Numba rule. Inside this file, `findings.md` and `plan.md` still
+mean the R.2 lists (now `findings_r2.md`, `plan_r2.md`), and `findings_r1.md` /
+`plan_r1.md` mean the R.1 lists (now `findings.md`, `plan.md`). Ids here are new (`SC-`, `SP-`,
 `N-`) so they cannot be confused with R.1's (`C-`, `S-`, `K-`).
 
 ## How this list was made

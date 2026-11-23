@@ -1,9 +1,16 @@
 # Clean-code review — refactor plan (R.2)
 
-Session R.2, 23 Nov 2026. Orders the findings of `docs/review/findings.md` into
-single-refactoring commits. Nothing here has been started. The R.1 plan is kept as
-`docs/review/plan_r1.md`; the charter's ruling 3 accepted *its* order, which this plan follows
+Session R.2, 23 Nov 2026. Orders the findings of `docs/review/findings_r2.md` into
+single-refactoring commits. Nothing here has been started. The R.1 plan is
+`docs/review/plan.md`; the charter's ruling 3 accepted *its* order, which this plan follows
 except where "Where I would change the order" says otherwise.
+
+**Superseded in session R.3 (charter ruling 22).** `docs/review/plan.md` (R.1) governs. Its
+groups now carry R.2's order changes (group 0 removals first; the schedule clean-up in group
+2; the bench after every commit of group 4), the Numba rule (group 3) and the early
+wrong-documentation fixes (0.2 to 0.5). The owner's answers to the questions below are
+charter rulings 23 to 28. Inside this file, `findings.md` / `plan.md` mean the R.2 lists and
+`*_r1.md` the R.1 lists.
 
 Every commit: one refactoring, named with its risk class; expressions move verbatim (charter
 rule 2); `make lint` and `make test-both` (snapshot and supporting-code checks in both
