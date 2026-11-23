@@ -1,15 +1,16 @@
-# Nomenclature — proposed (session R.3, for the owner's approval)
+# Nomenclature
 
-**Status: proposal. Nothing has been renamed.** The owner edits and approves this table;
-the renames then follow it, one quantity or one tightly related family per commit
-(`docs/review/plan.md`, group 1). `docs/style.md` §2 ("Names") is the rule this follows:
+**Status: approved by the owner (session R.3, 23 Nov 2026; charter rulings 29-38),** with
+two changes to the proposal (`applied_force`, ruling 37; the two long sweep columns left
+undecided, ruling 38) and the answers to its questions (at the end). The renames follow it,
+one quantity or one tightly related family per commit (`docs/review/plan.md`, group 1); the
+"when" column says which are made in the renames session and which later. `docs/style.md` §2 ("Names") is the rule this follows:
 descriptive by default; a symbol only inside a compiled kernel, only if it is listed under
 "Kernel symbols" below with its meaning and unit, and never in a public signature.
 
 One row per quantity the solver and the supporting modules use. Columns:
 
-* **proposed** — the code name. `?` with a question means I could not tell what the
-  quantity is and the owner is asked ("Questions", end).
+* **proposed** — the code name. "undecided" where the owner left it for a later session.
 * **symbol** — an established symbol, where there is one (used in docstrings and Notes;
   in code only as listed under "Kernel symbols").
 * **unit** — SI unless the name carries a suffix (ruling 28). "—" for counts, indices,
@@ -20,17 +21,18 @@ One row per quantity the solver and the supporting modules use. Columns:
 * **current** — every name the quantity has in Python today, `module.name` where the
   module matters.
 * **when** — when the rename is applied:
-  * **R** — the renames session (now, after approval): locals, private functions, module
-    constants, NamedTuple fields, and parameters of functions that are not public.
+  * **R** — the renames session: locals, module constants, NamedTuple fields, and every
+    function that is not a user-facing entry point (ruling 29), with its parameters.
   * **K** — with the parameter objects (plan group 3, ruling 21): the parameters and
     locals of the compiled kernels `response._integrate_kernel` and
     `response._trace_frame`, the parameters of `moc.step` and `structure.step_scalars`,
     and the `JunctionCoupling` attributes (replaced by the column NamedTuple of plan 3.2).
     The name is fixed here; it is applied once, as a field or parameter, then.
-  * **P** — the public API session: public function names and their parameters (taken
-    here as every function without a leading underscore; see question Q-N1), dataclass
-    fields returned to users (`PeakResponse`, `Trace`, `LoopLayout`, `History`), and every
-    name written into an exported file or a CSV header (the schema bump).
+  * **P** — the public API session: the user-facing entry points (the solvers of
+    `response`, `histories.canonical`, `from_params`, `p_cap`, `export.to_*_dict`) and
+    their parameters, dataclass fields returned to users (`PeakResponse`, `Trace`,
+    `LoopLayout`, `History`), and every name written into an exported file or a CSV header
+    (the schema bump).
   * **—** — unchanged.
 
 Scope: every parameter and local of `moc.step`, `structure.step_scalars`,
@@ -58,7 +60,7 @@ collide (C-25).
 | proposed | symbol | meaning | unit | VBA | current | when |
 |---|---|---|---|---|---|---|
 | `column_cell_count` | N | Cells (half-grid B points) in the whole modelled column: the span, about `L / (2 c dt)` cells, plus `end_to_elbow_cell_count + 1` at each end. The A half-grid has `N + 1` nodes | — | `pipeSegQTY` | `pipe_seg_qty`, `n_seg` (`moc.step`, kernel, `JunctionCoupling`), `N` in prose | R (locals); K (kernel, `JunctionCoupling`); P (`Trace`, `LoopLayout`, exported `pipe_seg_qty`) |
-| `end_to_elbow_cell_count` | — | Cells from each end of the column to the elbow at the foot of the leg (the portal-frame pivot): the inactive end cells plus the leg height in cells. Also the index of the A node at elbow A, so `moc.step` reads it as an index | — | `pivotSegQTY` | `pivot_seg_qty`, `pivot` | R (locals); K; P (`Trace`, `LoopLayout`, exported) — see Q-N2 |
+| `end_to_elbow_cell_count` | — | Cells from each end of the column to the elbow at the foot of the leg (the portal-frame pivot): the inactive end cells plus the leg height in cells. Also the index of the A node at elbow A, so `moc.step` reads it as an index | — | `pivotSegQTY` | `pivot_seg_qty`, `pivot` | R (locals); K; P (`Trace`, `LoopLayout`, exported) |
 | `INACTIVE_END_CELL_COUNT` | — | Cells at each end of the column that receive no mass acceleration (4) | — | `extQTY` | `moc.EXT_QTY`; `ext_qty` (`Trace`, `LoopLayout`, `trace.build` parameter) | R (constant); P (fields, exported `ext_qty`) |
 | `grid_point_count` | 2N + 1 | Points of the interleaved display grid | — | — | `n_cells` (`_integrate`, `trace`, `geometry`, `export`) | R (locals); P (`Trace.n_cells`, `LoopLayout.n_cells`, exported `meta.n_cells`) |
 | `cell_length` | 2 c dt | Length of one MoC cell (and of one node spacing) | m | — | `cell_length` (`LoopLayout`), `cell_length_m` (exported) | — |
@@ -85,7 +87,7 @@ collide (C-25).
 | `pressure_b_upper`, `velocity_b_upper` | — | The same for B cell `n` | Pa, m/s | `arrayB(0, n)`, `arrayB(1, n)` | `pb`, `vb` | R |
 | `pressure_a_lower`, `velocity_a_lower` | — | `moc.step`, odd half: A node `n` | Pa, m/s | `arrayA(0, n)`, `arrayA(1, n)` | `pa_prev`, `va_prev` | R |
 | `pressure_a_upper`, `velocity_a_upper` | — | The same for A node `n + 1` | Pa, m/s | `arrayA(0, n + 1)`, `arrayA(1, n + 1)` | `pa`, `va` | R |
-| `flow_area` | A | Internal cross-sectional area of the pipe (the pressure area) | m² | `fluidArea` | `fluid_area`; `fluid_area_m2` (exported) | R (locals); K; P (public keyword, exported; parameters of non-underscore functions: Q-N1) |
+| `flow_area` | A | Internal cross-sectional area of the pipe (the pressure area) | m² | `fluidArea` | `fluid_area`; `fluid_area_m2` (exported) | R (locals, parameters of non-entry-point functions); K; P (public keyword, exported) |
 | `fluid_density` | ρ | Fluid density | kg/m³ | `fluidDensty` | `fluid_densty` | P (public keyword; the frozen fixtures keep the VBA key, K-9 of R.2) |
 | `celerity` | c | Pressure-wave speed in the pipe; also the speed the force travels between the elbows | m/s | `celerity` | `celerity` | — |
 | `is_short_pipe` | — | The span cannot hold the MoC grid; the JC solver falls back to the lumped one | — | `pipeSegQTY - 2 * pivotSegQTY <= 2` | `moc.is_short_pipe()`; `jc_short_pipe` (exported column) | — (function); P (column) |
@@ -107,7 +109,7 @@ collide (C-25).
 | `support_gap` | — | Gap at the supports, at the centre of mass, before the closed-gap stiffness acts | m | `gap` | `SdofParams.gap`, `gap` | R (field, locals); K; P (public keyword, exported) |
 | `closed_gap_stiffness_ratio` | (f_c/f_o)² | Stiffness beyond the gap over the open-gap stiffness: `restrain_freq_ratio ** 2` | — | `restrainFreqRatio ^ 2` | `SdofParams.ratio2`, `ratio2`; `params.ratio2` (exported) | R; K; P (exported) |
 | `closed_gap_frequency_ratio` | — | Natural frequency with the gaps closed over that with them open | — | `restrainFreqRatio` | `restrain_freq_ratio` | P (public keyword) |
-| `external_force` | F | Force on the proxy from the loads: unbalance plus junction force in the forced phases, junction force alone in free decay | N | `forceA - forceB + dF` (inline) | `f_applied` | K (kernel local and `step_scalars` parameter) |
+| `applied_force` | F | Force applied to the proxy: unbalance plus junction force in the forced phases, junction force alone in free decay (not `external_force`: the junction force is not external to the model, ruling 37) | N | `forceA - forceB + dF` (inline) | `f_applied` | K (kernel local and `step_scalars` parameter) |
 | `x_magnitude` | \|x\| | `abs(x)` in the gap ladder | m | `Abs(x)` | `ax` (`step_scalars`, `effective_displacement`) | R |
 | `x_within_gap` | — | Displacement up to the gap, signed: `minUnsigned(gap, x)` | m | `minUnsigned(gap, x)` | `clamp` | R |
 | `x_excess_magnitude` | — | `max(0, abs(x) - gap)` | m | `max(0, Abs(x) - gap)` | `excess` | R |
@@ -124,7 +126,7 @@ collide (C-25).
 | `omega_squared` | ω² | `(2 π f_n)²` | rad²/s² | `(2 * pi * natFreq) ^ 2` | `omega2` (`solve_portal_height`) | R |
 | `GRAVITY` | g | 9.81, fixing m and s in the friction step (style §6; plan 2.5 names it, not here) | m/s² | `9.81` | literal | — (plan 2.5) |
 | `VBA_PI` | π | The VBA's 15-digit π | — | `Const pi` | `VBA_PI` | — |
-| `quartic_constant`, `cubic_coefficient`, `quartic_coefficient` | — | Coefficients of `c0 + c3 L³ + c4 L⁴ = 0`, the portal-height equation (`kg·m³`, kg, kg/m in that use) | see meaning | `varA`, `varB`, `varC` | `var_a`, `var_b`, `var_c` | P (parameters of `solve_poly`); R (`var_b`, `var_c` locals in `solve_portal_height`) |
+| `quartic_constant`, `cubic_coefficient`, `quartic_coefficient` | — | Coefficients of `c0 + c3 L³ + c4 L⁴ = 0`, the portal-height equation (`kg·m³`, kg, kg/m in that use) | see meaning | `varA`, `varB`, `varC` | `var_a`, `var_b`, `var_c` | R |
 | `root` | — | The Newton iterate, the portal height in its one use | m | `lenVal` | `len_val` | R |
 | `residual` | — | Value of the polynomial at the iterate | kg·m³ | `errorVal` | `error_val` | R |
 | `slope` | — | Derivative of the polynomial at the iterate | kg·m² | `grad` | `grad` | R |
@@ -134,7 +136,7 @@ collide (C-25).
 
 | proposed | symbol | meaning | unit | VBA | current | when |
 |---|---|---|---|---|---|---|
-| `force_history` | — | The force-time history at one location, as given (1-D, or 2-D walked column-major) | N | `forceHistory` | `force_history` (keyword), `history` (`response` local, `loads` parameters), `force` (tools) | R (locals and `loads` parameters, see Q-N1); — (public keyword) |
+| `force_history` | — | The force-time history at one location, as given (1-D, or 2-D walked column-major) | N | `forceHistory` | `force_history` (keyword), `history` (`response` local, `loads` parameters), `force` (tools) | R (locals and `loads` parameters); — (public keyword) |
 | `force_history_one_based` | — | The history as 1-based nested lists, `[row][column]` (`vba_2d`) | N | `forceHistory(i, j)` | `fh` (`_Run`) | R |
 | `history_row_count`, `history_column_count` | — | Rows and columns of the 2-D history | — | `UBound(forceHistory, 1)`, `UBound(forceHistory, 2)` | `u1`, `u2` | R |
 | `substep_count` | — | Substeps per sample | — | `stepQTY` | `step_qty`; `STEP_QTY` (`sweep_jc`); `params.step_qty` (exported) | R (`_Run` field, locals, `STEP_QTY` → `SUBSTEP_COUNT`); K; P (keyword, `Trace.step_qty`, exported) |
@@ -154,7 +156,7 @@ collide (C-25).
 | `next_history_row`, `next_history_column` | — | The sample after it, wrapping to the next column | — | `imax`, `jmax` | `imax`, `jmax` | R |
 | `elbow_b_row`, `elbow_b_column` | — | Position in the history of the sample elbow B reads | — | `iB`, `jB` | `ib`, `jb` | R |
 | `elbow_b_next_row`, `elbow_b_next_column` | — | The sample after it | — | `iBmax`, `jBmax` | `ibmax`, `jbmax` | R |
-| `transit_last_column` | — | Upper bound of the column loop of the transit walk: `1 + CLng(transit_delay_samples / history_column_count)` | — | `1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))` | `jb_to` | R — see Q-N3 |
+| `transit_last_column` | — | Upper bound of the column loop of the transit walk: `1 + CLng(transit_delay_samples / history_column_count)` (a "For Ben to review" comment, ruling 31) | — | `1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))` | `jb_to` | R |
 | `sample_number` | — | 1-based number of the sample being walked or integrated (samples begun so far); the 0-based sample index is `sample_number - 1` | — | `totInd` | `tot_ind` (`_schedule`, generators, kernel) | R (loads); K (kernel) |
 | `first_substep_number` | — | 1-based running number of the sample's first substep, `(sample_number - 1) * substep_count + 1`, tested against `transit_delay_substeps` | — | `(totInd - 1) * stepQTY + 1` | `base` | R |
 | `pre_advance_substep_count` | — | Substeps of a forced sample before elbow B advances: `substep_count - overlap_substep_count` | — | `stepQTY - kOverlap` | `split` | R |
@@ -168,9 +170,9 @@ collide (C-25).
 
 | proposed | symbol | meaning | unit | VBA | current | when |
 |---|---|---|---|---|---|---|
-| `nominal_forced_sample_count` | — | History samples plus the rounded transit delay: the samples the forced phases take, as the VBA sizes its result | — | `outMax` | `out_max`; `Trace.out_max`; `params.out_max` (exported) | R (`response` locals); K; P (field, exported) — see Q-N4 |
+| `nominal_forced_sample_count` | — | History samples plus the rounded transit delay: the samples the forced phases take, as the VBA sizes its result | — | `outMax` | `out_max`; `Trace.out_max`; `params.out_max` (exported) | R (`response` locals, non-entry-point parameters); K; P (field, exported) |
 | `recorded_sample_count` | — | `2 * nominal_forced_sample_count`: the samples the response history and the trace keep (the forced samples and an equal allowance for free decay; precomputing it is allowed, ruling 25) | — | `outMax * 2` | `out_max * 2` (inline, five sites) | K (plan 4.5) |
-| `forced_sample_count` | — | Samples of the transit and forced phases, as integrated | — | `totInd` after phase 2 | `n_samples` and `forced_samples` (kernel; the same value), `len(samples)` (`_integrate`), `forced_samples` (`trace.capacity`) | K (kernel); R (`trace`) — see Q-N5 |
+| `forced_sample_count` | — | Samples of the transit and forced phases, as integrated | — | `totInd` after phase 2 | `n_samples` (kernel; `forced_samples`, the same value, stays until plan group 4 removes it, ruling 33), `len(samples)` (`_integrate`), `forced_samples` (`trace.capacity`) | K (kernel); R (`trace`) |
 | `forced_substep_count` | — | Substeps of the transit and forced phases | — | — | `n_sub` (`_integrate`), `forced_substeps` (`trace`, `tools/cases.py`) | R |
 | `transit_substep_count` | — | Substeps of the transit phase, counted from the elbow-force walk | — | — | `delay_substeps` | K |
 | `free_decay_sample_count` | — | Samples integrated in free decay | — | — | `PeakResponse.free_decay_samples`, `free_decay_samples` (exported) | P |
@@ -233,7 +235,7 @@ collide (C-25).
 | proposed | symbol | meaning | unit | VBA | current | when |
 |---|---|---|---|---|---|---|
 | `inlet_elbow_index` | — | Grid point of the elbow between the inlet and leg 1 (last fraction-0 point before the span) | — | — | `inlet_end` (`LoopLayout`, `segments.inlet_end`) | P |
-| `run_start_index`, `run_end_index` | — | First and last fraction-1 grid points: the two elbows at the feet of the legs, the ends of the run | — | — | `run_start`, `run_end` | P — see Q-N6 |
+| `run_start_index`, `run_end_index` | — | First and last fraction-1 grid points: the two elbows at the feet of the legs, the ends of the run | — | — | `run_start`, `run_end` | P (elbow A is the `run_start` corner, elbow B the `run_end` corner, ruling 34) |
 | `outlet_elbow_index` | — | Grid point of the elbow between leg 2 and the outlet | — | — | `outlet_start` | P |
 | `elbow_grid_point_pairs` | — | The two grid points either side of each of the four drawn elbows | — | — | `elbow_pairs` | P |
 | `x_at_rest`, `y_at_rest` | — | Circle centres at rest on the loop | m | — | `x_nominal`, `y_nominal`; exported `x_nominal_m`, `y_nominal_m` | P |
@@ -265,7 +267,7 @@ names and parameters change in the public API session. `History` is returned to 
 
 | proposed | symbol | meaning | unit | VBA | current | when |
 |---|---|---|---|---|---|---|
-| `history_type` | — | `"step"`, `"step_sine"` or `"step_noise"` | — | — | `History.kind`, `kind`, `KINDS`; column `history_type` | R (`KINDS` → `HISTORY_TYPES`); P (field, parameter) |
+| `history_type` | — | `"step"`, `"step_sine"` or `"step_noise"` | — | — | `History.kind`, `kind`, `KINDS`; column `history_type` | R (`KINDS` → `HISTORY_TYPES`, parameters of non-entry-point functions); P (`History.kind`, the `canonical` parameter, the `PARAM_KEYS` key `kind`) |
 | `time` | t | Sample times, `arange(n) / sample_rate` | s | — | `History.time`, `time` | — |
 | `pressure` | p | Pressure | Pa | — | `History.pressure` | — |
 | `lead_in_s`, `transit_s`, `tail_s`, `decay_s`, `duration_s` | — | The four duration terms and their sum | s | — | the same | — |
@@ -289,7 +291,7 @@ names and parameters change in the public API session. `History` is returned to 
 | `noise` | — | The noise before scaling (raw, filtered, enveloped) | Pa | — | `w` | R |
 | `noise_max` | — | Its maximum | Pa | — | `w_max` | R |
 | `scaled_noise` | — | The noise scaled to reach the target | Pa | — | `noise` | R |
-| `frequency` | f | Frequency argument of `decay_rate` / `envelope` | Hz | — | `f` | R (`decay_rate`, `envelope` are not tool-called; see Q-N1) |
+| `frequency` | f | Frequency argument of `decay_rate` / `envelope` | Hz | — | `f` | R (`decay_rate`, `envelope` are not tool-called) |
 | `shared_arguments` | — | Keyword arguments common to the generators | — | — | `common` | R |
 | `unit_sine_history` | — | The unit-amplitude probe that sizes the sine | — | — | `probe` | R |
 | `HISTORY_TYPES`, `DEFAULT_SAMPLE_RATE` | — | Constants | — | — | `KINDS`, `DEFAULT_SAMPLE_FREQ` | R |
@@ -318,22 +320,22 @@ names and locals are R.
 | `solver_arguments` | — | The solver keyword arguments | — | — | `kw` (`run_case`, `cases.py`) | R |
 | `diameter_mm`, `amplitude_bar`, `lead_in_s`, `duration_s`, `fluid_density` (argparse `dest`) | — | Step-case options; the flag strings stay | mm, bar, s, s, kg/m³ | — | `size`, `amplitude`, `lead_in`, `duration`, `density` | R |
 | `hold_sample_count` | — | Samples the step is held | — | — | `n_hold` | R |
-| `dynamic_amplification_factor_*` | DAF | `F_eq / peak_pressure_force` | — | — | column `daf_*` | P |
-| `static_force_per_length_diameter_squared_*` | — | `F_eq / (L D²)` | N/m³ | — | column `f_eq_over_LD2_*` | P |
+| undecided (ruling 38; "DAF" is the paper's term) | DAF | `F_eq / peak_pressure_force` | — | — | column `daf_*` | P |
+| undecided (ruling 38) | — | `F_eq / (L D²)` | N/m³ | — | column `f_eq_over_LD2_*` | P |
 
 ## 10. Function names
 
 | proposed | current | meaning | when |
 |---|---|---|---|
-| `moving_fraction_a`, `moving_fraction_b`, `moving_fraction_a_fixed`, `moving_fraction_b_fixed`, `moving_fractions` | `moc.interp_fraction_a`, `_b`, `_a_fixed`, `_b_fixed`, `interp_fractions` | The moving-fraction profiles (SP-36) | P (public by Python convention; R if Q-N1 is answered "style §2's sense") |
-| `column_at_rest` | `moc.new_column` | The four column arrays at rest | P / R (Q-N1) |
-| `mean_velocity_divisor` | `moc.vav_divisor` | | P / R |
-| `end_pressure_decay_factor` | `moc.decay_factor` | | P / R |
-| `solve_quartic` | `structure.solve_poly` | Relaxed Newton root of `c0 + c3 L³ + c4 L⁴` | P / R |
+| `moving_fraction_a`, `moving_fraction_b`, `moving_fraction_a_fixed`, `moving_fraction_b_fixed`, `moving_fractions` | `moc.interp_fraction_a`, `_b`, `_a_fixed`, `_b_fixed`, `interp_fractions` | The moving-fraction profiles (SP-36) | R |
+| `column_at_rest` | `moc.new_column` | The four column arrays at rest | R |
+| `mean_velocity_divisor` | `moc.vav_divisor` | | R |
+| `end_pressure_decay_factor` | `moc.decay_factor` | | R |
+| `solve_quartic` | `structure.solve_poly` | Relaxed Newton root of `c0 + c3 L³ + c4 L⁴` | R |
 | `_free_decay_product` | `response._decay_test` | `x * x_zero` with the overflow check | R |
 | `_record_sample` | `response._record` | Store the end-of-sample state in the response history | R |
 | `_walk_constants` | `loads._run` | Per-run constants of the walk | R |
-| `allocate_frames`, `frame_capacity`, `build_trace` | `trace.allocate`, `trace.capacity`, `trace.build` | | P / R |
+| `allocate_frames`, `frame_capacity`, `build_trace` | `trace.allocate`, `trace.capacity`, `trace.build` | | R |
 | `_moving_fractions_display` | `geometry._interp_fractions_display` | | R |
 | `peak_pressure_target` | `histories.p_cap` | | P (tool-called, ruling 18) |
 | `step` (unchanged) | `moc.step` | Split into the two half-grid updates in plan 4.2, which names them | — |
@@ -355,44 +357,18 @@ else.
 | `rho_c`, `two_rho_c` | Characteristic impedance ρc and 2ρc | Pa·s/m |
 | `n` | Loop index over nodes or cells in `moc.step` (a few lines each) | — |
 
-## Questions for the owner
+## Answers (owner, R.3; charter rulings 29-38)
 
-* **Q-N1. Which functions are "public" for this session?** The brief says public function
-  names and their parameters wait for the public API session. By Python convention that is
-  every function without a leading underscore; by `docs/style.md` §2 only the user-facing
-  entry points (`response` solvers, `histories.canonical`, `from_params`, `p_cap`, the
-  `export.to_*_dict` functions) are public. The "when" column takes the first reading
-  (P). Under the second, the functions of section 10 marked "P / R" and the parameters of
-  `structure.lumped_params`, `jc_params`, `solve_poly`, `loads.*`, `moc.*`, `trace.*` and
-  `JunctionCoupling.__init__` would be renamed now.
-* **Q-N2. `pivotSegQTY`.** I read it as the cells from each end of the column to the elbow
-  at the foot of the leg (end cells plus the leg height in cells), so the junction force
-  taps the pressure at the two elbows, and the "pivot" is that elbow. Is the portal-frame
-  pivot the elbow between leg and span? If not, `end_to_elbow_cell_count` is wrong.
-* **Q-N3. `jb_to`.** `1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))` divides the
-  transit delay in samples by the number of *columns*; the samples per column are the
-  rows. The walk exits on `totInd > unballanceStepQTY` before the bound matters in every
-  case the tests run. I named it for what it is (`transit_last_column`); is it meant as a
-  bound on columns, or is the divisor a VBA slip (a question for the lead author, not a
-  change)?
-* **Q-N4. `outMax`.** Proposed `nominal_forced_sample_count` (history samples plus the
-  rounded transit delay). The forced phases actually take `forced_sample_count`, which can
-  differ by one (R.1 C-29). Do you want the name to say "nominal" or "estimated", or
-  something tied to its use (the recorded window is twice it)?
-* **Q-N5. Two kernel locals hold the forced sample count.** `n_samples` (from the offsets)
-  and `forced_samples` (`tot_ind` after the forced loop) are equal. One name for both
-  needs a structural change (dropping one); two names for one quantity misleads. Proposed:
-  `forced_sample_count` for the first; the second removed in plan group 4 (it is then the
-  same variable). Or keep both until then with `forced_sample_count` and
-  `forced_samples_integrated`?
-* **Q-N6. Which drawn corners are elbows A and B?** Ruling 26: elbow A is the inlet side of
-  the run. In `LoopLayout` the run runs from `run_start` (x = 0, the foot of leg 1, inlet
-  side) to `run_end` (x = run_length, the foot of leg 2). I take elbow A as the
-  `run_start` corner and elbow B as the `run_end` corner, which also matches the junction
-  force taps at node `pivot` and `N - pivot` (`moc.step`). Confirm, and the `LoopLayout`
-  docstring says so (plan 1.16).
-* **Q-N7. `history_type` against `kind`.** `History.kind`, the `kind` parameter of
-  `canonical` and the `history_type` column are one concept (S-32). Proposed:
-  `history_type` everywhere (the column already uses it). Or `kind`?
-* **Q-N8. Celerity.** Kept as `celerity` (the water-hammer term an engineer reads without
-  a gloss), not `wave_speed`. Agree?
+* **Q-N1.** "Public" is the user-facing entry points only (style §2): every other function
+  without a leading underscore, and its parameters, is renamed now (ruling 29).
+* **Q-N2.** The pivot is the elbow between leg and span; `end_to_elbow_cell_count` stands
+  (ruling 30).
+* **Q-N3.** `transit_last_column`, with a "For Ben to review:" comment; nothing else changes
+  (ruling 31).
+* **Q-N4.** `nominal_forced_sample_count` (ruling 32).
+* **Q-N5.** `forced_sample_count` for the first local; the second stays until plan group 4
+  removes it (ruling 33).
+* **Q-N6.** Elbow A is the `run_start` corner, elbow B the `run_end` corner; the
+  `LoopLayout` docstring says so (ruling 34).
+* **Q-N7.** `history_type` everywhere (ruling 35).
+* **Q-N8.** `celerity` stays (ruling 36).
