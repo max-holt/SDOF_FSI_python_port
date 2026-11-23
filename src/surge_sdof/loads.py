@@ -124,8 +124,8 @@ class _Run(NamedTuple):
     transit_delay_samples: float  # unballanceStepQTY, samples
     overlap_substep_count: int  # kOverlap
     transit_delay_substeps: float  # unballanceStepQTY * stepQTY, VBA line 446
-    frac: list  # k / (stepQTY - 1), k = 0 .. stepQTY - 1 (D-7, D-18)
-    one_minus: list  # 1 - k / (stepQTY - 1)
+    next_sample_weight: list  # k / (stepQTY - 1), k = 0 .. stepQTY - 1 (D-7, D-18)
+    current_sample_weight: list  # 1 - k / (stepQTY - 1)
 
 
 def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
@@ -134,8 +134,8 @@ def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
     transit_delay_samples = transit_delay(physical_length, celerity, sample_freq)
     overlap_substep_count = overlap_substeps(transit_delay_samples, step_qty)
     # k / (stepQTY - 1) and 1 - k / (stepQTY - 1) for k = 0 .. stepQTY - 1 (D-7, D-18)
-    frac = [k / (step_qty - 1) for k in range(step_qty)]
-    one_minus = [1 - f for f in frac]
+    next_sample_weight = [k / (step_qty - 1) for k in range(step_qty)]
+    current_sample_weight = [1 - f for f in next_sample_weight]
     return _Run(
         force_history_one_based,
         len(force_history_one_based) - 1,
@@ -144,8 +144,8 @@ def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
         transit_delay_samples,
         overlap_substep_count,
         transit_delay_samples * step_qty,
-        frac,
-        one_minus,
+        next_sample_weight,
+        current_sample_weight,
     )
 
 
@@ -169,8 +169,8 @@ def _schedule(run: _Run) -> Iterator[tuple]:
         transit_delay_samples,
         overlap_substep_count,
         _transit_delay_substeps,
-        _frac,
-        _one_minus,
+        _next_sample_weight,
+        _current_sample_weight,
     ) = run
 
     # ---------------------------------------------------------------- phase 1: delay
@@ -310,12 +310,18 @@ def unbalance_force(
       inner ``k`` loops here are the Stage 4 ones (same operands, same operations).
     """
     run = _run(history, sample_freq, physical_length, celerity, step_qty)
-    step_qty, overlap_substep_count, transit_delay_substeps, frac, one_minus = (
+    (
+        step_qty,
+        overlap_substep_count,
+        transit_delay_substeps,
+        next_sample_weight,
+        current_sample_weight,
+    ) = (
         run.step_qty,
         run.overlap_substep_count,
         run.transit_delay_substeps,
-        run.frac,
-        run.one_minus,
+        run.next_sample_weight,
+        run.current_sample_weight,
     )
     split = step_qty - overlap_substep_count
     for item in _schedule(run):
@@ -324,7 +330,7 @@ def unbalance_force(
             base = (tot_ind - 1) * step_qty + 1
             sample = []
             for k in range(step_qty):
-                force_b = f_cur * one_minus[k] + f_nxt * frac[k]
+                force_b = f_cur * current_sample_weight[k] + f_nxt * next_sample_weight[k]
                 sample.append(force_a - force_b)
                 if base + k > transit_delay_substeps:
                     break
@@ -334,17 +340,17 @@ def unbalance_force(
             sample = []
             # For k = 0 To stepQTY - kOverlap - 1: forceB at k + kOverlap
             for k in range(0, split):
-                force_a = fa_cur * one_minus[k] + fa_nxt * frac[k]
+                force_a = fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k]
                 force_b = (
-                    fb_cur * one_minus[k + overlap_substep_count]
-                    + fb_nxt * frac[k + overlap_substep_count]
+                    fb_cur * current_sample_weight[k + overlap_substep_count]
+                    + fb_nxt * next_sample_weight[k + overlap_substep_count]
                 )
                 sample.append(force_a - force_b)
             # For k = stepQTY - kOverlap To stepQTY - 1: forceB at k - stepQTY + kOverlap
             for k in range(split, step_qty):
                 m = k - step_qty + overlap_substep_count
-                force_a = fa_cur * one_minus[k] + fa_nxt * frac[k]
-                force_b = fb2_cur * one_minus[m] + fb2_nxt * frac[m]
+                force_a = fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k]
+                force_b = fb2_cur * current_sample_weight[m] + fb2_nxt * next_sample_weight[m]
                 sample.append(force_a - force_b)
             yield sample
 
@@ -379,12 +385,18 @@ def elbow_forces(
         As ``unbalance_force`` (D-7, D-8).
     """
     run = _run(history, sample_freq, physical_length, celerity, step_qty)
-    step_qty, overlap_substep_count, transit_delay_substeps, frac, one_minus = (
+    (
+        step_qty,
+        overlap_substep_count,
+        transit_delay_substeps,
+        next_sample_weight,
+        current_sample_weight,
+    ) = (
         run.step_qty,
         run.overlap_substep_count,
         run.transit_delay_substeps,
-        run.frac,
-        run.one_minus,
+        run.next_sample_weight,
+        run.current_sample_weight,
     )
     split = step_qty - overlap_substep_count
     for item in _schedule(run):
@@ -395,7 +407,7 @@ def elbow_forces(
             fb = []
             for k in range(step_qty):
                 fa.append(force_a)
-                fb.append(f_cur * one_minus[k] + f_nxt * frac[k])
+                fb.append(f_cur * current_sample_weight[k] + f_nxt * next_sample_weight[k])
                 if base + k > transit_delay_substeps:
                     break
             yield (0, fa, fb)
@@ -404,13 +416,13 @@ def elbow_forces(
             fa = []
             fb = []
             for k in range(0, split):
-                fa.append(fa_cur * one_minus[k] + fa_nxt * frac[k])
+                fa.append(fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k])
                 fb.append(
-                    fb_cur * one_minus[k + overlap_substep_count]
-                    + fb_nxt * frac[k + overlap_substep_count]
+                    fb_cur * current_sample_weight[k + overlap_substep_count]
+                    + fb_nxt * next_sample_weight[k + overlap_substep_count]
                 )
             for k in range(split, step_qty):
                 m = k - step_qty + overlap_substep_count
-                fa.append(fa_cur * one_minus[k] + fa_nxt * frac[k])
-                fb.append(fb2_cur * one_minus[m] + fb2_nxt * frac[m])
+                fa.append(fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k])
+                fb.append(fb2_cur * current_sample_weight[m] + fb2_nxt * next_sample_weight[m])
             yield (1, fa, fb)
