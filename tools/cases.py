@@ -90,8 +90,10 @@ def step_name(args) -> str:
 
 def forced_substeps(force, kw) -> int:
     """Sub-steps of the forced phases (transit + history), as the trace capacity counts them."""
-    unb = loads.transit_delay(kw["physical_length"], kw["celerity"], kw["sample_freq"])
-    return int(np.size(force)) * kw["step_qty"] + int(unb * kw["step_qty"]) + 1
+    transit_delay_samples = loads.transit_delay(
+        kw["physical_length"], kw["celerity"], kw["sample_freq"]
+    )
+    return int(np.size(force)) * kw["step_qty"] + int(transit_delay_samples * kw["step_qty"]) + 1
 
 
 def default_trace_every(force, kw, target_frames: int) -> int:

@@ -248,8 +248,8 @@ def peak_response(
     trace_every = _trace_stride(trace_every)
 
     history = loads.as_history_2d(force_history)
-    unb = loads.transit_delay(physical_length, celerity, sample_freq)
-    out_max = history.shape[0] * history.shape[1] + clng(unb)  # VBA line 377
+    transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
+    out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 377
     dt = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
@@ -408,8 +408,8 @@ def peak_response_jc(
     trace_every = _trace_stride(trace_every)
 
     history = loads.as_history_2d(force_history)
-    unb = loads.transit_delay(physical_length, celerity, sample_freq)
-    out_max = history.shape[0] * history.shape[1] + clng(unb)  # VBA line 714
+    transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
+    out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 714
     dt = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(

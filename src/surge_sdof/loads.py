@@ -95,12 +95,12 @@ def transit_delay(physical_length: float, celerity: float, sample_freq: float) -
 
 
 # VBA line 380
-def overlap_substeps(unballance_step_qty: float, step_qty: int) -> int:
+def overlap_substeps(transit_delay_samples: float, step_qty: int) -> int:
     """``kOverlap`` (VBA line 380): the fractional part of the transit delay in sub-steps.
 
     Parameters
     ----------
-    unballance_step_qty : float
+    transit_delay_samples : float
         Transit delay from ``transit_delay``, samples.
     step_qty : int
         Sub-steps per sample.
@@ -111,7 +111,7 @@ def overlap_substeps(unballance_step_qty: float, step_qty: int) -> int:
         ``CLng((unballanceStepQTY - floor(unballanceStepQTY)) * stepQTY)``, 0 .. ``stepQTY``
         (``CLng`` rounds half to even; ``floor`` is the fixed VBA floor, D-1).
     """
-    return clng((unballance_step_qty - vba_floor(unballance_step_qty)) * step_qty)
+    return clng((transit_delay_samples - vba_floor(transit_delay_samples)) * step_qty)
 
 
 class _Run(NamedTuple):
@@ -121,9 +121,9 @@ class _Run(NamedTuple):
     u1: int  # UBound(forceHistory, 1)
     u2: int  # UBound(forceHistory, 2)
     step_qty: int
-    unb: float  # unballanceStepQTY, samples
-    k_overlap: int
-    unb_steps: float  # unballanceStepQTY * stepQTY, VBA line 446
+    transit_delay_samples: float  # unballanceStepQTY, samples
+    overlap_substep_count: int  # kOverlap
+    transit_delay_substeps: float  # unballanceStepQTY * stepQTY, VBA line 446
     frac: list  # k / (stepQTY - 1), k = 0 .. stepQTY - 1 (D-7, D-18)
     one_minus: list  # 1 - k / (stepQTY - 1)
 
@@ -131,13 +131,21 @@ class _Run(NamedTuple):
 def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
     fh = vba_2d(as_history_2d(history)).tolist()
     step_qty = int(step_qty)
-    unb = transit_delay(physical_length, celerity, sample_freq)
-    k_overlap = overlap_substeps(unb, step_qty)
+    transit_delay_samples = transit_delay(physical_length, celerity, sample_freq)
+    overlap_substep_count = overlap_substeps(transit_delay_samples, step_qty)
     # k / (stepQTY - 1) and 1 - k / (stepQTY - 1) for k = 0 .. stepQTY - 1 (D-7, D-18)
     frac = [k / (step_qty - 1) for k in range(step_qty)]
     one_minus = [1 - f for f in frac]
     return _Run(
-        fh, len(fh) - 1, len(fh[0]) - 1, step_qty, unb, k_overlap, unb * step_qty, frac, one_minus
+        fh,
+        len(fh) - 1,
+        len(fh[0]) - 1,
+        step_qty,
+        transit_delay_samples,
+        overlap_substep_count,
+        transit_delay_samples * step_qty,
+        frac,
+        one_minus,
     )
 
 
@@ -153,7 +161,17 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     sub-steps and between the third pair for the remaining ``kOverlap``. The item is
     yielded after every index it needs is read, so a D-8 ``IndexError`` surfaces where the
     legacy raised it: at the first phase-2 sample, after every phase-1 sample."""
-    fh, u1, u2, step_qty, unb, k_overlap, _unb_steps, _frac, _one_minus = run
+    (
+        fh,
+        u1,
+        u2,
+        step_qty,
+        transit_delay_samples,
+        overlap_substep_count,
+        _transit_delay_substeps,
+        _frac,
+        _one_minus,
+    ) = run
 
     # ---------------------------------------------------------------- phase 1: delay
     force_a = fh[1][1]
@@ -165,7 +183,7 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     # history columns (UBound(forceHistory, 2)), where the samples per column are the rows.
     # The walk exits earlier, on totInd > unballanceStepQTY, in every tested case, so the
     # bound has not been seen to matter. The expression is the VBA's and stays.
-    jb_to = 1 + clng(unb / u2)
+    jb_to = 1 + clng(transit_delay_samples / u2)
     jb = 1
     while jb <= jb_to:
         ib = 1
@@ -184,10 +202,10 @@ def _schedule(run: _Run) -> Iterator[tuple]:
                 jmax = min(j, u2)
                 imax = min(i + 1, u1)
             yield (0, tot_ind, force_a, fh[i][j], fh[imax][jmax])
-            if tot_ind > unb:
+            if tot_ind > transit_delay_samples:
                 break
             ib = ib + 1
-        if tot_ind > unb:
+        if tot_ind > transit_delay_samples:
             break
         jb = jb + 1
 
@@ -277,14 +295,14 @@ def unbalance_force(
       inner ``k`` loops here are the Stage 4 ones (same operands, same operations).
     """
     run = _run(history, sample_freq, physical_length, celerity, step_qty)
-    step_qty, k_overlap, unb_steps, frac, one_minus = (
+    step_qty, overlap_substep_count, transit_delay_substeps, frac, one_minus = (
         run.step_qty,
-        run.k_overlap,
-        run.unb_steps,
+        run.overlap_substep_count,
+        run.transit_delay_substeps,
         run.frac,
         run.one_minus,
     )
-    split = step_qty - k_overlap
+    split = step_qty - overlap_substep_count
     for item in _schedule(run):
         if item[0] == 0:
             _phase, tot_ind, force_a, f_cur, f_nxt = item
@@ -293,7 +311,7 @@ def unbalance_force(
             for k in range(step_qty):
                 force_b = f_cur * one_minus[k] + f_nxt * frac[k]
                 sample.append(force_a - force_b)
-                if base + k > unb_steps:
+                if base + k > transit_delay_substeps:
                     break
             yield sample
         else:
@@ -302,11 +320,14 @@ def unbalance_force(
             # For k = 0 To stepQTY - kOverlap - 1: forceB at k + kOverlap
             for k in range(0, split):
                 force_a = fa_cur * one_minus[k] + fa_nxt * frac[k]
-                force_b = fb_cur * one_minus[k + k_overlap] + fb_nxt * frac[k + k_overlap]
+                force_b = (
+                    fb_cur * one_minus[k + overlap_substep_count]
+                    + fb_nxt * frac[k + overlap_substep_count]
+                )
                 sample.append(force_a - force_b)
             # For k = stepQTY - kOverlap To stepQTY - 1: forceB at k - stepQTY + kOverlap
             for k in range(split, step_qty):
-                m = k - step_qty + k_overlap
+                m = k - step_qty + overlap_substep_count
                 force_a = fa_cur * one_minus[k] + fa_nxt * frac[k]
                 force_b = fb2_cur * one_minus[m] + fb2_nxt * frac[m]
                 sample.append(force_a - force_b)
@@ -343,14 +364,14 @@ def elbow_forces(
         As ``unbalance_force`` (D-7, D-8).
     """
     run = _run(history, sample_freq, physical_length, celerity, step_qty)
-    step_qty, k_overlap, unb_steps, frac, one_minus = (
+    step_qty, overlap_substep_count, transit_delay_substeps, frac, one_minus = (
         run.step_qty,
-        run.k_overlap,
-        run.unb_steps,
+        run.overlap_substep_count,
+        run.transit_delay_substeps,
         run.frac,
         run.one_minus,
     )
-    split = step_qty - k_overlap
+    split = step_qty - overlap_substep_count
     for item in _schedule(run):
         if item[0] == 0:
             _phase, tot_ind, force_a, f_cur, f_nxt = item
@@ -360,7 +381,7 @@ def elbow_forces(
             for k in range(step_qty):
                 fa.append(force_a)
                 fb.append(f_cur * one_minus[k] + f_nxt * frac[k])
-                if base + k > unb_steps:
+                if base + k > transit_delay_substeps:
                     break
             yield (0, fa, fb)
         else:
@@ -369,9 +390,12 @@ def elbow_forces(
             fb = []
             for k in range(0, split):
                 fa.append(fa_cur * one_minus[k] + fa_nxt * frac[k])
-                fb.append(fb_cur * one_minus[k + k_overlap] + fb_nxt * frac[k + k_overlap])
+                fb.append(
+                    fb_cur * one_minus[k + overlap_substep_count]
+                    + fb_nxt * frac[k + overlap_substep_count]
+                )
             for k in range(split, step_qty):
-                m = k - step_qty + k_overlap
+                m = k - step_qty + overlap_substep_count
                 fa.append(fa_cur * one_minus[k] + fa_nxt * frac[k])
                 fb.append(fb2_cur * one_minus[m] + fb2_nxt * frac[m])
             yield (1, fa, fb)
