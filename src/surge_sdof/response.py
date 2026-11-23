@@ -684,9 +684,9 @@ def _integrate(
             params.mass,
             params.stiffness,
             params.damping,
-            params.fric_acc,
-            params.gap,
-            params.ratio2,
+            params.friction_velocity_step,
+            params.support_gap,
+            params.closed_gap_stiffness_ratio,
             dt,
             int(step_qty),
             int(out_max),
@@ -714,7 +714,12 @@ def _integrate(
 
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
     static_equivalent = (
-        abs(structure.effective_displacement(x_max, params.gap, params.ratio2)) * params.stiffness
+        abs(
+            structure.effective_displacement(
+                x_max, params.support_gap, params.closed_gap_stiffness_ratio
+            )
+        )
+        * params.stiffness
     )
     trace = None
     if trace_every > 0:

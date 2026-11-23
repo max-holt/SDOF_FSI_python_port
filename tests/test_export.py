@@ -194,7 +194,9 @@ def test_meta_carries_the_run_as_resolved():
     doc = trace_doc("example_jc")
     r = example_result("example_jc")
     p = doc["meta"]["params"]
-    assert p["mass"] == r.trace.params.mass and p["fric_acc"] == r.trace.params.fric_acc
+    assert (
+        p["mass"] == r.trace.params.mass and p["fric_acc"] == r.trace.params.friction_velocity_step
+    )
     assert p["trace_every"] == 4 and p["step_qty"] == 80 and p["dt"] == r.trace.dt
     assert doc["meta"]["outputs"]["max_displacement"] == r.max_displacement
     assert doc["meta"]["inputs"]["vav_denominator"] == "fixed"

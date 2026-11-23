@@ -269,7 +269,7 @@ def test_f_friction_is_zero_without_friction():
         force, kw, _ht = _lumped_case(idx)
         assert kw["dynamic_fric"] == 0
         tr = response.peak_response(force, **kw, trace_every=1).trace
-        assert tr.params.fric_acc == 0
+        assert tr.params.friction_velocity_step == 0
         assert not np.any(tr.f_friction) and not np.any(tr.stick)
 
 
@@ -278,7 +278,7 @@ def test_f_friction_and_stick_follow_the_coulomb_branch(idx):
     force, kw, _ht = _lumped_case(idx)
     assert kw["dynamic_fric"] > 0
     tr = response.peak_response(force, **kw, trace_every=1).trace
-    mass, fric_acc, dt = tr.params.mass, tr.params.fric_acc, tr.dt
+    mass, fric_acc, dt = tr.params.mass, tr.params.friction_velocity_step, tr.dt
     v_old = np.concatenate([[0.0], tr.v[:-1]])
     a_old = np.concatenate([[0.0], tr.a[:-1]])
     assert np.array_equal(tr.stick, np.abs(v_old) < fric_acc)

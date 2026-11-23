@@ -104,7 +104,8 @@ class Trace:
     out_max : int
         The VBA ``outMax``; free decay is traced while ``sample < out_max * 2``.
     params : SdofParams
-        ``(mass, stiffness, damping, fric_acc, gap, ratio2)`` of the run (kg, N/m, N·s/m,
+        ``(mass, stiffness, damping, friction_velocity_step, support_gap,
+        closed_gap_stiffness_ratio)`` of the run (kg, N/m, N·s/m,
         m/s, m, dimensionless).
     inputs : dict
         The case inputs as the solver received them (``force_history`` as the 2-D array

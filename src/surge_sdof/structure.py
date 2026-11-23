@@ -60,13 +60,13 @@ class SdofParams(NamedTuple):
         Stiffness with the support gaps open, N/m (VBA ``stiffness``).
     damping : float
         Viscous damping coefficient, N·s/m (VBA ``damping``).
-    fric_acc : float
-        Coulomb friction velocity increment per sub-step, m/s (VBA ``fricAcc`` =
+    friction_velocity_step : float
+        Velocity Coulomb friction removes per sub-step, m/s (VBA ``fricAcc`` =
         ``0.5 * dynamicFric * 9.81 * dt``; the only quantity whose units are fixed to m
         and s by the VBA).
-    gap : float
+    support_gap : float
         Support gap, m (VBA ``gap``).
-    ratio2 : float
+    closed_gap_stiffness_ratio : float
         ``restrainFreqRatio ^ 2``, dimensionless: the stiffness beyond the gap relative
         to ``stiffness``.
     """
@@ -74,9 +74,9 @@ class SdofParams(NamedTuple):
     mass: float
     stiffness: float
     damping: float
-    fric_acc: float
-    gap: float
-    ratio2: float
+    friction_velocity_step: float
+    support_gap: float
+    closed_gap_stiffness_ratio: float
 
 
 # VBA line 137: Function solvePoly(varA As Double, varB As Double, varC As Double) As Double
@@ -202,7 +202,7 @@ def lumped_params(
     -------
     SdofParams
         ``mass = (L + 4h/3) m'`` (kg), ``stiffness = (2 pi f)^2 mass`` (N/m),
-        ``damping = 2 sqrt(k m) zeta / 100`` (N·s/m), ``fric_acc = 0.5 mu 9.81 dt``
+        ``damping = 2 sqrt(k m) zeta / 100`` (N·s/m), ``friction_velocity_step = 0.5 mu 9.81 dt``
         (m/s), ``gap`` (m), ``restrain_freq_ratio^2``.
 
     Notes
@@ -219,12 +219,12 @@ def lumped_params(
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
-    fric_acc = 0.5 * dynamic_fric * 9.81 * dt
+    friction_velocity_step = 0.5 * dynamic_fric * 9.81 * dt
     return SdofParams(
         float(mass),
         float(stiffness),
         float(damping),
-        float(fric_acc),
+        float(friction_velocity_step),
         float(gap),
         float(restrain_freq_ratio) ** 2,
     )
@@ -279,7 +279,8 @@ def jc_params(
     -------
     SdofParams
         ``mass`` kg (rigid), ``stiffness`` N/m and ``damping`` N·s/m on the total mass,
-        ``fric_acc`` m/s corrected by ``total mass / rigid mass``, ``gap`` m, ``ratio2``.
+        ``friction_velocity_step`` m/s corrected by ``total mass / rigid mass``,
+        ``support_gap`` m, ``closed_gap_stiffness_ratio``.
 
     Notes
     -----
@@ -310,7 +311,7 @@ def jc_params(
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part (as in lumped_params). The weight is that of the total mass (pipe and
     # contents) while the velocity step acts on the rigid mass, hence total mass / rigid mass.
-    fric_acc = (
+    friction_velocity_step = (
         0.5
         * dynamic_fric
         * 9.81
@@ -322,26 +323,29 @@ def jc_params(
         float(mass),
         float(stiffness),
         float(damping),
-        float(fric_acc),
+        float(friction_velocity_step),
         float(gap),
         float(restrain_freq_ratio) ** 2,
     )
 
 
 # VBA line 424 (restoring term) and 611 (static-equivalent force)
-def effective_displacement(x: float, gap: float, ratio2: float) -> float:
+def effective_displacement(
+    x: float, support_gap: float, closed_gap_stiffness_ratio: float
+) -> float:
     """Displacement seen by the open-gap stiffness (VBA line 424 and 611).
 
-    ``minUnsigned(gap, x) + max(0, |x| - gap) * sign(x) * ratio2``: ``x`` up to the
-    support gap, then ``gap + (|x| - gap) * ratio2`` with the sign of ``x`` beyond it.
+    ``minUnsigned(gap, x) + max(0, |x| - gap) * sign(x) * ratio^2``: ``x`` up to the
+    support gap, then ``gap + (|x| - gap) * closed_gap_stiffness_ratio`` with the sign of
+    ``x`` beyond it.
 
     Parameters
     ----------
     x : float
         Displacement, m.
-    gap : float
+    support_gap : float
         Support gap, m.
-    ratio2 : float
+    closed_gap_stiffness_ratio : float
         ``restrainFreqRatio ^ 2``, dimensionless.
 
     Returns
@@ -357,14 +361,14 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
     """
     ax = abs(x)
     # minUnsigned(gap, x)
-    if abs(gap) < ax:
-        clamp = gap if x > 0 else -gap  # gap * sign(x); x != 0 here
-    elif gap == 0:
+    if abs(support_gap) < ax:
+        clamp = support_gap if x > 0 else -support_gap  # support_gap * sign(x); x != 0 here
+    elif support_gap == 0:
         clamp = x
     else:
-        clamp = x if gap > 0 else -x  # x * sign(gap)
+        clamp = x if support_gap > 0 else -x  # x * sign(gap)
     # max(0, Abs(x) - gap) * sign(x)
-    excess = ax - gap
+    excess = ax - support_gap
     if excess < 0:
         excess = 0.0
     if x > 0:
@@ -373,7 +377,7 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
         beyond = -excess
     else:
         beyond = excess * 0.0
-    return clamp + beyond * ratio2
+    return clamp + beyond * closed_gap_stiffness_ratio
 
 
 @numba.njit(cache=True)

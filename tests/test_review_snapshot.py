@@ -92,9 +92,9 @@ _PARAM_FIELDS = {
     "mass": "mass",
     "stiffness": "stiffness",
     "damping": "damping",
-    "fric_acc": "fric_acc",
-    "gap": "gap",
-    "ratio2": "ratio2",
+    "fric_acc": "friction_velocity_step",
+    "gap": "support_gap",
+    "ratio2": "closed_gap_stiffness_ratio",
 }
 
 

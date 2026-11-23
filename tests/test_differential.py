@@ -284,13 +284,16 @@ def test_lumped_params_match_legacy(idx):
         kw["gap"],
         kw["restrain_freq_ratio"],
     )
-    assert (p.mass, p.stiffness, p.damping, p.fric_acc) == (
+    assert (p.mass, p.stiffness, p.damping, p.friction_velocity_step) == (
         su["mass"],
         su["stiffness"],
         su["damping"],
         su["fric_acc"],
     )
-    assert p.gap == kw["gap"] and p.ratio2 == kw["restrain_freq_ratio"] ** 2
+    assert (
+        p.support_gap == kw["gap"]
+        and p.closed_gap_stiffness_ratio == kw["restrain_freq_ratio"] ** 2
+    )
     assert all(type(v) is float for v in p)
 
 
@@ -850,7 +853,7 @@ def test_jc_params_match_legacy(idx):
         kw.get("gap", 0.0),
         kw.get("restrain_freq_ratio", 1.0),
     )
-    assert (p.mass, p.stiffness, p.damping, p.fric_acc) == (
+    assert (p.mass, p.stiffness, p.damping, p.friction_velocity_step) == (
         su["mass"],
         su["stiffness"],
         su["damping"],
