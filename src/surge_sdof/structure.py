@@ -36,7 +36,7 @@ import numba
 __all__ = [
     "VBA_PI",
     "SdofParams",
-    "solve_poly",
+    "solve_quartic",
     "solve_portal_height",
     "lumped_params",
     "jc_params",
@@ -80,7 +80,9 @@ class SdofParams(NamedTuple):
 
 
 # VBA line 137: Function solvePoly(varA As Double, varB As Double, varC As Double) As Double
-def solve_poly(var_a: float, var_b: float, var_c: float) -> float:
+def solve_quartic(
+    quartic_constant: float, cubic_coefficient: float, quartic_coefficient: float
+) -> float:
     """Relaxed Newton solve of ``varA + varB * L^3 + varC * L^4 = 0`` for ``L``.
 
     Literal copy of ``legacy_port.solve_poly`` (VBA line 137) so that this module does
@@ -88,10 +90,10 @@ def solve_poly(var_a: float, var_b: float, var_c: float) -> float:
 
     Parameters
     ----------
-    var_a, var_b, var_c : float
-        Polynomial coefficients. In the portal-frame use the root is a length in m and
-        the coefficients carry the matching units (``var_a`` kg·m³, ``var_b`` kg,
-        ``var_c`` kg/m).
+    quartic_constant, cubic_coefficient, quartic_coefficient : float
+        The coefficients ``c0``, ``c3``, ``c4`` of ``c0 + c3 L^3 + c4 L^4`` (VBA ``varA``,
+        ``varB``, ``varC``). In the portal-frame use the root is a length in m and the
+        coefficients carry the matching units (kg·m³, kg, kg/m).
 
     Returns
     -------
@@ -105,14 +107,16 @@ def solve_poly(var_a: float, var_b: float, var_c: float) -> float:
     D-12: a negative base makes the Python seed complex where VBA raises error 5.
     """
     relax = 0.25
-    len_val = (-var_a / var_b) ** (1 / 3)
+    root = (-quartic_constant / cubic_coefficient) ** (1 / 3)
     for _i in range(1, 100 + 1):
-        error_val = var_a + var_b * (len_val**3) + var_c * (len_val**4)
-        if abs(error_val / var_a) < 0.000001:
+        residual = (
+            quartic_constant + cubic_coefficient * (root**3) + quartic_coefficient * (root**4)
+        )
+        if abs(residual / quartic_constant) < 0.000001:
             break
-        grad = 3 * var_b * (len_val**2) + 4 * var_c * (len_val**3)
-        len_val = len_val - relax * error_val / grad
-    return len_val
+        slope = 3 * cubic_coefficient * (root**2) + 4 * quartic_coefficient * (root**3)
+        root = root - relax * residual / slope
+    return root
 
 
 # VBA lines 384-387
@@ -123,7 +127,8 @@ def solve_portal_height(
 
     The height ``h`` at which the frame stiffness ``12 EI (0.5 + 1.5 (h / (L + h))^2) / h^3``
     gives ``natFreq`` with the mass ``(L + 4h/3) * massPerUnitLen``: the seed
-    ``solvePoly`` call plus the VBA's 11 refinement passes of the end-fixity factor.
+    ``solve_quartic`` (VBA ``solvePoly``) call plus the VBA's 11 refinement passes of the
+    end-fixity factor.
 
     Parameters
     ----------
@@ -149,13 +154,13 @@ def solve_portal_height(
     var_c = mass_per_unit_len * 4 / 3
     # Proposed derivation, for Ben to confirm: 12 * EI / h^3 is the lateral stiffness of a leg
     # of height h fixed against rotation at both ends.
-    h = solve_poly(-12 * flexural_rigidity_ei / omega2, var_b, var_c)
+    h = solve_quartic(-12 * flexural_rigidity_ei / omega2, var_b, var_c)
     for _i in range(0, 10 + 1):
         # Proposed derivation, for Ben to confirm: 0.5 + 1.5 * (h / (L + h))^2 is a factor on that
         # stiffness, running from 0.5 when the legs are short against the span (two legs acting as
         # cantilevers, 2 * 3EI/h^3) to 2 when they are long (two legs fixed at both ends,
         # 2 * 12EI/h^3). The squared ratio is an interpolation between the two.
-        h = solve_poly(
+        h = solve_quartic(
             -12 * flexural_rigidity_ei * (0.5 + 1.5 * ((h / (physical_length + h)) ** 2)) / omega2,
             var_b,
             var_c,

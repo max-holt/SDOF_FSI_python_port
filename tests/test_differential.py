@@ -297,11 +297,11 @@ def test_lumped_params_match_legacy(idx):
     assert all(type(v) is float for v in p)
 
 
-def test_solve_poly_is_the_legacy_function():
+def test_solve_quartic_is_the_legacy_function():
     rng = random.Random(SEED)
     for _ in range(200):
         a, b, c = -rng.uniform(1e2, 1e7), rng.uniform(1.0, 1e3), rng.uniform(1.0, 1e2)
-        assert structure.solve_poly(a, b, c) == lp.solve_poly(a, b, c)
+        assert structure.solve_quartic(a, b, c) == lp.solve_poly(a, b, c)
 
 
 def test_restoring_force_matches_the_legacy_expression():
