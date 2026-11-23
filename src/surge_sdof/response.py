@@ -363,7 +363,10 @@ def peak_response_jc(
     Raises
     ------
     ValueError
-        Unknown ``parity``, ``vav_denominator`` or ``fraction_profile``; ``trace_every <
+        Unknown ``parity`` or ``fraction_profile`` (checked at the entry); unknown
+        ``vav_denominator``, but only where the MoC column is built: a short pipe returns
+        ``peak_response`` and ``rhoC = 0`` raises ``FloatingPointError`` before that check
+        (validation at the entry is planned for the public API session); ``trace_every <
         0`` or a trace over ``trace.MAX_TRACE_VALUES``; ``pivotSegQTY = 4`` at the set-up
         with the fixed fraction profile (the ramp needs ``pivot > ext``).
     ZeroDivisionError
