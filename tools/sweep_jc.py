@@ -56,20 +56,22 @@ PIPES = {
     16: (406.4, 9.525),
     18: (457.0, 12.7),
 }
-RHO_FLUID = 1000.0  # kg/m³ (curve_10in!H9)
-RHO_PIPE = 7800.0  # kg/m³ (curve_10in!H10)
+FLUID_DENSITY = 1000.0  # kg/m³ (curve_10in!H9)
+PIPE_DENSITY = 7800.0  # kg/m³ (curve_10in!H10)
 YOUNGS_MODULUS = 195e9  # Pa (curve_10in!H14)
 ALLOWABLE_STRESS = 138e6  # Pa, A106 Gr B (owner)
 P_DESIGN_EXPECTED_BAR = {10: 78.8, 12: 75.3, 16: 64.7, 18: 76.7}  # owner's figures, ±0.1 bar
-BAR = 1e5
+PA_PER_BAR = 1e5  # Pa per bar: a pressure in bar times this is in Pa
 
-STEP_QTY = 40
-SAMPLE_FREQ = 1000.0
+SUBSTEP_COUNT = 40
+SAMPLE_RATE = 1000.0
 CELERITY = 1237.0
 DAMPING_PERCENT = 0.5
-RESTRAIN_FREQ_RATIO = 1.0
-GAP = 0.0
-F_REF_NOISE = 4.0  # Hz: the envelope reference of step_noise (the middle Tier 1 f_osc)
+CLOSED_GAP_FREQUENCY_RATIO = 1.0
+SUPPORT_GAP = 0.0
+NOISE_REFERENCE_FREQUENCY = (
+    4.0  # Hz: the envelope reference of step_noise (the middle Tier 1 f_osc)
+)
 TRANSIT_ALLOWANCE_S = 0.04  # >= 48 m / 1237 m/s, the tier's longest span; one history per type
 
 TIERS = {
@@ -122,7 +124,7 @@ def pipe(size_in: int) -> Pipe:
     r_in = (od_mm / 2 - thk_mm) / 1000
     r_out = od_mm / 2000
     fluid_area = math.pi * r_in**2
-    mass = math.pi * (r_in**2 * RHO_FLUID + (r_out**2 - r_in**2) * RHO_PIPE)
+    mass = math.pi * (r_in**2 * FLUID_DENSITY + (r_out**2 - r_in**2) * PIPE_DENSITY)
     inertia = (math.pi / 4) * (r_out**4 - r_in**4)
     p_design = 2 * (thk_mm / 1000) * ALLOWABLE_STRESS / (od_mm / 1000)
     return Pipe(size_in, od_mm, thk_mm, fluid_area, mass, YOUNGS_MODULUS * inertia, p_design)
@@ -134,7 +136,7 @@ def check_pipe_table(verbose: bool = True) -> None:
     import json
 
     for size, expected in P_DESIGN_EXPECTED_BAR.items():
-        got = pipe(size).p_design / BAR
+        got = pipe(size).p_design / PA_PER_BAR
         assert abs(got - expected) <= 0.1, f"{size} in: p_design {got:.2f} bar, expected {expected}"
         if verbose:
             print(
@@ -271,8 +273,8 @@ def case_history(case: Case, p_design: float) -> histories.History:
         case.amplitude_fraction,
         f_osc=case.f_osc_hz,
         seed=case.seed,
-        f_ref=F_REF_NOISE if case.history_type == "step_noise" else None,
-        sample_freq=SAMPLE_FREQ,
+        f_ref=NOISE_REFERENCE_FREQUENCY if case.history_type == "step_noise" else None,
+        sample_freq=SAMPLE_RATE,
         transit_s=TRANSIT_ALLOWANCE_S,
     )
 
@@ -295,8 +297,8 @@ def history_from_row(row: dict) -> histories.History:
 
 def solver_kwargs(case: Case, p: Pipe) -> dict:
     return {
-        "step_qty": STEP_QTY,
-        "sample_freq": SAMPLE_FREQ,
+        "step_qty": SUBSTEP_COUNT,
+        "sample_freq": SAMPLE_RATE,
         "physical_length": case.length_m,
         "flexural_rigidity_ei": p.ei,
         "celerity": CELERITY,
@@ -304,8 +306,8 @@ def solver_kwargs(case: Case, p: Pipe) -> dict:
         "damping_percent": DAMPING_PERCENT,
         "dynamic_fric": case.mu,
         "nat_freq": case.nat_freq_hz,
-        "restrain_freq_ratio": RESTRAIN_FREQ_RATIO,
-        "gap": GAP,
+        "restrain_freq_ratio": CLOSED_GAP_FREQUENCY_RATIO,
+        "gap": SUPPORT_GAP,
     }
 
 
@@ -327,7 +329,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     portal_frame_height = structure.solve_portal_height(
         case.length_m, p.ei, p.mass_per_unit_len, case.nat_freq_hz
     )
-    substep_duration = 1 / (SAMPLE_FREQ * STEP_QTY)
+    substep_duration = 1 / (SAMPLE_RATE * SUBSTEP_COUNT)
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
         case.length_m, portal_frame_height, CELERITY, substep_duration
     )
@@ -347,12 +349,12 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         nat_freq_hz=case.nat_freq_hz,
         amplitude_fraction=case.amplitude_fraction,
         mu=case.mu,
-        p_design_bar=p.p_design / BAR,
-        p_cap_bar=histories.p_cap(p.p_design, case.amplitude_fraction) / BAR,
-        p_peak_bar=h.peak / BAR,
-        p_mean_bar=h.mean / BAR,
-        p_rms_bar=h.rms / BAR,
-        noise_rms_bar=None if h.noise_rms is None else h.noise_rms / BAR,
+        p_design_bar=p.p_design / PA_PER_BAR,
+        p_cap_bar=histories.p_cap(p.p_design, case.amplitude_fraction) / PA_PER_BAR,
+        p_peak_bar=h.peak / PA_PER_BAR,
+        p_mean_bar=h.mean / PA_PER_BAR,
+        p_rms_bar=h.rms / PA_PER_BAR,
+        noise_rms_bar=None if h.noise_rms is None else h.noise_rms / PA_PER_BAR,
         decay_s=h.decay_s,
         duration_s=h.duration_s,
         n_samples=h.n_samples,
@@ -360,7 +362,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         fluid_area_m2=p.fluid_area,
         mass_per_unit_len=p.mass_per_unit_len,
         ei=p.ei,
-        rho_c=RHO_FLUID * CELERITY,
+        rho_c=FLUID_DENSITY * CELERITY,
         portal_height_m=portal_frame_height,
         mass_total_kg=mass_total,
         pipe_seg_qty=column_cell_count,
@@ -381,7 +383,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     if err:
         errors.append(f"lumped: {err}")
     jc, row["t_jc_s"], err = _timed(
-        response.peak_response_jc, force, fluid_densty=RHO_FLUID, fluid_area=p.fluid_area, **kw
+        response.peak_response_jc, force, fluid_densty=FLUID_DENSITY, fluid_area=p.fluid_area, **kw
     )
     if err:
         errors.append(f"jc: {err}")
