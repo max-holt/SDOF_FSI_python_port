@@ -117,9 +117,9 @@ def overlap_substeps(transit_delay_samples: float, step_qty: int) -> int:
 class _Run(NamedTuple):
     """Per-run constants of the walk, computed once by ``_run``."""
 
-    fh: list  # fh[i][j] is the VBA forceHistory(i, j), 1-based (vba_2d)
-    u1: int  # UBound(forceHistory, 1)
-    u2: int  # UBound(forceHistory, 2)
+    force_history_one_based: list  # [i][j] is the VBA forceHistory(i, j), 1-based (vba_2d)
+    history_row_count: int  # UBound(forceHistory, 1)
+    history_column_count: int  # UBound(forceHistory, 2)
     step_qty: int
     transit_delay_samples: float  # unballanceStepQTY, samples
     overlap_substep_count: int  # kOverlap
@@ -129,7 +129,7 @@ class _Run(NamedTuple):
 
 
 def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
-    fh = vba_2d(as_history_2d(history)).tolist()
+    force_history_one_based = vba_2d(as_history_2d(history)).tolist()
     step_qty = int(step_qty)
     transit_delay_samples = transit_delay(physical_length, celerity, sample_freq)
     overlap_substep_count = overlap_substeps(transit_delay_samples, step_qty)
@@ -137,9 +137,9 @@ def _run(history, sample_freq, physical_length, celerity, step_qty) -> _Run:
     frac = [k / (step_qty - 1) for k in range(step_qty)]
     one_minus = [1 - f for f in frac]
     return _Run(
-        fh,
-        len(fh) - 1,
-        len(fh[0]) - 1,
+        force_history_one_based,
+        len(force_history_one_based) - 1,
+        len(force_history_one_based[0]) - 1,
         step_qty,
         transit_delay_samples,
         overlap_substep_count,
@@ -162,9 +162,9 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     yielded after every index it needs is read, so a D-8 ``IndexError`` surfaces where the
     legacy raised it: at the first phase-2 sample, after every phase-1 sample."""
     (
-        fh,
-        u1,
-        u2,
+        force_history_one_based,
+        history_row_count,
+        history_column_count,
         step_qty,
         transit_delay_samples,
         overlap_substep_count,
@@ -174,7 +174,7 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     ) = run
 
     # ---------------------------------------------------------------- phase 1: delay
-    force_a = fh[1][1]
+    force_a = force_history_one_based[1][1]
     tot_ind = 0
     # For jB = 1 To 1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))
     #     For iB = 1 To UBound(forceHistory, 1)
@@ -183,72 +183,87 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     # history columns (UBound(forceHistory, 2)), where the samples per column are the rows.
     # The walk exits earlier, on totInd > unballanceStepQTY, in every tested case, so the
     # bound has not been seen to matter. The expression is the VBA's and stays.
-    jb_to = 1 + clng(transit_delay_samples / u2)
-    jb = 1
-    while jb <= jb_to:
-        ib = 1
-        while ib <= u1:
+    transit_last_column = 1 + clng(transit_delay_samples / history_column_count)
+    elbow_b_column = 1
+    while elbow_b_column <= transit_last_column:
+        elbow_b_row = 1
+        while elbow_b_row <= history_row_count:
             tot_ind = tot_ind + 1
-            if jb > u2:
-                j = u2
-                i = u1
+            if elbow_b_column > history_column_count:
+                history_column = history_column_count
+                history_row = history_row_count
             else:
-                j = jb
-                i = ib
-            if i + 1 > u1 and j < u2:
-                jmax = min(j + 1, u2)
-                imax = 1
+                history_column = elbow_b_column
+                history_row = elbow_b_row
+            if history_row + 1 > history_row_count and history_column < history_column_count:
+                next_history_column = min(history_column + 1, history_column_count)
+                next_history_row = 1
             else:
-                jmax = min(j, u2)
-                imax = min(i + 1, u1)
-            yield (0, tot_ind, force_a, fh[i][j], fh[imax][jmax])
+                next_history_column = min(history_column, history_column_count)
+                next_history_row = min(history_row + 1, history_row_count)
+            yield (
+                0,
+                tot_ind,
+                force_a,
+                force_history_one_based[history_row][history_column],
+                force_history_one_based[next_history_row][next_history_column],
+            )
             if tot_ind > transit_delay_samples:
                 break
-            ib = ib + 1
+            elbow_b_row = elbow_b_row + 1
         if tot_ind > transit_delay_samples:
             break
-        jb = jb + 1
+        elbow_b_column = elbow_b_column + 1
 
     # VBA quirk D-8 preserved: if the loops complete without Exit For (single-row
-    # history), iB is UBound(1) + 1 and fh[ib][jb] below raises IndexError.
-    if jb > u2:
-        jb = u2
-        ib = u1
+    # history), iB is UBound(1) + 1 and the read at [elbow_b_row][elbow_b_column] below
+    # raises IndexError.
+    if elbow_b_column > history_column_count:
+        elbow_b_column = history_column_count
+        elbow_b_row = history_row_count
 
     # ----------------------------------------------------------------- phase 2: ramp
-    for j in range(1, u2 + 1):
-        for i in range(1, u1 + 1):
-            if i + 1 > u1 and j < u2:
-                jmax = min(j + 1, u2)
-                imax = 1
+    for history_column in range(1, history_column_count + 1):
+        for history_row in range(1, history_row_count + 1):
+            if history_row + 1 > history_row_count and history_column < history_column_count:
+                next_history_column = min(history_column + 1, history_column_count)
+                next_history_row = 1
             else:
-                jmax = j
-                imax = min(i + 1, u1)
-            if ib + 1 > u1 and jb < u2:
-                jbmax = min(jb + 1, u2)
-                ibmax = 1
+                next_history_column = history_column
+                next_history_row = min(history_row + 1, history_row_count)
+            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
+                elbow_b_next_column = min(elbow_b_column + 1, history_column_count)
+                elbow_b_next_row = 1
             else:
-                jbmax = jb
-                ibmax = min(ib + 1, u1)
-            fa_cur = fh[i][j]
-            fa_nxt = fh[imax][jmax]
-            fb_cur = fh[ib][jb]
-            fb_nxt = fh[ibmax][jbmax]
+                elbow_b_next_column = elbow_b_column
+                elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
+            fa_cur = force_history_one_based[history_row][history_column]
+            fa_nxt = force_history_one_based[next_history_row][next_history_column]
+            fb_cur = force_history_one_based[elbow_b_row][elbow_b_column]
+            fb_nxt = force_history_one_based[elbow_b_next_row][elbow_b_next_column]
             # forceB for k = 0 To stepQTY - kOverlap - 1 comes from (fb_cur, fb_nxt); the
             # VBA then advances iB/jB and reads the pair for k = stepQTY - kOverlap To
             # stepQTY - 1 (the advance does not depend on the k loop)
-            if ib + 1 > u1 and jb < u2:
-                jb = min(jb + 1, u2)
-                ib = 1
+            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
+                elbow_b_column = min(elbow_b_column + 1, history_column_count)
+                elbow_b_row = 1
             else:
-                ib = min(ib + 1, u1)
-            if ib + 1 > u1 and jb < u2:
-                jbmax = min(jb + 1, u2)
-                ibmax = 1
+                elbow_b_row = min(elbow_b_row + 1, history_row_count)
+            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
+                elbow_b_next_column = min(elbow_b_column + 1, history_column_count)
+                elbow_b_next_row = 1
             else:
-                jbmax = jb
-                ibmax = min(ib + 1, u1)
-            yield (1, fa_cur, fa_nxt, fb_cur, fb_nxt, fh[ib][jb], fh[ibmax][jbmax])
+                elbow_b_next_column = elbow_b_column
+                elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
+            yield (
+                1,
+                fa_cur,
+                fa_nxt,
+                fb_cur,
+                fb_nxt,
+                force_history_one_based[elbow_b_row][elbow_b_column],
+                force_history_one_based[elbow_b_next_row][elbow_b_next_column],
+            )
 
 
 def unbalance_force(
