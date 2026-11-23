@@ -59,8 +59,8 @@ import numpy as np
 from surge_sdof.vba_compat import clng
 
 __all__ = [
-    "EXT_QTY",
-    "DAMPING_A",
+    "INACTIVE_END_CELL_COUNT",
+    "JUNCTION_FORCE_FILTER_WEIGHT",
     "grid_size",
     "is_short_pipe",
     "end_pressure_decay_factor",
@@ -75,11 +75,12 @@ __all__ = [
     "step",
 ]
 
-EXT_QTY = 4
+INACTIVE_END_CELL_COUNT = 4
 """VBA ``Const extQTY = 4``: cells at each end that receive no mass acceleration."""
 
-DAMPING_A = 0.25
-"""VBA ``Const dampingA = 0.25``: first-order low-pass on the junction force ``dF``."""
+JUNCTION_FORCE_FILTER_WEIGHT = 0.25
+"""VBA ``Const dampingA = 0.25``: weight of the previous junction force ``dF`` in its first-order
+low-pass filter (not a damping)."""
 
 FRACTION_PROFILES = ("legacy", "fixed")
 """Values of the ``fraction_profile`` flag: the original ``interpFractionA/B`` (D-4
@@ -111,7 +112,7 @@ def grid_size(
         ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
         height in cells; ``CLng`` rounds half to even).
     """
-    pivot_seg_qty = EXT_QTY + clng(portal_frame_height / (2 * celerity * dt))
+    pivot_seg_qty = INACTIVE_END_CELL_COUNT + clng(portal_frame_height / (2 * celerity * dt))
     # Proposed derivation, for Ben to confirm: a grid segment is 2 * celerity * dt long, and
     # the count is halved, rounded and doubled so the number of segments is even:
     # L / (4 c dt) is half the span's segment count.
@@ -180,14 +181,19 @@ def moving_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
         0 in the ``extQTY`` end cells, a squared ramp up to the pivot, 1 between the
         pivots; dimensionless.
     """
-    if n < EXT_QTY:
+    if n < INACTIVE_END_CELL_COUNT:
         return 0.0
     elif n < pivot_seg_qty:
-        return ((n - 0.5 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n > pipe_seg_qty - EXT_QTY:
+        return (
+            (n - 0.5 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
+    elif n > pipe_seg_qty - INACTIVE_END_CELL_COUNT:
         return 0.0
     elif n > pipe_seg_qty - pivot_seg_qty:
-        return ((pipe_seg_qty - 0.5 - EXT_QTY - n) / (pivot_seg_qty - EXT_QTY)) ** 2
+        return (
+            (pipe_seg_qty - 0.5 - INACTIVE_END_CELL_COUNT - n)
+            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
     else:
         return 1.0
 
@@ -219,11 +225,14 @@ def moving_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     if n < 3:  # VBA quirk D-4 preserved
         return 0.0
     elif n < pivot_seg_qty:
-        return ((n - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n > pipe_seg_qty - EXT_QTY:
+        return ((n - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)) ** 2
+    elif n > pipe_seg_qty - INACTIVE_END_CELL_COUNT:
         return 0.0
     elif n > pipe_seg_qty - pivot_seg_qty:
-        return ((pipe_seg_qty - 1 - EXT_QTY - n) / (pivot_seg_qty - EXT_QTY)) ** 2
+        return (
+            (pipe_seg_qty - 1 - INACTIVE_END_CELL_COUNT - n)
+            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
     else:
         return 1.0
 
@@ -252,14 +261,19 @@ def moving_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
         dimensionless. At ``pivotSegQTY = 4`` the ramp branch is unreachable (the zero test
         covers it), so nothing divides by zero here.
     """
-    if n + 1 < EXT_QTY + 0.5:
+    if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
     elif n + 1 < pivot_seg_qty:
-        return ((n + 0.5 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n + 1 > pipe_seg_qty + 1 - EXT_QTY + 0.5:
+        return (
+            (n + 0.5 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
+    elif n + 1 > pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
     elif n + 1 > pipe_seg_qty + 2 - pivot_seg_qty:
-        return ((pipe_seg_qty + 1 - EXT_QTY - n - 0.5) / (pivot_seg_qty - EXT_QTY)) ** 2
+        return (
+            (pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - n - 0.5)
+            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
     else:
         return 1.0
 
@@ -287,14 +301,17 @@ def moving_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
         ``B(N - 1 - n)`` on the outlet leg (``N - pivot + 1 <= n <= N - 5``), 1 between;
         dimensionless. As for the A profile the ramp is unreachable at ``pivotSegQTY = 4``.
     """
-    if n + 1 < EXT_QTY + 0.5:
+    if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
     elif n + 1 < pivot_seg_qty:
-        return ((n + 1 - EXT_QTY) / (pivot_seg_qty - EXT_QTY)) ** 2
-    elif n + 1 > pipe_seg_qty + 1 - EXT_QTY - 0.5:
+        return ((n + 1 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)) ** 2
+    elif n + 1 > pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - 0.5:
         return 0.0
     elif n + 1 > pipe_seg_qty + 1.5 - pivot_seg_qty:
-        return ((pipe_seg_qty + 1 - EXT_QTY - n - 1) / (pivot_seg_qty - EXT_QTY)) ** 2
+        return (
+            (pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - n - 1)
+            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+        ) ** 2
     else:
         return 1.0
 
@@ -337,9 +354,10 @@ def moving_fractions(
             f"fraction_profile must be one of {FRACTION_PROFILES}, got {fraction_profile!r}"
         )
     if fraction_profile == "fixed":
-        if pivot_seg_qty <= EXT_QTY:
+        if pivot_seg_qty <= INACTIVE_END_CELL_COUNT:
             raise ValueError(
-                f"pivotSegQTY = {pivot_seg_qty} <= extQTY = {EXT_QTY}: the fixed fraction "
+                f"pivotSegQTY = {pivot_seg_qty} <= extQTY = {INACTIVE_END_CELL_COUNT}: "
+                "the fixed fraction "
                 "profile needs pivot > ext (the portal-frame height rounds to no MoC cell)"
             )
         profile_a, profile_b = moving_fraction_a_fixed, moving_fraction_b_fixed
@@ -498,8 +516,8 @@ def step(
         for n in range(0, n_seg):
             v_b[n] = a_dt * frac_b[n] - v_av + v_b[n]
         d_f = (
-            DAMPING_A * d_f
-            + (1 - DAMPING_A)
+            JUNCTION_FORCE_FILTER_WEIGHT * d_f
+            + (1 - JUNCTION_FORCE_FILTER_WEIGHT)
             * fluid_area
             * (p_a[pivot] + p_a[pivot - 1] - p_a[n_seg - pivot] - p_a[n_seg - pivot + 1])
             / 2
@@ -530,5 +548,7 @@ def step(
         # place of p_b[pivot]. Moving it to pivot - 1 changed the equivalent static force by at
         # most 0.3 % over 16 cases (spans 6 to 48 m, 3 to 22 Hz), largest on the 6 m span.
         # The expression is the VBA's (lines 846, 971, 1067, 1164) and stays; DEVIATIONS D-24.
-        d_f = DAMPING_A * d_f + (1 - DAMPING_A) * fluid_area * (p_b[pivot] - p_b[n_seg - pivot])
+        d_f = JUNCTION_FORCE_FILTER_WEIGHT * d_f + (
+            1 - JUNCTION_FORCE_FILTER_WEIGHT
+        ) * fluid_area * (p_b[pivot] - p_b[n_seg - pivot])
     return d_f

@@ -306,7 +306,7 @@ def test_jc_trace_geometry():
     assert (tr.pipe_seg_qty, tr.pivot_seg_qty, tr.ext_qty) == (
         pipe_seg_qty,
         pivot_seg_qty,
-        moc.EXT_QTY,
+        moc.INACTIVE_END_CELL_COUNT,
     )
     assert tr.n_cells == 2 * pipe_seg_qty + 1
     assert np.array_equal(tr.cell_kind, np.arange(tr.n_cells) % 2)

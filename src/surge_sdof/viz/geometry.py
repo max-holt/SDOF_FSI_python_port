@@ -46,7 +46,7 @@ class LoopLayout:
     cell_position, cell_kind, moving_fraction : numpy.ndarray
         As ``Trace`` (m along the column; 0 = A node / 1 = B cell; the moving fraction).
     pivot_seg_qty, pipe_seg_qty, ext_qty : int
-        The grid (``moc.grid_size``, ``moc.EXT_QTY``).
+        The grid (``moc.grid_size``, ``moc.INACTIVE_END_CELL_COUNT``).
     cell_length : float
         ``2 * celerity * dt``, m (a cell; ``cell_position`` steps by half of it).
     portal_height : float
@@ -213,7 +213,7 @@ def _moving_fractions_display(pipe_seg_qty: int, pivot_seg_qty: int):
         moving_fraction_b = np.zeros(pipe_seg_qty)
         for n in range(1, pipe_seg_qty):
             moving_fraction_a[n] = moc.moving_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
-        for n in range(moc.EXT_QTY, pipe_seg_qty):
+        for n in range(moc.INACTIVE_END_CELL_COUNT, pipe_seg_qty):
             moving_fraction_b[n] = moc.moving_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
         return moving_fraction_a, moving_fraction_b
 
@@ -296,5 +296,12 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
         )
     position, kind, fraction, n_seg, pivot, portal_frame_height = lumped_grid(inputs, trace.dt)
     return loop_layout(
-        position, kind, fraction, pivot, n_seg, moc.EXT_QTY, cell_length, portal_frame_height
+        position,
+        kind,
+        fraction,
+        pivot,
+        n_seg,
+        moc.INACTIVE_END_CELL_COUNT,
+        cell_length,
+        portal_frame_height,
     )

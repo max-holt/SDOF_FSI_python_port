@@ -738,7 +738,7 @@ def _integrate(
             tr_v,
             jc=coupling,
             celerity=meta.celerity,
-            ext_qty=moc.EXT_QTY,
+            ext_qty=moc.INACTIVE_END_CELL_COUNT,
         )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent),

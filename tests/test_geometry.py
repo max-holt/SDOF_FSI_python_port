@@ -151,7 +151,7 @@ def test_lumped_grid_survives_pivot_seg_qty_4():
     # legacy: moving_fraction_b divides by zero, D-4); the display profile must not
     frac_a, frac_b = geometry._moving_fractions_display(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
-    assert np.all(frac_b[: moc.EXT_QTY] == 0) and frac_b[10] == 1.0
+    assert np.all(frac_b[: moc.INACTIVE_END_CELL_COUNT] == 0) and frac_b[10] == 1.0
     with pytest.raises(ValueError):
         moc.moving_fractions(20, 4)
     with pytest.raises(ZeroDivisionError):

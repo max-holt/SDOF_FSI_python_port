@@ -22,7 +22,7 @@ from surge_sdof import coupling, moc, response
 from surge_sdof.trace import interleave
 from surge_sdof.viz import geometry
 
-EXT = moc.EXT_QTY
+EXT = moc.INACTIVE_END_CELL_COUNT
 
 # (pipeSegQTY, pivotSegQTY): the sweep's 20-45 cell grids and the golden sizes (546-666
 # cells, pivot 27-87 per the differential tests), pivot 5 (no ramp cell) included

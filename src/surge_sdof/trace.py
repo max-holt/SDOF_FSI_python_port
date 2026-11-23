@@ -328,7 +328,7 @@ def build(
     celerity : float
         Pressure-wave speed, m/s (cell positions); unused for lumped.
     ext_qty : int
-        ``moc.EXT_QTY`` for a JC run.
+        ``moc.INACTIVE_END_CELL_COUNT`` for a JC run.
     """
     f = tr_f[:n_frames]
     ints = tr_i[:n_frames]
