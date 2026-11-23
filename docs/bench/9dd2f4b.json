@@ -1,0 +1,339 @@
+{
+ "git_sha": "9dd2f4b1041c88bc929389164066e6bf21f9933d",
+ "git_short_sha": "9dd2f4b",
+ "git_dirty": false,
+ "date": "2026-11-23T23:28:59+00:00",
+ "python": "3.13.18",
+ "numpy": "2.5.5",
+ "numba": "0.68.1",
+ "llvmlite": "0.50.0",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+ "platform": "Linux-6.18.44-fc-v726-x86_64-with-glibc2.39",
+ "repeats": 3,
+ "profile": false,
+ "cases": [
+  {
+   "id": "lumped_r20",
+   "mode": "literal",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    1.774864,
+    1.661334,
+    1.64402
+   ],
+   "median_s": 1.661334,
+   "substeps": 1005523,
+   "s_per_substep": 1.652209e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "ratio_to_reference": 1.0
+  },
+  {
+   "id": "lumped_r80",
+   "mode": "literal",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.legacy_port.get_peak_response",
+   "times_s": [
+    1.656068,
+    1.67177,
+    1.686299
+   ],
+   "median_s": 1.67177,
+   "substeps": 1007364,
+   "s_per_substep": 1.659549e-06,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "ratio_to_reference": 1.0063
+  },
+  {
+   "id": "jc_r96_n2000",
+   "mode": "literal",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.legacy_port.get_peak_response_jc",
+   "times_s": [
+    81.718462,
+    80.737208,
+    82.871822
+   ],
+   "median_s": 81.718462,
+   "substeps": 80982,
+   "s_per_substep": 0.00100909414,
+   "cells": 666,
+   "cell_updates_per_s": 659998,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "ratio_to_reference": 49.1885
+  },
+  {
+   "id": "response_r20",
+   "mode": "python",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.624919,
+    0.620105,
+    0.619712
+   ],
+   "median_s": 0.620105,
+   "substeps": 1005523,
+   "s_per_substep": 6.16699e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "ratio_to_reference": 0.3733
+  },
+  {
+   "id": "response_r80",
+   "mode": "python",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.response.peak_response",
+   "times_s": [
+    0.688044,
+    0.630166,
+    0.634265
+   ],
+   "median_s": 0.634265,
+   "substeps": 1007364,
+   "s_per_substep": 6.29629e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "ratio_to_reference": 0.3818
+  },
+  {
+   "id": "response_jc_r96_n2000",
+   "mode": "python",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "times_s": [
+    44.808054,
+    43.890625,
+    44.547599
+   ],
+   "median_s": 44.547599,
+   "substeps": 80982,
+   "s_per_substep": 0.000550092599,
+   "cells": 666,
+   "cell_updates_per_s": 1210705,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "ratio_to_reference": 26.8144
+  },
+  {
+   "id": "response_r20",
+   "mode": "numba",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2) via surge_sdof.response.peak_response",
+   "first_call_s": 0.16856,
+   "times_s": [
+    0.165801,
+    0.16622,
+    0.164186
+   ],
+   "median_s": 0.165801,
+   "substeps": 1005523,
+   "s_per_substep": 1.6489e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "golden_max_rel_err": 3.4008683055974843e-13,
+   "ratio_to_reference": 0.0998
+  },
+  {
+   "id": "response_r80",
+   "mode": "numba",
+   "description": "golden lumped source_row 80 (r080_lumped_L48_f2) via surge_sdof.response.peak_response",
+   "first_call_s": 0.165397,
+   "times_s": [
+    0.163622,
+    0.16782,
+    0.164674
+   ],
+   "median_s": 0.164674,
+   "substeps": 1007364,
+   "s_per_substep": 1.6347e-07,
+   "cells": null,
+   "cell_updates_per_s": null,
+   "result": [
+    3848.688035202786,
+    0.004415100556964004,
+    0.0408910493397843,
+    0.6123043360725197,
+    3627.6714128770836
+   ],
+   "golden_max_rel_err": 8.382796831762512e-14,
+   "ratio_to_reference": 0.0991
+  },
+  {
+   "id": "response_jc_r96_n2000",
+   "mode": "numba",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), first 2000 samples via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "first_call_s": 0.080305,
+   "times_s": [
+    0.079255,
+    0.091695,
+    0.092442
+   ],
+   "median_s": 0.091695,
+   "substeps": 80982,
+   "s_per_substep": 1.132286e-06,
+   "cells": 666,
+   "cell_updates_per_s": 588190769,
+   "result": [
+    781.2637738019574,
+    0.0007277413275859328,
+    0.0063706248553247295,
+    0.13701189086205764,
+    537.5892344361055
+   ],
+   "ratio_to_reference": 0.0552
+  },
+  {
+   "id": "response_jc_r96_full",
+   "mode": "numba",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3) via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "first_call_s": 1.01036,
+   "times_s": [
+    1.008873,
+    1.010616,
+    1.013859
+   ],
+   "median_s": 1.010616,
+   "substeps": 1006382,
+   "s_per_substep": 1.004208e-06,
+   "cells": 666,
+   "cell_updates_per_s": 663209523,
+   "result": [
+    3885.7009927936806,
+    0.0036195012413495903,
+    0.05827184148261104,
+    1.2461559320153934,
+    1903.596529175862
+   ],
+   "golden_max_rel_err": 8.56766156146851e-13,
+   "ratio_to_reference": 0.6083
+  },
+  {
+   "id": "response_jc_r97_full",
+   "mode": "numba",
+   "description": "golden jc source_row 97 (r097_jc_L24_f7.5) via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "first_call_s": 0.880903,
+   "times_s": [
+    0.895787,
+    0.875628,
+    0.893227
+   ],
+   "median_s": 0.893227,
+   "substeps": 1006382,
+   "s_per_substep": 8.87562e-07,
+   "cells": 592,
+   "cell_updates_per_s": 666995596,
+   "result": [
+    2591.1002294872137,
+    0.0004208265736997048,
+    0.013901705645009175,
+    0.9247993499148764,
+    1903.596529175862
+   ],
+   "golden_max_rel_err": 2.0739725183649006e-14,
+   "ratio_to_reference": 0.5377
+  },
+  {
+   "id": "response_jc_r98_full",
+   "mode": "numba",
+   "description": "golden jc source_row 98 (r098_jc_L24_f22) via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "first_call_s": 0.843047,
+   "times_s": [
+    0.890657,
+    0.892107,
+    0.862899
+   ],
+   "median_s": 0.890657,
+   "substeps": 1006382,
+   "s_per_substep": 8.85009e-07,
+   "cells": 546,
+   "cell_updates_per_s": 616942886,
+   "result": [
+    2424.767511315524,
+    4.846929892752623e-05,
+    0.004881402227951339,
+    1.0644742454144547,
+    1903.596529175862
+   ],
+   "golden_max_rel_err": 8.439419735869214e-15,
+   "ratio_to_reference": 0.5361
+  }
+ ],
+ "rss": [
+  {
+   "id": "rss_response_r20_type1",
+   "description": "golden lumped source_row 20 (r020_lumped_L3_f2), outputType 1 via surge_sdof.response.peak_response",
+   "time_s": 0.26017,
+   "ru_maxrss_mb": 192.4,
+   "result": [
+    257.1105776076194,
+    0.001052635281483685,
+    0.010369977634403163,
+    0.7617503949351916,
+    994.394215841683
+   ],
+   "numba_disable_jit": false
+  },
+  {
+   "id": "rss_response_jc_r96_full_type1",
+   "description": "golden jc source_row 96 (r096_jc_L24_f3), outputType 1 via surge_sdof.response.peak_response_jc {'vav_denominator': 'legacy', 'parity': 'per_phase', 'fraction_profile': 'legacy'}",
+   "time_s": 1.038221,
+   "ru_maxrss_mb": 192.6,
+   "result": [
+    3885.7009927936806,
+    0.0036195012413495903,
+    0.05827184148261104,
+    1.2461559320153934,
+    1903.596529175862
+   ],
+   "numba_disable_jit": false
+  }
+ ],
+ "compile_s": 1.839585,
+ "digest_pairs_ok": true
+}

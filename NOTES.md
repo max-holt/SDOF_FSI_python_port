@@ -37,7 +37,9 @@ compiled fast suite) before it is made, and the full gate runs on a worktree of 
 Gates: every commit `make lint` and the fast suite compiled and with `NUMBA_DISABLE_JIT=1`
 after a cache wipe, run on a worktree of the commit (949 passed + 24 skipped / 947 + 26
 throughout; no test count changed in part 2); session gates on the final tree: `-m slow`
-150 passed; `tools/bench.py` see below.
+150 passed; `tools/bench.py --skip-full-python` (`docs/bench/9dd2f4b.json`): digests all equal to
+the literal port, results the same as `b92e840`, no case slower beyond noise (0.91x-1.49x;
+the one 0.91x is the 92 ms JC case).
 
 Session R.3 (renames session, part 1, 2026-11-23) **stopped at the rename table**, as the
 brief asks: nothing is renamed yet. (1) The owner's rulings 13-28 are in the charter and
