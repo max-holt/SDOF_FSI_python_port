@@ -144,7 +144,7 @@ def _setup_values(params: dict) -> dict:
         "portal_frame_height": height,
         "pipe_cell_count": pipe_cells,
         "pivot_cell_count": pivot_cells,
-        "end_node_decay_factor": moc.decay_factor(celerity, dt, length),
+        "end_node_decay_factor": moc.end_pressure_decay_factor(celerity, dt, length),
     }
 
 

@@ -49,8 +49,9 @@ class JunctionCoupling:
         Acoustic impedance ``fluidDensty * celerity``, Pa·s/m (kg/(m²·s)).
     fluid_area : float
         Internal cross-sectional area of the pipe, m².
-    decay : float
-        ``dacayFactor`` from ``moc.decay_factor``, dimensionless, per even update.
+    end_pressure_decay_factor : float
+        ``dacayFactor`` from ``moc.end_pressure_decay_factor``, dimensionless, per even
+        update.
     vav_denominator : {"fixed", "legacy"}, optional
         Divisor of the mean-velocity sum: ``2N + 1`` (approved fix F-1, default) or the
         VBA's ``2N - 1`` (D-17).
@@ -104,7 +105,7 @@ class JunctionCoupling:
         dt: float,
         rho_c: float,
         fluid_area: float,
-        decay: float,
+        end_pressure_decay_factor: float,
         vav_denominator: str = "fixed",
         fraction_profile: str = "fixed",
     ):
@@ -115,6 +116,6 @@ class JunctionCoupling:
         self.dt = float(dt)
         self.rho_c = float(rho_c)
         self.fluid_area = float(fluid_area)
-        self.decay = float(decay)
+        self.decay = float(end_pressure_decay_factor)
         self.vav_div = moc.mean_velocity_divisor(self.n_seg, vav_denominator)
         self.d_f = 0.0

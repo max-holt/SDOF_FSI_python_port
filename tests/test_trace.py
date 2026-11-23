@@ -360,7 +360,7 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
         dt,
         kw["fluid_densty"] * kw["celerity"],
         kw["fluid_area"],
-        moc.decay_factor(kw["celerity"], dt, kw["physical_length"]),
+        moc.end_pressure_decay_factor(kw["celerity"], dt, kw["physical_length"]),
         "fixed",
     )
     a_prev = 0.0

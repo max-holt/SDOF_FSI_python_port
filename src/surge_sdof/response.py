@@ -429,7 +429,7 @@ def peak_response_jc(
         gap,
         restrain_freq_ratio,
     )
-    decay = moc.decay_factor(celerity, dt, physical_length)
+    end_pressure_decay_factor = moc.end_pressure_decay_factor(celerity, dt, physical_length)
     pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, portal_frame_height, celerity, dt)
     if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
         # insufficient length, use lumped mass (VBA 736-740)
@@ -461,7 +461,7 @@ def peak_response_jc(
         dt,
         rho_c,
         fluid_area,
-        decay,
+        end_pressure_decay_factor,
         vav_denominator,
         fraction_profile,
     )

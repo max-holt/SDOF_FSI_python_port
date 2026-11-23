@@ -63,7 +63,7 @@ __all__ = [
     "DAMPING_A",
     "grid_size",
     "is_short_pipe",
-    "decay_factor",
+    "end_pressure_decay_factor",
     "FRACTION_PROFILES",
     "moving_fraction_a",
     "moving_fraction_b",
@@ -137,7 +137,7 @@ def is_short_pipe(pipe_seg_qty: int, pivot_seg_qty: int) -> bool:
 
 
 # VBA line 731
-def decay_factor(celerity: float, dt: float, physical_length: float) -> float:
+def end_pressure_decay_factor(celerity: float, dt: float, physical_length: float) -> float:
     """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)`` (VBA line 731).
 
     Parameters

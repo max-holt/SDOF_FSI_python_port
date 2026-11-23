@@ -666,7 +666,10 @@ def test_moc_grid_setup_matches_legacy(idx):
     grid = moc.grid_size(kw["physical_length"], su["portal_frame_height"], kw["celerity"], su["dt"])
     assert grid == (su["pipe_seg_qty"], su["pivot_seg_qty"])
     assert not moc.is_short_pipe(*grid)
-    assert moc.decay_factor(kw["celerity"], su["dt"], kw["physical_length"]) == su["dacay_factor"]
+    assert (
+        moc.end_pressure_decay_factor(kw["celerity"], su["dt"], kw["physical_length"])
+        == su["dacay_factor"]
+    )
     assert moc.mean_velocity_divisor(grid[0], "legacy") == 2 * grid[0] - 1
     assert moc.mean_velocity_divisor(grid[0], "fixed") == 2 * grid[0] + 1
     with pytest.raises(ValueError):
