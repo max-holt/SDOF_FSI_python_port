@@ -149,6 +149,31 @@ second review (`docs/review/plan_r2.md`). They bind the rest of the review along
     basis.
 28. **Units** stay "SI unless suffixed", in code and in exported names.
 
+## Rulings (owner, on the rename table, session R.3, 23 Nov 2026)
+
+`docs/nomenclature.md` is approved with the changes and answers below.
+
+29. **Public, for the renames.** "Public" means the user-facing entry points only, as
+    `docs/style.md` §2 defines them (rulings 4 and 18). Every other function without a
+    leading underscore, and its parameters, is renamed in the renames session (Q-N1).
+30. **`pivotSegQTY`** counts the cells from each end of the column to the elbow between leg
+    and span: the portal-frame pivot is that elbow. `end_to_elbow_cell_count` (Q-N2).
+31. **`jb_to`** is `transit_last_column`, with a "For Ben to review:" comment that the bound
+    divides the transit delay in samples by the number of columns and that the walk exits
+    earlier in every tested case. Nothing else changes (Q-N3).
+32. **`outMax`** is `nominal_forced_sample_count` (Q-N4).
+33. **The forced sample count in the kernel.** The first local (`n_samples`) becomes
+    `forced_sample_count`; the second (`forced_samples`) stays as it is until plan group 4
+    removes it (Q-N5).
+34. **Elbows on the drawn loop.** Elbow A is the `run_start` corner, elbow B the `run_end`
+    corner; the `LoopLayout` docstring says so (Q-N6).
+35. **`history_type`** everywhere, for `kind` of a history (Q-N7).
+36. **`celerity`** stays (Q-N8).
+37. **`applied_force`**, not `external_force`, for `f_applied`: it includes the junction
+    force, which is not external to the model.
+38. **The two long exported column names** (`daf_*`, `f_eq_over_LD2_*`) are undecided and
+    settled in the public API session; "DAF" is the paper's own term.
+
 ## Gates
 
 | when | gate |
