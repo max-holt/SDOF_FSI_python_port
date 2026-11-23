@@ -14,7 +14,7 @@ acceleration. Two staggered half-grids: the A nodes ``0 .. N`` (pressure ``p_a``
 velocity ``v_a``) and the B cells ``0 .. N-1`` (``p_b``, ``v_b``), the VBA
 ``arrayA(0 To 1, 0 To N)`` and ``arrayB(0 To 1, 0 To N-1)`` split into four contiguous
 1-D float64 arrays. Even sub-steps update the A grid from B, odd sub-steps the B grid
-from A; the structure's acceleration enters as ``a dt`` weighted by the interp-fraction
+from A; the structure's acceleration enters as ``a dt`` weighted by the moving-fraction
 profiles, which depend only on the grid and are tabulated once per run.
 
 ``step`` is one function over the four arrays and scalars with scalar loop bodies: no
@@ -31,7 +31,7 @@ Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFr
 ``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``); F-4b
 (``legacy/vba/interpFraction_fix_2026-10-27.bas``, confirmed by the lead author 29 Oct 2026)
 moves the outlet side of both one node outward (``pipeSegQTY -> pipeSegQTY + 1`` in the two
-outlet tests and the outlet ramp). ``interp_fractions`` tabulates either the original
+outlet tests and the outlet ramp). ``moving_fractions`` tabulates either the original
 profile (``fraction_profile="legacy"``: the ``n < 3`` test of ``interpFractionB`` and the
 division by zero at ``pivotSegQTY = 4``) or the corrected one (``"fixed"``, the 27 Oct
 text: both profiles start at exactly 0 at ``n = 3``, one strictly monotone squared ramp per
@@ -65,11 +65,11 @@ __all__ = [
     "is_short_pipe",
     "decay_factor",
     "FRACTION_PROFILES",
-    "interp_fraction_a",
-    "interp_fraction_b",
-    "interp_fraction_a_fixed",
-    "interp_fraction_b_fixed",
-    "interp_fractions",
+    "moving_fraction_a",
+    "moving_fraction_b",
+    "moving_fraction_a_fixed",
+    "moving_fraction_b_fixed",
+    "moving_fractions",
     "new_column",
     "vav_divisor",
     "step",
@@ -161,7 +161,7 @@ def decay_factor(celerity: float, dt: float, physical_length: float) -> float:
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def interp_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     """Cell-centred weighting of the mass acceleration at A node ``n`` (VBA line 105).
 
     Literal copy of ``legacy_port.interp_fraction_a`` so this module does not import the
@@ -193,7 +193,7 @@ def interp_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
 
 
 # VBA line 121: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     """Node-centred weighting of the mass acceleration at B cell ``n`` (VBA line 121).
 
     Literal copy of ``legacy_port.interp_fraction_b``.
@@ -208,11 +208,11 @@ def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     Returns
     -------
     float
-        Dimensionless weight, as ``interp_fraction_a`` but node-centred.
+        Dimensionless weight, as ``moving_fraction_a`` but node-centred.
 
     Notes
     -----
-    VBA quirk D-4 preserved: the first test is ``n < 3`` where ``interp_fraction_a`` uses
+    VBA quirk D-4 preserved: the first test is ``n < 3`` where ``moving_fraction_a`` uses
     ``n < extQTY`` (4), so ``n = 3`` takes the ramp branch and ``pivotSegQTY = 4``
     divides by zero.
     """
@@ -229,8 +229,8 @@ def interp_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
 
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def interp_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """``interp_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
+def moving_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+    """``moving_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
     moved one node outward by F-4b).
 
     Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``; the tests
@@ -265,8 +265,8 @@ def interp_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
 
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
-    """``interp_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
+def moving_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+    """``moving_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
     moved one cell outward by F-4b).
 
     Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``. The first
@@ -299,7 +299,7 @@ def interp_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
         return 1.0
 
 
-def interp_fractions(
+def moving_fractions(
     pipe_seg_qty: int, pivot_seg_qty: int, fraction_profile: str = "fixed"
 ) -> tuple[np.ndarray, np.ndarray]:
     """The two profiles tabulated once per grid.
@@ -310,16 +310,16 @@ def interp_fractions(
         From ``grid_size``.
     fraction_profile : {"fixed", "legacy"}, optional
         ``"fixed"`` (default): the lead author's corrected functions (approved fix F-4,
-        ``interp_fraction_a_fixed`` / ``interp_fraction_b_fixed``); ``"legacy"``: the VBA
+        ``moving_fraction_a_fixed`` / ``moving_fraction_b_fixed``); ``"legacy"``: the VBA
         ``interpFractionA/B`` of ``Existing Code.bas`` (D-4 included).
 
     Returns
     -------
-    frac_a : numpy.ndarray
-        Length ``N + 1``; ``frac_a[n]`` for the A nodes ``n = 1 .. N-1`` (elements 0 and
+    fractions_a : numpy.ndarray
+        Length ``N + 1``; ``fractions_a[n]`` for the A nodes ``n = 1 .. N-1`` (elements 0 and
         ``N`` are never used by ``step`` and are 0).
-    frac_b : numpy.ndarray
-        Length ``N``; ``frac_b[n]`` for the B cells ``n = 0 .. N-1``.
+    fractions_b : numpy.ndarray
+        Length ``N``; ``fractions_b[n]`` for the B cells ``n = 0 .. N-1``.
 
     Raises
     ------
@@ -342,16 +342,16 @@ def interp_fractions(
                 f"pivotSegQTY = {pivot_seg_qty} <= extQTY = {EXT_QTY}: the fixed fraction "
                 "profile needs pivot > ext (the portal-frame height rounds to no MoC cell)"
             )
-        fa, fb = interp_fraction_a_fixed, interp_fraction_b_fixed
+        profile_a, profile_b = moving_fraction_a_fixed, moving_fraction_b_fixed
     else:
-        fa, fb = interp_fraction_a, interp_fraction_b
-    frac_a = np.zeros(pipe_seg_qty + 1)
-    frac_b = np.zeros(pipe_seg_qty)
+        profile_a, profile_b = moving_fraction_a, moving_fraction_b
+    fractions_a = np.zeros(pipe_seg_qty + 1)
+    fractions_b = np.zeros(pipe_seg_qty)
     for n in range(1, pipe_seg_qty):
-        frac_a[n] = fa(n, pivot_seg_qty, pipe_seg_qty)
+        fractions_a[n] = profile_a(n, pivot_seg_qty, pipe_seg_qty)
     for n in range(0, pipe_seg_qty):
-        frac_b[n] = fb(n, pivot_seg_qty, pipe_seg_qty)
-    return frac_a, frac_b
+        fractions_b[n] = profile_b(n, pivot_seg_qty, pipe_seg_qty)
+    return fractions_a, fractions_b
 
 
 def new_column(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -437,7 +437,7 @@ def step(
     p_b, v_b : numpy.ndarray
         Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``; updated in place.
     frac_a, frac_b : numpy.ndarray
-        From ``interp_fractions``, dimensionless.
+        From ``moving_fractions``, dimensionless.
     n_seg : int
         ``pipeSegQTY``.
     pivot : int

@@ -678,15 +678,15 @@ def test_interp_fractions_match_the_legacy_helpers():
         for pivot_seg_qty in (5, 6, 7, 27, 50, 87):
             if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
                 continue
-            frac_a, frac_b = moc.interp_fractions(pipe_seg_qty, pivot_seg_qty, "legacy")
+            frac_a, frac_b = moc.moving_fractions(pipe_seg_qty, pivot_seg_qty, "legacy")
             assert frac_a.shape == (pipe_seg_qty + 1,) and frac_b.shape == (pipe_seg_qty,)
             assert frac_a[0] == frac_a[pipe_seg_qty] == 0.0  # never read by step
             for n in range(1, pipe_seg_qty):
                 assert frac_a[n] == lp.interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
-                assert moc.interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty) == frac_a[n]
+                assert moc.moving_fraction_a(n, pivot_seg_qty, pipe_seg_qty) == frac_a[n]
             for n in range(0, pipe_seg_qty):
                 assert frac_b[n] == lp.interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
-                assert moc.interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty) == frac_b[n]
+                assert moc.moving_fraction_b(n, pivot_seg_qty, pipe_seg_qty) == frac_b[n]
 
 
 def test_interp_fractions_minimal_pivot_divides_by_zero_at_setup():
@@ -695,7 +695,7 @@ def test_interp_fractions_minimal_pivot_divides_by_zero_at_setup():
     with pytest.raises(ZeroDivisionError):
         lp.interp_fraction_b(3, 4, 20)
     with pytest.raises(ZeroDivisionError):
-        moc.interp_fractions(20, 4, "legacy")
+        moc.moving_fractions(20, 4, "legacy")
 
 
 def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
@@ -703,7 +703,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
     from rest, and return the per-sub-step (p_a, v_a, p_b, v_b, d_f) it produces."""
     su = trace.setup
     n_seg, pivot = su["pipe_seg_qty"], su["pivot_seg_qty"]
-    frac_a, frac_b = moc.interp_fractions(n_seg, pivot, "legacy")
+    frac_a, frac_b = moc.moving_fractions(n_seg, pivot, "legacy")
     p_a, v_a, p_b, v_b = moc.new_column(n_seg)
     vav_div = moc.vav_divisor(n_seg, vav_denominator)
     dt = float(su["dt"])
@@ -1143,7 +1143,7 @@ def test_fixed_vav_divides_by_the_number_of_terms():
     update leaves the end nodes at v_b[0] - vAv = 0; the legacy divisor gives
     (2N + 1) / (2N - 1)."""
     n_seg, pivot = 18, 5
-    frac_a, frac_b = moc.interp_fractions(n_seg, pivot)
+    frac_a, frac_b = moc.moving_fractions(n_seg, pivot)
     for vav_denominator, expected_v0 in (("fixed", 0.0), ("legacy", 1 - 37 / 35)):
         p_a, v_a, p_b, v_b = moc.new_column(n_seg)
         v_a[:] = 1.0

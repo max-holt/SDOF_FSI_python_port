@@ -1,6 +1,6 @@
-"""Approved fix F-4 (+ F-4b): the corrected interp-fraction profiles (DEVIATIONS D-4).
+"""Approved fix F-4 (+ F-4b): the corrected moving-fraction profiles (DEVIATIONS D-4).
 
-``moc.interp_fractions(..., fraction_profile="fixed")`` transcribes
+``moc.moving_fractions(..., fraction_profile="fixed")`` transcribes
 ``legacy/vba/interpFraction_fix_2026-10-27.bas`` (the 26 Oct functions with the outlet side
 moved one node outward, F-4b, confirmed by the lead author 29 Oct 2026); ``"legacy"`` stays
 the original ``Existing Code.bas`` profile. The expected values below are computed from the
@@ -40,11 +40,11 @@ GRIDS = [
 
 
 def fixed(pipe, pivot):
-    return moc.interp_fractions(pipe, pivot, "fixed")
+    return moc.moving_fractions(pipe, pivot, "fixed")
 
 
 def legacy(pipe, pivot):
-    return moc.interp_fractions(pipe, pivot, "legacy")
+    return moc.moving_fractions(pipe, pivot, "legacy")
 
 
 def ramp_cells(profile):
@@ -62,14 +62,14 @@ def ramp_cells(profile):
 def test_default_profile_is_fixed():
     """F-4 is on by default in the tabulation, the coupling and the solver."""
     pipe, pivot = 30, 8
-    assert moc.interp_fractions.__defaults__ == ("fixed",)
+    assert moc.moving_fractions.__defaults__ == ("fixed",)
     assert inspect.signature(coupling.JunctionCoupling).parameters["fraction_profile"].default == (
         "fixed"
     )
     assert inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default == (
         "fixed"
     )
-    fa, fb = moc.interp_fractions(pipe, pivot)
+    fa, fb = moc.moving_fractions(pipe, pivot)
     xa, xb = fixed(pipe, pivot)
     assert np.array_equal(fa, xa) and np.array_equal(fb, xb)
     assert td.FIXED_FLAGS["fraction_profile"] == "fixed"
@@ -78,7 +78,7 @@ def test_default_profile_is_fixed():
 
 def test_unknown_profile_is_rejected():
     with pytest.raises(ValueError, match="fraction_profile"):
-        moc.interp_fractions(30, 8, "corrected")
+        moc.moving_fractions(30, 8, "corrected")
     _id, force, kw = td.JC_SMALL[0]
     with pytest.raises(ValueError, match="fraction_profile"):
         response.peak_response_jc(force, **kw, fraction_profile="corrected")
@@ -102,8 +102,8 @@ def test_table_pivot_8_pipe_30():
     assert fa.tolist() == expected_a
     assert fb.tolist() == expected_b
     # the per-node functions are what the table tabulates (node 0 and N of A included)
-    assert [moc.interp_fraction_a_fixed(n, 8, 30) for n in range(31)] == expected_a
-    assert [moc.interp_fraction_b_fixed(n, 8, 30) for n in range(30)] == expected_b
+    assert [moc.moving_fraction_a_fixed(n, 8, 30) for n in range(31)] == expected_a
+    assert [moc.moving_fraction_b_fixed(n, 8, 30) for n in range(30)] == expected_b
     # the legacy profile on the same grid: the D-4 cell and the duplicated A value
     la, lb = legacy(30, 8)
     assert lb[3] == 1 / 16 and la[4] == la[5] == 1 / 64
@@ -207,7 +207,7 @@ def test_fixed_b_is_zero_at_n_3_and_legacy_is_not(pipe, pivot):
     fa, fb = fixed(pipe, pivot)
     la, lb = legacy(pipe, pivot)
     assert fb[3] == 0.0 and fa[3] == 0.0
-    assert moc.interp_fraction_b_fixed(3, pivot, pipe) == 0.0
+    assert moc.moving_fraction_b_fixed(3, pivot, pipe) == 0.0
     assert lb[3] == ((3 - EXT) / (pivot - EXT)) ** 2 != 0.0  # D-4 on the legacy path
     assert np.array_equal(la, fa) is False and np.array_equal(lb, fb) is False
 
@@ -217,14 +217,14 @@ def test_pivot_4_is_a_value_error_on_the_fixed_path_and_d4_on_the_legacy_path():
     test covers ``n <= 3``), so they would return a 0 -> 1 step without dividing; the port
     refuses the grid instead (added guard: the ramp needs ``pivot > ext``)."""
     for n in range(20):
-        moc.interp_fraction_a_fixed(n, 4, 20)
-        moc.interp_fraction_b_fixed(n, 4, 20)
+        moc.moving_fraction_a_fixed(n, 4, 20)
+        moc.moving_fraction_b_fixed(n, 4, 20)
     with pytest.raises(ValueError, match="pivot > ext"):
-        moc.interp_fractions(20, 4, "fixed")
+        moc.moving_fractions(20, 4, "fixed")
     with pytest.raises(ValueError, match="pivot > ext"):
         coupling.JunctionCoupling(20, 4, 1e-4, 1e6, 0.01, 1.01, fraction_profile="fixed")
     with pytest.raises(ZeroDivisionError):  # D-4
-        moc.interp_fractions(20, 4, "legacy")
+        moc.moving_fractions(20, 4, "legacy")
     with pytest.raises(ZeroDivisionError):
         coupling.JunctionCoupling(20, 4, 1e-4, 1e6, 0.01, 1.01, fraction_profile="legacy")
     # pivot 5: no ramp cell, a 0 -> 1 step, valid on both paths
@@ -234,7 +234,7 @@ def test_pivot_4_is_a_value_error_on_the_fixed_path_and_d4_on_the_legacy_path():
 
 
 def test_display_profile_survives_pivot_4_on_both_paths(monkeypatch):
-    frac_a, frac_b = geometry._interp_fractions_display(20, 4)
+    frac_a, frac_b = geometry._moving_fractions_display(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
     assert np.all(frac_b[:EXT] == 0) and frac_b[10] == 1.0
 
@@ -250,7 +250,7 @@ def test_fraction_profile_flag_reaches_the_coupling_and_the_trace():
         res = response.peak_response_jc(
             force, **kw, trace_every=1, **dict(td.LEGACY_FLAGS, fraction_profile=profile)
         )
-        fa, fb = moc.interp_fractions(res.trace.pipe_seg_qty, res.trace.pivot_seg_qty, profile)
+        fa, fb = moc.moving_fractions(res.trace.pipe_seg_qty, res.trace.pivot_seg_qty, profile)
         assert np.array_equal(res.trace.moving_fraction, interleave(fa, fb))
         assert res.trace.inputs["fraction_profile"] == profile
 

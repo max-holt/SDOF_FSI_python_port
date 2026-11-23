@@ -311,7 +311,7 @@ def test_jc_trace_geometry():
     assert tr.n_cells == 2 * pipe_seg_qty + 1
     assert np.array_equal(tr.cell_kind, np.arange(tr.n_cells) % 2)
     assert np.array_equal(tr.cell_position, np.arange(tr.n_cells) * (kw["celerity"] * dt))
-    frac_a, frac_b = moc.interp_fractions(pipe_seg_qty, pivot_seg_qty)
+    frac_a, frac_b = moc.moving_fractions(pipe_seg_qty, pivot_seg_qty)
     assert np.array_equal(tr.moving_fraction[0::2], frac_a)
     assert np.array_equal(tr.moving_fraction[1::2], frac_b)
     assert np.array_equal(tr.moving_fraction, tracing.interleave(frac_a, frac_b))

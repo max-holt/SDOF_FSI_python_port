@@ -138,7 +138,7 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
         tr.inputs["nat_freq"],
     )
     n_seg, piv = moc.grid_size(tr.inputs["physical_length"], h, tr.inputs["celerity"], tr.dt)
-    frac_a, frac_b = moc.interp_fractions(n_seg, piv)
+    frac_a, frac_b = moc.moving_fractions(n_seg, piv)
     assert (layout.pipe_seg_qty, layout.pivot_seg_qty) == (n_seg, piv)
     assert layout.n_cells == 2 * n_seg + 1
     assert np.array_equal(layout.moving_fraction[0::2], frac_a)
@@ -148,11 +148,11 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
 
 def test_lumped_grid_survives_pivot_seg_qty_4():
     # pivotSegQTY = 4 is refused by both profiles (fixed: the pivot > ext guard, F-4;
-    # legacy: interp_fraction_b divides by zero, D-4); the display profile must not
-    frac_a, frac_b = geometry._interp_fractions_display(20, 4)
+    # legacy: moving_fraction_b divides by zero, D-4); the display profile must not
+    frac_a, frac_b = geometry._moving_fractions_display(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
     assert np.all(frac_b[: moc.EXT_QTY] == 0) and frac_b[10] == 1.0
     with pytest.raises(ValueError):
-        moc.interp_fractions(20, 4)
+        moc.moving_fractions(20, 4)
     with pytest.raises(ZeroDivisionError):
-        moc.interp_fractions(20, 4, "legacy")
+        moc.moving_fractions(20, 4, "legacy")

@@ -94,14 +94,14 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 
 The `LoopLayout` of `surge_sdof.viz.geometry.layout_from_trace` (the rules are in
 `docs/architecture.md`, "the animation", Geometry): a JC run's own grid; for a lumped run the grid
-the case would have (`moc.grid_size`, `moc.interp_fractions`). Arrays are length `n` = the number
+the case would have (`moc.grid_size`, `moc.moving_fractions`). Arrays are length `n` = the number
 of cells of that grid (equal to `meta.n_cells` for a JC run).
 
 | key | type | meaning |
 |---|---|---|
 | `cell_position_m` | float[n] | Position along the column from the first A node, m (`j c dt`; a cell is `2 c dt`) |
 | `cell_kind` | int[n] | `0` = A node, `1` = B cell (interleaved `A0 B0 A1 … AN`) |
-| `moving_fraction` | float[n] | The interp fraction the cell's velocity is corrected by (0 fixed … 1 moving with the mass) |
+| `moving_fraction` | float[n] | The moving fraction the cell's velocity is corrected by (0 fixed … 1 moving with the mass) |
 | `ext_qty` | int | `extQTY`, the fixed end cells |
 | `pivot_seg_qty` | int | `pivotSegQTY` |
 | `pipe_seg_qty` | int | `N`; `n = 2N + 1` |

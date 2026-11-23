@@ -42,7 +42,7 @@ The staggered grid is stored **interleaved**: ``A0 B0 A1 B1 ... A(N-1) B(N-1) A(
 ``ext_qty`` end cells, the leg up to the pivot, the span between the pivots, the other leg
 and ``ext_qty`` end cells, see ``moc.grid_size``). ``moving_fraction`` is ``frac_a`` /
 ``frac_b`` interleaved the same way, the values ``moc.step`` multiplies ``a dt`` by
-(``frac_a[0]`` and ``frac_a[N]`` are the unused zeros of ``moc.interp_fractions``).
+(``frac_a[0]`` and ``frac_a[N]`` are the unused zeros of ``moc.moving_fractions``).
 ``p_cells`` and ``v_cells`` are copies of the four arrays exactly as the model stores them:
 pressures in Pa, velocities in m/s relative to the pipe, after the acceleration injection
 and the ``vAv`` subtraction of the sub-step.
@@ -132,7 +132,7 @@ class Trace:
         and m/s.
     cell_position, cell_kind, moving_fraction : numpy.ndarray or None
         JC only, length ``n_cells``: position along the column (m), 0 = A node / 1 = B
-        cell, and the interp fraction of the cell (dimensionless).
+        cell, and the moving fraction of the cell (dimensionless).
     """
 
     solver: str
@@ -324,7 +324,7 @@ def build(
     tr_f, tr_i, tr_p, tr_v : numpy.ndarray
         From ``allocate``, filled by the kernel.
     jc : coupling.JunctionCoupling or None
-        The junction of a JC run (its grid and interp fractions), None for lumped.
+        The junction of a JC run (its grid and moving fractions), None for lumped.
     celerity : float
         Pressure-wave speed, m/s (cell positions); unused for lumped.
     ext_qty : int

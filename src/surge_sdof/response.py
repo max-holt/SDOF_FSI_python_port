@@ -18,7 +18,7 @@ double-steps a half-grid at a phase boundary). The parity flag is applied by
 ``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
 ``fraction_profile`` ("legacy": the VBA ``interpFractionA/B``, D-4; "fixed": the lead
 author's corrected profiles, approved fix F-4) is passed to the coupling, which tabulates
-the profile once (``moc.interp_fractions``).
+the profile once (``moc.moving_fractions``).
 
 Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
@@ -349,7 +349,7 @@ def peak_response_jc(
         (approved fix F-2, default) or the VBA per-phase index ``k + (totInd - 1) *
         stepQTY`` that can double-step a half-grid at a phase boundary (D-19).
     fraction_profile : {"fixed", "legacy"}, keyword-only
-        The interp-fraction profiles weighting the mass acceleration along the column:
+        The moving-fraction profiles weighting the mass acceleration along the column:
         the lead author's corrected functions (approved fix F-4, default,
         ``legacy/vba/interpFraction_fix_2026-10-26.bas``) or the VBA ``interpFractionA/B``
         (D-4).

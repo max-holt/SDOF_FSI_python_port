@@ -34,7 +34,7 @@ class JunctionCoupling:
     """The junction-coupling solver (``GetPeakResponseJC``).
 
     A 1-D MoC fluid column inside the span is accelerated with the mass through the
-    interp-fraction profiles and feeds the low-pass-filtered pressure-difference force
+    moving-fraction profiles and feeds the low-pass-filtered pressure-difference force
     ``dF`` back. Owns the column state (``moc.new_column``) and ``dF``.
 
     Parameters
@@ -55,7 +55,7 @@ class JunctionCoupling:
         Divisor of the mean-velocity sum: ``2N + 1`` (approved fix F-1, default) or the
         VBA's ``2N - 1`` (D-17).
     fraction_profile : {"fixed", "legacy"}, optional
-        The interp-fraction profiles (``moc.interp_fractions``): the lead author's
+        The moving-fraction profiles (``moc.moving_fractions``): the lead author's
         corrected functions (approved fix F-4, default) or the VBA originals (D-4).
 
     Attributes
@@ -110,7 +110,7 @@ class JunctionCoupling:
     ):
         self.n_seg = int(pipe_seg_qty)
         self.pivot = int(pivot_seg_qty)
-        self.frac_a, self.frac_b = moc.interp_fractions(self.n_seg, self.pivot, fraction_profile)
+        self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
         self.p_a, self.v_a, self.p_b, self.v_b = moc.new_column(self.n_seg)
         self.dt = float(dt)
         self.rho_c = float(rho_c)

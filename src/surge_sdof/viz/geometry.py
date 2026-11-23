@@ -7,7 +7,7 @@ fraction (``_segments``: the fraction-1 block is the run, the last fraction-0 ce
 and the first after it the upper elbows), uniform spacing by ``cell_position`` along the
 centreline, sharp elbows (the model has no bends). A JC trace brings its own grid; a lumped
 trace gets the grid the case would have (``lumped_grid``: ``moc.grid_size`` /
-``moc.interp_fractions`` with the solver's default profile, F-4; a ``pivotSegQTY = 4`` grid,
+``moc.moving_fractions`` with the solver's default profile, F-4; a ``pivotSegQTY = 4`` grid,
 refused by both profiles, gets the legacy B profile with the ``n < extQTY`` test, display
 only). The rules are described in ``docs/architecture.md`` ("The picture", Geometry) and
 pinned by ``tests/test_geometry.py``.
@@ -44,7 +44,7 @@ class LoopLayout:
     Attributes
     ----------
     cell_position, cell_kind, moving_fraction : numpy.ndarray
-        As ``Trace`` (m along the column; 0 = A node / 1 = B cell; the interp fraction).
+        As ``Trace`` (m along the column; 0 = A node / 1 = B cell; the moving fraction).
     pivot_seg_qty, pipe_seg_qty, ext_qty : int
         The grid (``moc.grid_size``, ``moc.EXT_QTY``).
     cell_length : float
@@ -201,21 +201,21 @@ def loop_layout(
     )
 
 
-def _interp_fractions_display(pipe_seg_qty: int, pivot_seg_qty: int):
-    """``moc.interp_fractions`` with the solver's default profile, or, when
-    ``pivotSegQTY = 4`` is refused (legacy: ``interp_fraction_b`` divides by zero, D-4;
+def _moving_fractions_display(pipe_seg_qty: int, pivot_seg_qty: int):
+    """``moc.moving_fractions`` with the solver's default profile, or, when
+    ``pivotSegQTY = 4`` is refused (legacy: ``moving_fraction_b`` divides by zero, D-4;
     fixed: the port's ``pivot > ext`` guard), the legacy B profile with the ``n < extQTY``
     test; display only."""
     try:
-        return moc.interp_fractions(pipe_seg_qty, pivot_seg_qty)
+        return moc.moving_fractions(pipe_seg_qty, pivot_seg_qty)
     except (ZeroDivisionError, ValueError):
-        frac_a = np.zeros(pipe_seg_qty + 1)
-        frac_b = np.zeros(pipe_seg_qty)
+        moving_fraction_a = np.zeros(pipe_seg_qty + 1)
+        moving_fraction_b = np.zeros(pipe_seg_qty)
         for n in range(1, pipe_seg_qty):
-            frac_a[n] = moc.interp_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
+            moving_fraction_a[n] = moc.moving_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
         for n in range(moc.EXT_QTY, pipe_seg_qty):
-            frac_b[n] = moc.interp_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
-        return frac_a, frac_b
+            moving_fraction_b[n] = moc.moving_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+        return moving_fraction_a, moving_fraction_b
 
 
 def lumped_grid(
@@ -250,13 +250,13 @@ def lumped_grid(
     pipe_seg_qty, pivot_seg_qty = moc.grid_size(
         inputs["physical_length"], portal_frame_height, inputs["celerity"], dt
     )
-    frac_a, frac_b = _interp_fractions_display(pipe_seg_qty, pivot_seg_qty)
+    moving_fraction_a, moving_fraction_b = _moving_fractions_display(pipe_seg_qty, pivot_seg_qty)
     n_cells = 2 * pipe_seg_qty + 1
     position = np.arange(n_cells, dtype=np.float64) * (float(inputs["celerity"]) * float(dt))
     return (
         position,
         np.arange(n_cells) % 2,
-        interleave(frac_a, frac_b),
+        interleave(moving_fraction_a, moving_fraction_b),
         pipe_seg_qty,
         pivot_seg_qty,
         portal_frame_height,
