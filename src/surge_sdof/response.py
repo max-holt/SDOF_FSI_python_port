@@ -249,7 +249,8 @@ def peak_response(
 
     history = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
-    out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 377
+    # VBA line 377 (outMax)
+    nominal_forced_sample_count = history.shape[0] * history.shape[1] + clng(transit_delay_samples)
     substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
@@ -295,7 +296,7 @@ def peak_response(
         substep_duration,
         step_qty,
         None,
-        out_max,
+        nominal_forced_sample_count,
         output_type,
         trace_every=trace_every,
         meta=meta,
@@ -409,7 +410,8 @@ def peak_response_jc(
 
     history = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
-    out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 714
+    # VBA line 714 (outMax)
+    nominal_forced_sample_count = history.shape[0] * history.shape[1] + clng(transit_delay_samples)
     substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
@@ -503,7 +505,7 @@ def peak_response_jc(
         substep_duration,
         step_qty,
         junction,
-        out_max,
+        nominal_forced_sample_count,
         output_type,
         legacy_parity=(parity == "per_phase"),
         trace_every=trace_every,
@@ -610,7 +612,7 @@ def _integrate(
     substep_duration: float,
     substep_count: int,
     coupling: JunctionCoupling | None,
-    out_max: int,
+    nominal_forced_sample_count: int,
     output_type: int,
     legacy_parity: bool = False,
     trace_every: int = 0,
@@ -645,7 +647,7 @@ def _integrate(
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
-    history = np.zeros(out_max * 2 if output_type > 0 else 0)
+    history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
     kind = int(coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
@@ -666,7 +668,12 @@ def _integrate(
         )
         delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
         cap = tracing.check_memory(
-            n_sub, len(samples), int(out_max), int(substep_count), trace_every, n_cells
+            n_sub,
+            len(samples),
+            int(nominal_forced_sample_count),
+            int(substep_count),
+            trace_every,
+            n_cells,
         )
     else:
         flat_a = flat_b = np.zeros(0)
@@ -693,7 +700,7 @@ def _integrate(
             params.closed_gap_stiffness_ratio,
             substep_duration,
             int(substep_count),
-            int(out_max),
+            int(nominal_forced_sample_count),
             int(output_type),
             bool(legacy_parity),
             history,
@@ -733,7 +740,7 @@ def _integrate(
             trace_every,
             substep_duration,
             substep_count,
-            out_max,
+            nominal_forced_sample_count,
             params,
             int(n_frames),
             tr_f,

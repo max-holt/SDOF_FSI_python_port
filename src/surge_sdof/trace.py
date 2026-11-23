@@ -172,7 +172,11 @@ class Trace:
 
 
 def capacity(
-    forced_substeps: int, forced_samples: int, out_max: int, substep_count: int, trace_every: int
+    forced_substeps: int,
+    forced_samples: int,
+    nominal_forced_sample_count: int,
+    substep_count: int,
+    trace_every: int,
 ) -> int:
     """Frames to allocate: the forced phases (``forced_substeps`` sub-steps, known from the
     unbalance schedule) plus free decay up to the history window (``outMax * 2`` samples
@@ -184,7 +188,7 @@ def capacity(
         Sub-steps of the transit and forced phases (the length of the flat unbalance array).
     forced_samples : int
         Samples of the transit and forced phases.
-    out_max : int
+    nominal_forced_sample_count : int
         The VBA ``outMax``.
     substep_count : int
         Sub-steps per sample.
@@ -200,14 +204,14 @@ def capacity(
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
-    decay_substeps = max(0, out_max * 2 - forced_samples) * substep_count
+    decay_substeps = max(0, nominal_forced_sample_count * 2 - forced_samples) * substep_count
     return -(-(forced_substeps + decay_substeps) // trace_every)  # ceil
 
 
 def check_memory(
     forced_substeps: int,
     forced_samples: int,
-    out_max: int,
+    nominal_forced_sample_count: int,
     substep_count: int,
     trace_every: int,
     n_cells: int,
@@ -216,7 +220,7 @@ def check_memory(
 
     Parameters
     ----------
-    forced_substeps, forced_samples, out_max, substep_count, trace_every
+    forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, trace_every
         As ``capacity``.
     n_cells : int
         ``2N + 1`` for a JC run, 0 for lumped.
@@ -234,13 +238,15 @@ def check_memory(
         array); the message names the smallest ``trace_every`` that fits.
     """
     per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * n_cells
-    cap = capacity(forced_substeps, forced_samples, out_max, substep_count, trace_every)
+    cap = capacity(
+        forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, trace_every
+    )
     if cap * per_frame <= MAX_TRACE_VALUES:
         return cap
     stride = max(trace_every + 1, math.ceil(cap * trace_every * per_frame / MAX_TRACE_VALUES))
-    while capacity(forced_substeps, forced_samples, out_max, substep_count, stride) * per_frame > (
-        MAX_TRACE_VALUES
-    ):
+    while capacity(
+        forced_substeps, forced_samples, nominal_forced_sample_count, substep_count, stride
+    ) * per_frame > (MAX_TRACE_VALUES):
         stride += 1
     raise ValueError(
         f"trace_every={trace_every} would record {cap} frames x {per_frame} values "
@@ -301,7 +307,7 @@ def build(
     trace_every: int,
     substep_duration: float,
     substep_count: int,
-    out_max: int,
+    nominal_forced_sample_count: int,
     params: SdofParams,
     n_frames: int,
     tr_f: np.ndarray,
@@ -317,7 +323,8 @@ def build(
 
     Parameters
     ----------
-    solver, inputs, trace_every, substep_duration, substep_count, out_max, params
+    solver, inputs, trace_every, substep_duration, substep_count, nominal_forced_sample_count,
+    params
         The one-off fields.
     n_frames : int
         Frames the kernel wrote.
@@ -338,7 +345,7 @@ def build(
         "trace_every": int(trace_every),
         "dt": float(substep_duration),
         "step_qty": int(substep_count),
-        "out_max": int(out_max),
+        "out_max": int(nominal_forced_sample_count),
         "params": params,
         "inputs": inputs,
         "t": (sub_step + 1) * float(substep_duration),
