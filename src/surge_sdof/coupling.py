@@ -39,9 +39,9 @@ class JunctionCoupling:
 
     Parameters
     ----------
-    pipe_seg_qty : int
+    column_cell_count : int
         ``pipeSegQTY``, cells in the whole column (from ``moc.grid_size``).
-    pivot_seg_qty : int
+    end_to_elbow_cell_count : int
         ``pivotSegQTY``, cells from each end to the portal-frame pivot.
     dt : float
         Sub-step, s.
@@ -100,8 +100,8 @@ class JunctionCoupling:
 
     def __init__(
         self,
-        pipe_seg_qty: int,
-        pivot_seg_qty: int,
+        column_cell_count: int,
+        end_to_elbow_cell_count: int,
         dt: float,
         rho_c: float,
         fluid_area: float,
@@ -109,8 +109,8 @@ class JunctionCoupling:
         vav_denominator: str = "fixed",
         fraction_profile: str = "fixed",
     ):
-        self.n_seg = int(pipe_seg_qty)
-        self.pivot = int(pivot_seg_qty)
+        self.n_seg = int(column_cell_count)
+        self.pivot = int(end_to_elbow_cell_count)
         self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
         self.p_a, self.v_a, self.p_b, self.v_b = moc.column_at_rest(self.n_seg)
         self.dt = float(dt)

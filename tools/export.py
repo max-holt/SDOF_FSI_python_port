@@ -52,8 +52,14 @@ def estimated_cells(kw: dict, solver: str) -> int:
     portal_frame_height = structure.solve_portal_height(
         kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
     )
-    n_seg, pivot = moc.grid_size(kw["physical_length"], portal_frame_height, kw["celerity"], dt)
-    return 0 if moc.is_short_pipe(n_seg, pivot) else 2 * n_seg + 1
+    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
+        kw["physical_length"], portal_frame_height, kw["celerity"], dt
+    )
+    return (
+        0
+        if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)
+        else 2 * column_cell_count + 1
+    )
 
 
 def estimate_bytes(n_frames: int, n_cells: int, n_samples: int) -> int:

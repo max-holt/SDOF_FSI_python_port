@@ -328,7 +328,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         case.length_m, p.ei, p.mass_per_unit_len, case.nat_freq_hz
     )
     dt = 1 / (SAMPLE_FREQ * STEP_QTY)
-    n_seg, pivot = moc.grid_size(case.length_m, portal_frame_height, CELERITY, dt)
+    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
+        case.length_m, portal_frame_height, CELERITY, dt
+    )
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
@@ -361,9 +363,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         rho_c=RHO_FLUID * CELERITY,
         portal_height_m=portal_frame_height,
         mass_total_kg=mass_total,
-        pipe_seg_qty=n_seg,
-        pivot_seg_qty=pivot,
-        jc_short_pipe=int(moc.is_short_pipe(n_seg, pivot)),
+        pipe_seg_qty=column_cell_count,
+        pivot_seg_qty=end_to_elbow_cell_count,
+        jc_short_pipe=int(moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)),
         history_peak=float(np.abs(force).max()),
         history_mean=float(force.mean()),
         history_rms=float(math.sqrt(float(np.mean(force * force)))),

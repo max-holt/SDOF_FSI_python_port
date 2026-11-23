@@ -430,8 +430,10 @@ def peak_response_jc(
         restrain_freq_ratio,
     )
     end_pressure_decay_factor = moc.end_pressure_decay_factor(celerity, dt, physical_length)
-    pipe_seg_qty, pivot_seg_qty = moc.grid_size(physical_length, portal_frame_height, celerity, dt)
-    if moc.is_short_pipe(pipe_seg_qty, pivot_seg_qty):
+    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
+        physical_length, portal_frame_height, celerity, dt
+    )
+    if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count):
         # insufficient length, use lumped mass (VBA 736-740)
         return peak_response(
             force_history,
@@ -456,8 +458,8 @@ def peak_response_jc(
         # does not apply, so the check is made once here, before the first update.
         raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
     junction = JunctionCoupling(
-        pipe_seg_qty,
-        pivot_seg_qty,
+        column_cell_count,
+        end_to_elbow_cell_count,
         dt,
         rho_c,
         fluid_area,

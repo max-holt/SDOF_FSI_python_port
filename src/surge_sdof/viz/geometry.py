@@ -122,8 +122,8 @@ def loop_layout(
     cell_position: np.ndarray,
     cell_kind: np.ndarray,
     moving_fraction: np.ndarray,
-    pivot_seg_qty: int,
-    pipe_seg_qty: int,
+    end_to_elbow_cell_count: int,
+    column_cell_count: int,
     ext_qty: int,
     cell_length: float,
     portal_height: float,
@@ -143,7 +143,7 @@ def loop_layout(
     ----------
     cell_position, cell_kind, moving_fraction : numpy.ndarray
         Length ``2N + 1`` (``Trace`` layout).
-    pivot_seg_qty, pipe_seg_qty, ext_qty : int
+    end_to_elbow_cell_count, column_cell_count, ext_qty : int
     cell_length : float
         ``2 * celerity * dt``, m.
     portal_height : float
@@ -177,8 +177,8 @@ def loop_layout(
         cell_position=s,
         cell_kind=np.asarray(cell_kind),
         moving_fraction=frac,
-        pivot_seg_qty=int(pivot_seg_qty),
-        pipe_seg_qty=int(pipe_seg_qty),
+        pivot_seg_qty=int(end_to_elbow_cell_count),
+        pipe_seg_qty=int(column_cell_count),
         ext_qty=int(ext_qty),
         cell_length=float(cell_length),
         portal_height=float(portal_height),
@@ -201,20 +201,24 @@ def loop_layout(
     )
 
 
-def _moving_fractions_display(pipe_seg_qty: int, pivot_seg_qty: int):
+def _moving_fractions_display(column_cell_count: int, end_to_elbow_cell_count: int):
     """``moc.moving_fractions`` with the solver's default profile, or, when
     ``pivotSegQTY = 4`` is refused (legacy: ``moving_fraction_b`` divides by zero, D-4;
     fixed: the port's ``pivot > ext`` guard), the legacy B profile with the ``n < extQTY``
     test; display only."""
     try:
-        return moc.moving_fractions(pipe_seg_qty, pivot_seg_qty)
+        return moc.moving_fractions(column_cell_count, end_to_elbow_cell_count)
     except (ZeroDivisionError, ValueError):
-        moving_fraction_a = np.zeros(pipe_seg_qty + 1)
-        moving_fraction_b = np.zeros(pipe_seg_qty)
-        for n in range(1, pipe_seg_qty):
-            moving_fraction_a[n] = moc.moving_fraction_a(n, pivot_seg_qty, pipe_seg_qty)
-        for n in range(moc.INACTIVE_END_CELL_COUNT, pipe_seg_qty):
-            moving_fraction_b[n] = moc.moving_fraction_b(n, pivot_seg_qty, pipe_seg_qty)
+        moving_fraction_a = np.zeros(column_cell_count + 1)
+        moving_fraction_b = np.zeros(column_cell_count)
+        for n in range(1, column_cell_count):
+            moving_fraction_a[n] = moc.moving_fraction_a(
+                n, end_to_elbow_cell_count, column_cell_count
+            )
+        for n in range(moc.INACTIVE_END_CELL_COUNT, column_cell_count):
+            moving_fraction_b[n] = moc.moving_fraction_b(
+                n, end_to_elbow_cell_count, column_cell_count
+            )
         return moving_fraction_a, moving_fraction_b
 
 
@@ -235,7 +239,7 @@ def lumped_grid(
     -------
     cell_position, cell_kind, moving_fraction : numpy.ndarray
         Interleaved as ``Trace`` (``trace.interleave``).
-    pipe_seg_qty, pivot_seg_qty : int
+    column_cell_count, end_to_elbow_cell_count : int
     portal_height : float
         m.
     """
@@ -247,18 +251,20 @@ def lumped_grid(
         inputs["mass_per_unit_len"],
         inputs["nat_freq"],
     )
-    pipe_seg_qty, pivot_seg_qty = moc.grid_size(
+    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
         inputs["physical_length"], portal_frame_height, inputs["celerity"], dt
     )
-    moving_fraction_a, moving_fraction_b = _moving_fractions_display(pipe_seg_qty, pivot_seg_qty)
-    n_cells = 2 * pipe_seg_qty + 1
+    moving_fraction_a, moving_fraction_b = _moving_fractions_display(
+        column_cell_count, end_to_elbow_cell_count
+    )
+    n_cells = 2 * column_cell_count + 1
     position = np.arange(n_cells, dtype=np.float64) * (float(inputs["celerity"]) * float(dt))
     return (
         position,
         np.arange(n_cells) % 2,
         interleave(moving_fraction_a, moving_fraction_b),
-        pipe_seg_qty,
-        pivot_seg_qty,
+        column_cell_count,
+        end_to_elbow_cell_count,
         portal_frame_height,
     )
 
@@ -294,13 +300,15 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
             cell_length,
             portal_frame_height,
         )
-    position, kind, fraction, n_seg, pivot, portal_frame_height = lumped_grid(inputs, trace.dt)
+    position, kind, fraction, column_cell_count, end_to_elbow_cell_count, portal_frame_height = (
+        lumped_grid(inputs, trace.dt)
+    )
     return loop_layout(
         position,
         kind,
         fraction,
-        pivot,
-        n_seg,
+        end_to_elbow_cell_count,
+        column_cell_count,
         moc.INACTIVE_END_CELL_COUNT,
         cell_length,
         portal_frame_height,

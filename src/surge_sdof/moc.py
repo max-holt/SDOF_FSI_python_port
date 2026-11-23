@@ -112,29 +112,33 @@ def grid_size(
         ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
         height in cells; ``CLng`` rounds half to even).
     """
-    pivot_seg_qty = INACTIVE_END_CELL_COUNT + clng(portal_frame_height / (2 * celerity * dt))
+    end_to_elbow_cell_count = INACTIVE_END_CELL_COUNT + clng(
+        portal_frame_height / (2 * celerity * dt)
+    )
     # Proposed derivation, for Ben to confirm: a grid segment is 2 * celerity * dt long, and
     # the count is halved, rounded and doubled so the number of segments is even:
     # L / (4 c dt) is half the span's segment count.
-    pipe_seg_qty = 2 + clng(physical_length / (4 * celerity * dt) + pivot_seg_qty) * 2
-    return pipe_seg_qty, pivot_seg_qty
+    column_cell_count = (
+        2 + clng(physical_length / (4 * celerity * dt) + end_to_elbow_cell_count) * 2
+    )
+    return column_cell_count, end_to_elbow_cell_count
 
 
 # VBA line 736
-def is_short_pipe(pipe_seg_qty: int, pivot_seg_qty: int) -> bool:
+def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
     """``pipeSegQTY - 2 * pivotSegQTY <= 2`` (VBA line 736): the span cannot hold the MoC
     grid and ``GetPeakResponseJC`` falls back to the lumped solver.
 
     Parameters
     ----------
-    pipe_seg_qty, pivot_seg_qty : int
+    column_cell_count, end_to_elbow_cell_count : int
         From ``grid_size``.
 
     Returns
     -------
     bool
     """
-    return pipe_seg_qty - 2 * pivot_seg_qty <= 2
+    return column_cell_count - 2 * end_to_elbow_cell_count <= 2
 
 
 # VBA line 731
@@ -162,7 +166,7 @@ def end_pressure_decay_factor(celerity: float, dt: float, physical_length: float
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def moving_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_a(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
     """Cell-centred weighting of the mass acceleration at A node ``n`` (VBA line 105).
 
     Literal copy of ``legacy_port.interp_fraction_a`` so this module does not import the
@@ -172,7 +176,7 @@ def moving_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     ----------
     n : int
         A node index, ``0 .. pipeSegQTY``.
-    pivot_seg_qty, pipe_seg_qty : int
+    end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
     Returns
@@ -183,23 +187,24 @@ def moving_fraction_a(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     """
     if n < INACTIVE_END_CELL_COUNT:
         return 0.0
-    elif n < pivot_seg_qty:
+    elif n < end_to_elbow_cell_count:
         return (
-            (n - 0.5 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (n - 0.5 - INACTIVE_END_CELL_COUNT)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
-    elif n > pipe_seg_qty - INACTIVE_END_CELL_COUNT:
+    elif n > column_cell_count - INACTIVE_END_CELL_COUNT:
         return 0.0
-    elif n > pipe_seg_qty - pivot_seg_qty:
+    elif n > column_cell_count - end_to_elbow_cell_count:
         return (
-            (pipe_seg_qty - 0.5 - INACTIVE_END_CELL_COUNT - n)
-            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (column_cell_count - 0.5 - INACTIVE_END_CELL_COUNT - n)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
     else:
         return 1.0
 
 
 # VBA line 121: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def moving_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_b(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
     """Node-centred weighting of the mass acceleration at B cell ``n`` (VBA line 121).
 
     Literal copy of ``legacy_port.interp_fraction_b``.
@@ -208,7 +213,7 @@ def moving_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     ----------
     n : int
         B cell index, ``0 .. pipeSegQTY - 1``.
-    pivot_seg_qty, pipe_seg_qty : int
+    end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
     Returns
@@ -224,21 +229,23 @@ def moving_fraction_b(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
     """
     if n < 3:  # VBA quirk D-4 preserved
         return 0.0
-    elif n < pivot_seg_qty:
-        return ((n - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)) ** 2
-    elif n > pipe_seg_qty - INACTIVE_END_CELL_COUNT:
-        return 0.0
-    elif n > pipe_seg_qty - pivot_seg_qty:
+    elif n < end_to_elbow_cell_count:
         return (
-            (pipe_seg_qty - 1 - INACTIVE_END_CELL_COUNT - n)
-            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (n - INACTIVE_END_CELL_COUNT) / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
+        ) ** 2
+    elif n > column_cell_count - INACTIVE_END_CELL_COUNT:
+        return 0.0
+    elif n > column_cell_count - end_to_elbow_cell_count:
+        return (
+            (column_cell_count - 1 - INACTIVE_END_CELL_COUNT - n)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
     else:
         return 1.0
 
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def moving_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_a_fixed(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
     """``moving_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
     moved one node outward by F-4b).
 
@@ -249,7 +256,7 @@ def moving_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     ----------
     n : int
         A node index, ``0 .. pipeSegQTY``.
-    pivot_seg_qty, pipe_seg_qty : int
+    end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
     Returns
@@ -263,23 +270,24 @@ def moving_fraction_a_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     """
     if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
-    elif n + 1 < pivot_seg_qty:
+    elif n + 1 < end_to_elbow_cell_count:
         return (
-            (n + 0.5 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (n + 0.5 - INACTIVE_END_CELL_COUNT)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
-    elif n + 1 > pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT + 0.5:
+    elif n + 1 > column_cell_count + 1 - INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
-    elif n + 1 > pipe_seg_qty + 2 - pivot_seg_qty:
+    elif n + 1 > column_cell_count + 2 - end_to_elbow_cell_count:
         return (
-            (pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - n - 0.5)
-            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (column_cell_count + 1 - INACTIVE_END_CELL_COUNT - n - 0.5)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
     else:
         return 1.0
 
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
-def moving_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> float:
+def moving_fraction_b_fixed(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
     """``moving_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
     moved one cell outward by F-4b).
 
@@ -290,7 +298,7 @@ def moving_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     ----------
     n : int
         B cell index, ``0 .. pipeSegQTY - 1``.
-    pivot_seg_qty, pipe_seg_qty : int
+    end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
     Returns
@@ -303,27 +311,29 @@ def moving_fraction_b_fixed(n: int, pivot_seg_qty: int, pipe_seg_qty: int) -> fl
     """
     if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
-    elif n + 1 < pivot_seg_qty:
-        return ((n + 1 - INACTIVE_END_CELL_COUNT) / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)) ** 2
-    elif n + 1 > pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - 0.5:
-        return 0.0
-    elif n + 1 > pipe_seg_qty + 1.5 - pivot_seg_qty:
+    elif n + 1 < end_to_elbow_cell_count:
         return (
-            (pipe_seg_qty + 1 - INACTIVE_END_CELL_COUNT - n - 1)
-            / (pivot_seg_qty - INACTIVE_END_CELL_COUNT)
+            (n + 1 - INACTIVE_END_CELL_COUNT) / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
+        ) ** 2
+    elif n + 1 > column_cell_count + 1 - INACTIVE_END_CELL_COUNT - 0.5:
+        return 0.0
+    elif n + 1 > column_cell_count + 1.5 - end_to_elbow_cell_count:
+        return (
+            (column_cell_count + 1 - INACTIVE_END_CELL_COUNT - n - 1)
+            / (end_to_elbow_cell_count - INACTIVE_END_CELL_COUNT)
         ) ** 2
     else:
         return 1.0
 
 
 def moving_fractions(
-    pipe_seg_qty: int, pivot_seg_qty: int, fraction_profile: str = "fixed"
+    column_cell_count: int, end_to_elbow_cell_count: int, fraction_profile: str = "fixed"
 ) -> tuple[np.ndarray, np.ndarray]:
     """The two profiles tabulated once per grid.
 
     Parameters
     ----------
-    pipe_seg_qty, pivot_seg_qty : int
+    column_cell_count, end_to_elbow_cell_count : int
         From ``grid_size``.
     fraction_profile : {"fixed", "legacy"}, optional
         ``"fixed"`` (default): the lead author's corrected functions (approved fix F-4,
@@ -354,30 +364,30 @@ def moving_fractions(
             f"fraction_profile must be one of {FRACTION_PROFILES}, got {fraction_profile!r}"
         )
     if fraction_profile == "fixed":
-        if pivot_seg_qty <= INACTIVE_END_CELL_COUNT:
+        if end_to_elbow_cell_count <= INACTIVE_END_CELL_COUNT:
             raise ValueError(
-                f"pivotSegQTY = {pivot_seg_qty} <= extQTY = {INACTIVE_END_CELL_COUNT}: "
+                f"pivotSegQTY = {end_to_elbow_cell_count} <= extQTY = {INACTIVE_END_CELL_COUNT}: "
                 "the fixed fraction "
                 "profile needs pivot > ext (the portal-frame height rounds to no MoC cell)"
             )
         profile_a, profile_b = moving_fraction_a_fixed, moving_fraction_b_fixed
     else:
         profile_a, profile_b = moving_fraction_a, moving_fraction_b
-    fractions_a = np.zeros(pipe_seg_qty + 1)
-    fractions_b = np.zeros(pipe_seg_qty)
-    for n in range(1, pipe_seg_qty):
-        fractions_a[n] = profile_a(n, pivot_seg_qty, pipe_seg_qty)
-    for n in range(0, pipe_seg_qty):
-        fractions_b[n] = profile_b(n, pivot_seg_qty, pipe_seg_qty)
+    fractions_a = np.zeros(column_cell_count + 1)
+    fractions_b = np.zeros(column_cell_count)
+    for n in range(1, column_cell_count):
+        fractions_a[n] = profile_a(n, end_to_elbow_cell_count, column_cell_count)
+    for n in range(0, column_cell_count):
+        fractions_b[n] = profile_b(n, end_to_elbow_cell_count, column_cell_count)
     return fractions_a, fractions_b
 
 
-def column_at_rest(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def column_at_rest(column_cell_count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(p_a, v_a, p_b, v_b)`` at rest.
 
     Parameters
     ----------
-    pipe_seg_qty : int
+    column_cell_count : int
         ``N``.
 
     Returns
@@ -387,19 +397,19 @@ def column_at_rest(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarra
         four contiguous float64 arrays: pressures in Pa (``rhoC * v``), velocities in m/s.
     """
     return (
-        np.zeros(pipe_seg_qty + 1),
-        np.zeros(pipe_seg_qty + 1),
-        np.zeros(pipe_seg_qty),
-        np.zeros(pipe_seg_qty),
+        np.zeros(column_cell_count + 1),
+        np.zeros(column_cell_count + 1),
+        np.zeros(column_cell_count),
+        np.zeros(column_cell_count),
     )
 
 
-def mean_velocity_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
+def mean_velocity_divisor(column_cell_count: int, vav_denominator: str) -> int:
     """Divisor of the mean-velocity sum (``2N + 1`` terms).
 
     Parameters
     ----------
-    pipe_seg_qty : int
+    column_cell_count : int
         ``N``.
     vav_denominator : {"legacy", "fixed"}
         ``"legacy"``: ``2 * pipeSegQTY - 1`` (VBA line 802, quirk D-17); ``"fixed"``:
@@ -415,9 +425,9 @@ def mean_velocity_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
         Any other string.
     """
     if vav_denominator == "legacy":
-        return 2 * pipe_seg_qty - 1
+        return 2 * column_cell_count - 1
     if vav_denominator == "fixed":
-        return 2 * pipe_seg_qty + 1
+        return 2 * column_cell_count + 1
     raise ValueError(f"vav_denominator must be 'legacy' or 'fixed', got {vav_denominator!r}")
 
 

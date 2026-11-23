@@ -356,12 +356,12 @@ def build(
         "d_f": f[:, F_DF].copy(),
     }
     if jc is not None:
-        n_seg = int(jc.n_seg)
-        n_cells = 2 * n_seg + 1
+        column_cell_count = int(jc.n_seg)
+        n_cells = 2 * column_cell_count + 1
         fields.update(
             n_cells=n_cells,
             pivot_seg_qty=int(jc.pivot),
-            pipe_seg_qty=n_seg,
+            pipe_seg_qty=column_cell_count,
             ext_qty=int(ext_qty),
             p_cells=tr_p[:n_frames].copy(),
             v_cells=tr_v[:n_frames].copy(),
