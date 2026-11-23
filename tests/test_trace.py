@@ -382,7 +382,9 @@ def test_memory_guard_names_a_stride_that_fits(monkeypatch):
     stride = int(str(info.value).rsplit(">= ", 1)[1])
     assert stride > 1
     res = response.peak_response_jc(force, **kw, trace_every=stride)
-    per_frame = tracing.N_FLOAT_COLUMNS + tracing.N_INT_COLUMNS + 2 * res.trace.n_cells
+    per_frame = (
+        tracing.FRAME_STATE_COLUMN_COUNT + tracing.FRAME_INDEX_COLUMN_COUNT + 2 * res.trace.n_cells
+    )
     assert res.trace.n_frames * per_frame <= 20_000
     with pytest.raises(ValueError):
         response.peak_response_jc(force, **kw, trace_every=stride - 1)

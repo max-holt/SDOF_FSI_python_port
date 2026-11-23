@@ -77,18 +77,18 @@ from surge_sdof import trace as tracing
 from surge_sdof.coupling import JunctionCoupling
 from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.trace import (
-    F_A,
-    F_DF,
-    F_FA,
-    F_FB,
-    F_FFRIC,
-    F_FU,
-    F_V,
-    F_X,
-    I_PHASE,
-    I_SAMPLE,
-    I_STICK,
-    I_SUB_STEP,
+    COL_A,
+    COL_ELBOW_A_FORCE,
+    COL_ELBOW_B_FORCE,
+    COL_FRICTION_FORCE,
+    COL_IS_STICKING,
+    COL_JUNCTION_FORCE,
+    COL_LOAD_PHASE,
+    COL_SAMPLE_INDEX,
+    COL_SUBSTEP_INDEX,
+    COL_UNBALANCE_FORCE,
+    COL_V,
+    COL_X,
     PHASE_FORCED,
     PHASE_FREE_DECAY,
     PHASE_TRANSIT,
@@ -588,18 +588,18 @@ def _trace_frame(
     ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, for ``kind`` 1, the column
     interleaved ``A0 B0 A1 ... A(N)`` into ``tr_p`` / ``tr_v``. Reads only; the solver
     state is untouched."""
-    tr_f[frame, F_X] = x
-    tr_f[frame, F_V] = v
-    tr_f[frame, F_A] = a
-    tr_f[frame, F_FA] = f_a
-    tr_f[frame, F_FB] = f_b
-    tr_f[frame, F_FU] = f_u
-    tr_f[frame, F_FFRIC] = f_fric
-    tr_f[frame, F_DF] = d_f
-    tr_i[frame, I_SUB_STEP] = n
-    tr_i[frame, I_SAMPLE] = sample
-    tr_i[frame, I_PHASE] = phase
-    tr_i[frame, I_STICK] = 1 if stick else 0
+    tr_f[frame, COL_X] = x
+    tr_f[frame, COL_V] = v
+    tr_f[frame, COL_A] = a
+    tr_f[frame, COL_ELBOW_A_FORCE] = f_a
+    tr_f[frame, COL_ELBOW_B_FORCE] = f_b
+    tr_f[frame, COL_UNBALANCE_FORCE] = f_u
+    tr_f[frame, COL_FRICTION_FORCE] = f_fric
+    tr_f[frame, COL_JUNCTION_FORCE] = d_f
+    tr_i[frame, COL_SUBSTEP_INDEX] = n
+    tr_i[frame, COL_SAMPLE_INDEX] = sample
+    tr_i[frame, COL_LOAD_PHASE] = phase
+    tr_i[frame, COL_IS_STICKING] = 1 if stick else 0
     if kind == 1:
         for c in range(n_seg):
             tr_p[frame, 2 * c] = p_a[c]

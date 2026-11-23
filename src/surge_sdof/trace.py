@@ -74,12 +74,21 @@ PHASE_TRANSIT = 0
 PHASE_FORCED = 1
 PHASE_FREE_DECAY = 2
 
-# Columns of the kernel's float64 frame array ``tr_f (capacity, N_FLOAT_COLUMNS)``.
-F_X, F_V, F_A, F_FA, F_FB, F_FU, F_FFRIC, F_DF = range(8)
-N_FLOAT_COLUMNS = 8
-# Columns of the int64 frame array ``tr_i (capacity, N_INT_COLUMNS)``.
-I_SUB_STEP, I_SAMPLE, I_PHASE, I_STICK = range(4)
-N_INT_COLUMNS = 4
+# Columns of the kernel's float64 frame array ``tr_f (capacity, FRAME_STATE_COLUMN_COUNT)``.
+(
+    COL_X,
+    COL_V,
+    COL_A,
+    COL_ELBOW_A_FORCE,
+    COL_ELBOW_B_FORCE,
+    COL_UNBALANCE_FORCE,
+    COL_FRICTION_FORCE,
+    COL_JUNCTION_FORCE,
+) = range(8)
+FRAME_STATE_COLUMN_COUNT = 8
+# Columns of the int64 frame array ``tr_i (capacity, FRAME_INDEX_COLUMN_COUNT)``.
+COL_SUBSTEP_INDEX, COL_SAMPLE_INDEX, COL_LOAD_PHASE, COL_IS_STICKING = range(4)
+FRAME_INDEX_COLUMN_COUNT = 4
 
 MAX_TRACE_VALUES = 50_000_000
 """Memory guard: the largest number of 8-byte values (``frame_capacity * (float columns +
@@ -234,11 +243,11 @@ def check_memory(
     Raises
     ------
     ValueError
-        When ``frame_capacity * (N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count)``
+        When ``frame_capacity * (FRAME_STATE_COLUMN_COUNT + FRAME_INDEX_COLUMN_COUNT + 2 * grid_point_count)``
         exceeds ``MAX_TRACE_VALUES`` (this includes the ``n_frames * grid_point_count`` of
         each column array); the message names the smallest ``trace_every`` that fits.
     """
-    values_per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count
+    values_per_frame = FRAME_STATE_COLUMN_COUNT + FRAME_INDEX_COLUMN_COUNT + 2 * grid_point_count
     needed_frames = frame_capacity(
         forced_substep_count,
         forced_sample_count,
@@ -272,8 +281,8 @@ def check_memory(
 def allocate_frames(
     frame_capacity: int, grid_point_count: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """``(tr_f, tr_i, tr_p, tr_v)`` zeroed for the kernel: ``(cap, N_FLOAT_COLUMNS)``
-    float64, ``(cap, N_INT_COLUMNS)`` int64 and two ``(cap, grid_point_count)`` float64
+    """``(tr_f, tr_i, tr_p, tr_v)`` zeroed for the kernel: ``(cap, FRAME_STATE_COLUMN_COUNT)``
+    float64, ``(cap, FRAME_INDEX_COLUMN_COUNT)`` int64 and two ``(cap, grid_point_count)`` float64
     (``grid_point_count`` is 0 for lumped; both are ``(0, 0)`` when ``frame_capacity`` is 0).
 
     Parameters
@@ -285,8 +294,8 @@ def allocate_frames(
     """
     allocated_grid_point_count = grid_point_count if frame_capacity > 0 else 0
     return (
-        np.zeros((frame_capacity, N_FLOAT_COLUMNS)),
-        np.zeros((frame_capacity, N_INT_COLUMNS), dtype=np.int64),
+        np.zeros((frame_capacity, FRAME_STATE_COLUMN_COUNT)),
+        np.zeros((frame_capacity, FRAME_INDEX_COLUMN_COUNT), dtype=np.int64),
         np.zeros((frame_capacity, allocated_grid_point_count)),
         np.zeros((frame_capacity, allocated_grid_point_count)),
     )
@@ -355,7 +364,7 @@ def build_trace(
     """
     frame_state = tr_f[:n_frames]
     frame_index_columns = tr_i[:n_frames]
-    sub_step = frame_index_columns[:, I_SUB_STEP].copy()
+    sub_step = frame_index_columns[:, COL_SUBSTEP_INDEX].copy()
     fields = {
         "solver": solver,
         "trace_every": int(trace_every),
@@ -366,17 +375,17 @@ def build_trace(
         "inputs": inputs,
         "t": (sub_step + 1) * float(substep_duration),
         "sub_step": sub_step,
-        "sample": frame_index_columns[:, I_SAMPLE].copy(),
-        "phase": frame_index_columns[:, I_PHASE].copy(),
-        "x": frame_state[:, F_X].copy(),
-        "v": frame_state[:, F_V].copy(),
-        "a": frame_state[:, F_A].copy(),
-        "f_a": frame_state[:, F_FA].copy(),
-        "f_b": frame_state[:, F_FB].copy(),
-        "f_unbalance": frame_state[:, F_FU].copy(),
-        "f_friction": frame_state[:, F_FFRIC].copy(),
-        "stick": frame_index_columns[:, I_STICK] != 0,
-        "d_f": frame_state[:, F_DF].copy(),
+        "sample": frame_index_columns[:, COL_SAMPLE_INDEX].copy(),
+        "phase": frame_index_columns[:, COL_LOAD_PHASE].copy(),
+        "x": frame_state[:, COL_X].copy(),
+        "v": frame_state[:, COL_V].copy(),
+        "a": frame_state[:, COL_A].copy(),
+        "f_a": frame_state[:, COL_ELBOW_A_FORCE].copy(),
+        "f_b": frame_state[:, COL_ELBOW_B_FORCE].copy(),
+        "f_unbalance": frame_state[:, COL_UNBALANCE_FORCE].copy(),
+        "f_friction": frame_state[:, COL_FRICTION_FORCE].copy(),
+        "stick": frame_index_columns[:, COL_IS_STICKING] != 0,
+        "d_f": frame_state[:, COL_JUNCTION_FORCE].copy(),
     }
     if jc is not None:
         column_cell_count = int(jc.n_seg)
