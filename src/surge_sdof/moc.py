@@ -24,7 +24,7 @@ dead ``useUndamped`` branch (``Const useUndamped = False``, the AFT infinite-pip
 is not ported; only the live decaying boundary (``dacayFactor``) is.
 
 Approved fix F-1 (NOTES.md): the mean velocity ``vAv`` sums ``2N + 1`` terms; the VBA
-divides by ``2N - 1`` (D-17). ``vav_divisor`` returns either, selected by the caller's
+divides by ``2N - 1`` (D-17). ``mean_velocity_divisor`` returns either, selected by the caller's
 ``vav_denominator`` flag ("legacy" | "fixed").
 
 Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
@@ -71,7 +71,7 @@ __all__ = [
     "moving_fraction_b_fixed",
     "moving_fractions",
     "column_at_rest",
-    "vav_divisor",
+    "mean_velocity_divisor",
     "step",
 ]
 
@@ -376,7 +376,7 @@ def column_at_rest(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarra
     )
 
 
-def vav_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
+def mean_velocity_divisor(pipe_seg_qty: int, vav_denominator: str) -> int:
     """Divisor of the mean-velocity sum (``2N + 1`` terms).
 
     Parameters
@@ -447,7 +447,7 @@ def step(
     decay : float
         ``dacayFactor``, dimensionless.
     vav_div : int
-        From ``vav_divisor``.
+        From ``mean_velocity_divisor``.
     fluid_area : float
         Internal cross-sectional area, m².
     d_f : float

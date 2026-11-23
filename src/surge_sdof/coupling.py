@@ -116,5 +116,5 @@ class JunctionCoupling:
         self.rho_c = float(rho_c)
         self.fluid_area = float(fluid_area)
         self.decay = float(decay)
-        self.vav_div = moc.vav_divisor(self.n_seg, vav_denominator)
+        self.vav_div = moc.mean_velocity_divisor(self.n_seg, vav_denominator)
         self.d_f = 0.0

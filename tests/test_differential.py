@@ -667,10 +667,10 @@ def test_moc_grid_setup_matches_legacy(idx):
     assert grid == (su["pipe_seg_qty"], su["pivot_seg_qty"])
     assert not moc.is_short_pipe(*grid)
     assert moc.decay_factor(kw["celerity"], su["dt"], kw["physical_length"]) == su["dacay_factor"]
-    assert moc.vav_divisor(grid[0], "legacy") == 2 * grid[0] - 1
-    assert moc.vav_divisor(grid[0], "fixed") == 2 * grid[0] + 1
+    assert moc.mean_velocity_divisor(grid[0], "legacy") == 2 * grid[0] - 1
+    assert moc.mean_velocity_divisor(grid[0], "fixed") == 2 * grid[0] + 1
     with pytest.raises(ValueError):
-        moc.vav_divisor(grid[0], "other")
+        moc.mean_velocity_divisor(grid[0], "other")
 
 
 def test_interp_fractions_match_the_legacy_helpers():
@@ -705,7 +705,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
     n_seg, pivot = su["pipe_seg_qty"], su["pivot_seg_qty"]
     frac_a, frac_b = moc.moving_fractions(n_seg, pivot, "legacy")
     p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
-    vav_div = moc.vav_divisor(n_seg, vav_denominator)
+    vav_div = moc.mean_velocity_divisor(n_seg, vav_denominator)
     dt = float(su["dt"])
     d_f = 0.0
     out = []
@@ -1161,7 +1161,7 @@ def test_fixed_vav_divides_by_the_number_of_terms():
             pivot,
             1e6,
             1.001,
-            moc.vav_divisor(n_seg, vav_denominator),
+            moc.mean_velocity_divisor(n_seg, vav_denominator),
             0.01,
             0.0,
         )
