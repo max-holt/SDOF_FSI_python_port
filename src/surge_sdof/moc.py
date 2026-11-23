@@ -492,29 +492,36 @@ def step(
     two_rho_c = 2 * rho_c
     if even:
         # vAv = arrayA(1, N) + sum over n = 0 .. N-1 of arrayA(1, n) + arrayB(1, n)
-        v_av = v_a[n_seg]
+        mean_velocity = v_a[n_seg]
         for n in range(0, n_seg):
-            v_av = v_av + v_a[n]
-            v_av = v_av + v_b[n]
-        v_av = v_av / vav_div
+            mean_velocity = mean_velocity + v_a[n]
+            mean_velocity = mean_velocity + v_b[n]
+        mean_velocity = mean_velocity / vav_div
         # decaying boundary (the live branch; useUndamped is dead and not ported)
         p_a[0] = p_b[0] / decay
         p_a[n_seg] = p_b[n_seg - 1] / decay
-        v_a[0] = v_b[0] - v_av
-        v_a[n_seg] = v_b[n_seg - 1] - v_av
+        v_a[0] = v_b[0] - mean_velocity
+        v_a[n_seg] = v_b[n_seg - 1] - mean_velocity
         # A nodes 1 .. N-1 from B cells n-1 and n
-        pb_prev = p_b[0]
-        vb_prev = v_b[0]
+        pressure_b_lower = p_b[0]
+        velocity_b_lower = v_b[0]
         for n in range(1, n_seg):
-            pb = p_b[n]
-            vb = v_b[n]
-            p_a[n] = (pb_prev + pb) / 2 + rho_c * (vb_prev - vb) / 2
-            v_a[n] = a_dt * frac_a[n] - v_av + (pb_prev - pb) / two_rho_c + (vb_prev + vb) / 2
-            pb_prev = pb
-            vb_prev = vb
+            pressure_b_upper = p_b[n]
+            velocity_b_upper = v_b[n]
+            p_a[n] = (pressure_b_lower + pressure_b_upper) / 2 + rho_c * (
+                velocity_b_lower - velocity_b_upper
+            ) / 2
+            v_a[n] = (
+                a_dt * frac_a[n]
+                - mean_velocity
+                + (pressure_b_lower - pressure_b_upper) / two_rho_c
+                + (velocity_b_lower + velocity_b_upper) / 2
+            )
+            pressure_b_lower = pressure_b_upper
+            velocity_b_lower = velocity_b_upper
         # B velocities receive the mass acceleration and lose the mean velocity
         for n in range(0, n_seg):
-            v_b[n] = a_dt * frac_b[n] - v_av + v_b[n]
+            v_b[n] = a_dt * frac_b[n] - mean_velocity + v_b[n]
         d_f = (
             JUNCTION_FORCE_FILTER_WEIGHT * d_f
             + (1 - JUNCTION_FORCE_FILTER_WEIGHT)
@@ -524,15 +531,21 @@ def step(
         )
     else:
         # B cells 0 .. N-1 from A nodes n and n+1
-        pa_prev = p_a[0]
-        va_prev = v_a[0]
+        pressure_a_lower = p_a[0]
+        velocity_a_lower = v_a[0]
         for n in range(0, n_seg):
-            pa = p_a[n + 1]
-            va = v_a[n + 1]
-            p_b[n] = (pa_prev + pa) / 2 + rho_c * (va_prev - va) / 2
-            v_b[n] = a_dt * frac_b[n] + (pa_prev - pa) / two_rho_c + (va_prev + va) / 2
-            pa_prev = pa
-            va_prev = va
+            pressure_a_upper = p_a[n + 1]
+            velocity_a_upper = v_a[n + 1]
+            p_b[n] = (pressure_a_lower + pressure_a_upper) / 2 + rho_c * (
+                velocity_a_lower - velocity_a_upper
+            ) / 2
+            v_b[n] = (
+                a_dt * frac_b[n]
+                + (pressure_a_lower - pressure_a_upper) / two_rho_c
+                + (velocity_a_lower + velocity_a_upper) / 2
+            )
+            pressure_a_lower = pressure_a_upper
+            velocity_a_lower = velocity_a_upper
         # A velocities receive the mass acceleration
         for n in range(1, n_seg):
             v_a[n] = a_dt * frac_a[n] + v_a[n]
