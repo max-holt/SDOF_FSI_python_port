@@ -152,7 +152,7 @@ stride; a file is never windowed (the viewer windows).
 ### trace.cells
 
 Present for a JC run only. Each value is an array block of shape `[n_frames, n_cells]` (row 0
-the rest frame, zeros: `moc.new_column`), the interleaved column `A0 B0 A1 … AN` after the
+the rest frame, zeros: `moc.column_at_rest`), the interleaved column `A0 B0 A1 … AN` after the
 sub-step, exactly as the model stores it.
 
 | key | type | meaning |

@@ -35,7 +35,7 @@ class JunctionCoupling:
 
     A 1-D MoC fluid column inside the span is accelerated with the mass through the
     moving-fraction profiles and feeds the low-pass-filtered pressure-difference force
-    ``dF`` back. Owns the column state (``moc.new_column``) and ``dF``.
+    ``dF`` back. Owns the column state (``moc.column_at_rest``) and ``dF``.
 
     Parameters
     ----------
@@ -111,7 +111,7 @@ class JunctionCoupling:
         self.n_seg = int(pipe_seg_qty)
         self.pivot = int(pivot_seg_qty)
         self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
-        self.p_a, self.v_a, self.p_b, self.v_b = moc.new_column(self.n_seg)
+        self.p_a, self.v_a, self.p_b, self.v_b = moc.column_at_rest(self.n_seg)
         self.dt = float(dt)
         self.rho_c = float(rho_c)
         self.fluid_area = float(fluid_area)

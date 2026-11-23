@@ -70,7 +70,7 @@ __all__ = [
     "moving_fraction_a_fixed",
     "moving_fraction_b_fixed",
     "moving_fractions",
-    "new_column",
+    "column_at_rest",
     "vav_divisor",
     "step",
 ]
@@ -354,7 +354,7 @@ def moving_fractions(
     return fractions_a, fractions_b
 
 
-def new_column(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def column_at_rest(pipe_seg_qty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(p_a, v_a, p_b, v_b)`` at rest.
 
     Parameters

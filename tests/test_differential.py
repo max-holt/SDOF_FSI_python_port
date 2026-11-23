@@ -704,7 +704,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
     su = trace.setup
     n_seg, pivot = su["pipe_seg_qty"], su["pivot_seg_qty"]
     frac_a, frac_b = moc.moving_fractions(n_seg, pivot, "legacy")
-    p_a, v_a, p_b, v_b = moc.new_column(n_seg)
+    p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
     vav_div = moc.vav_divisor(n_seg, vav_denominator)
     dt = float(su["dt"])
     d_f = 0.0
@@ -1145,7 +1145,7 @@ def test_fixed_vav_divides_by_the_number_of_terms():
     n_seg, pivot = 18, 5
     frac_a, frac_b = moc.moving_fractions(n_seg, pivot)
     for vav_denominator, expected_v0 in (("fixed", 0.0), ("legacy", 1 - 37 / 35)):
-        p_a, v_a, p_b, v_b = moc.new_column(n_seg)
+        p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
         v_a[:] = 1.0
         v_b[:] = 1.0
         moc.step(

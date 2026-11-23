@@ -338,7 +338,7 @@ def test_interleave():
 def test_jc_column_at_frame_0_is_the_initial_column(stride):
     force, kw = _jc_case(0)
     tr = response.peak_response_jc(force, **kw, trace_every=stride).trace
-    p_a, v_a, p_b, v_b = moc.new_column(tr.pipe_seg_qty)
+    p_a, v_a, p_b, v_b = moc.column_at_rest(tr.pipe_seg_qty)
     assert np.array_equal(tr.p_cells[0], tracing.interleave(p_a, p_b))
     assert np.array_equal(tr.v_cells[0], tracing.interleave(v_a, v_b))
     assert tr.d_f[0] == 0.0
