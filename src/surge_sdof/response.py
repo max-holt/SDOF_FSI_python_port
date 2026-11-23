@@ -535,17 +535,17 @@ class _TraceMeta(NamedTuple):
 
 
 @numba.njit(cache=True)
-def _decay_test(x: float, x_zero: float) -> float:
+def _free_decay_product(x: float, x_zero: float) -> float:
     """``x * xZero`` of the free-decay test; VBA raises error 6 if the product
     overflows (the numpy state of the legacy port did the same), so this does too."""
-    p = x * x_zero
-    if p == math.inf:
+    free_decay_product = x * x_zero
+    if free_decay_product == math.inf:
         raise FloatingPointError("x * xZero overflowed (VBA error 6)")  # D-23
-    return p
+    return free_decay_product
 
 
 @numba.njit(cache=True)
-def _record(
+def _record_sample(
     history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
 ) -> None:
     """Store the end-of-sample state in ``history[index]``: ``x`` for ``output_type`` 1,
@@ -925,12 +925,12 @@ def _integrate_kernel(
             if abs(f) > f_max:
                 f_max = abs(f)
         if output_type > 0:
-            _record(history, output_type, tot_ind - 1, x, v, a)
+            _record_sample(history, output_type, tot_ind - 1, x, v, a)
 
     # ---------------------------------------------------------- free decay
     forced_samples = tot_ind
     x_zero = x
-    while _decay_test(x, x_zero) > 0.01:
+    while _free_decay_product(x, x_zero) > 0.01:
         tot_ind += 1
         if legacy_parity:
             off = (tot_ind - 1) * step_qty + 1 - n
@@ -1004,12 +1004,12 @@ def _integrate_kernel(
                 v_max = abs(v)
             if abs(x) > x_max:
                 x_max = abs(x)
-            if _decay_test(x, x_zero) <= 0.01:
+            if _free_decay_product(x, x_zero) <= 0.01:
                 x_zero = 0.0
         # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
         # the forced samples and an equal allowance for free decay; later free decay is integrated
         # but not recorded.
         if output_type > 0 and tot_ind <= out_max * 2:
-            _record(history, output_type, tot_ind - 1, x, v, a)
+            _record_sample(history, output_type, tot_ind - 1, x, v, a)
 
     return (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, frame)

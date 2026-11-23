@@ -21,9 +21,9 @@ and 2 in free decay. Frame 0 is the end of sub-step 0: a column at rest with
 ``a = 0`` is still bitwise the initial column there.
 
 Free decay is traced for as long as the history records it (``totInd <= outMax * 2``, the
-``_record`` guard of the kernel); later free-decay sub-steps are integrated but not traced,
-as the history drops them. The arrays are allocated once for that window (``frame_capacity``)
-and sliced to the frames written.
+``_record_sample`` guard of the kernel); later free-decay sub-steps are integrated but not
+traced, as the history drops them. The arrays are allocated once for that window
+(``frame_capacity``) and sliced to the frames written.
 
 ``f_friction = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old +
 a_new) * (dt / 2))`` is the velocity the Coulomb branch of ``structure.step_scalars`` added
@@ -243,9 +243,10 @@ def check_memory(
     Raises
     ------
     ValueError
-        When ``frame_capacity * (FRAME_STATE_COLUMN_COUNT + FRAME_INDEX_COLUMN_COUNT + 2 * grid_point_count)``
-        exceeds ``MAX_TRACE_VALUES`` (this includes the ``n_frames * grid_point_count`` of
-        each column array); the message names the smallest ``trace_every`` that fits.
+        When ``frame_capacity * (FRAME_STATE_COLUMN_COUNT + FRAME_INDEX_COLUMN_COUNT + 2 *
+        grid_point_count)`` exceeds ``MAX_TRACE_VALUES`` (this includes the ``n_frames *
+        grid_point_count`` of each column array); the message names the smallest
+        ``trace_every`` that fits.
     """
     values_per_frame = FRAME_STATE_COLUMN_COUNT + FRAME_INDEX_COLUMN_COUNT + 2 * grid_point_count
     needed_frames = frame_capacity(
