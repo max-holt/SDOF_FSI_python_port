@@ -347,8 +347,9 @@ def test_jc_column_at_frame_0_is_the_initial_column(stride):
 
 @pytest.mark.parametrize("idx", [0, 3], ids=[td.JC_SMALL_IDS[0], td.JC_SMALL_IDS[3]])
 def test_jc_trace_reproduces_the_coupling_sequence(idx):
-    """At stride 1 a fresh ``JunctionCoupling`` driven with the traced acceleration of the
-    previous sub-step and the running index reproduces ``d_f`` and the column bitwise."""
+    """At stride 1 ``moc.step`` on a fresh ``JunctionCoupling``'s column, driven with the
+    traced acceleration of the previous sub-step and the running index, reproduces ``d_f``
+    and the column bitwise."""
     force, kw = _jc_case(idx)
     res = response.peak_response_jc(force, **kw, trace_every=1)
     tr = res.trace
@@ -363,12 +364,12 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
         "fixed",
     )
     a_prev = 0.0
+    d_f = jc.d_f
     for i in range(tr.n_frames):
-        d_f = jc.coupling_force((0.0, 0.0, a_prev), int(tr.sub_step[i]))
+        d_f = td.advance_column(jc, int(tr.sub_step[i]), a_prev, d_f)
         assert d_f == tr.d_f[i]
-        p_a, v_a, p_b, v_b = jc.column()
-        assert np.array_equal(tr.p_cells[i], tracing.interleave(p_a, p_b))
-        assert np.array_equal(tr.v_cells[i], tracing.interleave(v_a, v_b))
+        assert np.array_equal(tr.p_cells[i], tracing.interleave(jc.p_a, jc.p_b))
+        assert np.array_equal(tr.v_cells[i], tracing.interleave(jc.v_a, jc.v_b))
         a_prev = float(tr.a[i])
     assert tr.n_frames > 100
 

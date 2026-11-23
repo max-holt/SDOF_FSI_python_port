@@ -6,12 +6,11 @@ the coupling object they pass to it. Per sub-step the loop evaluates the couplin
 block sits at the top of each ``k`` loop and reads the current ``a``), and adds the result
 to the unbalance force (phases 1-2) or uses it alone (free decay).
 
-``coupling_force(state, step_index)`` is the Python-level interface (callers, tests). The
-compiled loop of Stage 5 (``response._integrate_kernel``) cannot call Python objects, so
-``response._integrate`` unpacks the coupling instead: ``KIND`` (0 = ``NoCoupling``, 1 =
+The compiled loop of Stage 5 (``response._integrate_kernel``) cannot call Python objects,
+so ``response._integrate`` unpacks the coupling: ``KIND`` (0 = ``NoCoupling``, 1 =
 ``JunctionCoupling``) and, for the junction, its column arrays and scalars; the kernel
-then performs exactly what ``coupling_force`` does (``moc.step`` on the half-grid
-``step_index % 2`` selects, ``dF`` as a float) and ``_integrate`` writes ``d_f`` back.
+calls ``moc.step`` on the half-grid ``step_index % 2`` selects, keeps ``dF`` as a float,
+and ``_integrate`` writes ``d_f`` back.
 
 ``step_index`` is a running sub-step counter over the whole run (0 at the first
 sub-step); ``JunctionCoupling`` uses its parity for the MoC alternation (approved fix
@@ -26,8 +25,6 @@ See ``docs/architecture.md``.
 from __future__ import annotations
 
 from typing import Protocol
-
-import numpy as np
 
 from surge_sdof import moc
 from surge_sdof.structure import State
@@ -111,15 +108,15 @@ class JunctionCoupling:
 
     Notes
     -----
-    Each ``coupling_force`` call advances the column one sub-step (``moc.step``) on the
-    half-grid selected by ``step_index % 2`` (even first, as the VBA's index 0) with
-    ``a * dt`` from the state's acceleration. The parity source (running counter, F-2, or
-    the VBA per-phase index, D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the
-    constructor raises ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather
-    than in the first MoC update) and ``ValueError`` on the fixed one (the port's guard:
-    the ramp needs ``pivot > ext``). The compiled loop (Stage 5) reads the attributes listed in ``__slots__``
-    directly and performs the same update; after the run ``d_f`` and the arrays hold the
-    final column state either way.
+    The compiled loop (Stage 5) reads the attributes listed in ``__slots__`` and advances
+    the column one sub-step at a time (``moc.step``) on the half-grid selected by
+    ``step_index % 2`` (even first, as the VBA's index 0) with ``a * dt`` from the
+    previous sub-step's acceleration; after the run ``d_f`` and the arrays hold the final
+    column state. The parity source (running counter, F-2, or the VBA per-phase index,
+    D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the constructor raises
+    ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather than in the first
+    MoC update) and ``ValueError`` on the fixed one (the port's guard: the ramp needs
+    ``pivot > ext``).
     """
 
     KIND = 1
@@ -161,44 +158,3 @@ class JunctionCoupling:
         self.decay = float(decay)
         self.vav_div = moc.vav_divisor(self.n_seg, vav_denominator)
         self.d_f = 0.0
-
-    def coupling_force(self, state: State, step_index: int) -> float:
-        """Advance the column one sub-step and return the new junction force.
-
-        Parameters
-        ----------
-        state : State
-            ``(x, v, a)`` at the end of the previous sub-step; only ``a`` (m/s²) is used.
-        step_index : int
-            Even: update the A nodes from the B cells; odd: the B cells from the A nodes.
-
-        Returns
-        -------
-        float
-            ``dF``, N, as a Python float (``float(numpy.float64)`` is exact).
-        """
-        d_f = moc.step(
-            step_index % 2 == 0,
-            state[2] * self.dt,
-            self.p_a,
-            self.v_a,
-            self.p_b,
-            self.v_b,
-            self.frac_a,
-            self.frac_b,
-            self.n_seg,
-            self.pivot,
-            self.rho_c,
-            self.decay,
-            self.vav_div,
-            self.fluid_area,
-            self.d_f,
-        )
-        self.d_f = float(d_f)
-        return self.d_f
-
-    def column(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Copies of ``(p_a, v_a, p_b, v_b)``: the VBA ``arrayA(0, :)``, ``arrayA(1, :)``,
-        ``arrayB(0, :)``, ``arrayB(1, :)`` (Pa, m/s, Pa, m/s).
-        """
-        return self.p_a.copy(), self.v_a.copy(), self.p_b.copy(), self.v_b.copy()

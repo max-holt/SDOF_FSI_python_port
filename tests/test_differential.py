@@ -759,10 +759,34 @@ def test_moc_step_fixed_vav_divisor_changes_the_mean_velocity_only():
 # ------------------------------------------------------------------ coupling.py
 
 
+def advance_column(jc: coupling.JunctionCoupling, step_index: int, a: float, d_f: float):
+    """``moc.step`` on the arrays and scalars of ``jc``, as the kernel calls it: the
+    half-grid ``step_index % 2`` selects, ``a * dt`` from the acceleration ``a``; returns
+    the new junction force."""
+    return moc.step(
+        step_index % 2 == 0,
+        a * jc.dt,
+        jc.p_a,
+        jc.v_a,
+        jc.p_b,
+        jc.v_b,
+        jc.frac_a,
+        jc.frac_b,
+        jc.n_seg,
+        jc.pivot,
+        jc.rho_c,
+        jc.decay,
+        jc.vav_div,
+        jc.fluid_area,
+        d_f,
+    )
+
+
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
 def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
-    """Drive ``JunctionCoupling`` with the legacy's per-phase parity index and its
-    pre-update state and compare ``dF`` and the column after every sub-step."""
+    """Drive ``moc.step`` on a ``JunctionCoupling``'s column with the legacy's per-phase
+    parity index and its pre-update state and compare ``dF`` and the column after every
+    sub-step."""
     _id, _force, kw = JC_SMALL[idx]
     trace = jc_small_trace(idx)
     su = trace.setup
@@ -778,17 +802,15 @@ def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
     )
     assert jc.rho_c == kw["fluid_densty"] * kw["celerity"]
     d_fs = []
+    d_f = jc.d_f
     for s in trace.substeps:
-        d_f = jc.coupling_force(tuple(float(q) for q in s.pre), s.legacy_index)
-        assert type(d_f) is float
+        d_f = advance_column(jc, s.legacy_index, float(s.pre[2]), d_f)
         d_fs.append(d_f)
-        p_a, v_a, p_b, v_b = jc.column()
-        assert_close(p_a, s.array_a[0])
-        assert_close(v_a, s.array_a[1])
-        assert_close(p_b, s.array_b[0])
-        assert_close(v_b, s.array_b[1])
+        assert_close(jc.p_a, s.array_a[0])
+        assert_close(jc.v_a, s.array_a[1])
+        assert_close(jc.p_b, s.array_b[0])
+        assert_close(jc.v_b, s.array_b[1])
     assert_close(d_fs, [s.d_f for s in trace.substeps])
-    assert jc.d_f == d_fs[-1]
 
 
 def test_junction_coupling_without_fluid_area_returns_exact_zero():
@@ -797,10 +819,11 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
     jc = coupling.JunctionCoupling(
         su["pipe_seg_qty"], su["pivot_seg_qty"], su["dt"], su["rho_c"], 0.0, su["dacay_factor"]
     )
+    d_f = jc.d_f
     for n in range(50):
-        d_f = jc.coupling_force((0.0, 0.0, 3.0), n)
+        d_f = advance_column(jc, n, 3.0, d_f)
         assert d_f == 0.0 and not np.signbit(d_f)
-    assert np.any(jc.column()[1] != 0.0)  # the column still moves with the mass
+    assert np.any(jc.v_a != 0.0)  # the column still moves with the mass
 
 
 def test_no_coupling_is_unchanged():
