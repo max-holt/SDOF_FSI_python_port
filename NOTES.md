@@ -6,6 +6,19 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.2 (second independent review, 2026-11-23) **done**: findings and plan only, no
+code change. The R.1 lists are kept unchanged as `docs/review/findings_r1.md` and
+`docs/review/plan_r1.md` (the charter's rulings cite their ids; the charter and the
+references below still name `findings.md` / `plan.md` for them: owner's question R.2 Q-2).
+Six blind reviewers (151 raw findings), merged to 71 Design/Readability findings, each
+through its own verifier: 67 confirmed, 3 refuted, 1 unclear. `docs/review/findings.md`
+(ids `SC-`, `SP-`, `N-`): 13 Design, 55 Readability, 24 Nits (unverified), constraints
+K-1 to K-9, 15 possible defects, what to leave alone. `docs/review/plan.md`: groups 0-6,
+five order changes, questions Q-1 to Q-11. Toy kernel (scratch, not committed): NamedTuple
+parameters and compiled helpers bit-identical in both modes and as fast as flat scalars,
+**except** a column NamedTuple passed two calls deep per substep (1.46x at 60 cells, 1.16x
+at 300); the plan's parameter-object commits follow that rule. Gates not re-run (docs only).
+
 Session R.1b (owner's decisions applied, 2026-11-23, branch
 `claude/solver-review-charter-oe8gtr`, where the rest of the review now runs) **done**; no
 refactoring. (1) The pressure solver is removed: `pressure.py` (with the
@@ -315,7 +328,11 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Review session R.2:** `docs/nomenclature.md` (plan 0.1) from the vocabulary of charter
+**After R.2:** the owner answers `docs/review/plan.md` Q-1 to Q-11 (Q-1, Q-2, Q-4 block
+work); then group 0 (ruling-2 removals) and the nomenclature (plan 1.0). The paragraph
+below is the pre-R.2 next action, superseded by the R.2 plan's order.
+
+**Formerly planned as R.2:** `docs/nomenclature.md` (plan 0.1) from the vocabulary of charter
 ruling 1, and the rename table, written to `docs/review/rename_table.md` and shown to the
 owner before the first rename (ruling 10); then group 1 of the plan (renames, R0), one
 refactoring per commit. Rules, rulings and gates: `docs/review/charter.md`.
