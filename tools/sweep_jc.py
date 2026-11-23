@@ -339,12 +339,15 @@ def _timed(fn, *args, **kwargs):
 
 def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     """Both solvers on one case; the CSV row."""
-    p = pipe(case.size_in)
-    h = case_history(case, p.design_pressure)
-    force = h.force(p.flow_area)
-    kw = solver_kwargs(case, p)
+    pipe_properties = pipe(case.size_in)
+    pressure_history = case_history(case, pipe_properties.design_pressure)
+    force_history = pressure_history.force(pipe_properties.flow_area)
+    solver_arguments = solver_kwargs(case, pipe_properties)
     portal_frame_height = structure.solve_portal_height(
-        case.length_m, p.flexural_rigidity, p.mass_per_length, case.natural_frequency
+        case.length_m,
+        pipe_properties.flexural_rigidity,
+        pipe_properties.mass_per_length,
+        case.natural_frequency,
     )
     substep_duration = 1 / (SAMPLE_RATE * SUBSTEP_COUNT)
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
@@ -353,74 +356,87 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
-    mass_total = (case.length_m + portal_frame_height * 4 / 3) * p.mass_per_length
+    total_mass = (case.length_m + portal_frame_height * 4 / 3) * pipe_properties.mass_per_length
     row = dict.fromkeys(COLUMNS)
     row.update(
         case_id=case.case_id,
         tier=tier,
         subset=subset,
         size_in=case.size_in,
-        od_mm=p.outside_diameter_mm,
-        thk_mm=p.wall_thickness_mm,
+        od_mm=pipe_properties.outside_diameter_mm,
+        thk_mm=pipe_properties.wall_thickness_mm,
         length_m=case.length_m,
         nat_freq_hz=case.natural_frequency,
         amplitude_fraction=case.amplitude_fraction,
         mu=case.friction_coefficient,
-        p_design_bar=p.design_pressure / PA_PER_BAR,
-        p_cap_bar=histories.p_cap(p.design_pressure, case.amplitude_fraction) / PA_PER_BAR,
-        p_peak_bar=h.peak / PA_PER_BAR,
-        p_mean_bar=h.mean / PA_PER_BAR,
-        p_rms_bar=h.rms / PA_PER_BAR,
-        noise_rms_bar=None if h.noise_rms is None else h.noise_rms / PA_PER_BAR,
-        decay_s=h.decay_s,
-        duration_s=h.duration_s,
-        n_samples=h.n_samples,
-        histories_version=h.version,
-        fluid_area_m2=p.flow_area,
-        mass_per_unit_len=p.mass_per_length,
-        ei=p.flexural_rigidity,
+        p_design_bar=pipe_properties.design_pressure / PA_PER_BAR,
+        p_cap_bar=histories.p_cap(pipe_properties.design_pressure, case.amplitude_fraction)
+        / PA_PER_BAR,
+        p_peak_bar=pressure_history.peak / PA_PER_BAR,
+        p_mean_bar=pressure_history.mean / PA_PER_BAR,
+        p_rms_bar=pressure_history.rms / PA_PER_BAR,
+        noise_rms_bar=None
+        if pressure_history.noise_rms is None
+        else pressure_history.noise_rms / PA_PER_BAR,
+        decay_s=pressure_history.decay_s,
+        duration_s=pressure_history.duration_s,
+        n_samples=pressure_history.n_samples,
+        histories_version=pressure_history.version,
+        fluid_area_m2=pipe_properties.flow_area,
+        mass_per_unit_len=pipe_properties.mass_per_length,
+        ei=pipe_properties.flexural_rigidity,
         rho_c=FLUID_DENSITY * CELERITY,
         portal_height_m=portal_frame_height,
-        mass_total_kg=mass_total,
+        mass_total_kg=total_mass,
         pipe_seg_qty=column_cell_count,
         pivot_seg_qty=end_to_elbow_cell_count,
         jc_short_pipe=int(moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)),
-        history_peak=float(np.abs(force).max()),
-        history_mean=float(force.mean()),
-        history_rms=float(math.sqrt(float(np.mean(force * force)))),
+        history_peak=float(np.abs(force_history).max()),
+        history_mean=float(force_history.mean()),
+        history_rms=float(math.sqrt(float(np.mean(force_history * force_history)))),
         cpu=cpu,
         git_sha=sha,
     )
-    params = h.params()
+    params = pressure_history.params()
     for column, key in HISTORY_PARAM_COLUMNS:
         row[column] = params[key]
 
     errors = []
-    lumped, row["t_lumped_s"], err = _timed(response.peak_response, force, **kw)
+    lumped_result, row["t_lumped_s"], err = _timed(
+        response.peak_response, force_history, **solver_arguments
+    )
     if err:
         errors.append(f"lumped: {err}")
-    jc, row["t_jc_s"], err = _timed(
-        response.peak_response_jc, force, fluid_densty=FLUID_DENSITY, fluid_area=p.flow_area, **kw
+    jc_result, row["t_jc_s"], err = _timed(
+        response.peak_response_jc,
+        force_history,
+        fluid_densty=FLUID_DENSITY,
+        fluid_area=pipe_properties.flow_area,
+        **solver_arguments,
     )
     if err:
         errors.append(f"jc: {err}")
-    d2 = (p.outside_diameter_mm / 1000) ** 2
-    p_peak_a = h.peak * p.flow_area
-    for name, r in (("lumped", lumped), ("jc", jc)):
-        if r is None:
+    outside_diameter_squared = (pipe_properties.outside_diameter_mm / 1000) ** 2
+    peak_pressure_force = pressure_history.peak * pipe_properties.flow_area
+    for name, result in (("lumped", lumped_result), ("jc", jc_result)):
+        if result is None:
             continue
-        row[f"f_eq_{name}"] = r.max_static_equivalent_force
-        row[f"v_peak_{name}"] = r.max_velocity
-        row[f"momentum_{name}"] = mass_total * r.max_velocity
-        row[f"ke_peak_{name}"] = 0.5 * mass_total * r.max_velocity**2
-        row[f"x_peak_{name}"] = r.max_displacement
-        row[f"a_peak_{name}"] = r.max_acceleration
-        row[f"f_peak_{name}"] = r.max_applied_force
-        row[f"f_eq_over_LD2_{name}"] = r.max_static_equivalent_force / (case.length_m * d2)
-        row[f"daf_{name}"] = r.max_static_equivalent_force / p_peak_a
-    if lumped is not None and jc is not None:
-        row["ratio_f_eq"] = jc.max_static_equivalent_force / lumped.max_static_equivalent_force
-        row["ratio_v_peak"] = jc.max_velocity / lumped.max_velocity
+        row[f"f_eq_{name}"] = result.max_static_equivalent_force
+        row[f"v_peak_{name}"] = result.max_velocity
+        row[f"momentum_{name}"] = total_mass * result.max_velocity
+        row[f"ke_peak_{name}"] = 0.5 * total_mass * result.max_velocity**2
+        row[f"x_peak_{name}"] = result.max_displacement
+        row[f"a_peak_{name}"] = result.max_acceleration
+        row[f"f_peak_{name}"] = result.max_applied_force
+        row[f"f_eq_over_LD2_{name}"] = result.max_static_equivalent_force / (
+            case.length_m * outside_diameter_squared
+        )
+        row[f"daf_{name}"] = result.max_static_equivalent_force / peak_pressure_force
+    if lumped_result is not None and jc_result is not None:
+        row["ratio_f_eq"] = (
+            jc_result.max_static_equivalent_force / lumped_result.max_static_equivalent_force
+        )
+        row["ratio_v_peak"] = jc_result.max_velocity / lumped_result.max_velocity
     row["error"] = "; ".join(errors) if errors else None
     return row
 
