@@ -223,7 +223,7 @@ def _moving_fractions_display(column_cell_count: int, end_to_elbow_cell_count: i
 
 
 def lumped_grid(
-    inputs: dict, dt: float
+    inputs: dict, substep_duration: float
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int, float]:
     """The MoC grid a lumped case *would* have, for the lumped layout.
 
@@ -232,7 +232,7 @@ def lumped_grid(
     inputs : dict
         ``Trace.inputs`` (``physical_length``, ``flexural_rigidity_ei``,
         ``mass_per_unit_len``, ``nat_freq``, ``celerity``).
-    dt : float
+    substep_duration : float
         ``Trace.dt``, s.
 
     Returns
@@ -252,13 +252,15 @@ def lumped_grid(
         inputs["nat_freq"],
     )
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        inputs["physical_length"], portal_frame_height, inputs["celerity"], dt
+        inputs["physical_length"], portal_frame_height, inputs["celerity"], substep_duration
     )
     moving_fraction_a, moving_fraction_b = _moving_fractions_display(
         column_cell_count, end_to_elbow_cell_count
     )
     n_cells = 2 * column_cell_count + 1
-    position = np.arange(n_cells, dtype=np.float64) * (float(inputs["celerity"]) * float(dt))
+    position = np.arange(n_cells, dtype=np.float64) * (
+        float(inputs["celerity"]) * float(substep_duration)
+    )
     return (
         position,
         np.arange(n_cells) % 2,

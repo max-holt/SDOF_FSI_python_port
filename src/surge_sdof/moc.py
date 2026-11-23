@@ -89,7 +89,7 @@ included) or the lead author's corrected functions (approved fix F-4)."""
 
 # VBA lines 733-734
 def grid_size(
-    span_length: float, portal_frame_height: float, celerity: float, dt: float
+    span_length: float, portal_frame_height: float, celerity: float, substep_duration: float
 ) -> tuple[int, int]:
     """``(pipeSegQTY, pivotSegQTY)`` of the MoC grid (VBA lines 733-734).
 
@@ -101,7 +101,7 @@ def grid_size(
         From ``structure.solve_portal_height``, m.
     celerity : float
         Pressure-wave speed, m/s.
-    dt : float
+    substep_duration : float
         Sub-step, s; a cell is ``2 * celerity * dt`` long.
 
     Returns
@@ -113,12 +113,14 @@ def grid_size(
         height in cells; ``CLng`` rounds half to even).
     """
     end_to_elbow_cell_count = INACTIVE_END_CELL_COUNT + clng(
-        portal_frame_height / (2 * celerity * dt)
+        portal_frame_height / (2 * celerity * substep_duration)
     )
     # Proposed derivation, for Ben to confirm: a grid segment is 2 * celerity * dt long, and
     # the count is halved, rounded and doubled so the number of segments is even:
     # L / (4 c dt) is half the span's segment count.
-    column_cell_count = 2 + clng(span_length / (4 * celerity * dt) + end_to_elbow_cell_count) * 2
+    column_cell_count = (
+        2 + clng(span_length / (4 * celerity * substep_duration) + end_to_elbow_cell_count) * 2
+    )
     return column_cell_count, end_to_elbow_cell_count
 
 
@@ -140,14 +142,16 @@ def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
 
 
 # VBA line 731
-def end_pressure_decay_factor(celerity: float, dt: float, span_length: float) -> float:
+def end_pressure_decay_factor(
+    celerity: float, substep_duration: float, span_length: float
+) -> float:
     """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)`` (VBA line 731).
 
     Parameters
     ----------
     celerity : float
         Pressure-wave speed, m/s.
-    dt : float
+    substep_duration : float
         Sub-step, s.
     span_length : float
         Length between elbows, m.
@@ -160,7 +164,7 @@ def end_pressure_decay_factor(celerity: float, dt: float, span_length: float) ->
         updates, ``2 L / c`` seconds, it makes a factor of 2: a half-life of two transits
         of the length ``L``, not one.
     """
-    return 2 ** ((celerity * dt) / span_length)
+    return 2 ** ((celerity * substep_duration) / span_length)
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)

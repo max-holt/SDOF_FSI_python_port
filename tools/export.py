@@ -48,12 +48,12 @@ def estimated_cells(kw: dict, solver: str) -> int:
     """``2N + 1`` cells a JC run will carry (0 for lumped or a short-pipe fallback)."""
     if solver != "jc":
         return 0
-    dt = 1.0 / (kw["sample_freq"] * kw["step_qty"])
+    substep_duration = 1.0 / (kw["sample_freq"] * kw["step_qty"])
     portal_frame_height = structure.solve_portal_height(
         kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
     )
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        kw["physical_length"], portal_frame_height, kw["celerity"], dt
+        kw["physical_length"], portal_frame_height, kw["celerity"], substep_duration
     )
     return (
         0

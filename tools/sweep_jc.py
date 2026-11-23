@@ -327,9 +327,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     portal_frame_height = structure.solve_portal_height(
         case.length_m, p.ei, p.mass_per_unit_len, case.nat_freq_hz
     )
-    dt = 1 / (SAMPLE_FREQ * STEP_QTY)
+    substep_duration = 1 / (SAMPLE_FREQ * STEP_QTY)
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        case.length_m, portal_frame_height, CELERITY, dt
+        case.length_m, portal_frame_height, CELERITY, substep_duration
     )
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.

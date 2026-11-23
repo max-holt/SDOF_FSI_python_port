@@ -250,7 +250,7 @@ def peak_response(
     history = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
     out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 377
-    dt = 1 / (sample_freq * step_qty)
+    substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
@@ -262,7 +262,7 @@ def peak_response(
         damping_percent,
         dynamic_fric,
         nat_freq,
-        dt,
+        substep_duration,
         gap,
         restrain_freq_ratio,
     )
@@ -292,7 +292,7 @@ def peak_response(
     return _integrate(
         forces,
         params,
-        dt,
+        substep_duration,
         step_qty,
         None,
         out_max,
@@ -410,7 +410,7 @@ def peak_response_jc(
     history = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
     out_max = history.shape[0] * history.shape[1] + clng(transit_delay_samples)  # VBA line 714
-    dt = 1 / (sample_freq * step_qty)
+    substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
@@ -425,13 +425,15 @@ def peak_response_jc(
         damping_percent,
         dynamic_fric,
         nat_freq,
-        dt,
+        substep_duration,
         gap,
         restrain_freq_ratio,
     )
-    end_pressure_decay_factor = moc.end_pressure_decay_factor(celerity, dt, physical_length)
+    end_pressure_decay_factor = moc.end_pressure_decay_factor(
+        celerity, substep_duration, physical_length
+    )
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        physical_length, portal_frame_height, celerity, dt
+        physical_length, portal_frame_height, celerity, substep_duration
     )
     if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count):
         # insufficient length, use lumped mass (VBA 736-740)
@@ -460,7 +462,7 @@ def peak_response_jc(
     junction = JunctionCoupling(
         column_cell_count,
         end_to_elbow_cell_count,
-        dt,
+        substep_duration,
         rho_c,
         fluid_area,
         end_pressure_decay_factor,
@@ -498,7 +500,7 @@ def peak_response_jc(
     return _integrate(
         forces,
         params,
-        dt,
+        substep_duration,
         step_qty,
         junction,
         out_max,
@@ -605,7 +607,7 @@ def _trace_frame(
 def _integrate(
     forces,
     params: SdofParams,
-    dt: float,
+    substep_duration: float,
     step_qty: int,
     coupling: JunctionCoupling | None,
     out_max: int,
@@ -632,7 +634,7 @@ def _integrate(
     flattened like ``forces``, the trace arrays are allocated (``trace.check_memory``,
     ``trace.allocate``) and the kernel fills them; ``trace.build`` makes the ``Trace``.
     With 0 the kernel takes empty arrays."""
-    dt = float(dt)
+    substep_duration = float(substep_duration)
     samples = list(forces)
     offsets = np.zeros(len(samples) + 1, dtype=np.int64)
     for i, sample in enumerate(samples):
@@ -689,7 +691,7 @@ def _integrate(
             params.friction_velocity_step,
             params.support_gap,
             params.closed_gap_stiffness_ratio,
-            dt,
+            substep_duration,
             int(step_qty),
             int(out_max),
             int(output_type),
@@ -729,7 +731,7 @@ def _integrate(
             meta.solver,
             meta.inputs,
             trace_every,
-            dt,
+            substep_duration,
             step_qty,
             out_max,
             params,

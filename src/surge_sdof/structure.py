@@ -181,7 +181,7 @@ def lumped_params(
     damping_percent: float,
     friction_coefficient: float,
     natural_frequency: float,
-    dt: float,
+    substep_duration: float,
     support_gap: float,
     closed_gap_frequency_ratio: float,
 ) -> SdofParams:
@@ -201,7 +201,7 @@ def lumped_params(
         Coulomb friction coefficient, dimensionless (the VBA fixes m and s here).
     natural_frequency : float
         Natural frequency with the gaps open, Hz.
-    dt : float
+    substep_duration : float
         Sub-step, s (``1 / (sampleFreq * stepQTY)``).
     support_gap : float
         Support gap, m.
@@ -229,7 +229,7 @@ def lumped_params(
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
-    friction_velocity_step = 0.5 * friction_coefficient * 9.81 * dt
+    friction_velocity_step = 0.5 * friction_coefficient * 9.81 * substep_duration
     return SdofParams(
         float(mass),
         float(stiffness),
@@ -250,7 +250,7 @@ def jc_params(
     damping_percent: float,
     friction_coefficient: float,
     natural_frequency: float,
-    dt: float,
+    substep_duration: float,
     support_gap: float,
     closed_gap_frequency_ratio: float,
 ) -> SdofParams:
@@ -278,7 +278,7 @@ def jc_params(
         Coulomb friction coefficient, dimensionless (m and s fixed by the VBA).
     natural_frequency : float
         Natural frequency with the gaps open, Hz (modelled with the fluid mass included).
-    dt : float
+    substep_duration : float
         Sub-step, s.
     support_gap : float
         Support gap, m.
@@ -322,7 +322,7 @@ def jc_params(
         0.5
         * friction_coefficient
         * 9.81
-        * dt
+        * substep_duration
         * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)
         / mass
     )  # mass correction from frictional to inertial

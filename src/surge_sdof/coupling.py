@@ -43,7 +43,7 @@ class JunctionCoupling:
         ``pipeSegQTY``, cells in the whole column (from ``moc.grid_size``).
     end_to_elbow_cell_count : int
         ``pivotSegQTY``, cells from each end to the portal-frame pivot.
-    dt : float
+    substep_duration : float
         Sub-step, s.
     rho_c : float
         Acoustic impedance ``fluidDensty * celerity``, Pa·s/m (kg/(m²·s)).
@@ -102,7 +102,7 @@ class JunctionCoupling:
         self,
         column_cell_count: int,
         end_to_elbow_cell_count: int,
-        dt: float,
+        substep_duration: float,
         rho_c: float,
         fluid_area: float,
         end_pressure_decay_factor: float,
@@ -113,7 +113,7 @@ class JunctionCoupling:
         self.pivot = int(end_to_elbow_cell_count)
         self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
         self.p_a, self.v_a, self.p_b, self.v_b = moc.column_at_rest(self.n_seg)
-        self.dt = float(dt)
+        self.dt = float(substep_duration)
         self.rho_c = float(rho_c)
         self.fluid_area = float(fluid_area)
         self.decay = float(end_pressure_decay_factor)

@@ -299,7 +299,7 @@ def build(
     solver: str,
     inputs: dict,
     trace_every: int,
-    dt: float,
+    substep_duration: float,
     step_qty: int,
     out_max: int,
     params: SdofParams,
@@ -317,7 +317,7 @@ def build(
 
     Parameters
     ----------
-    solver, inputs, trace_every, dt, step_qty, out_max, params
+    solver, inputs, trace_every, substep_duration, step_qty, out_max, params
         The one-off fields.
     n_frames : int
         Frames the kernel wrote.
@@ -336,12 +336,12 @@ def build(
     fields = {
         "solver": solver,
         "trace_every": int(trace_every),
-        "dt": float(dt),
+        "dt": float(substep_duration),
         "step_qty": int(step_qty),
         "out_max": int(out_max),
         "params": params,
         "inputs": inputs,
-        "t": (sub_step + 1) * float(dt),
+        "t": (sub_step + 1) * float(substep_duration),
         "sub_step": sub_step,
         "sample": ints[:, I_SAMPLE].copy(),
         "phase": ints[:, I_PHASE].copy(),
@@ -365,7 +365,8 @@ def build(
             ext_qty=int(ext_qty),
             p_cells=tr_p[:n_frames].copy(),
             v_cells=tr_v[:n_frames].copy(),
-            cell_position=np.arange(n_cells, dtype=np.float64) * (float(celerity) * float(dt)),
+            cell_position=np.arange(n_cells, dtype=np.float64)
+            * (float(celerity) * float(substep_duration)),
             cell_kind=np.arange(n_cells) % 2,
             moving_fraction=interleave(jc.frac_a, jc.frac_b),
         )
