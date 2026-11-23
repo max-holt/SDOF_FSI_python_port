@@ -153,14 +153,17 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
     ``elbow_forces`` (which differ only in their inner ``k`` loops).
 
-    Phase 1 (delay) items are ``(0, totInd, forceA, f_cur, f_nxt)``: ``forceA`` is held,
-    ``forceB`` ramps from ``f_cur`` to ``f_nxt``; the consumer truncates the sample at the
-    VBA ``Exit For`` (``base + k > unballanceStepQTY * stepQTY``). Phase 2 (ramp) items are
-    ``(1, fa_cur, fa_nxt, fb_cur, fb_nxt, fb2_cur, fb2_nxt)``: ``forceA`` ramps between the
-    first pair, ``forceB`` between the second pair for the first ``stepQTY - kOverlap``
-    sub-steps and between the third pair for the remaining ``kOverlap``. The item is
-    yielded after every index it needs is read, so a D-8 ``IndexError`` surfaces where the
-    legacy raised it: at the first phase-2 sample, after every phase-1 sample."""
+    Phase 1 (delay) items are ``(0, totInd, elbow_a_force, elbow_b_force_current,
+    elbow_b_force_next)``: the force at elbow A is held, the force at elbow B ramps between
+    the pair; the consumer truncates the sample at the VBA ``Exit For`` (``base + k >
+    unballanceStepQTY * stepQTY``). Phase 2 (ramp) items are ``(1, elbow_a_force_current,
+    elbow_a_force_next, elbow_b_force_current, elbow_b_force_next,
+    elbow_b_force_advanced_current, elbow_b_force_advanced_next)``: elbow A ramps between the
+    first pair, elbow B between the second pair for the first ``stepQTY - kOverlap``
+    sub-steps and between the third pair (after it advances) for the remaining
+    ``kOverlap``. The item is yielded after every index it needs is read, so a D-8
+    ``IndexError`` surfaces where the legacy raised it: at the first phase-2 sample, after
+    every phase-1 sample."""
     (
         force_history_one_based,
         history_row_count,
@@ -174,7 +177,7 @@ def _schedule(run: _Run) -> Iterator[tuple]:
     ) = run
 
     # ---------------------------------------------------------------- phase 1: delay
-    force_a = force_history_one_based[1][1]
+    elbow_a_force = force_history_one_based[1][1]
     tot_ind = 0
     # For jB = 1 To 1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))
     #     For iB = 1 To UBound(forceHistory, 1)
@@ -204,7 +207,7 @@ def _schedule(run: _Run) -> Iterator[tuple]:
             yield (
                 0,
                 tot_ind,
-                force_a,
+                elbow_a_force,
                 force_history_one_based[history_row][history_column],
                 force_history_one_based[next_history_row][next_history_column],
             )
@@ -237,11 +240,11 @@ def _schedule(run: _Run) -> Iterator[tuple]:
             else:
                 elbow_b_next_column = elbow_b_column
                 elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
-            fa_cur = force_history_one_based[history_row][history_column]
-            fa_nxt = force_history_one_based[next_history_row][next_history_column]
-            fb_cur = force_history_one_based[elbow_b_row][elbow_b_column]
-            fb_nxt = force_history_one_based[elbow_b_next_row][elbow_b_next_column]
-            # forceB for k = 0 To stepQTY - kOverlap - 1 comes from (fb_cur, fb_nxt); the
+            elbow_a_force_current = force_history_one_based[history_row][history_column]
+            elbow_a_force_next = force_history_one_based[next_history_row][next_history_column]
+            elbow_b_force_current = force_history_one_based[elbow_b_row][elbow_b_column]
+            elbow_b_force_next = force_history_one_based[elbow_b_next_row][elbow_b_next_column]
+            # forceB for k = 0 To stepQTY - kOverlap - 1 comes from the current / next pair; the
             # VBA then advances iB/jB and reads the pair for k = stepQTY - kOverlap To
             # stepQTY - 1 (the advance does not depend on the k loop)
             if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
@@ -257,10 +260,10 @@ def _schedule(run: _Run) -> Iterator[tuple]:
                 elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
             yield (
                 1,
-                fa_cur,
-                fa_nxt,
-                fb_cur,
-                fb_nxt,
+                elbow_a_force_current,
+                elbow_a_force_next,
+                elbow_b_force_current,
+                elbow_b_force_next,
                 force_history_one_based[elbow_b_row][elbow_b_column],
                 force_history_one_based[elbow_b_next_row][elbow_b_next_column],
             )
@@ -326,32 +329,52 @@ def unbalance_force(
     split = step_qty - overlap_substep_count
     for item in _schedule(run):
         if item[0] == 0:
-            _phase, tot_ind, force_a, f_cur, f_nxt = item
+            _phase, tot_ind, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             base = (tot_ind - 1) * step_qty + 1
             sample = []
             for k in range(step_qty):
-                force_b = f_cur * current_sample_weight[k] + f_nxt * next_sample_weight[k]
-                sample.append(force_a - force_b)
+                elbow_b_force = (
+                    elbow_b_force_current * current_sample_weight[k]
+                    + elbow_b_force_next * next_sample_weight[k]
+                )
+                sample.append(elbow_a_force - elbow_b_force)
                 if base + k > transit_delay_substeps:
                     break
             yield sample
         else:
-            _phase, fa_cur, fa_nxt, fb_cur, fb_nxt, fb2_cur, fb2_nxt = item
+            (
+                _phase,
+                elbow_a_force_current,
+                elbow_a_force_next,
+                elbow_b_force_current,
+                elbow_b_force_next,
+                elbow_b_force_advanced_current,
+                elbow_b_force_advanced_next,
+            ) = item
             sample = []
             # For k = 0 To stepQTY - kOverlap - 1: forceB at k + kOverlap
             for k in range(0, split):
-                force_a = fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k]
-                force_b = (
-                    fb_cur * current_sample_weight[k + overlap_substep_count]
-                    + fb_nxt * next_sample_weight[k + overlap_substep_count]
+                elbow_a_force = (
+                    elbow_a_force_current * current_sample_weight[k]
+                    + elbow_a_force_next * next_sample_weight[k]
                 )
-                sample.append(force_a - force_b)
+                elbow_b_force = (
+                    elbow_b_force_current * current_sample_weight[k + overlap_substep_count]
+                    + elbow_b_force_next * next_sample_weight[k + overlap_substep_count]
+                )
+                sample.append(elbow_a_force - elbow_b_force)
             # For k = stepQTY - kOverlap To stepQTY - 1: forceB at k - stepQTY + kOverlap
             for k in range(split, step_qty):
                 m = k - step_qty + overlap_substep_count
-                force_a = fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k]
-                force_b = fb2_cur * current_sample_weight[m] + fb2_nxt * next_sample_weight[m]
-                sample.append(force_a - force_b)
+                elbow_a_force = (
+                    elbow_a_force_current * current_sample_weight[k]
+                    + elbow_a_force_next * next_sample_weight[k]
+                )
+                elbow_b_force = (
+                    elbow_b_force_advanced_current * current_sample_weight[m]
+                    + elbow_b_force_advanced_next * next_sample_weight[m]
+                )
+                sample.append(elbow_a_force - elbow_b_force)
             yield sample
 
 
@@ -375,7 +398,7 @@ def elbow_forces(
     phase : int
         0 for the delay phase (``forceA`` held at the first sample while ``forceB``
         ramps; the trace's "transit"), 1 for the ramp phase (the trace's "history").
-    force_a, force_b : list of float
+    elbow_a_force, elbow_b_force : list of float
         The force at elbow A and the delayed force at elbow B, N, per sub-step; the same
         lengths as the ``unbalance_force`` samples (the last delay sample truncated).
 
@@ -401,28 +424,48 @@ def elbow_forces(
     split = step_qty - overlap_substep_count
     for item in _schedule(run):
         if item[0] == 0:
-            _phase, tot_ind, force_a, f_cur, f_nxt = item
+            _phase, tot_ind, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             base = (tot_ind - 1) * step_qty + 1
-            fa = []
-            fb = []
+            elbow_a_forces = []
+            elbow_b_forces = []
             for k in range(step_qty):
-                fa.append(force_a)
-                fb.append(f_cur * current_sample_weight[k] + f_nxt * next_sample_weight[k])
+                elbow_a_forces.append(elbow_a_force)
+                elbow_b_forces.append(
+                    elbow_b_force_current * current_sample_weight[k]
+                    + elbow_b_force_next * next_sample_weight[k]
+                )
                 if base + k > transit_delay_substeps:
                     break
-            yield (0, fa, fb)
+            yield (0, elbow_a_forces, elbow_b_forces)
         else:
-            _phase, fa_cur, fa_nxt, fb_cur, fb_nxt, fb2_cur, fb2_nxt = item
-            fa = []
-            fb = []
+            (
+                _phase,
+                elbow_a_force_current,
+                elbow_a_force_next,
+                elbow_b_force_current,
+                elbow_b_force_next,
+                elbow_b_force_advanced_current,
+                elbow_b_force_advanced_next,
+            ) = item
+            elbow_a_forces = []
+            elbow_b_forces = []
             for k in range(0, split):
-                fa.append(fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k])
-                fb.append(
-                    fb_cur * current_sample_weight[k + overlap_substep_count]
-                    + fb_nxt * next_sample_weight[k + overlap_substep_count]
+                elbow_a_forces.append(
+                    elbow_a_force_current * current_sample_weight[k]
+                    + elbow_a_force_next * next_sample_weight[k]
+                )
+                elbow_b_forces.append(
+                    elbow_b_force_current * current_sample_weight[k + overlap_substep_count]
+                    + elbow_b_force_next * next_sample_weight[k + overlap_substep_count]
                 )
             for k in range(split, step_qty):
                 m = k - step_qty + overlap_substep_count
-                fa.append(fa_cur * current_sample_weight[k] + fa_nxt * next_sample_weight[k])
-                fb.append(fb2_cur * current_sample_weight[m] + fb2_nxt * next_sample_weight[m])
-            yield (1, fa, fb)
+                elbow_a_forces.append(
+                    elbow_a_force_current * current_sample_weight[k]
+                    + elbow_a_force_next * next_sample_weight[k]
+                )
+                elbow_b_forces.append(
+                    elbow_b_force_advanced_current * current_sample_weight[m]
+                    + elbow_b_force_advanced_next * next_sample_weight[m]
+                )
+            yield (1, elbow_a_forces, elbow_b_forces)
