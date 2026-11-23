@@ -152,8 +152,10 @@ def decay_factor(celerity: float, dt: float, physical_length: float) -> float:
     Returns
     -------
     float
-        Dimensionless factor by which the end-node pressure decays per even update (a
-        half-life of one pipe transit).
+        Dimensionless factor ``2 ** (c dt / L)`` by which the end-node pressure is divided
+        at every even update, once every ``2 dt``. Compounded over ``L / (c dt)`` even
+        updates, ``2 L / c`` seconds, it makes a factor of 2: a half-life of two transits
+        of the length ``L``, not one.
     """
     return 2 ** ((celerity * dt) / physical_length)
 
