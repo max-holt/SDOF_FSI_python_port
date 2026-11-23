@@ -1,188 +1,262 @@
-# Clean-code review — refactor plan (R.2)
+# Clean-code review — refactor plan
 
-Session R.2, 23 Nov 2026. Orders the findings of `docs/review/findings.md` into
-single-refactoring commits. Nothing here has been started. The R.1 plan is kept as
-`docs/review/plan_r1.md`; the charter's ruling 3 accepted *its* order, which this plan follows
-except where "Where I would change the order" says otherwise.
+Session R.1, 16 Nov 2026. Orders the findings of `docs/review/findings.md` into commits.
+Nothing here has been started.
 
-Every commit: one refactoring, named with its risk class; expressions move verbatim (charter
-rule 2); `make lint` and `make test-both` (snapshot and supporting-code checks in both
-modes); revert on red. Every session: `-m slow` and `tools/bench.py`. After any edit to
-`moc.py`, `structure.py` or `trace.py`, wipe the Numba cache before trusting a result.
+**Updated in session R.1b (23 Nov 2026) to the owner's rulings** (`docs/review/charter.md`,
+"Rulings"): the order below is accepted; the pressure solver is gone (its rows are struck
+through); the test-only interfaces are removed (group 3 opens with that); the coupling is a
+plain flag; the ungated tools get rename-only edits; Nits are rejected, so a nit id below is
+a reference only and its fix is not a commit of its own; S-17 is rejected; the two edge-case
+fixes are group 7. The answers are under each question at the end.
 
-"Stop" marks a point where the charter (ruling 10) asks the session to write the proposal to
-a file under `docs/review/` and wait for the owner.
+**Approvals in files (ruling 10).** Where a session is to stop and show the owner
+something, it also writes it under `docs/review/`: the rename table
+(`docs/review/rename_table.md`, before group 1), the parameter-object groups
+(`docs/review/parameter_objects.md`, before group 3), the substep designs
+(`docs/review/substep_design.md`, before group 4) and the public interface
+(`docs/review/public_interface.md`, before group 6).
 
-## 0. Removals that ruling 2 already decided (proposed first; see "order")
+Every commit below is one refactoring, named in its message with its risk class, and is
+gated as the charter says (`make lint`, `make test-both`; revert on red). Expressions move
+verbatim. A session ends with `-m slow` and `tools/bench.py`. Ids are those of the
+findings; "Q-n" refers to the questions at the end.
 
-| # | commit | finding | risk |
+## The order, and where I would change it (accepted by the owner, R.1b)
+
+The charter's order is kept: names; constants, units and control flow; parameter objects;
+the single sub-step; supporting modules and tools; public API, data format, docstrings and
+lint limits. Four changes inside it:
+
+1. **Kernel-signature names move from group 1 to group 3.** `tr_f`, `flat`, `flat_a`,
+   `p_a`, `n_seg`, `pivot`, `off`, `rec` and the other names in the 36-parameter signature
+   (C-36, parts of C-25 and C-28) are replaced by parameter-object fields in group 3.
+   Renaming them first means every one changes twice, in the riskiest file, for no reader.
+   Group 1 renames concepts (fields, locals, functions outside the kernel signatures);
+   group 3 names each kernel parameter once, as a field.
+2. **`docs/nomenclature.md` comes before group 1** (C-24). It is the word list every rename
+   draws from, and it needs the owner's rulings on vocabulary (Q-6) before the first
+   rename, not after.
+3. **The phase and kind constants (C-09) open group 2**, ahead of the unit constants. The
+   parameter objects and the sub-step extraction both lean on them.
+4. **The ungated tools go last in group 5, or not at all** (Q-7). The plots and report of
+   `sweep_jc`, `bench.py`, `extract_fixtures.py`, `golden_report.py` and `profile_delta.py`
+   have no test; a refactoring there cannot be shown to preserve anything. The gated
+   supporting code goes first.
+
+Two things I would not move although it is tempting: docstrings stay last (rewriting the
+docstring of a function that is about to be split is wasted), and the exported names stay
+in the single schema bump.
+
+## Before group 1
+
+| # | commit | findings | risk |
 |---|---|---|---|
-| 0.1 | Remove `structure.restoring_force`, `structure.step`, `structure.State`; point their tests at `effective_displacement` / `step_scalars`, assertions unchanged | SC-01 | R3 |
-| 0.2 | Remove `JunctionCoupling.column()` (no caller) | SC-01 | R0 |
-| 0.3 | Remove `Coupling` protocol and `coupling_force` (both classes); point the tests at `moc.step` — **stop** for Q-1 (three assertions with no counterpart) | SC-01 | R3 |
-| 0.4 | Remove the dead `jc.d_f` write-back (`response.py:707-708`) | SC-01 | R2 |
+| 0.1 | Write `docs/nomenclature.md`: symbol or name, meaning, unit, VBA name, for every kernel symbol kept and every name group 1 introduces | C-24 | R0 |
+| 0.2 | Correct the two descriptions of what the grid count covers (`moc.py:108`, `docs/data_format.md:251`) | S-38 | R0 |
 
-`NoCoupling` and `KIND` stay until 3.4: they still select the kernel path.
+Q-6 is answered (ruling 1). 0.2 is a docstring and a document line; it is here because group 1 names the
+quantity.
 
-## 1. Names
+## Group 1 — names (R0)
 
-| # | commit | finding | risk |
+Internal names only. Public keywords, the alias, exported keys and CSV columns do not
+change; the snapshot and support adapters absorb the renamed attributes.
+
+| # | commit | findings |
+|---|---|---|
+| 1.1 | `SdofParams.fric_acc` to `friction_velocity_step`, `ratio2` to `closed_gap_stiffness_ratio` (attribute side; exported keys stay) | C-30, S-37 |
+| 1.2 | Transit delay: `unb`, `unballance_step_qty`, `unb_steps`, `k_overlap` in `loads`, `response` and the tools | C-27, S-06 (names) |
+| 1.3 | `loads` index walk and `_Run` fields | C-37 |
+| 1.4 | Forced-phase vocabulary: one pair for delay / ramp and transit / history, in names and docstrings | C-44, S-39 |
+| 1.5 | Unbalance force: `f`, `f_u`, `forces` outside the kernel signature; `f_applied` | C-26 |
+| 1.6 | Elbow forces in `loads` (`force_a`, `fa`, `fb`); `F_A` to an acceleration name; `moc.py:338` `fa, fb` | C-25 |
+| 1.7 | `structure` solver locals (`var_a..c`, `len_val`, `error_val`, `ax`, `av`) | C-38 |
+| 1.8 | ~~`pressure` locals and `PressureSetup` fields~~: removed with the pressure solver (R.1b) | C-39 |
+| 1.9 | ~~`pressure.grid_size` renamed; `tot_ind` and `out_max` inside `pressure`~~: removed (R.1b); the `loads` / `response` part of C-29 is 1.13 | C-21, C-29 |
+| 1.10 | Internal `fluid_densty`, `h`, `time_step` / `dt` in `structure`, `moc`, `coupling` | C-31 |
+| 1.11 | `d_f` descriptions, `DAMPING_A`, `vav_div` / `vav_divisor` (internal) | C-45 |
+| 1.12 | `history` (response history against force history), `decay`, `frac` in `loads` | C-43 |
+| 1.13 | Counts and indices outside kernel signatures: `_count`, `_index`, one spelling of sub-step | C-28, S-40, C-N17 |
+| 1.14 | Supporting code: `jc`, `cap`, `p`, `h`, `kind` reused; booleans as predicates; computation names in `sweep_jc`, `geometry`, `profile_delta`; tool argparse `dest` names | S-44, S-46, S-47, S-48, C-N15 |
+
+Each row is one commit, or one per module where the rename crosses more than about ten
+files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, both modes.
+
+## Group 2 — constants, units, control flow (R1, R2)
+
+| # | commit | findings | risk |
 |---|---|---|---|
-| 1.0 | Write `docs/nomenclature.md` (every code name: meaning, SI unit, VBA name) and the rename table `docs/review/renames.md` — **stop** | SC-18 | — |
-| 1.1 | Load phases: `PHASE_HISTORY` → `PHASE_FORCED`; prose to transit / forced / free decay, phases by name not number (`loads`, `response`, `trace`, `coupling`) | SC-12 (R0 part) | R0 |
-| 1.2 | "substep" one word, internal names and prose (`step_index`, `unb_steps`, `I_SUB_STEP`, docstrings); `step_qty` keyword and `sub_step` key wait for the bump | SC-21 | R0 |
-| 1.3 | `SdofParams` fields `fric_acc`, `ratio2`; `moc.DAMPING_A`; internal `d_f` outside kernel signatures | SC-19 | R0 |
-| 1.4 | Unbalance force vs applied force: one name each (internal) | SC-22 | R0 |
-| 1.5 | "history": input force history, recorded response, recording window (internal locals and prose) | SC-23 | R0 |
-| 1.6 | `loads` locals: `fh`, `u1`, `u2`, `ib`, `jb`, `imax`, `jbmax`, `jb_to`, `unb`, `frac`, `one_minus`, `split`, `base`, `m` | SC-24 | R0 |
-| 1.7 | `structure` locals and `solve_poly` (`var_a..c`, `len_val`, `error_val`); `response` locals (`h`, `p`, `flat`, `offsets`, `scalars`, `rec`, `off`, `tot_ind`, `out_max`) | SC-24 | R0 |
-| 1.8 | Counts and indices: `_count` / `_index` (internal; `pivot` as count vs index) | SC-25 | R0 |
-| 1.9 | Moving fraction: "interp fraction" → "moving fraction" in prose; `interp_fraction_*` functions (not kernel parameters) | SP-36 | R0 |
-| 1.10 | Grid vocabulary: node / cell / grid point in prose; correct the `moc.grid_size` docstring on `pipe_seg_qty` | SP-34 (internal part) | R0 |
-| 1.11 | Trace frame arrays and constants in `trace.py` (`tr_f`, `F_FU`, `N_FLOAT_COLUMNS`…), kernel parameters renamed positionally | SP-42 | R0 |
-| 1.12 | `sweep_jc.run_case` locals (`p`, `h`, `d2`, `p_peak_a`, `mass`) | SP-37 | R0 |
+| 2.1 | One named phase pair, used in `loads`, `response`, `trace`, the tests | C-09 | R1 |
+| 2.2 | The coupling kind as a plain flag (fluid coupling on or off, a bool) in place of `KIND` 0 / 1 and the literal `1` in the kernels (ruling 2, in place of a constant pair) | C-09 | R2 |
+| 2.3 | ~~Unit factors in `pressure.setup` and `pump_boundary`~~: removed (R.1b) | C-33 | R1 |
+| 2.4 | `/ 100` percent of critical in `structure` | C-33 | R1 |
+| 2.5 | `9.81`; the friction dead band; the Newton tolerance, relaxation and pass counts | C-34 | R1 |
+| 2.6 | Free-decay threshold `0.01`; the result capacity `out_max * 2` named once | C-34, C-N08 | R1 |
+| 2.7 | The legacy `n < 3` limit (the valve-closed threshold and the two friction clamps went with the pressure solver) | C-34 | R1 |
+| 2.8 | Derivation comments for the pure-number coefficients: **done in R.1b** for `12`, `0.5 + 1.5 (...)`, `4 / 3`, `out_max * 2` and `4 * celerity * dt` ("Proposed derivation, for Ben to confirm"); the friction `0.5` still needs one (Q-4) | C-35 | R0 |
+| 2.9 | Supporting code: conversions and convention values in gated expressions (`cases.py:59-62`, `sweep_jc.py:122-127`, `332`, `383`, `histories.py`) | S-45 | R1 |
+| 2.10 | `rho_c == 0` guard to the first statement of the coupling constructor | C-19 | R2 |
+| 2.11 | Trace request as one optional object in `_integrate` | C-23 | R2 |
+| 2.12 | ~~Small control-flow nits~~: Nits rejected (ruling 8) | C-N03, C-N04, C-N06 | R2 |
 
-Renames in `tests/test_review_snapshot.py` and `tests/test_review_support.py` go into their
-adapter sections only (charter rules 5 and 6).
+2.6 needs Q-4 only for its comment, now written; the friction `0.5` of 2.8 still needs it
+(2.3 and Q-5 went with the pressure solver). The charter's mutation tests showed that a
+regrouped set-up value can hide from a peak, so 2.4 to 2.7 are one literal per commit and the
+snapshot runs in both modes each time.
 
-## 2. Constants, units and control flow
+## Group 3 — parameter objects (R3, R4)
 
-| # | commit | finding | risk |
+Q-2 is answered (ruling 2): the test-only interfaces are removed first, one per commit,
+their tests pointed at the code that actually runs with the assertions unchanged. Before
+3.1, write `docs/review/parameter_objects.md` (the groups) and stop for the owner.
+
+| # | commit | findings | risk |
 |---|---|---|---|
-| 2.1 | Phase constants defined once and imported (loads' tags, `response.py:659`) | SC-12 | R1 |
-| 2.2 | Core constants: gravity, percent, friction dead zone (D-20), `solve_poly` relaxation / iterations / tolerance, refinement passes, free-decay threshold (D-21), `n < 3` (D-4); one commit per module | SC-20 | R1 |
-| 2.3 | `histories` default constants (`decay_cycles`, `decay_fraction`, step fraction of cap); comment on `p_noise_rms` | SP-40 | R1 |
-| 2.4 | Tool constants: comments for `sweep_jc` inputs; `P_CAP_FACTOR` basis (Q-8); unit factors named in place, one name per meaning | SP-39, SP-38 | R1 |
-| 2.5 | `_schedule`: Extract Function `_next_index` | SC-14 | R3 |
-| 2.6 | `_schedule` items as two NamedTuples | SC-15 | R1 |
-| 2.7 | One schedule walk: `unbalance_force` = `fa - fb` of the elbow generator; drop the double walk and the length check | SC-08 | R3 |
-| 2.8 | `portal_frame_mass` for the four identically grouped sites | SC-11 | R3 |
+| 3.0a | Remove `JunctionCoupling.coupling_force` and `column()`; the tests that call them drive `moc.step` or the solver instead | C-03, C-N13 | R3 |
+| 3.0b | Remove the `Coupling` protocol and `NoCoupling`; `_integrate` takes the plain flag of 2.2 | C-03 | R3 |
+| 3.0c | Remove `structure.step` and `State`; their tests call `step_scalars` | C-10 | R3 |
+| 3.0d | Remove `structure.restoring_force`; its tests call `effective_displacement` | C-10 | R3 |
+| 3.1 | `step_scalars` takes `SdofParams`; the kernel receives it whole | C-10, C-01 | R4 |
+| 3.2 | Fluid-column NamedTuple (four state arrays, two weight arrays, counts, `rho_c`, decay factor, divisor, area) built by `JunctionCoupling`; `moc.step` and the kernel take it; a named constructor for the empty column with today's literal types | C-01, C-03, C-04, C-N07, C-N13 | R4 |
+| 3.3 | Trace-buffers NamedTuple returned by `trace.allocate`, taken by the kernel and `trace.build` | C-01, C-15, S-08 | R4 |
+| 3.4 | Run-settings NamedTuple (`dt`, sub-steps per sample, capacity, `output_type`, parity flag) | C-01 | R4 |
+| 3.5 | NamedTuple return of the kernel | C-01 | R4 |
+| 3.6 | Grid description passed to `trace.build` in place of the coupling object; annotate it | C-14, S-08 | R3 |
+| 3.7 | Span, restraint and fluid objects for `lumped_params` / `jc_params`; shared return block | C-17 | R3 |
+| 3.8 | Grid and fluid-constant objects for `JunctionCoupling.__init__` | C-18 | R3 |
+| 3.9 | ~~`pressure` column NamedTuple~~: removed (R.1b) | C-16, C-N02 | R3 |
+| 3.10 | Entry points: extract the sample grid and the trace wrapper; keyword arguments in the short-pipe fallback | C-11 | R3 |
+| 3.11 | One set-up query in the core (sub-step, portal height, grid), used by `response` | S-06 (core half) | R3 |
 
-## 3. Parameter objects
+3.1 to 3.5 are the commits the bench matters for. After each: cache wipe, both modes,
+snapshot; `tools/bench.py` at the end of the session and a revert of the session's last
+commit if the kernel rows move beyond noise. K-1 in the findings records the toy result
+that makes this worth trying; it is not evidence for the real kernel.
 
-**Stop** before 3.1: write the parameter-object groups to `docs/review/parameter_objects.md`
-(ruling 10). Rule from the toy test (findings K-1): unpack the column tuple once per kernel
-call, or pass it at most one call deep per substep. Kernel-signature names change here
-(ruling 3), with 1.x having renamed everything else.
+## Group 4 — the single sub-step (R3, R4)
 
-| # | commit | finding | risk |
+| # | commit | findings | risk |
 |---|---|---|---|
-| 3.1 | `effective_displacement` compiled and called from `step_scalars` | SC-10 | R3 |
-| 3.2 | `step_scalars` takes `SdofParams` whole; the kernel takes it whole | SC-02 | R4 |
-| 3.3 | Column NamedTuple built by a `moc` set-up function, replacing `JunctionCoupling`; `moc.step` takes it; `trace.build` reads it | SC-02, SC-01 (rest), N-06 | R4 |
-| 3.4 | `is_fluid_coupled` bool replaces `KIND`; the empty column built once; `NoCoupling` goes | SC-04 | R4 |
-| 3.5 | Trace-buffer NamedTuple returned by `allocate`, passed to the kernel and `build` | SC-02, SP-15 | R4 |
-| 3.6 | `trace.build`: run-field and JC-grid parameter objects | SP-15 | R3 |
-| 3.7 | Set-up parameter objects for `lumped_params` / `jc_params`; one `SdofParams` builder | SC-17 | R3 |
-| 3.8 | Shared entry-point prefix (NamedTuple) and trace-meta builder (key order kept) | SC-06 | R3 |
-| 3.9 | Split `_integrate`: flatten, prepare trace, column arguments, result | SC-05 | R3 |
-| 3.10 | Core set-up helpers for the tools and `geometry` (two layers, casts as the solver) — Q-5 | SP-01 | R3 |
-| 3.11 | Forced-substep count in `loads`, used by `cases` and `bench` | SP-07 | R3 |
+| 4.1 | Compile `effective_displacement`; `step_scalars` calls it for the ladder | C-10 | R4 |
+| 4.2 | Split `moc.step` into the two half-grid functions; the parity test stays at the callers | C-04, C-N22 | R4 |
+| 4.3 | Junction-force functions out of the half-grid updates, into the coupling layer | C-05 | R4 |
+| 4.4 | One compiled column advance (parity, half-grid update, junction force) called by the kernel twice (`coupling_force` is gone, 3.0a) | C-03 | R4 |
+| 4.5 | Friction and stick derivation as a compiled function beside `step_scalars` | C-14 | R3 |
+| 4.6 | Peak trackers extracted | C-02 | R4 |
+| 4.7 | Trace frame: scalar-row writer and column writer; the kernel's recording branch calls one function | C-15, C-02 | R4 |
+| 4.8 | `_trace_frame` and its writers moved to `trace.py` | C-14 | R3 |
+| 4.9 | The sub-step body as one function called from the forced loop and the free-decay loop; the `f_applied` forms stay in the loops | C-02 | R4 |
+| 4.10 | `_integrate` split into prepare, run, build result | C-06 | R3 |
+| 4.11 | `loads`: per-sample helpers shared by the two generators; `_schedule` items as NamedTuples; the three identical index blocks extracted | C-07, C-08 | R3 |
+| 4.12 | Flattening of the schedule moved into `loads`; the run-time cross-check of the two walks removed | C-22, C-07 | R3 |
+| 4.13 | ~~`pressure`: the shared characteristic solve~~: removed (R.1b) | C-N01 | R3 |
 
-## 4. The single substep
+Before 4.1, write `docs/review/substep_design.md` (the substep designs) and stop for the
+owner.
 
-**Stop** before 4.1: write the substep design to `docs/review/substep.md`.
+4.2 and 4.4 change tests that patch or replay `moc.step` (Q-9). 4.11 can slow the untraced
+lumped path, where the Python generator is already the dominant cost: bench it on its own.
+4.9 is the commit the review exists for; if it will not stay bit-identical or costs time,
+4.6 and 4.7 alone already leave the two loops short enough to compare by eye.
 
-| # | commit | finding | risk |
+## Group 5 — supporting modules and tools
+
+Gated code first.
+
+| # | commit | findings | risk |
 |---|---|---|---|
-| 4.1 | `moc.step` split into two compiled halves (and the mean-velocity sum); `step` keeps the dispatch | SC-16 | R3 |
-| 4.2 | Extract the column-advance helper (with its `float(...)` cast) | SC-03 | R3 |
-| 4.3 | Extract the peak-tracker helper | SC-03 | R3 |
-| 4.4 | Extract the frame-record helper (friction expression verbatim; arguments grouped) | SC-03 | R3 |
-| 4.5 | Recording window as one named limit — after Q-3 | SC-09 | R4 |
+| 5.1 | Shared non-test module for fixture loaders, tolerances and flag sets; tests and tools import it | S-01, S-N21 | R3 |
+| 5.2 | Shared tools module for `git`, `cpu_model`, the text table | S-23 | R3 |
+| 5.3 | Frame-column table in `trace.py`; derive counts, `build` mapping, `FRAME_COLUMNS`, the int set | S-05 | R3 |
+| 5.4 | Sweep-column table; derive type sets and per-solver names; one raw CSV reader | S-04 | R3 |
+| 5.5 | `interleaved_grid` shared by `trace.build` and `lumped_grid`; column-grid object for `loop_layout` | S-07, S-16 | R3 |
+| 5.6 | Tools and geometry call the core set-up query of 3.11; portal height on `Trace` (own commit) | S-06, S-35 | R3 |
+| 5.7 | Display fraction profile moved into `moc`; exception replaced by a test | S-12 | R3 |
+| 5.8 | `export.py`: provenance helper, `meta.params` / `meta.outputs` extracted, `TYPE_CHECKING` import, docstring corrected | S-09, S-26 | R3 |
+| 5.9 | `_sweep_value` decomposed | S-27 | R3 |
+| 5.10 | `histories.py`: `_history` defaults, noise scaling extracted (the per-kind functions behind `canonical` are not made: S-17 rejected) | S-18 | R3 |
+| 5.11 | `tools/cases.py`: spec record for the step case; sweep-document helpers to their own tools module; `reference_block` record | S-10, S-29 | R3 |
+| 5.12 | `tools/sweep_jc.py`: grid and pipe properties, row computation and report as three modules behind the same script; `run_case` parts; provenance tuple | S-03, S-15 | R3 |
+| 5.13 | Remove the `sys.path` inserts and private loaders the earlier commits made unnecessary | S-02 | R3 |
+| 5.14 | Dead code and small items: `estimate_bytes`, unused constants, `build_viewer.build` parameters, `review_snapshot.main` | S-30, S-34, S-N01, S-N12, S-N22 | R0-R3 |
+| 5.15 | Ungated tools (`bench.py`, the plots and report of `sweep_jc.py`, `extract_fixtures.py`, `golden_report.py`, `profile_delta.py`): **rename-only edits** (ruling 3, Q-7), made with the renames of group 1; no restructuring | S-13, S-14, S-19 to S-22, S-24, S-25, S-28 | R0 |
+| 5.16 | `vba_compat` helpers copied into a live module with a pinning test; imports repointed (`_vba_semantics.py`, the module this row first named, was removed in R.1b) | C-13 | R3 |
 
-Each loop keeps its own `f_applied` line, `rec` test, `f_max` update and `x_zero` reset.
-`tools/bench.py` after each of 4.1-4.4, not only at the session end: this is where the toy's
-slow pattern would appear.
+5.3 and 5.4 are the preparation for the schema bump: with one table per document the bump
+is an edit of two tables. 5.12 must keep `tools/sweep_jc.py` a runnable script and the
+worker picklable (K-11). 5.16 needs Q-1 and is placed here only because it is independent
+of everything else. S-11 and S-36 are group 7: they change output on edge inputs (Q-8).
 
-## 5. Supporting modules and tools
+## Group 6 — public API, data format, docstrings, lint limits
 
-Gated (the support checks run them):
+| # | commit | findings |
+|---|---|---|
+| 6.1 | Form of `output_type` and of the three junction-coupling flags; one validation at the entry, as a recorded deviation (ruling 5); both flag paths kept | C-12 |
+| 6.2 | Keyword-only entry points; public keyword renames (the `get_pressure_response` alias went with the pressure solver, R.1b) | C-11, C-31, C-N21 |
+| 6.3 | `PeakResponse` and `Trace` field renames; `Trace` column sub-record (approved, ruling 7) | C-26, C-43, S-08 |
+| 6.4 | Public signatures of `histories.canonical` and `export.to_*_dict` (user-facing entry points, ruling 4: keyword-only, no symbols) | S-33 |
+| 6.5 | **The schema bump**, one commit: exported keys and CSV columns renamed through the two tables, viewer keys with them, `tests/review_support/` rewritten with `--write`, values shown unchanged; the committed sweep CSVs (`docs/sweep/*.csv`) get their headers renamed by a one-off script, every data row byte-identical (ruling 12) | S-31, S-32, S-37 to S-43, S-46 to S-49, C-25, C-28, C-30 |
+| 6.6 | Docstrings: numpy sections, units, shapes; VBA references and ids to Notes; first lines in model terms | C-40, C-41, S-49, S-50 |
+| 6.7 | Annotations | C-42, S-51 |
+| 6.8 | Lint limits in `pyproject.toml` (PLR0913 at 6, C901 at 10, the statement and nesting targets), with a one-line reason on each function that still misses | style 3 |
 
-| # | commit | finding | risk |
-|---|---|---|---|
-| 5.1 | `estimate_bytes` removed; docstring corrected | SP-21 | R0 |
-| 5.2 | Shared `git` / `cpu_model` tools module | SP-06 | R3 |
-| 5.3 | Fixture loaders out of `tests/test_golden.py` (tolerances stay there unless Q-11 says otherwise) | SP-03 | R3 |
-| 5.4 | `step_case` / `step_name` take a step-case object built by `case_from_args` | SP-29 | R3 |
-| 5.5 | `sweep_jc.run_case` Split Phase | SP-08 | R3 |
-| 5.6 | `sweep_jc.run` Extract Function per job | SP-09 | R3 |
-| 5.7 | `histories`: `_history` defaults; `_sampled_axis(decay_s)` | SP-19 | R3 |
-| 5.8 | `geometry.loop_layout`: keyword arguments; then grid NamedTuple; then `_nominal_centreline` | SP-20 | R2, R3, R3 |
-| 5.9 | `trace.check_memory`: extract the stride search | SP-16 | R3 |
-| 5.10 | `export.to_trace_dict`: params and outputs blocks; provenance helpers | SP-17 | R3 |
-| 5.11 | `export._sweep_value`: guard-clause dispatch | SP-18 | R3 |
+Before 6.1, write `docs/review/public_interface.md` (the public interface) and stop for the
+owner. 6.1 changes error behaviour on bad flag values (Q-3, approved) and needs a
+`DEVIATIONS.md` row and a pinning test.
 
-Ungated (no test runs them). Charter ruling 3 allows **renames only** here, so these stay
-open unless the owner lifts the ruling or a check is added (Q-4): SP-10, SP-11, SP-12,
-SP-13, SP-14, SP-22, SP-23, SP-24, SP-25, SP-26, SP-27, SP-28. If lifted, each is one
-commit in the order listed in findings, with a by-hand before/after diff of the output.
+## Group 7 — the approved edge-case fixes (after the refactoring)
 
-## 6. Public API, data format, docstrings, lint limits
+Behaviour changes, approved by the owner (ruling 11): each its own commit with a
+`DEVIATIONS.md` row and a test that pins the new value; a stored file it changes is
+rewritten in that commit only.
 
-**Stop** before 6.1: write the public interface to `docs/review/public_api.md`.
-
-| # | commit | finding | risk |
-|---|---|---|---|
-| 6.1 | Flag validation at the entry, a recorded deviation (DEVIATIONS row, pinning test) | SC-27, ruling 5 | — |
-| 6.2 | Form of the junction-coupling flags and of `output_type` | SC-27, SC-28 | R4 |
-| 6.3 | Public keywords (`fluid_densty`, `step_qty`, `nat_freq`, …), `PeakResponse.history`, `max_applied_force` | SC-29, SC-21, SC-22, SC-23 | R0 |
-| 6.4 | `to_*_dict` take `sha` / `created` as values; the regen template owned by `tools/cases.py` | SP-05 | R3 |
-| 6.5 | `Trace` records portal height and celerity (ruling 7); `geometry` reads them | SP-02 | R3 |
-| 6.6 | Schema bump: one name per quantity, suffix policy (Q-7), counts, `segments`, leg heights, `d_f`, `sub_step`, `fric_acc`, `ratio2`; viewer, `data_format.md`, stored exports rewritten, CSV header only (rule 6); committed sweep CSVs by script (ruling 12) | SP-30, SP-31, SP-34, SP-35, SC-19, SC-21, SC-25 | R0 |
-| 6.7 | Docstrings: module boundaries and history labels; first lines in model terms; pointers and session tags | SC-13, SC-26, SP-33 | R0 |
-| 6.8 | Enforce the 6-argument limit and the lint settings | style §3 | — |
-
-After the refactoring: the two approved output fixes (ruling 11).
-
-## Where I would change the order, and why
-
-1. **Ruling-2 removals first (group 0), before the nomenclature.** Group 1 would otherwise
-   rename `coupling_force`, `State`, `restoring_force` and the `d_f` write-back only for
-   group 3 to delete them. The removals are decided (ruling 2) and small; done first, they
-   shrink the surface the nomenclature and the rename table must cover. Only 0.3 waits on
-   the owner (Q-1).
-2. **Wrong documentation now, not in 6.7.** `data_format.md:113` (SP-41), `data_format.md:251`
-   and `moc.py:108` (SP-34), `response.py:366` (SC-27) and possibly the `decay_factor`
-   half-life (defect 8) state things the code does not do. Doc-only R0 commits cannot move
-   a bit; leaving them wrong through four groups of refactoring is the larger risk. The
-   style rewrite of docstrings stays in 6.7.
-3. **`effective_displacement` (3.1) is independent** of the parameter objects and could go at
-   the end of group 2; it is listed first in group 3 because it changes `step_scalars`, which
-   3.2 changes again.
-4. **The schedule refactorings (2.5-2.7) in group 2,** not group 5: they are control flow in
-   pure Python, gated by the snapshot, and they remove the double walk before 3.9 splits
-   `_integrate`, which would otherwise have to carry it.
-5. **Bench inside group 4, per commit.** The toy shows the one parameter-object pattern that
-   costs time (the column tuple passed two calls deep); in group 4 the helpers create
-   exactly that call depth. A session-end bench would not show which commit did it.
+| # | commit | findings |
+|---|---|---|
+| 7.1 | `is_capped` from the kernel's forced-sample count, carried on `Trace` | S-11 |
+| 7.2 | `size_in` taken from the caller, not read from the CSV's directory name | S-36 |
 
 ## Questions for the owner
 
-* **Q-1.** Removing `coupling_force` (0.3) leaves three assertions with no counterpart:
-  `test_differential.py:783` (`type(d_f) is float`), `:802` (no negative zero), `:807`
-  (`NoCoupling` returns `0.0`). Drop them (the charter needs your word), or restate them
-  against `moc.step` / the kernel?
-* **Q-2.** The R.1 lists are kept as `findings_r1.md` / `plan_r1.md`. The charter (rulings 3
-  and 8) and `NOTES.md` still cite `findings.md` / `plan.md` for R.1's ids. Update those
-  references to the `_r1` names, or do you want R.2 merged into the R.1 files instead?
-* **Q-3.** SC-09 / 4.5 passes `out_max * 2`, an exact integer product, into the kernel
-  precomputed. Does hoisting an exact integer count as an expression change under style §5?
-* **Q-4.** Ruling 3 limits ungated tools to renames. Twelve readability findings (bench,
-  profile_delta, golden_report, review_baseline, extract_fixtures, the sweep plots and
-  report) need more. Lift the ruling for them with a by-hand output diff, add checks first,
-  or leave them open?
-* **Q-5.** `tools/export.py:51` writes `1.0 / (...)` where the solver writes `1 / (...)`.
-  The two give the same bits for these inputs. May SP-01 switch it to the solver's form?
-* **Q-6.** Which drawn corner of the expansion loop is elbow A (where `f_a` acts)? The inlet
-  side run corner is the likely one; the code does not say (SP-35).
-* **Q-7.** Unit suffixes at the schema bump: keep "SI unless suffixed", or "every
-  dimensional key carries its unit" (SP-31, unclear)?
-* **Q-8.** What is the basis of `P_CAP_FACTOR = 1.33` (a code allowance, a test-pressure
-  ratio)? Style §6 asks for the source (SP-39).
-* **Q-9.** `example_pressure` in the sweep reference block is reproduced only by the frozen
-  `legacy_port.get_pressure_response`. Keep it after Stage 6 removes `legacy_port.py`?
-* **Q-10.** Do you accept the order changes above (especially group 0 first and the early
-  doc fixes)?
-* **Q-11.** SP-03: may the golden tolerances move to the new loader module with a
-  re-export from `tests/test_golden.py`, or must they stay defined there (`CLAUDE.md`)?
+* **Q-1.** `NOTES.md` and `CLAUDE.md` say Stage 6 removes `vba_compat.py` with
+  `legacy_port.py`; `docs/architecture.md` lets live modules import `clng`, `vba_floor`,
+  `mod_dbl` and `vba_2d` from it. Confirm the removal, so that C-13 (literal copies in a
+  live module; `_vba_semantics` itself was removed in R.1b) is done in this review and not
+  at Stage 6.
+  **Answer (R.1b):** open; not answered in R.1b.
+* **Q-2.** `JunctionCoupling.coupling_force`, the `Coupling` protocol, `structure.step`,
+  `State` and `restoring_force` are called only by tests. Keep them as thin wrappers over
+  the shared compiled functions, or remove them and re-point the tests?
+  **Answer (R.1b):** remove them and re-point the tests at the code that actually runs, assertions unchanged (ruling 2); commits 3.0a to 3.0d.
+* **Q-3.** An unknown `vav_denominator` is accepted on a short pipe and when `rho_c == 0`.
+  May the public API session validate all flags at the entry, as a recorded deviation?
+  **Answer (R.1b):** yes, in the public API session, as a recorded deviation (ruling 5).
+* **Q-4.** Derivations the code does not hold: the factor 2 in `out_max * 2`; the `0.5` in
+  `0.5 * dynamic_fric * 9.81 * dt`; `4 / 3` on the portal-frame height; `12` and
+  `0.5 + 1.5 * (...)` in the end-fixity formula; `4 * celerity * dt` in the grid size.
+  **Answer (R.1b):** the owner's proposed derivations of `12`, `0.5 + 1.5 (...)`, `4 / 3`, `out_max * 2` and `4 * celerity * dt` are written at each site as "Proposed derivation, for Ben to confirm:" comments (R.1b); the friction `0.5` is still open.
+* **Q-5.** ~~In `60 * 60` (`pressure.py:177`, `179`), which factor is seconds per minute and
+  which minutes per hour?~~ Moot: `pressure.py` was removed in R.1b.
+  **Answer (R.1b):** moot.
+* **Q-6.** Vocabulary for `docs/nomenclature.md`: elbows A / B as inlet / outlet or kept as
+  A / B; "node" and "cell" for the two half-grids and one word for an interleaved entry;
+  "transit" and "history" for the two forced phases; `sub_step` or `substep`.
+  **Answer (R.1b):** the grids stay A and B (`pressure_a`, `velocity_b`); the elbows are A and B; the phases are transit, forced and free decay; `substep` is one word (ruling 1). One word for an interleaved entry of the display grid is not yet ruled.
+* **Q-7.** The ungated tools (5.15): refactor without a gate, add characterisation checks
+  first, or leave them as they are?
+  **Answer (R.1b):** rename-only edits (ruling 3); 5.15.
+* **Q-8.** Two supporting fixes change output on edge inputs: `is_capped` taken from the
+  kernel's count (differs for a stride above `step_qty`), and `size_in` no longer read from
+  a directory name (a moved CSV exports a value where it exports null today). Wanted?
+  **Answer (R.1b):** both wanted, as recorded behaviour changes after the refactoring (ruling 11); group 7.
+* **Q-9.** The charter allows only rename-forced edits in `tests/`. Groups 3 and 4 change
+  call sites in tests that call `moc.step` and `jc_params` directly (`pressure.setup` and
+  `initial_column` went in R.1b), and the test that patches `moc.step` to record the half-grid
+  sequence. Are signature-forced edits covered?
+  **Answer (R.1b):** tests may change how they call a function, never what they assert (ruling 6).
+* **Q-10.** `Trace` is returned to users. May its column fields move into a sub-record in
+  the public API session, or must the flat attributes stay?
+  **Answer (R.1b):** yes, in the public API session (ruling 7).
+* **Q-11.** The fourteen suspected defects listed at the end of the findings: which, if
+  any, should be looked into, and by whom?
+  **Answer (R.1b):** open, except no. 2 (the odd-substep junction tap: a "For Ben to review" comment in `moc.step` and DEVIATIONS D-24, R.1b), no. 1 (Q-3) and no. 9 (S-11, group 7); no. 4 went with the pressure solver.
