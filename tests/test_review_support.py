@@ -323,10 +323,27 @@ def export_bytes(name: str, out_dir: Path) -> bytes:
     return out.read_bytes()
 
 
+# Keyword of a stored generator call -> today's keyword of the generators ``step``,
+# ``step_sine``, ``step_noise`` (renamed in R.3; ``canonical`` and ``from_params`` keep theirs
+# until the public API session).
+_GENERATOR_KEYWORDS = {
+    "sample_freq": "sample_rate",
+    "f_ref": "envelope_reference_frequency",
+    "p_cap": "peak_pressure_target",
+}
+
+
+def _generate(name: str) -> histories.History:
+    """Call the generator of document ``name`` with today's keywords."""
+    generator, args, kwargs = HISTORY_CALLS[name]
+    if generator not in ("canonical", "from_params"):
+        kwargs = {_GENERATOR_KEYWORDS.get(key, key): value for key, value in kwargs.items()}
+    return getattr(histories, generator)(*args, **kwargs)
+
+
 def history_values(name: str) -> dict:
     """The generated history of document ``name`` under the snapshot's own keys."""
-    generator, args, kwargs = HISTORY_CALLS[name]
-    history = getattr(histories, generator)(*args, **kwargs)
+    history = _generate(name)
     values = {key: getattr(history, attr) for key, attr in _HISTORY_FIELDS.items()}
     values["force"] = history.force(CASES["fluid_area"])  # m²
     return values
@@ -334,8 +351,7 @@ def history_values(name: str) -> dict:
 
 def rebuilt_pressure(name: str) -> np.ndarray:
     """The pressure of document ``name`` rebuilt from the history's own parameters."""
-    generator, args, kwargs = HISTORY_CALLS[name]
-    history = getattr(histories, generator)(*args, **kwargs)
+    history = _generate(name)
     return histories.from_params(history.params()).pressure
 
 

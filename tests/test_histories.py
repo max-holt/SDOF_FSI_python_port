@@ -160,7 +160,7 @@ def test_rejections():
     with pytest.raises(ValueError, match="seed"):
         H.canonical("step_noise", P_DESIGN, 1.0)
     with pytest.raises(ValueError, match="p_cap"):
-        H.step_noise(1.0, 1.0, f_ref=4.0, p_cap=1.0)
+        H.step_noise(1.0, 1.0, envelope_reference_frequency=4.0, peak_pressure_target=1.0)
     with pytest.raises(ValueError, match="unknown history parameters"):
         H.from_params({"kind": "step", "p_step": 1.0, "bogus": 1})
     with pytest.raises(ValueError, match="non-negative"):
