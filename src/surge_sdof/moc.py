@@ -514,5 +514,17 @@ def step(
         # A velocities receive the mass acceleration
         for n in range(1, n_seg):
             v_a[n] = a_dt * frac_a[n] + v_a[n]
+        # For Ben to review: in the odd MoC substep the junction force reads B-grid pressures
+        # at pivot and N - pivot, while the even substep reads the equivalent of pivot - 1 and
+        # N - pivot, so the odd-step inlet tap sits one cell inward. Positions, in cells from
+        # the inlet end: A node n is at n, B cell n is at n + 0.5. The even substep averages
+        # A nodes pivot - 1 and pivot (at pivot - 0.5, the position of B cell pivot - 1) and
+        # A nodes N - pivot and N - pivot + 1 (at N - pivot + 0.5, B cell N - pivot): taps at
+        # equal distances from the two ends. Example, N = 20, pivot = 6: even taps at 5.5 and
+        # 14.5 (5.5 from each end); odd taps p_b[6] at 6.5 and p_b[14] at 14.5, the inlet one
+        # cell nearer the centre. The one-index alternative is p_b[pivot - 1] (at 5.5) in
+        # place of p_b[pivot]. Moving it to pivot - 1 changed the equivalent static force by at
+        # most 0.3 % over 16 cases (spans 6 to 48 m, 3 to 22 Hz), largest on the 6 m span.
+        # The expression is the VBA's (lines 846, 971, 1067, 1164) and stays; DEVIATIONS D-24.
         d_f = DAMPING_A * d_f + (1 - DAMPING_A) * fluid_area * (p_b[pivot] - p_b[n_seg - pivot])
     return d_f
