@@ -247,16 +247,18 @@ def peak_response(
     output_type = int(output_type)
     trace_every = _trace_stride(trace_every)
 
-    history = loads.as_history_2d(force_history)
+    force_history_2d = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
     # VBA line 377 (outMax)
-    nominal_forced_sample_count = history.shape[0] * history.shape[1] + clng(transit_delay_samples)
+    nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
+        transit_delay_samples
+    )
     substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
-    params = structure.lumped_params(
+    sdof_params = structure.lumped_params(
         physical_length,
         portal_frame_height,
         mass_per_unit_len,
@@ -268,14 +270,14 @@ def peak_response(
         restrain_freq_ratio,
     )
     unbalance_force_samples = loads.unbalance_force(
-        history, sample_freq, physical_length, celerity, step_qty
+        force_history_2d, sample_freq, physical_length, celerity, step_qty
     )
-    meta = None
+    trace_request = None
     if trace_every:
-        meta = _TraceMeta(
+        trace_request = _TraceRequest(
             "peak_response",
             {
-                "force_history": history,
+                "force_history": force_history_2d,
                 "step_qty": step_qty,
                 "sample_freq": sample_freq,
                 "physical_length": physical_length,
@@ -290,18 +292,18 @@ def peak_response(
                 "output_type": output_type,
             },
             celerity,
-            loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
+            loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
     return _integrate(
         unbalance_force_samples,
-        params,
+        sdof_params,
         substep_duration,
         step_qty,
         None,
         nominal_forced_sample_count,
         output_type,
         trace_every=trace_every,
-        meta=meta,
+        trace_request=trace_request,
     )
 
 
@@ -410,17 +412,19 @@ def peak_response_jc(
     output_type = int(output_type)
     trace_every = _trace_stride(trace_every)
 
-    history = loads.as_history_2d(force_history)
+    force_history_2d = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
     # VBA line 714 (outMax)
-    nominal_forced_sample_count = history.shape[0] * history.shape[1] + clng(transit_delay_samples)
+    nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
+        transit_delay_samples
+    )
     substep_duration = 1 / (sample_freq * step_qty)
 
     portal_frame_height = structure.solve_portal_height(
         physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
     # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
-    params = structure.jc_params(
+    sdof_params = structure.jc_params(
         physical_length,
         portal_frame_height,
         mass_per_unit_len,
@@ -457,31 +461,31 @@ def peak_response_jc(
             output_type,
             trace_every,
         )
-    rho_c = fluid_densty * celerity
-    if rho_c == 0:
+    characteristic_impedance = fluid_densty * celerity
+    if characteristic_impedance == 0:
         # D-9: the MoC divides by rhoC at every sub-step. The legacy raised
         # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
         # does not apply, so the check is made once here, before the first update.
         raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
-    junction = JunctionCoupling(
+    junction_coupling = JunctionCoupling(
         column_cell_count,
         end_to_elbow_cell_count,
         substep_duration,
-        rho_c,
+        characteristic_impedance,
         fluid_area,
         end_pressure_decay_factor,
         vav_denominator,
         fraction_profile,
     )
     unbalance_force_samples = loads.unbalance_force(
-        history, sample_freq, physical_length, celerity, step_qty
+        force_history_2d, sample_freq, physical_length, celerity, step_qty
     )
-    meta = None
+    trace_request = None
     if trace_every:
-        meta = _TraceMeta(
+        trace_request = _TraceRequest(
             "peak_response_jc",
             {
-                "force_history": history,
+                "force_history": force_history_2d,
                 "step_qty": step_qty,
                 "sample_freq": sample_freq,
                 "physical_length": physical_length,
@@ -501,19 +505,19 @@ def peak_response_jc(
                 "fraction_profile": fraction_profile,
             },
             celerity,
-            loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty),
+            loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
     return _integrate(
         unbalance_force_samples,
-        params,
+        sdof_params,
         substep_duration,
         step_qty,
-        junction,
+        junction_coupling,
         nominal_forced_sample_count,
         output_type,
         legacy_parity=(parity == "per_phase"),
         trace_every=trace_every,
-        meta=meta,
+        trace_request=trace_request,
     )
 
 
@@ -525,13 +529,13 @@ def _trace_stride(trace_every) -> int:
     return trace_every
 
 
-class _TraceMeta(NamedTuple):
+class _TraceRequest(NamedTuple):
     """What ``_integrate`` needs beyond the kernel arrays to build a ``Trace``."""
 
     solver: str
     inputs: dict
     celerity: float
-    elbows: object  # the loads.elbow_forces generator
+    elbow_force_samples: object  # the loads.elbow_forces generator
 
 
 @numba.njit(cache=True)
@@ -612,15 +616,15 @@ def _trace_frame(
 
 def _integrate(
     unbalance_force_samples,
-    params: SdofParams,
+    sdof_params: SdofParams,
     substep_duration: float,
     substep_count: int,
-    coupling: JunctionCoupling | None,
+    junction_coupling: JunctionCoupling | None,
     nominal_forced_sample_count: int,
     output_type: int,
     legacy_parity: bool = False,
     trace_every: int = 0,
-    meta: _TraceMeta | None = None,
+    trace_request: _TraceRequest | None = None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
     driven by ``unbalance_force_samples`` (one list of per-sub-step unbalance values per
@@ -628,20 +632,20 @@ def _integrate(
     sample.
 
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
-    ``unbalance_force_samples`` once, unpacks ``params`` and ``coupling`` (``None``: no fluid
-    coupling, kind 0; a ``JunctionCoupling``: kind 1, its arrays are updated in place and its
-    ``d_f`` written back), builds the ``PeakResponse``.
+    ``unbalance_force_samples`` once, unpacks ``sdof_params`` and ``junction_coupling``
+    (``None``: no fluid coupling, kind 0; a ``JunctionCoupling``: kind 1, its arrays are
+    updated in place and its ``d_f`` written back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
     ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
     with ``off`` fixed per sample (D-19, approved fix F-2).
 
-    Session V.1: with ``trace_every > 0`` the elbow forces of ``meta.elbows`` are
-    flattened like ``unbalance_force_samples``, the trace arrays are allocated
-    (``trace.check_memory``, ``trace.allocate_frames``) and the kernel fills them;
-    ``trace.build_trace`` makes the ``Trace``.
-    With 0 the kernel takes empty arrays."""
+    Session V.1: with ``trace_every > 0`` the elbow forces of
+    ``trace_request.elbow_force_samples`` are flattened like ``unbalance_force_samples``,
+    the trace arrays are allocated (``trace.check_memory``, ``trace.allocate_frames``) and
+    the kernel fills them; ``trace.build_trace`` makes the ``Trace``. With 0 the kernel takes
+    empty arrays."""
     substep_duration = float(substep_duration)
     unbalance_force_samples = list(unbalance_force_samples)
     offsets = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
@@ -655,30 +659,32 @@ def _integrate(
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
-    history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
-    kind = int(coupling is not None)
+    response_history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
+    kind = int(junction_coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
-    grid_point_count = 2 * coupling.n_seg + 1 if coupling is not None else 0
+    grid_point_count = 2 * junction_coupling.n_seg + 1 if junction_coupling is not None else 0
     delay_substeps = 0
     if trace_every > 0:
-        if meta is None:
+        if trace_request is None:
             raise TypeError("trace_every > 0 needs the trace meta")
-        elbows = list(meta.elbows)
-        if [len(fa) for _ph, fa, _fb in elbows] != [len(s) for s in unbalance_force_samples]:
+        elbow_force_samples = list(trace_request.elbow_force_samples)
+        if [len(fa) for _ph, fa, _fb in elbow_force_samples] != [
+            len(s) for s in unbalance_force_samples
+        ]:
             raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
         forced_substep_count = int(offsets[-1])
         flat_a = np.fromiter(
-            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbows),
+            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbow_force_samples),
             np.float64,
             count=forced_substep_count,
         )
         flat_b = np.fromiter(
-            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbows),
+            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbow_force_samples),
             np.float64,
             count=forced_substep_count,
         )
-        delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
+        delay_substeps = sum(len(fa) for ph, fa, _fb in elbow_force_samples if ph == 0)
         frame_capacity = tracing.check_memory(
             forced_substep_count,
             len(unbalance_force_samples),
@@ -691,10 +697,24 @@ def _integrate(
         flat_a = flat_b = np.zeros(0)
         frame_capacity = 0
     tr_f, tr_i, tr_p, tr_v = tracing.allocate_frames(frame_capacity, grid_point_count)
-    if coupling is not None:
-        jc: JunctionCoupling = coupling
-        column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)
-        scalars = (jc.n_seg, jc.pivot, jc.rho_c, jc.decay, jc.vav_div, jc.fluid_area, jc.d_f)
+    if junction_coupling is not None:
+        column = (
+            junction_coupling.p_a,
+            junction_coupling.v_a,
+            junction_coupling.p_b,
+            junction_coupling.v_b,
+            junction_coupling.frac_a,
+            junction_coupling.frac_b,
+        )
+        scalars = (
+            junction_coupling.n_seg,
+            junction_coupling.pivot,
+            junction_coupling.rho_c,
+            junction_coupling.decay,
+            junction_coupling.vav_div,
+            junction_coupling.fluid_area,
+            junction_coupling.d_f,
+        )
     else:
         empty = np.zeros(0)
         column = (empty, empty, empty, empty, empty, empty)
@@ -704,18 +724,18 @@ def _integrate(
         _integrate_kernel(
             flat,
             offsets,
-            params.mass,
-            params.stiffness,
-            params.damping,
-            params.friction_velocity_step,
-            params.support_gap,
-            params.closed_gap_stiffness_ratio,
+            sdof_params.mass,
+            sdof_params.stiffness,
+            sdof_params.damping,
+            sdof_params.friction_velocity_step,
+            sdof_params.support_gap,
+            sdof_params.closed_gap_stiffness_ratio,
             substep_duration,
             int(substep_count),
             int(nominal_forced_sample_count),
             int(output_type),
             bool(legacy_parity),
-            history,
+            response_history,
             int(kind),
             *column,
             *scalars,
@@ -729,47 +749,47 @@ def _integrate(
             tr_v,
         )
     )
-    if coupling is not None:
-        jc.d_f = float(d_f)
+    if junction_coupling is not None:
+        junction_coupling.d_f = float(d_f)
 
     if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
         raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
 
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
-    static_equivalent = (
+    static_equivalent_force_max = (
         abs(
             structure.effective_displacement(
-                x_max, params.support_gap, params.closed_gap_stiffness_ratio
+                x_max, sdof_params.support_gap, sdof_params.closed_gap_stiffness_ratio
             )
         )
-        * params.stiffness
+        * sdof_params.stiffness
     )
     trace = None
     if trace_every > 0:
         trace = tracing.build_trace(
-            meta.solver,
-            meta.inputs,
+            trace_request.solver,
+            trace_request.inputs,
             trace_every,
             substep_duration,
             substep_count,
             nominal_forced_sample_count,
-            params,
+            sdof_params,
             int(n_frames),
             tr_f,
             tr_i,
             tr_p,
             tr_v,
-            jc=coupling,
-            celerity=meta.celerity,
+            jc=junction_coupling,
+            celerity=trace_request.celerity,
             ext_qty=moc.INACTIVE_END_CELL_COUNT,
         )
     return PeakResponse(
-        max_static_equivalent_force=float(static_equivalent),
+        max_static_equivalent_force=float(static_equivalent_force_max),
         max_displacement=float(x_max),
         max_velocity=float(v_max),
         max_acceleration=float(a_max),
         max_applied_force=float(f_max),
-        history=history if output_type > 0 else None,
+        history=response_history if output_type > 0 else None,
         output_type=output_type,
         free_decay_samples=int(tot_ind - forced_sample_count),
         trace=trace,
