@@ -28,10 +28,11 @@ and sliced to the frames written.
 ``f_friction = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old +
 a_new) * (dt / 2))`` is the velocity the Coulomb branch of ``structure.step_scalars`` added
 or removed in the sub-step, recomputed in the recording branch from the same doubles the
-kernel formed (``half_dt = dt / 2``; ``v + av``): in slip it is ``-+fric_acc`` (``0.0``
-exactly with ``dynamicFric = 0``; the D-20 dead zone gives ``0.0`` too), in stick
-(``|v_old| < fric_acc``) it is ``av - (v_old + av)``, the momentum the stick removed, so
-``f_friction`` there is the holding force. ``stick`` is that test.
+kernel formed (``half_dt = dt / 2``; ``v + trapezoid_velocity_change``): in slip it is
+``-+fric_acc`` (``0.0`` exactly with ``dynamicFric = 0``; the D-20 dead zone gives ``0.0``
+too), in stick (``|v_old| < fric_acc``) it is ``trapezoid_velocity_change - (v_old +
+trapezoid_velocity_change)``, the momentum the stick removed, so ``f_friction`` there is the
+holding force. ``stick`` is that test.
 
 JC column layout
 ----------------

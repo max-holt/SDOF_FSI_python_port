@@ -366,25 +366,25 @@ def effective_displacement(
     51-59) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
     cases; ``step_scalars`` inlines the same code.
     """
-    ax = abs(x)
+    x_magnitude = abs(x)
     # minUnsigned(gap, x)
-    if abs(support_gap) < ax:
-        clamp = support_gap if x > 0 else -support_gap  # support_gap * sign(x); x != 0 here
+    if abs(support_gap) < x_magnitude:
+        x_within_gap = support_gap if x > 0 else -support_gap  # support_gap * sign(x); x != 0 here
     elif support_gap == 0:
-        clamp = x
+        x_within_gap = x
     else:
-        clamp = x if support_gap > 0 else -x  # x * sign(gap)
+        x_within_gap = x if support_gap > 0 else -x  # x * sign(gap)
     # max(0, Abs(x) - gap) * sign(x)
-    excess = ax - support_gap
-    if excess < 0:
-        excess = 0.0
+    x_excess_magnitude = x_magnitude - support_gap
+    if x_excess_magnitude < 0:
+        x_excess_magnitude = 0.0
     if x > 0:
-        beyond = excess
+        x_beyond_gap = x_excess_magnitude
     elif x < 0:
-        beyond = -excess
+        x_beyond_gap = -x_excess_magnitude
     else:
-        beyond = excess * 0.0
-    return clamp + beyond * closed_gap_stiffness_ratio
+        x_beyond_gap = x_excess_magnitude * 0.0
+    return x_within_gap + x_beyond_gap * closed_gap_stiffness_ratio
 
 
 @numba.njit(cache=True)
@@ -439,30 +439,30 @@ def step_scalars(
 
     # aNew = (F - (minUnsigned(gap, x) + max(0, Abs(x) - gap) * sign(x) * ratio^2)
     #             * stiffness - v * damping) / mass
-    ax = abs(x)
-    if abs(gap) < ax:
-        clamp = gap if x > 0 else -gap
+    x_magnitude = abs(x)
+    if abs(gap) < x_magnitude:
+        x_within_gap = gap if x > 0 else -gap
     elif gap == 0:
-        clamp = x
+        x_within_gap = x
     else:
-        clamp = x if gap > 0 else -x
-    excess = ax - gap
-    if excess < 0:
-        excess = 0.0
+        x_within_gap = x if gap > 0 else -x
+    x_excess_magnitude = x_magnitude - gap
+    if x_excess_magnitude < 0:
+        x_excess_magnitude = 0.0
     if x > 0:
-        beyond = excess
+        x_beyond_gap = x_excess_magnitude
     elif x < 0:
-        beyond = -excess
+        x_beyond_gap = -x_excess_magnitude
     else:
-        beyond = excess * 0.0
-    a_new = (f_applied - (clamp + beyond * ratio2) * stiffness - v * damping) / mass
+        x_beyond_gap = x_excess_magnitude * 0.0
+    a_new = (f_applied - (x_within_gap + x_beyond_gap * ratio2) * stiffness - v * damping) / mass
 
-    av = (a + a_new) * half_dt
+    trapezoid_velocity_change = (a + a_new) * half_dt
     if abs(v) < fric_acc:
-        v_new = av
+        v_new = trapezoid_velocity_change
     else:
         # vNew = v + (a + aNew) * dt / 2 - sign(v, 0.000001) * fricAcc
-        v_new = v + av
+        v_new = v + trapezoid_velocity_change
         if v > 0.000001:
             v_new = v_new - fric_acc
         elif v < -0.000001:
