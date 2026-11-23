@@ -309,7 +309,7 @@ def test_restoring_force_matches_the_legacy_expression():
         ratio = rng.uniform(0.5, 4.0)
         k = rng.uniform(1e2, 1e6)
         expected = (lp.min_unsigned(gap, x) + lp.max(0, abs(x) - gap) * lp.sign(x) * (ratio**2)) * k
-        actual = structure.restoring_force(x, k, gap, ratio)
+        actual = structure.effective_displacement(x, gap, ratio**2) * k
         assert_close(actual, expected)
         assert np.signbit(actual) == np.signbit(expected)
 

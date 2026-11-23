@@ -41,7 +41,6 @@ __all__ = [
     "lumped_params",
     "jc_params",
     "effective_displacement",
-    "restoring_force",
     "step_scalars",
 ]
 
@@ -342,7 +341,7 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
     Returns
     -------
     float
-        Effective displacement, m; ``restoring_force`` multiplies it by the stiffness.
+        Effective displacement, m; times the stiffness it is the restoring force.
 
     Notes
     -----
@@ -369,30 +368,6 @@ def effective_displacement(x: float, gap: float, ratio2: float) -> float:
     else:
         beyond = excess * 0.0
     return clamp + beyond * ratio2
-
-
-def restoring_force(x: float, k: float, gap: float, ratio: float) -> float:
-    """Bilinear restraint force: stiffness ``k`` up to the support gap, ``k * ratio^2`` beyond.
-
-    ``(minUnsigned(gap, x) + max(0, |x| - gap) * sign(x) * ratio^2) * k``.
-
-    Parameters
-    ----------
-    x : float
-        Displacement, m.
-    k : float
-        Stiffness with the gaps open, N/m.
-    gap : float
-        Support gap, m.
-    ratio : float
-        ``restrainFreqRatio`` (the square is taken here), dimensionless.
-
-    Returns
-    -------
-    float
-        Restoring force, N.
-    """
-    return effective_displacement(float(x), float(gap), float(ratio) ** 2) * float(k)
 
 
 @numba.njit(cache=True)
