@@ -36,6 +36,11 @@ __all__ = [
 class LoopLayout:
     """The column laid on the expansion loop (see the module docstring and ``loop_layout``).
 
+    The elbows of the force model are the two ends of the run: elbow A, which the pressure
+    wave reaches first (force A acts at once; the inlet side), is the ``run_start`` corner
+    at ``x = 0``; elbow B, reached after the transit delay, is the ``run_end`` corner at
+    ``x = run_length``. The junction force taps the column there (``moc.step``).
+
     Attributes
     ----------
     cell_position, cell_kind, moving_fraction : numpy.ndarray
