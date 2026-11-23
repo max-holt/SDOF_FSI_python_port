@@ -658,7 +658,7 @@ def _integrate(
     kind = int(coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
-    n_cells = 2 * coupling.n_seg + 1 if coupling is not None else 0
+    grid_point_count = 2 * coupling.n_seg + 1 if coupling is not None else 0
     delay_substeps = 0
     if trace_every > 0:
         if meta is None:
@@ -684,12 +684,12 @@ def _integrate(
             int(nominal_forced_sample_count),
             int(substep_count),
             trace_every,
-            n_cells,
+            grid_point_count,
         )
     else:
         flat_a = flat_b = np.zeros(0)
         cap = 0
-    tr_f, tr_i, tr_p, tr_v = tracing.allocate(cap, n_cells)
+    tr_f, tr_i, tr_p, tr_v = tracing.allocate(cap, grid_point_count)
     if coupling is not None:
         jc: JunctionCoupling = coupling
         column = (jc.p_a, jc.v_a, jc.p_b, jc.v_b, jc.frac_a, jc.frac_b)

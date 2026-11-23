@@ -214,7 +214,7 @@ def check_memory(
     nominal_forced_sample_count: int,
     substep_count: int,
     trace_every: int,
-    n_cells: int,
+    grid_point_count: int,
 ) -> int:
     """The trace capacity, or ``ValueError`` when it would exceed ``MAX_TRACE_VALUES``.
 
@@ -223,7 +223,7 @@ def check_memory(
     forced_substep_count, forced_sample_count, nominal_forced_sample_count, substep_count,
     trace_every
         As ``capacity``.
-    n_cells : int
+    grid_point_count : int
         ``2N + 1`` for a JC run, 0 for lumped.
 
     Returns
@@ -234,11 +234,11 @@ def check_memory(
     Raises
     ------
     ValueError
-        When ``capacity * (N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * n_cells)`` exceeds
-        ``MAX_TRACE_VALUES`` (this includes the ``n_frames * n_cells`` of each column
-        array); the message names the smallest ``trace_every`` that fits.
+        When ``capacity * (N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count)``
+        exceeds ``MAX_TRACE_VALUES`` (this includes the ``n_frames * grid_point_count`` of
+        each column array); the message names the smallest ``trace_every`` that fits.
     """
-    per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * n_cells
+    per_frame = N_FLOAT_COLUMNS + N_INT_COLUMNS + 2 * grid_point_count
     cap = capacity(
         forced_substep_count,
         forced_sample_count,
@@ -260,23 +260,25 @@ def check_memory(
     raise ValueError(
         f"trace_every={trace_every} would record {cap} frames x {per_frame} values "
         f"({cap * per_frame:.3g} > {MAX_TRACE_VALUES:.3g} 8-byte values, "
-        f"{cap * n_cells:.3g} per column array); use trace_every >= {stride}"
+        f"{cap * grid_point_count:.3g} per column array); use trace_every >= {stride}"
     )
 
 
-def allocate(cap: int, n_cells: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def allocate(
+    cap: int, grid_point_count: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(tr_f, tr_i, tr_p, tr_v)`` zeroed for the kernel: ``(cap, N_FLOAT_COLUMNS)``
-    float64, ``(cap, N_INT_COLUMNS)`` int64 and two ``(cap, n_cells)`` float64 (``n_cells``
-    is 0 for lumped; both are ``(0, 0)`` when ``cap`` is 0).
+    float64, ``(cap, N_INT_COLUMNS)`` int64 and two ``(cap, grid_point_count)`` float64
+    (``grid_point_count`` is 0 for lumped; both are ``(0, 0)`` when ``cap`` is 0).
 
     Parameters
     ----------
     cap : int
         From ``capacity`` / ``check_memory``.
-    n_cells : int
+    grid_point_count : int
         ``2N + 1`` or 0.
     """
-    cells = n_cells if cap > 0 else 0
+    cells = grid_point_count if cap > 0 else 0
     return (
         np.zeros((cap, N_FLOAT_COLUMNS)),
         np.zeros((cap, N_INT_COLUMNS), dtype=np.int64),
@@ -373,17 +375,17 @@ def build(
     }
     if jc is not None:
         column_cell_count = int(jc.n_seg)
-        n_cells = 2 * column_cell_count + 1
+        grid_point_count = 2 * column_cell_count + 1
         fields.update(
-            n_cells=n_cells,
+            n_cells=grid_point_count,
             pivot_seg_qty=int(jc.pivot),
             pipe_seg_qty=column_cell_count,
             ext_qty=int(ext_qty),
             p_cells=tr_p[:n_frames].copy(),
             v_cells=tr_v[:n_frames].copy(),
-            cell_position=np.arange(n_cells, dtype=np.float64)
+            cell_position=np.arange(grid_point_count, dtype=np.float64)
             * (float(celerity) * float(substep_duration)),
-            cell_kind=np.arange(n_cells) % 2,
+            cell_kind=np.arange(grid_point_count) % 2,
             moving_fraction=interleave(jc.frac_a, jc.frac_b),
         )
     return Trace(**fields)

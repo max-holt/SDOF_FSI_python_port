@@ -257,13 +257,13 @@ def lumped_grid(
     moving_fraction_a, moving_fraction_b = _moving_fractions_display(
         column_cell_count, end_to_elbow_cell_count
     )
-    n_cells = 2 * column_cell_count + 1
-    position = np.arange(n_cells, dtype=np.float64) * (
+    grid_point_count = 2 * column_cell_count + 1
+    position = np.arange(grid_point_count, dtype=np.float64) * (
         float(inputs["celerity"]) * float(substep_duration)
     )
     return (
         position,
-        np.arange(n_cells) % 2,
+        np.arange(grid_point_count) % 2,
         interleave(moving_fraction_a, moving_fraction_b),
         column_cell_count,
         end_to_elbow_cell_count,

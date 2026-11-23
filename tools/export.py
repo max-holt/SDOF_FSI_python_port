@@ -62,9 +62,11 @@ def estimated_cells(kw: dict, solver: str) -> int:
     )
 
 
-def estimate_bytes(n_frames: int, n_cells: int, n_samples: int) -> int:
+def estimate_bytes(n_frames: int, grid_point_count: int, n_samples: int) -> int:
     """``docs/data_format.md`` "Size expectations": about 20 bytes a float."""
-    return BYTES_PER_FLOAT * (n_frames * (len(export.FRAME_COLUMNS) + 2 * n_cells) + n_samples)
+    return BYTES_PER_FLOAT * (
+        n_frames * (len(export.FRAME_COLUMNS) + 2 * grid_point_count) + n_samples
+    )
 
 
 def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: float) -> int:
@@ -73,12 +75,14 @@ def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: fl
     ``budget_mb`` (forced phases only; free decay adds frames)."""
     stride = cases.default_trace_every(force, kw, target_frames)
     substeps = cases.forced_substep_count(force, kw)
-    n_cells = estimated_cells(kw, solver)
+    grid_point_count = estimated_cells(kw, solver)
     n_samples = int(force.size)
-    per_frame = BYTES_PER_FLOAT * (len(export.FRAME_COLUMNS) + 2 * n_cells)
+    per_frame = BYTES_PER_FLOAT * (len(export.FRAME_COLUMNS) + 2 * grid_point_count)
     frames_allowed = (budget_mb * 1e6 - BYTES_PER_FLOAT * n_samples) / per_frame
     if frames_allowed < 1:
-        raise SystemExit(f"the budget {budget_mb} MB cannot hold even one frame of {n_cells} cells")
+        raise SystemExit(
+            f"the budget {budget_mb} MB cannot hold even one frame of {grid_point_count} cells"
+        )
     return max(stride, math.ceil(substeps / frames_allowed))
 
 

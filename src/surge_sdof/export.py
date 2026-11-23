@@ -309,8 +309,8 @@ def _frames(trace: Trace) -> dict:
 
 
 def _cells(trace: Trace) -> dict:
-    n_cells = int(trace.p_cells.shape[1])
-    rest = np.zeros((1, n_cells))
+    grid_point_count = int(trace.p_cells.shape[1])
+    rest = np.zeros((1, grid_point_count))
     blocks = {}
     for name, arr in (("p", trace.p_cells), ("v", trace.v_cells)):
         full = np.concatenate([rest, arr], axis=0)
