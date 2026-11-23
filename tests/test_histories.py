@@ -22,7 +22,7 @@ def _canonical(kind, amplitude_fraction=1.0, **kw):
     return H.canonical(kind, P_DESIGN, amplitude_fraction, transit_s=0.04, **extra)
 
 
-@pytest.mark.parametrize("kind", H.KINDS)
+@pytest.mark.parametrize("kind", H.HISTORY_TYPES)
 @pytest.mark.parametrize("amplitude_fraction", [0.25, 1.0])
 def test_peak_equals_the_cap(kind, amplitude_fraction):
     h = _canonical(kind, amplitude_fraction)
@@ -99,7 +99,7 @@ def test_noise_lowpass_removes_the_band_above_f_cut():
     assert h.f_cut == 50.0
 
 
-@pytest.mark.parametrize("kind", H.KINDS)
+@pytest.mark.parametrize("kind", H.HISTORY_TYPES)
 def test_lead_in_is_zero_then_the_step(kind):
     h = _canonical(kind)
     n_lead = int(round(0.1 * h.sample_freq))
@@ -125,7 +125,7 @@ def test_durations_add_the_four_terms():
     assert noise.duration_s == pytest.approx(0.1 + 0.04 + 2.5 + 2.0)
 
 
-@pytest.mark.parametrize("kind", H.KINDS)
+@pytest.mark.parametrize("kind", H.HISTORY_TYPES)
 def test_params_round_trip_bitwise(kind):
     h = _canonical(kind, 0.25)
     params = h.params()

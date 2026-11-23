@@ -499,7 +499,7 @@ def test_the_cases_exercise_what_they_claim():
     tier = sweep_jc.TIERS[1]
     assert {float(row["length_m"]) for row in rows} == set(tier["lengths"])
     assert {float(row["nat_freq_hz"]) for row in rows} == set(tier["nat_freqs"])
-    assert {row["history_type"] for row in rows} == set(histories.KINDS)
+    assert {row["history_type"] for row in rows} == set(histories.HISTORY_TYPES)
 
     jc = export.read_json(SUPPORT_DIR / "trace_step_jc.json")
     assert jc["meta"]["n_cells"] > 0 and any(v != 0.0 for v in jc["cells"]["p"]["data"])

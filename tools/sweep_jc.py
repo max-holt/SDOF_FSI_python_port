@@ -1096,7 +1096,9 @@ def parse_args(argv=None):
     )
     r.add_argument("--subset-seed", type=int, default=0)
     r.add_argument("--limit", type=int, default=0, help="first N cases only (smoke test)")
-    r.add_argument("--history", choices=histories.KINDS, default=None, help="one history type only")
+    r.add_argument(
+        "--history", choices=histories.HISTORY_TYPES, default=None, help="one history type only"
+    )
     r.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     r.add_argument("--progress", type=int, default=25, help="print progress every N cases")
     r.add_argument(

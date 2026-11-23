@@ -40,11 +40,11 @@ import numpy as np
 
 __all__ = [
     "HISTORIES_VERSION",
-    "KINDS",
-    "DEFAULT_SAMPLE_FREQ",
+    "HISTORY_TYPES",
+    "DEFAULT_SAMPLE_RATE",
     "DEFAULT_LEAD_IN_S",
     "DEFAULT_TAIL_S",
-    "P_CAP_FACTOR",
+    "PEAK_TO_DESIGN_PRESSURE_RATIO",
     "History",
     "p_cap",
     "decay_rate",
@@ -59,15 +59,15 @@ __all__ = [
 HISTORIES_VERSION = "5b.1"
 """Version of the generators; a change to any waveform or scaling rule bumps it."""
 
-KINDS = ("step", "step_sine", "step_noise")
-DEFAULT_SAMPLE_FREQ = 1000.0
+HISTORY_TYPES = ("step", "step_sine", "step_noise")
+DEFAULT_SAMPLE_RATE = 1000.0
 DEFAULT_LEAD_IN_S = 0.1
 DEFAULT_TAIL_S = 2.0
 # For Ben to confirm: the basis of 1.33 (set by the lead author on 22 Oct 2026).
-P_CAP_FACTOR = 1.33
+PEAK_TO_DESIGN_PRESSURE_RATIO = 1.33
 """The sweep's peak pressure as a multiple of the design pressure, dimensionless:
-``p_cap = amplitude_fraction * P_CAP_FACTOR * p_design``. Set by the lead author on
-22 Oct 2026."""
+``p_cap = amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * p_design``. Set by the lead
+author on 22 Oct 2026."""
 
 PARAM_KEYS = (
     "kind",
@@ -169,8 +169,8 @@ class History:
 
 
 def p_cap(p_design: float, amplitude_fraction: float = 1.0) -> float:
-    """``amplitude_fraction * P_CAP_FACTOR * p_design``, Pa."""
-    return float(amplitude_fraction) * P_CAP_FACTOR * float(p_design)
+    """``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * p_design``, Pa."""
+    return float(amplitude_fraction) * PEAK_TO_DESIGN_PRESSURE_RATIO * float(p_design)
 
 
 def decay_rate(f: float, decay_cycles: float, decay_fraction: float) -> float:
@@ -254,7 +254,7 @@ def _history(kind, time, pressure, decay_s, duration_s, noise_rms=None, **params
 def step(
     p_step: float,
     *,
-    sample_freq: float = DEFAULT_SAMPLE_FREQ,
+    sample_freq: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
@@ -323,7 +323,7 @@ def step_sine(
     decay_cycles: float = 10.0,
     decay_fraction: float = 0.8,
     *,
-    sample_freq: float = DEFAULT_SAMPLE_FREQ,
+    sample_freq: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
@@ -402,7 +402,7 @@ def step_noise(
     *,
     f_ref: float,
     p_cap: float,
-    sample_freq: float = DEFAULT_SAMPLE_FREQ,
+    sample_freq: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
@@ -513,7 +513,7 @@ def canonical(
     p_noise_rms: float = 1.0,
     decay_cycles: float = 10.0,
     decay_fraction: float = 0.8,
-    sample_freq: float = DEFAULT_SAMPLE_FREQ,
+    sample_freq: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
@@ -530,7 +530,7 @@ def canonical(
     Parameters
     ----------
     kind : str
-        One of ``KINDS``.
+        One of ``HISTORY_TYPES``.
     p_design : float
         Design pressure, Pa.
     amplitude_fraction : float
@@ -579,7 +579,7 @@ def canonical(
             p_cap=cap,
             **common,
         )
-    raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
+    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
 
 
 def from_params(params: dict) -> History:
@@ -596,7 +596,7 @@ def from_params(params: dict) -> History:
         raise ValueError(f"unknown history parameters {sorted(unknown)}")
     p = {key: params.get(key) for key in PARAM_KEYS}
     common = {
-        "sample_freq": DEFAULT_SAMPLE_FREQ if p["sample_freq"] is None else p["sample_freq"],
+        "sample_freq": DEFAULT_SAMPLE_RATE if p["sample_freq"] is None else p["sample_freq"],
         "lead_in_s": DEFAULT_LEAD_IN_S if p["lead_in_s"] is None else p["lead_in_s"],
         "transit_s": 0.0 if p["transit_s"] is None else p["transit_s"],
         "tail_s": DEFAULT_TAIL_S if p["tail_s"] is None else p["tail_s"],
@@ -620,4 +620,4 @@ def from_params(params: dict) -> History:
             p_cap=p["p_cap"],
             **common,
         )
-    raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
+    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
