@@ -63,8 +63,11 @@ KINDS = ("step", "step_sine", "step_noise")
 DEFAULT_SAMPLE_FREQ = 1000.0
 DEFAULT_LEAD_IN_S = 0.1
 DEFAULT_TAIL_S = 2.0
+# For Ben to confirm: the basis of 1.33 (set by the lead author on 22 Oct 2026).
 P_CAP_FACTOR = 1.33
-"""``P_CAP = 1.33 * p_design`` (the owner's convention)."""
+"""The sweep's peak pressure as a multiple of the design pressure, dimensionless:
+``p_cap = amplitude_fraction * P_CAP_FACTOR * p_design``. Set by the lead author on
+22 Oct 2026."""
 
 PARAM_KEYS = (
     "kind",
