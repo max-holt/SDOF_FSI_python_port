@@ -173,12 +173,12 @@ def check_pipe_table(verbose: bool = True) -> None:
 class Case(NamedTuple):
     size_in: int
     length_m: float
-    nat_freq_hz: float
+    natural_frequency: float  # Hz
     history_type: str  # "step" | "step_sine" | "step_noise"
     f_osc_hz: float | None
     seed: int | None
     amplitude_fraction: float
-    mu: float
+    friction_coefficient: float
 
     @property
     def history_key(self) -> tuple:
@@ -193,8 +193,8 @@ class Case(NamedTuple):
         else:
             h = f"noise{self.seed}"
         return (
-            f"s{self.size_in}_L{self.length_m:g}_f{self.nat_freq_hz:g}_{h}"
-            f"_a{self.amplitude_fraction:g}_mu{self.mu:g}"
+            f"s{self.size_in}_L{self.length_m:g}_f{self.natural_frequency:g}_{h}"
+            f"_a{self.amplitude_fraction:g}_mu{self.friction_coefficient:g}"
         )
 
 
@@ -216,7 +216,14 @@ def tier_cases(tier: int) -> list[Case]:
     ]
 
 
-DIMENSIONS = ("size_in", "length_m", "nat_freq_hz", "history_key", "amplitude_fraction", "mu")
+DIMENSIONS = (
+    "size_in",
+    "length_m",
+    "natural_frequency",
+    "history_key",
+    "amplitude_fraction",
+    "friction_coefficient",
+)
 
 
 def stratified_subset(cases: list[Case], fraction: float, seed: int = 0) -> list[Case]:
@@ -314,8 +321,8 @@ def solver_kwargs(case: Case, p: Pipe) -> dict:
         "celerity": CELERITY,
         "mass_per_unit_len": p.mass_per_length,
         "damping_percent": DAMPING_PERCENT,
-        "dynamic_fric": case.mu,
-        "nat_freq": case.nat_freq_hz,
+        "dynamic_fric": case.friction_coefficient,
+        "nat_freq": case.natural_frequency,
         "restrain_freq_ratio": CLOSED_GAP_FREQUENCY_RATIO,
         "gap": SUPPORT_GAP,
     }
@@ -337,7 +344,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     force = h.force(p.flow_area)
     kw = solver_kwargs(case, p)
     portal_frame_height = structure.solve_portal_height(
-        case.length_m, p.flexural_rigidity, p.mass_per_length, case.nat_freq_hz
+        case.length_m, p.flexural_rigidity, p.mass_per_length, case.natural_frequency
     )
     substep_duration = 1 / (SAMPLE_RATE * SUBSTEP_COUNT)
     column_cell_count, end_to_elbow_cell_count = moc.grid_size(
@@ -356,9 +363,9 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         od_mm=p.outside_diameter_mm,
         thk_mm=p.wall_thickness_mm,
         length_m=case.length_m,
-        nat_freq_hz=case.nat_freq_hz,
+        nat_freq_hz=case.natural_frequency,
         amplitude_fraction=case.amplitude_fraction,
-        mu=case.mu,
+        mu=case.friction_coefficient,
         p_design_bar=p.design_pressure / PA_PER_BAR,
         p_cap_bar=histories.p_cap(p.design_pressure, case.amplitude_fraction) / PA_PER_BAR,
         p_peak_bar=h.peak / PA_PER_BAR,

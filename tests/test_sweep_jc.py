@@ -60,7 +60,7 @@ def test_stratified_subset_covers_every_level_of_every_dimension():
 
 @pytest.mark.parametrize("kind", ["step", "step_sine", "step_noise"])
 def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path):
-    cases = [c for c in sw.tier_cases(1) if c.history_type == kind and c.nat_freq_hz == 24.0]
+    cases = [c for c in sw.tier_cases(1) if c.history_type == kind and c.natural_frequency == 24.0]
     case = cases[0]
     row = sw.run_case(case, 1, "test", "cpu", "sha")
     assert set(row) == set(sw.COLUMNS)
