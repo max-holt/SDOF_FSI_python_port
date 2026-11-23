@@ -357,6 +357,28 @@ else.
 | `rho_c`, `two_rho_c` | Characteristic impedance ρc and 2ρc | Pa·s/m |
 | `n` | Loop index over nodes or cells in `moc.step` (a few lines each) | — |
 
+## Applied (session R.3)
+
+Every rename marked **R** is applied, one quantity or family per commit, except `relax`
+(left a local until plan 2.5 makes it `NEWTON_RELAXATION`) and the ungated tools beyond the
+transit-delay names in `tools/bench.py` (rename-only, ruling 24, not otherwise touched).
+Where the table's name could not be used as written, the code uses:
+
+| table | code | why |
+|---|---|---|
+| `force_history` for the 2-D local of the entry points | `force_history_2d` | the public keyword already holds `force_history` |
+| `moving_fraction_a` / `_b` for the tables inside `moc.moving_fractions` | `fractions_a` / `fractions_b` | in that module `moving_fraction_a` names the function |
+| `frame_capacity` for `cap` inside `trace.check_memory` | `needed_frames` | `frame_capacity` names the function it calls |
+| `grid_point_moving_fraction` for `frac` in `loop_layout` | `moving_fraction_array` | the parameter already has that name |
+| `frame_values` for `first` in `export._frames` | `rest_value` | it is the rest frame's value, not the frames' |
+| `trace_request` (`_TraceMeta`) | class `_TraceRequest` | the class follows its instances' name |
+| `diameter_mm` (`--size` dest) | `internal_diameter_mm` | the option is the internal diameter |
+
+Not renamed in R.3 by design: every **K** name (kernel parameters and locals, the
+`JunctionCoupling` slots, the trace buffers `tr_*`) and every **P** name (entry-point
+keywords, `PeakResponse` / `Trace` / `LoopLayout` / `History` fields, exported keys and
+columns, the keywords of `canonical` and `from_params`).
+
 ## Answers (owner, R.3; charter rulings 29-38)
 
 * **Q-N1.** "Public" is the user-facing entry points only (style §2): every other function
