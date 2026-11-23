@@ -4,8 +4,8 @@
 the coupling they pass to it: none, or a ``JunctionCoupling``. Per sub-step the loop
 evaluates the coupling force *before* the SDOF update, with the state at the end of the
 previous sub-step (the VBA MoC block sits at the top of each ``k`` loop and reads the
-current ``a``), and adds the result to the unbalance force (phases 1-2) or uses it alone
-(free decay).
+current ``a``), and adds the result to the unbalance force (transit and forced phases) or
+uses it alone (free decay).
 
 The compiled loop of Stage 5 (``response._integrate_kernel``) cannot call Python objects,
 so ``response._integrate`` unpacks the coupling: a kind code (0 = none, 1 =

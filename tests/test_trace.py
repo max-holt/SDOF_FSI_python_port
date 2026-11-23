@@ -158,11 +158,11 @@ def _check_frames(res: response.PeakResponse, force, kw, stride):
     expected_phase = np.where(
         tr.sub_step < delay_substeps,
         tracing.PHASE_TRANSIT,
-        np.where(forced, tracing.PHASE_HISTORY, tracing.PHASE_FREE_DECAY),
+        np.where(forced, tracing.PHASE_FORCED, tracing.PHASE_FREE_DECAY),
     )
     assert np.array_equal(tr.phase, expected_phase)
     assert delay_substeps > 0 and np.any(tr.phase == tracing.PHASE_TRANSIT)
-    assert np.any(tr.phase == tracing.PHASE_HISTORY)
+    assert np.any(tr.phase == tracing.PHASE_FORCED)
     assert np.any(tr.phase == tracing.PHASE_FREE_DECAY) == (traced_decay > 0)
     # forces: the loads sequence at the traced sub-steps, zero in free decay
     assert np.array_equal(tr.f_unbalance[forced], flat[tr.sub_step[forced]])

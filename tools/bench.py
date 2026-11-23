@@ -43,8 +43,8 @@ solver it claims to mirror.
 
 Each case runs ``--repeats`` times (default 3); the median wall time is reported and, for
 the peak-response cases, the time per SDOF sub-step. The sub-step count is ``n_samples *
-stepQTY + floor(transit_delay_samples * stepQTY) + 1`` (phase 2 plus the phase-1 delay;
-phase 3 never runs on these inputs). JC cases also report MoC cell-updates per second (``sub-steps * pipeSegQTY /
+stepQTY + floor(transit_delay_samples * stepQTY) + 1`` (the forced phase plus the transit
+phase; free decay never runs on these inputs). JC cases also report MoC cell-updates per second (``sub-steps * pipeSegQTY /
 median``). In mode ``numba`` the first call of every case is timed separately
 (``first_call_s``); the compile itself is measured once per child as the first call of the
 tiny Example lumped case (``compile_s``), since all cases share one kernel specialisation.

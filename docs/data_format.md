@@ -138,7 +138,7 @@ stride; a file is never windowed (the viewer windows).
 | `t` | float | Time at the end of the sub-step, s |
 | `sub_step` | int | The kernel's 0-based sub-step counter (`-1` for the rest frame) |
 | `sample` | int | 0-based sample index, `totInd - 1` (`-1` for the rest frame) |
-| `phase` | int | `0` transit (delay), `1` history (ramp), `2` free decay |
+| `phase` | int | `0` transit, `1` forced, `2` free decay |
 | `x` | float | Displacement after the sub-step, m |
 | `v` | float | Velocity, m/s |
 | `a` | float | Acceleration, m/s² |

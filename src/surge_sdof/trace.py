@@ -16,8 +16,8 @@ half-grids). ``t = (sub_step + 1) * dt`` is the time at the end of that sub-step
 during it (zero in free decay); ``d_f`` the junction force the sub-step used (``moc.step``
 runs before the SDOF update; ``0.0`` for the lumped solver); ``p_cells`` / ``v_cells`` the
 column after it. ``sample`` is the 0-based sample index (``totInd - 1``, the index into
-``PeakResponse.history``); ``phase`` is 0 in the transit (delay) phase, 1 in the history
-(ramp) phase and 2 in free decay. Frame 0 is the end of sub-step 0: a column at rest with
+``PeakResponse.history``); ``phase`` is 0 in the transit phase, 1 in the forced phase
+and 2 in free decay. Frame 0 is the end of sub-step 0: a column at rest with
 ``a = 0`` is still bitwise the initial column there.
 
 Free decay is traced for as long as the history records it (``totInd <= outMax * 2``, the
@@ -60,7 +60,7 @@ from surge_sdof.structure import SdofParams
 __all__ = [
     "MAX_TRACE_VALUES",
     "PHASE_TRANSIT",
-    "PHASE_HISTORY",
+    "PHASE_FORCED",
     "PHASE_FREE_DECAY",
     "Trace",
     "capacity",
@@ -71,7 +71,7 @@ __all__ = [
 ]
 
 PHASE_TRANSIT = 0
-PHASE_HISTORY = 1
+PHASE_FORCED = 1
 PHASE_FREE_DECAY = 2
 
 # Columns of the kernel's float64 frame array ``tr_f (capacity, N_FLOAT_COLUMNS)``.
@@ -113,7 +113,7 @@ class Trace:
         the walk used; the JC keyword flags included), so the trace is self-describing.
     t, sub_step, sample, phase : numpy.ndarray
         Per frame: time at the end of the sub-step (s), the 0-based sub-step index, the
-        0-based sample index, the phase (0 transit, 1 history, 2 free decay).
+        0-based sample index, the phase (0 transit, 1 forced, 2 free decay).
     x, v, a : numpy.ndarray
         State at the end of the sub-step: m, m/s, m/s².
     f_a, f_b, f_unbalance : numpy.ndarray
@@ -181,9 +181,9 @@ def capacity(
     Parameters
     ----------
     forced_substeps : int
-        Sub-steps of phases 1-2 (the length of the flat unbalance array).
+        Sub-steps of the transit and forced phases (the length of the flat unbalance array).
     forced_samples : int
-        Samples of phases 1-2.
+        Samples of the transit and forced phases.
     out_max : int
         The VBA ``outMax``.
     step_qty : int

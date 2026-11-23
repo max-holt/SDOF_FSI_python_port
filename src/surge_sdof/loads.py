@@ -6,10 +6,10 @@ L / (c / sampleFreq)`` samples later; the structure sees ``forceA - forceB``. Th
 (``GetPeakResponse`` lines 394-567, identically in ``GetPeakResponseJC``) walks the
 history column-major in three phases:
 
-1. **delay** (``forceA`` held at the first sample, ``forceB`` ramps through the history)
-   until ``(totInd - 1) * stepQTY + 1 + k > unballanceStepQTY * stepQTY``, which exits
-   the last delay sample part way through (``Exit For``);
-2. **ramp** (both forces interpolate; ``forceB`` runs ``kOverlap`` sub-steps ahead of
+1. **transit** (``forceA`` held at the first sample, ``forceB`` ramps through the
+   history) until ``(totInd - 1) * stepQTY + 1 + k > unballanceStepQTY * stepQTY``, which
+   exits the last transit sample part way through (``Exit For``);
+2. **forced** (both forces interpolate; ``forceB`` runs ``kOverlap`` sub-steps ahead of
    the sample boundary, so each sample's sub-steps are split into
    ``stepQTY - kOverlap`` from one pair of samples and ``kOverlap`` from the next);
 3. **free decay** has no unbalance force and is the caller's business.
@@ -153,17 +153,18 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
     """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
     ``elbow_forces`` (which differ only in their inner ``k`` loops).
 
-    Phase 1 (delay) items are ``(0, totInd, elbow_a_force, elbow_b_force_current,
+    Transit-phase items are ``(0, totInd, elbow_a_force, elbow_b_force_current,
     elbow_b_force_next)``: the force at elbow A is held, the force at elbow B ramps between
-    the pair; the consumer truncates the sample at the VBA ``Exit For`` (``first_substep_number + k >
-    unballanceStepQTY * stepQTY``). Phase 2 (ramp) items are ``(1, elbow_a_force_current,
+    the pair; the consumer truncates the sample at the VBA ``Exit For``
+    (``first_substep_number + k > unballanceStepQTY * stepQTY``). Forced-phase items are
+    ``(1, elbow_a_force_current,
     elbow_a_force_next, elbow_b_force_current, elbow_b_force_next,
     elbow_b_force_advanced_current, elbow_b_force_advanced_next)``: elbow A ramps between the
     first pair, elbow B between the second pair for the first ``stepQTY - kOverlap``
     sub-steps and between the third pair (after it advances) for the remaining
     ``kOverlap``. The item is yielded after every index it needs is read, so a D-8
-    ``IndexError`` surfaces where the legacy raised it: at the first phase-2 sample, after
-    every phase-1 sample."""
+    ``IndexError`` surfaces where the legacy raised it: at the first forced sample, after
+    every transit sample."""
     (
         force_history_one_based,
         history_row_count,
@@ -176,7 +177,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
         _current_sample_weight,
     ) = walk
 
-    # ---------------------------------------------------------------- phase 1: delay
+    # ------------------------------------------------------------------- transit phase
     elbow_a_force = force_history_one_based[1][1]
     sample_number = 0
     # For jB = 1 To 1 + CLng(unballanceStepQTY / UBound(forceHistory, 2))
@@ -225,7 +226,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
         elbow_b_column = history_column_count
         elbow_b_row = history_row_count
 
-    # ----------------------------------------------------------------- phase 2: ramp
+    # -------------------------------------------------------------------- forced phase
     for history_column in range(1, history_column_count + 1):
         for history_row in range(1, history_row_count + 1):
             if history_row + 1 > history_row_count and history_column < history_column_count:
@@ -291,9 +292,9 @@ def unbalance_force(
     ------
     list of float
         The unbalance force ``forceA - forceB``, N, for each sub-step of one sample.
-        Phase 1 (delay) yields ``totInd`` samples, the last one truncated at the VBA
-        ``Exit For``; phase 2 (ramp) yields one full sample per history element. Phase 3
-        (free decay) has no unbalance force and is not yielded.
+        The transit phase yields ``totInd`` samples, the last one truncated at the VBA
+        ``Exit For``; the forced phase yields one full sample per history element. Free
+        decay has no unbalance force and is not yielded.
 
     Raises
     ------
@@ -396,8 +397,8 @@ def elbow_forces(
     Yields
     ------
     phase : int
-        0 for the delay phase (``forceA`` held at the first sample while ``forceB``
-        ramps; the trace's "transit"), 1 for the ramp phase (the trace's "history").
+        0 for the transit phase (``forceA`` held at the first sample while ``forceB``
+        ramps), 1 for the forced phase (both ramp).
     elbow_a_force, elbow_b_force : list of float
         The force at elbow A and the delayed force at elbow B, N, per sub-step; the same
         lengths as the ``unbalance_force`` samples (the last delay sample truncated).

@@ -36,7 +36,7 @@ and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kerne
 empty arrays and the recording branch is never entered. The recording reads the state and
 writes to the trace arrays only, so the ``PeakResponse`` values of a traced run are bitwise
 those of the untraced run (``tests/test_trace.py``). ``loads.elbow_forces`` supplies the
-per-sub-step elbow forces and the transit/history boundary for the trace.
+per-sub-step elbow forces and the transit / forced boundary for the trace.
 
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
@@ -89,8 +89,8 @@ from surge_sdof.trace import (
     I_SAMPLE,
     I_STICK,
     I_SUB_STEP,
+    PHASE_FORCED,
     PHASE_FREE_DECAY,
-    PHASE_HISTORY,
     PHASE_TRANSIT,
     Trace,
 )
@@ -614,9 +614,9 @@ def _integrate(
     trace_every: int = 0,
     meta: _TraceMeta | None = None,
 ) -> PeakResponse:
-    """The VBA sample loop shared by both peak solvers: phases 1-2 driven by ``forces``
-    (one list of per-sub-step unbalance values per sample), then free decay while
-    ``x * xZero > 0.01``; max trackers; result history per sample.
+    """The VBA sample loop shared by both peak solvers: the transit and forced phases
+    driven by ``forces`` (one list of per-sub-step unbalance values per sample), then free
+    decay while ``x * xZero > 0.01``; max trackers; result history per sample.
 
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens ``forces`` once,
     unpacks ``params`` and ``coupling`` (``None``: no fluid coupling, kind 0; a
@@ -806,7 +806,7 @@ def _integrate_kernel(
     Trace (Session V.1): with ``trace_every > 0`` every sub-step whose running index
     ``n`` is a multiple of it, while ``tot_ind <= out_max * 2`` and the capacity lasts,
     is written by ``_trace_frame`` after the SDOF update (``flat_a`` / ``flat_b`` are
-    the elbow forces per forced sub-step, ``delay_substeps`` the transit -> history
+    the elbow forces per forced sub-step, ``delay_substeps`` the transit -> forced
     boundary). ``f_friction`` is ``mass * (v_new - (v_old + (a_old + a_new) * half_dt))
     / dt`` with the same ``half_dt = dt / 2`` as ``step_scalars``; ``stick`` is ``|v_old| <
     fric_acc``. With ``trace_every == 0`` the branch is never entered and the arrays are
@@ -830,7 +830,7 @@ def _integrate_kernel(
     v_old = 0.0
     a_old = 0.0
 
-    # ------------------------------------------------- phases 1-2: forced response
+    # ------------------------------------------------- transit and forced phases
     for s in range(n_samples):
         tot_ind += 1
         if legacy_parity:
@@ -876,7 +876,7 @@ def _integrate_kernel(
                     frame,
                     n,
                     tot_ind - 1,
-                    PHASE_TRANSIT if n < delay_substeps else PHASE_HISTORY,
+                    PHASE_TRANSIT if n < delay_substeps else PHASE_FORCED,
                     x,
                     v,
                     a,
@@ -906,7 +906,7 @@ def _integrate_kernel(
         if output_type > 0:
             _record(history, output_type, tot_ind - 1, x, v, a)
 
-    # ---------------------------------------------------------- phase 3: free decay
+    # ---------------------------------------------------------- free decay
     forced_samples = tot_ind
     x_zero = x
     while _decay_test(x, x_zero) > 0.01:
