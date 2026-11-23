@@ -10,6 +10,11 @@ plain flag; the ungated tools get rename-only edits; Nits are rejected, so a nit
 a reference only and its fix is not a commit of its own; S-17 is rejected; the two edge-case
 fixes are group 7. The answers are under each question at the end.
 
+**Progress (session R.3, 23 Nov 2026).** Done: group 0 (3.0a to 3.0d), "Before group 1"
+(0.1 to 0.7) and group 1 (1.1 to 1.16) for every name the nomenclature marks R. Left for
+group 3: the kernel-signature names (ruling 21); for the public API session: public keywords,
+returned dataclass fields and exported names. Next: group 2.
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
