@@ -214,11 +214,11 @@ def _axis(duration_s: float, sample_freq: float, lead_in_s: float):
     """``(time, n_lead)``: the sample times and the number of lead-in (zero) samples."""
     if sample_freq <= 0.0:
         raise ValueError(f"sample_freq must be positive, got {sample_freq!r}")
-    n = int(round(duration_s * sample_freq))
-    n_lead = int(round(lead_in_s * sample_freq))
-    if n_lead >= n:
+    sample_count = int(round(duration_s * sample_freq))
+    lead_in_sample_count = int(round(lead_in_s * sample_freq))
+    if lead_in_sample_count >= sample_count:
         raise ValueError("the history has no sample after the lead-in")
-    return np.arange(n) / sample_freq, n_lead
+    return np.arange(sample_count) / sample_freq, lead_in_sample_count
 
 
 def _stats(pressure: np.ndarray) -> tuple[float, float, float, float]:
@@ -279,9 +279,9 @@ def step(
     sample_freq = float(sample_freq)
     lead_in_s, transit_s, tail_s = float(lead_in_s), float(transit_s), float(tail_s)
     duration_s = _duration(lead_in_s, transit_s, 0.0, tail_s)
-    time, n_lead = _axis(duration_s, sample_freq, lead_in_s)
+    time, lead_in_sample_count = _axis(duration_s, sample_freq, lead_in_s)
     pressure = np.zeros_like(time)
-    pressure[n_lead:] = p_step
+    pressure[lead_in_sample_count:] = p_step
     return _history(
         "step",
         time,
@@ -305,15 +305,15 @@ def step(
     )
 
 
-def _sine_shape(time, n_lead, f_osc, decay_cycles, decay_fraction) -> np.ndarray:
+def _sine_shape(time, lead_in_sample_count, f_osc, decay_cycles, decay_fraction) -> np.ndarray:
     """The unit enveloped sine: 0 over the lead-in, ``sin(2 pi f tau) envelope(tau)`` after,
-    ``tau`` from the first held sample."""
-    tau = time[n_lead:] - time[n_lead]
-    u = np.zeros_like(time)
-    u[n_lead:] = np.sin(2.0 * np.pi * f_osc * tau) * envelope(
-        tau, f_osc, decay_cycles, decay_fraction
+    ``time_since_lead_in`` from the first held sample."""
+    time_since_lead_in = time[lead_in_sample_count:] - time[lead_in_sample_count]
+    unit_sine = np.zeros_like(time)
+    unit_sine[lead_in_sample_count:] = np.sin(2.0 * np.pi * f_osc * time_since_lead_in) * envelope(
+        time_since_lead_in, f_osc, decay_cycles, decay_fraction
     )
-    return u
+    return unit_sine
 
 
 def step_sine(
@@ -354,10 +354,12 @@ def step_sine(
     lead_in_s, transit_s, tail_s = float(lead_in_s), float(transit_s), float(tail_s)
     decay_s = decay_cycles / f_osc
     duration_s = _duration(lead_in_s, transit_s, decay_s, tail_s)
-    time, n_lead = _axis(duration_s, sample_freq, lead_in_s)
+    time, lead_in_sample_count = _axis(duration_s, sample_freq, lead_in_s)
     pressure = np.zeros_like(time)
-    pressure[n_lead:] = p_step
-    pressure = pressure + p_osc * _sine_shape(time, n_lead, f_osc, decay_cycles, decay_fraction)
+    pressure[lead_in_sample_count:] = p_step
+    pressure = pressure + p_osc * _sine_shape(
+        time, lead_in_sample_count, f_osc, decay_cycles, decay_fraction
+    )
     return _history(
         "step_sine",
         time,
@@ -381,15 +383,15 @@ def step_sine(
     )
 
 
-def _lowpass(w: np.ndarray, sample_freq: float, f_cut: float) -> np.ndarray:
+def _lowpass(noise: np.ndarray, sample_freq: float, f_cut: float) -> np.ndarray:
     """FFT brick-wall low-pass: every bin above ``f_cut`` zeroed; a cut-off at or above the
-    Nyquist frequency returns ``w`` unchanged."""
+    Nyquist frequency returns ``noise`` unchanged."""
     if f_cut >= sample_freq / 2.0:
-        return w
-    spectrum = np.fft.rfft(w)
-    freqs = np.fft.rfftfreq(w.shape[0], 1.0 / sample_freq)
+        return noise
+    spectrum = np.fft.rfft(noise)
+    freqs = np.fft.rfftfreq(noise.shape[0], 1.0 / sample_freq)
     spectrum[freqs > f_cut] = 0.0
-    return np.fft.irfft(spectrum, n=w.shape[0])
+    return np.fft.irfft(spectrum, n=noise.shape[0])
 
 
 def step_noise(
@@ -461,19 +463,19 @@ def step_noise(
         raise ValueError(f"p_cap ({p_cap!r}) must exceed p_step ({p_step!r})")
     decay_s = decay_cycles / f_ref
     duration_s = _duration(lead_in_s, transit_s, decay_s, tail_s)
-    time, n_lead = _axis(duration_s, sample_freq, lead_in_s)
-    tau = time[n_lead:] - time[n_lead]
+    time, lead_in_sample_count = _axis(duration_s, sample_freq, lead_in_s)
+    time_since_lead_in = time[lead_in_sample_count:] - time[lead_in_sample_count]
     rng = np.random.default_rng(seed)
-    w = rng.standard_normal(tau.shape[0]) * p_noise_rms
-    w = _lowpass(w, sample_freq, f_cut)
-    w = w * envelope(tau, f_ref, decay_cycles, decay_fraction)
-    w_max = float(w.max())
-    if not w_max > 0.0:
+    noise = rng.standard_normal(time_since_lead_in.shape[0]) * p_noise_rms
+    noise = _lowpass(noise, sample_freq, f_cut)
+    noise = noise * envelope(time_since_lead_in, f_ref, decay_cycles, decay_fraction)
+    noise_max = float(noise.max())
+    if not noise_max > 0.0:
         raise ValueError("the enveloped noise has no positive sample to scale on")
-    noise = w * ((p_cap - p_step) / w_max)
+    scaled_noise = noise * ((p_cap - p_step) / noise_max)
     pressure = np.zeros_like(time)
-    pressure[n_lead:] = p_step + noise
-    noise_rms = float(math.sqrt(float(np.mean(noise * noise))))
+    pressure[lead_in_sample_count:] = p_step + scaled_noise
+    noise_rms = float(math.sqrt(float(np.mean(scaled_noise * scaled_noise))))
     return _history(
         "step_noise",
         time,
@@ -549,35 +551,37 @@ def canonical(
     ValueError
         Unknown ``kind`` or a missing frequency / seed.
     """
-    cap = p_cap(p_design, amplitude_fraction)
-    common = {
+    peak_pressure_target = p_cap(p_design, amplitude_fraction)
+    shared_arguments = {
         "sample_freq": sample_freq,
         "lead_in_s": lead_in_s,
         "transit_s": transit_s,
         "tail_s": tail_s,
     }
     if kind == "step":
-        return step(cap, **common)
+        return step(peak_pressure_target, **shared_arguments)
     if kind == "step_sine":
         if f_osc is None:
             raise ValueError("step_sine needs f_osc")
-        p_step = 0.5 * cap
-        probe = step_sine(0.0, 1.0, f_osc, decay_cycles, decay_fraction, **common)
-        p_osc = (cap - p_step) / probe.peak
-        return step_sine(p_step, p_osc, f_osc, decay_cycles, decay_fraction, **common)
+        p_step = 0.5 * peak_pressure_target
+        unit_sine_history = step_sine(
+            0.0, 1.0, f_osc, decay_cycles, decay_fraction, **shared_arguments
+        )
+        p_osc = (peak_pressure_target - p_step) / unit_sine_history.peak
+        return step_sine(p_step, p_osc, f_osc, decay_cycles, decay_fraction, **shared_arguments)
     if kind == "step_noise":
         if seed is None or f_ref is None:
             raise ValueError("step_noise needs seed and f_ref")
         return step_noise(
-            0.5 * cap,
+            0.5 * peak_pressure_target,
             p_noise_rms,
             f_cut,
             seed,
             decay_cycles,
             decay_fraction,
             f_ref=f_ref,
-            p_cap=cap,
-            **common,
+            p_cap=peak_pressure_target,
+            **shared_arguments,
         )
     raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
 
@@ -594,30 +598,43 @@ def from_params(params: dict) -> History:
     unknown = set(params) - set(PARAM_KEYS)
     if unknown:
         raise ValueError(f"unknown history parameters {sorted(unknown)}")
-    p = {key: params.get(key) for key in PARAM_KEYS}
-    common = {
-        "sample_freq": DEFAULT_SAMPLE_RATE if p["sample_freq"] is None else p["sample_freq"],
-        "lead_in_s": DEFAULT_LEAD_IN_S if p["lead_in_s"] is None else p["lead_in_s"],
-        "transit_s": 0.0 if p["transit_s"] is None else p["transit_s"],
-        "tail_s": DEFAULT_TAIL_S if p["tail_s"] is None else p["tail_s"],
+    parameter_values = {key: params.get(key) for key in PARAM_KEYS}
+    shared_arguments = {
+        "sample_freq": DEFAULT_SAMPLE_RATE
+        if parameter_values["sample_freq"] is None
+        else parameter_values["sample_freq"],
+        "lead_in_s": DEFAULT_LEAD_IN_S
+        if parameter_values["lead_in_s"] is None
+        else parameter_values["lead_in_s"],
+        "transit_s": 0.0
+        if parameter_values["transit_s"] is None
+        else parameter_values["transit_s"],
+        "tail_s": DEFAULT_TAIL_S
+        if parameter_values["tail_s"] is None
+        else parameter_values["tail_s"],
     }
-    kind = p["kind"]
+    kind = parameter_values["kind"]
     if kind == "step":
-        return step(p["p_step"], **common)
+        return step(parameter_values["p_step"], **shared_arguments)
     if kind == "step_sine":
         return step_sine(
-            p["p_step"], p["p_osc"], p["f_osc"], p["decay_cycles"], p["decay_fraction"], **common
+            parameter_values["p_step"],
+            parameter_values["p_osc"],
+            parameter_values["f_osc"],
+            parameter_values["decay_cycles"],
+            parameter_values["decay_fraction"],
+            **shared_arguments,
         )
     if kind == "step_noise":
         return step_noise(
-            p["p_step"],
-            p["p_noise_rms"],
-            p["f_cut"],
-            p["seed"],
-            p["decay_cycles"],
-            p["decay_fraction"],
-            f_ref=p["f_ref"],
-            p_cap=p["p_cap"],
-            **common,
+            parameter_values["p_step"],
+            parameter_values["p_noise_rms"],
+            parameter_values["f_cut"],
+            parameter_values["seed"],
+            parameter_values["decay_cycles"],
+            parameter_values["decay_fraction"],
+            f_ref=parameter_values["f_ref"],
+            p_cap=parameter_values["p_cap"],
+            **shared_arguments,
         )
     raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
