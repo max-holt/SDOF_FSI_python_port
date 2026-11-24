@@ -77,18 +77,6 @@ from surge_sdof import trace as tracing
 from surge_sdof.coupling import FluidConstants, fluid_column
 from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.trace import (
-    COL_A,
-    COL_ELBOW_A_FORCE,
-    COL_ELBOW_B_FORCE,
-    COL_FRICTION_FORCE,
-    COL_IS_STICKING,
-    COL_JUNCTION_FORCE,
-    COL_LOAD_PHASE,
-    COL_SAMPLE_INDEX,
-    COL_SUBSTEP_INDEX,
-    COL_UNBALANCE_FORCE,
-    COL_V,
-    COL_X,
     PHASE_FORCED,
     PHASE_FREE_DECAY,
     PHASE_TRANSIT,
@@ -689,70 +677,6 @@ def _record_sample(
         history[index] = a
 
 
-class _Frame(NamedTuple):
-    """One recorded sub-step: the values ``_write_frame_row`` writes into a frame row.
-
-    Built by ``_record_frame``. Units: forces in N, ``x`` / ``v`` / ``a`` in m, m/s, m/s².
-    """
-
-    substep_index: int  # running 0-based sub-step counter
-    sample_index: int  # 0-based sample index
-    load_phase: int  # PHASE_TRANSIT, PHASE_FORCED or PHASE_FREE_DECAY
-    x: float
-    v: float
-    a: float
-    elbow_a_force: float
-    elbow_b_force: float
-    unbalance_force: float
-    friction_force: float  # recomputed from the velocity change, as the trace defines it
-    is_sticking: bool  # |v before the sub-step| < the friction velocity step
-    junction_force: float  # 0.0 without fluid coupling
-
-
-@numba.njit(cache=True)
-def _write_frame_row(buffers: tracing.TraceBuffers, frame_index: int, values: _Frame) -> None:
-    """Write the scalars of one trace frame (Session V.1): ``values`` into row
-    ``frame_index`` of ``buffers.frame_state`` and ``buffers.frame_index_columns``
-    (columns ``trace.COL_*``)."""
-    frame_state = buffers.frame_state
-    frame_index_columns = buffers.frame_index_columns
-    frame_state[frame_index, COL_X] = values.x
-    frame_state[frame_index, COL_V] = values.v
-    frame_state[frame_index, COL_A] = values.a
-    frame_state[frame_index, COL_ELBOW_A_FORCE] = values.elbow_a_force
-    frame_state[frame_index, COL_ELBOW_B_FORCE] = values.elbow_b_force
-    frame_state[frame_index, COL_UNBALANCE_FORCE] = values.unbalance_force
-    frame_state[frame_index, COL_FRICTION_FORCE] = values.friction_force
-    frame_state[frame_index, COL_JUNCTION_FORCE] = values.junction_force
-    frame_index_columns[frame_index, COL_SUBSTEP_INDEX] = values.substep_index
-    frame_index_columns[frame_index, COL_SAMPLE_INDEX] = values.sample_index
-    frame_index_columns[frame_index, COL_LOAD_PHASE] = values.load_phase
-    frame_index_columns[frame_index, COL_IS_STICKING] = 1 if values.is_sticking else 0
-
-
-@numba.njit(cache=True)
-def _write_frame_column(
-    buffers: tracing.TraceBuffers, frame_index: int, column: moc.FluidColumn
-) -> None:
-    """Write the fluid column of one trace frame: pressure and velocity interleaved ``A0 B0
-    A1 ... A(N)`` into row ``frame_index`` of ``buffers.frame_pressure`` /
-    ``buffers.frame_velocity``. Reads the column only."""
-    frame_pressure = buffers.frame_pressure
-    frame_velocity = buffers.frame_velocity
-    pressure_a = column.pressure_a
-    velocity_a = column.velocity_a
-    pressure_b = column.pressure_b
-    velocity_b = column.velocity_b
-    column_cell_count = column.column_cell_count
-    for c in range(column_cell_count):
-        frame_pressure[frame_index, 2 * c] = pressure_a[c]
-        frame_pressure[frame_index, 2 * c + 1] = pressure_b[c]
-        frame_velocity[frame_index, 2 * c] = velocity_a[c]
-        frame_velocity[frame_index, 2 * c + 1] = velocity_b[c]
-    frame_pressure[frame_index, 2 * column_cell_count] = pressure_a[column_cell_count]
-    frame_velocity[frame_index, 2 * column_cell_count] = velocity_a[column_cell_count]
-
-
 class _RunState(NamedTuple):
     """What one SDOF sub-step changes: the state, the running maxima and the sub-step count.
 
@@ -824,15 +748,15 @@ def _record_frame(
 ) -> int:
     """Record one sub-step as trace frame ``frame_index`` and return the frame count after
     it: the row (``loads``, the state ``after``, the friction force and stick flag of
-    ``structure.substep_friction`` from ``before`` and ``after``) and, with fluid coupling,
-    the column. Called on recorded sub-steps only; reads the solver state only."""
+    ``structure.substep_friction`` from ``before`` and ``after``, by ``trace.write_frame_row``)
+    and, with fluid coupling, the column (``trace.write_frame_column``). Called on recorded sub-steps only; reads the solver state only."""
     friction_force, is_sticking = structure.substep_friction(
         inputs.sdof_params, before.v, before.a, after.v, after.a, inputs.substep_duration
     )
-    _write_frame_row(
+    tracing.write_frame_row(
         buffers,
         frame_index,
-        _Frame(
+        tracing.FrameRow(
             loads.substep_index,
             loads.sample_index,
             loads.load_phase,
@@ -848,7 +772,7 @@ def _record_frame(
         ),
     )
     if inputs.column.is_fluid_coupled:
-        _write_frame_column(buffers, frame_index, inputs.column)
+        tracing.write_frame_column(buffers, frame_index, inputs.column)
     return frame_index + 1
 
 

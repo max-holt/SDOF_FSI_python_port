@@ -7,6 +7,10 @@ kernel takes empty arrays and never enters the recording branch; the state arith
 the same in both cases, so a traced run returns the same ``PeakResponse`` values bitwise
 (``tests/test_trace.py``).
 
+The kernel writes each frame through the two compiled writers here (``write_frame_row``,
+the scalars of a ``FrameRow``; ``write_frame_column``, the interleaved column), called by
+``response._record_frame`` on recorded sub-steps only (review session R.7, plan 4.8).
+
 Frame convention
 ----------------
 Frame ``i`` is the **end of sub-step** ``i * trace_every``, where ``sub_step`` is the
@@ -28,7 +32,7 @@ traced, as the history drops them. The arrays are allocated once for that window
 ``f_friction = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old +
 a_new) * (dt / 2))`` is the velocity the Coulomb branch of ``structure.step_scalars`` added
 or removed in the sub-step, recomputed in the recording branch from the same doubles the
-kernel formed (``half_dt = dt / 2``; ``v + trapezoid_velocity_change``): in slip it is
+kernel formed (``structure.substep_friction``, ``half_dt = dt / 2``): in slip it is
 ``-+fric_acc`` (``0.0`` exactly with ``dynamicFric = 0``; the D-20 dead zone gives ``0.0``
 too), in stick (``|v_old| < fric_acc``) it is ``trapezoid_velocity_change - (v_old +
 trapezoid_velocity_change)``, the momentum the stick removed, so ``f_friction`` there is the
@@ -55,6 +59,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
+import numba
 import numpy as np
 
 from surge_sdof import moc
@@ -77,6 +82,9 @@ __all__ = [
     "allocate_frames",
     "interleave",
     "build_trace",
+    "FrameRow",
+    "write_frame_row",
+    "write_frame_column",
 ]
 
 # PHASE_TRANSIT and PHASE_FORCED are produced by ``loads`` and re-exported here with the
@@ -326,6 +334,68 @@ class TraceBuffers(NamedTuple):
     frame_pressure: np.ndarray
     frame_velocity: np.ndarray
     trace_every: int
+
+
+class FrameRow(NamedTuple):
+    """One recorded sub-step: the values ``write_frame_row`` writes into a frame row.
+
+    Built by ``response._record_frame``. Units: forces in N, ``x`` / ``v`` / ``a`` in m, m/s, m/s².
+    """
+
+    substep_index: int  # running 0-based sub-step counter
+    sample_index: int  # 0-based sample index
+    load_phase: int  # PHASE_TRANSIT, PHASE_FORCED or PHASE_FREE_DECAY
+    x: float
+    v: float
+    a: float
+    elbow_a_force: float
+    elbow_b_force: float
+    unbalance_force: float
+    friction_force: float  # recomputed from the velocity change, as the trace defines it
+    is_sticking: bool  # |v before the sub-step| < the friction velocity step
+    junction_force: float  # 0.0 without fluid coupling
+
+
+@numba.njit(cache=True)
+def write_frame_row(buffers: TraceBuffers, frame_index: int, values: FrameRow) -> None:
+    """Write the scalars of one trace frame (Session V.1): ``values`` into row
+    ``frame_index`` of ``buffers.frame_state`` and ``buffers.frame_index_columns``
+    (columns ``COL_*``)."""
+    frame_state = buffers.frame_state
+    frame_index_columns = buffers.frame_index_columns
+    frame_state[frame_index, COL_X] = values.x
+    frame_state[frame_index, COL_V] = values.v
+    frame_state[frame_index, COL_A] = values.a
+    frame_state[frame_index, COL_ELBOW_A_FORCE] = values.elbow_a_force
+    frame_state[frame_index, COL_ELBOW_B_FORCE] = values.elbow_b_force
+    frame_state[frame_index, COL_UNBALANCE_FORCE] = values.unbalance_force
+    frame_state[frame_index, COL_FRICTION_FORCE] = values.friction_force
+    frame_state[frame_index, COL_JUNCTION_FORCE] = values.junction_force
+    frame_index_columns[frame_index, COL_SUBSTEP_INDEX] = values.substep_index
+    frame_index_columns[frame_index, COL_SAMPLE_INDEX] = values.sample_index
+    frame_index_columns[frame_index, COL_LOAD_PHASE] = values.load_phase
+    frame_index_columns[frame_index, COL_IS_STICKING] = 1 if values.is_sticking else 0
+
+
+@numba.njit(cache=True)
+def write_frame_column(buffers: TraceBuffers, frame_index: int, column: moc.FluidColumn) -> None:
+    """Write the fluid column of one trace frame: pressure and velocity interleaved ``A0 B0
+    A1 ... A(N)`` into row ``frame_index`` of ``buffers.frame_pressure`` /
+    ``buffers.frame_velocity``. Reads the column only."""
+    frame_pressure = buffers.frame_pressure
+    frame_velocity = buffers.frame_velocity
+    pressure_a = column.pressure_a
+    velocity_a = column.velocity_a
+    pressure_b = column.pressure_b
+    velocity_b = column.velocity_b
+    column_cell_count = column.column_cell_count
+    for c in range(column_cell_count):
+        frame_pressure[frame_index, 2 * c] = pressure_a[c]
+        frame_pressure[frame_index, 2 * c + 1] = pressure_b[c]
+        frame_velocity[frame_index, 2 * c] = velocity_a[c]
+        frame_velocity[frame_index, 2 * c + 1] = velocity_b[c]
+    frame_pressure[frame_index, 2 * column_cell_count] = pressure_a[column_cell_count]
+    frame_velocity[frame_index, 2 * column_cell_count] = velocity_a[column_cell_count]
 
 
 def allocate_frames(frame_capacity: int, grid_point_count: int, trace_every: int) -> TraceBuffers:
