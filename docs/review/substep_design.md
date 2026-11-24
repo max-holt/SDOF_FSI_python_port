@@ -324,3 +324,56 @@ Not tried, for the owner to choose from (none is made without a ruling, ruling 5
 2. Design B, with the record-frame predicate evaluated in the loop so the recorder is
    called only on a recorded substep.
 3. Stop at 4.6 and 4.7 as the plan's fallback names, and leave the two loops.
+
+## Option 1, as built (session R.6, ruling 56)
+
+`_structure_substep(state: _RunState, applied_force, sdof_params, dt) -> _RunState` steps
+the structure, raises the maxima and counts the sub-step; `_RunState` = `x, v, a, x_max,
+v_max, a_max, substep_index`. The loops keep the record-frame test, the column advance,
+the applied force and the trace write behind `if record_frame:`. Every commit: `make
+lint`, the compiled fast suite (949 + 24) and the pure-Python suite (947 + 26), the snapshot
+and support checks exact in both modes; then an interleaved A/B against the commit before
+(5 rounds, min of 3; from `0d1b15c` ten cases, two of them half free decay) and
+`tools/bench.py`.
+
+| commit | what | A/B new / old |
+|---|---|---|
+| `256522a` | 4.9a, the forced loop | 0.981-1.024 |
+| `0d1b15c` | 4.9b, the free-decay loop | 0.944-1.032; free-decay cases 0.982, 1.006 |
+| `1634342` | `_largest_magnitude` for the unbalance maximum | 0.956-1.017 |
+| `2c239e4` | `_parity_offset` | 0.976-1.055; 9 rounds 0.975-1.040 |
+| `c6abb02` | `_is_frame_due`, `before = state` | 0.957-1.035 |
+| `f0bade5` | history write without the `output_type > 0` guards | 0.923-1.055; 9 rounds 0.972-1.058; A/A of the harness 0.954-1.049 |
+| `643fcbd` | `_decay_reference` | 0.979-1.068 (host slowing ~10 %) |
+| `dea48c7` | the frame records `junction_force` as it is | 0.915-1.071 (the 1.071 on an untraced case this change cannot reach) |
+| `6a6d423` | 4.1, `effective_displacement` compiled | 0.946-1.065 |
+| `ec3bbfe` | 4.5, `structure.substep_friction` | 0.953-1.013 |
+| `ec3bbfe` against `bfeb003` | the whole of it, 9 rounds | **0.973-1.027** |
+
+Single-commit outliers above 1.05 did not repeat and were not cumulative; the host slowed
+by about 15 % during the session (the old code's lumped r20 0.19 -> 0.23 s), so the bench
+rows of the later commits are disturbed and decide nothing (ruling 50).
+
+Pure Python (ruling 54): the fast suite took 186-196 s per commit until the host slowed,
+then 222-233 s; run back to back on one host, `bfeb003` 231 s and `dea48c7` 246 s (+6.5 %
+for 4.9), under the quarter the owner set. The bench's pure-Python lumped rows: 0.95 s ->
+1.25 s (r20), 0.88 s -> 1.32 s (r80) after 4.9a (one call and a NamedTuple per sub-step);
+the JC row does not move.
+
+Kernel, before (`1eeb6d4`) -> after (`ec3bbfe`): arguments 7 -> 6, complexity (ruff) 23 ->
+10 (radon 32 -> 11), statements 89 -> 59, nesting 3 -> 3, code lines 183 -> 153. It meets
+the complexity target of 10 (ruff C901 counts 10, which its limit of 10 allows) but not
+below it; the statement target (50) is missed by the two inline `_Frame` blocks, which plan
+4.7 shortens.
+
+## Group 4 after 4.9 (held for the owner)
+
+4.2 (split `moc.step` into the two half-grid functions, the parity test at the callers),
+4.3 (the junction-force functions into the coupling layer) and 4.4 (one compiled column
+advance called twice) were not started. 4.2 alone adds an `if` per kernel loop (complexity
+10 -> 12); 4.4 would fold it back, but a column advance called on every sub-step that takes
+the column and does not itself loop over it, and the junction-force functions of 4.3 (each
+reads four column entries), are what ruling 57 now rules out. Options: (a) 4.2 only, with
+the parity branch in the loops; (b) 4.2 and a 4.3 / 4.4 in which the half-grid functions
+compute the junction force themselves (each loops over the column, so ruling 57 allows it;
+C-05's separation is then not made); (c) drop 4.2 to 4.4.

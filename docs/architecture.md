@@ -64,15 +64,38 @@ history, `loads.transit_delay` gives `unballanceStepQTY` (samples) and with it `
 (mass kg, stiffness N/m, damping N·s/m, `friction_velocity_step` m/s, `support_gap` m,
 `closed_gap_stiffness_ratio`), and
 `loads.unbalance_force` is created as a generator. Per sample, `_integrate` pulls the next
-`list` of per-sub-step `forceA − forceB` values (N) from the generator. Per sub-step it adds
-`0.0` (no coupling) to the sub-step's unbalance value `f` and passes the sum as `f_applied`
-to `structure.step_scalars(x, v, a, f_applied, *params, dt)`, which computes `aNew` from the *old* `(x, v)`, the trapezoidal `v_new` with the
-stick/slip friction ladder, and the trapezoidal `x`. `_integrate` then updates the four max
-trackers (`|a|`, `|v|`, `|x|`, `|f|`) and increments the running counter `n`. At the end of
-the sample `_record_sample` stores `x`, `v` or `a` in the 0-based history for `output_type` 1-3.
-When the generator is exhausted (phase 1 delay and phase 2 ramp both done) the free-decay
-phase repeats the same sub-step with the coupling force alone as `f_applied`, `stepQTY`
-sub-steps per sample, while `x * xZero > FREE_DECAY_THRESHOLD` (0.01 m², D-21). Finally the static-equivalent force is
+`list` of per-sub-step `forceA − forceB` values (N) from the generator (`_integrate`
+flattens them into the `_ForceSchedule` the compiled kernel reads).
+
+One sub-step, in the kernel's order (review session R.6; the same in both loops, the
+differences named):
+
+1. `_is_frame_due(trace_every, substep_index, frame_count, frame_capacity,
+   is_in_record_window)`: whether this sub-step is a trace frame (the window is always
+   open in the transit and forced phases; in free decay it closes after
+   `outMax * 2` samples). The state before the sub-step is kept (`before = state`).
+2. With fluid coupling, the column advance (below), which returns the new junction force
+   `dF`; it reads `a * dt` and leaves the SDOF state untouched.
+3. The applied force, each loop its own expression: transit and forced phases
+   `dF + f` coupled, `0.0 + f` lumped (`f` the sub-step's unbalance value); free decay
+   `dF` coupled, `0.0` lumped. They are not merged: `0.0 + f` is not `f` for `f = -0.0`
+   ("Exactness notes").
+4. `_structure_substep(state, applied_force, sdof_params, dt) -> _RunState`: steps the
+   structure (`structure.step_scalars(x, v, a, f_applied, sdof_params, dt)`: `aNew` from the
+   *old* `(x, v)` through `structure.effective_displacement`, the trapezoidal `v_new` with
+   the stick/slip friction ladder, the trapezoidal `x`), raises the maxima of `|a|`, `|v|`,
+   `|x|` and counts the sub-step. Scalars in and out (`docs/style.md` §4).
+5. On a frame, `structure.substep_friction` gives the friction force and stick flag from
+   `before` and the new state, and `_trace_frame` writes the row (and the column, coupled).
+6. Free decay only: `_decay_reference(x, xZero)` sets `xZero = 0.0` once `x * xZero` falls
+   to `FREE_DECAY_THRESHOLD`.
+
+At the end of each sample `_record_sample` stores `x`, `v` or `a` in the 0-based history
+for `output_type` 1-3 (nothing for 0). The largest `|f|` is taken once per run over the
+schedule (`_largest_magnitude`). When the schedule is exhausted (phase 1 delay and phase 2
+ramp both done) free decay runs `stepQTY` sub-steps per sample while `x * xZero >
+FREE_DECAY_THRESHOLD` (0.01 m², D-21). The MoC parity offset of each sample comes from
+`_parity_offset` (the VBA's first `k` is 0 in the forced phases and 1 in free decay). Finally the static-equivalent force is
 `|structure.effective_displacement(xMax)| * stiffness` and the `PeakResponse` is built.
 
 **JC path** (`peak_response_jc`). The same loop and the same `structure.step_scalars`; the set-up adds
@@ -82,7 +105,7 @@ fallback, which returns `peak_response` outright), and `coupling.fluid_column`, 
 on the B cells `0..N-1`; Pa and m/s) and the tabulated moving fractions; the loop carries
 `dF`, from 0.0. Per sub-step, before
 `structure.step_scalars`, the loop takes the previous sub-step's acceleration `a`, forms
-`a * dt` (m/s) and calls `moc.step(even=step_index % 2 == 0, …)` on the column's arrays,
+`a * dt` (m/s) and calls `moc.step(is_even_substep=step_index % 2 == 0, …)` on the column's arrays,
 which updates one half-grid in place. Even: the mean velocity `vAv` over the `2N + 1`
 velocities divided by `vav_div` (2N+1 by default, 2N−1 with `vav_denominator="legacy"`,
 D-17), the decaying end nodes (`p_b / dacayFactor`), the interior A nodes from the two
@@ -153,13 +176,21 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   nominal_forced_sample_count, output_type, is_per_phase_parity)` built by the entry
   points, `trace_request` a `trace.TraceRequest` or `None`),
   `response._integrate_kernel(schedule, sdof_params, settings, response_history, column,
-  junction_force, buffers) -> _KernelResult` (the compiled loop; `schedule` is a
+  buffers) -> _KernelResult` (the compiled loop; it starts the junction force at 0.0 since
+  review session R.6; `schedule` is a
   `response._ForceSchedule` of the per-sub-step forces, `buffers` a `trace.TraceBuffers`
   of the four frame buffers and the stride; `_KernelResult` holds the four maxima, the final
-  state, `sample_number`, `forced_sample_count`, `junction_force` and `frame_count`),
+  state, `sample_number`, `forced_sample_count` and `frame_count`),
+  `response._structure_substep(state, applied_force, sdof_params, dt) -> _RunState` (one
+  SDOF sub-step, the maxima and the count; `_RunState` = `x, v, a, x_max, v_max, a_max,
+  substep_index`), `response._is_frame_due`, `response._parity_offset`,
+  `response._decay_reference`, `response._largest_magnitude` (review session R.6, scalars
+  only except the last, which is called once per run), `structure.substep_friction(sdof_params,
+  v_before, a_before, v, a, dt)` (the trace's friction force and stick flag),
   `response._trace_frame(buffers, frame_index, values, column)` (the compiled per-frame
   write; `values` a `response._Frame`), `response._record_sample(history, output_type,
-  index, x, v, a)` (the per-sample history write, called once per sample),
+  index, x, v, a)` (the per-sample history write, called once per sample; it stores nothing
+  for `output_type` 0),
   `response._free_decay_product(x, x_zero)` and `trace.build_trace(request, settings,
   params, buffers, n_frames, column)`.
 
@@ -182,11 +213,25 @@ observed bitwise:
   of the VBA-shaped `0 > excess` (ruff SIM300); the two are the same comparison for every
   double, NaN included (both false). The duplicated per-sample history write became
   `_record_sample`, one assignment of the same float. The differential suite stayed bitwise.
+* Review session R.6 (the single sub-step): the two loops share `_structure_substep`; every
+  expression moved verbatim, the snapshot exact in both modes after each commit. The trace
+  frame reads its elbow forces at the forced loop's index `i`, which always equals the
+  running `substep_index` there. The unbalance-force maximum is taken once over the
+  schedule (`_largest_magnitude`): the forced loop visited every entry once, in order, with
+  the same comparison, so the double is the same, NaN and `-0.0` included. The frame's
+  junction force is `dF` as it is: without coupling it is the 0.0 the kernel starts with.
+  `structure.effective_displacement` is compiled and `step_scalars` calls it in place of its
+  own copy of the gap ladder (the same expression).
 
 ## Stage 5 — compiled kernels
 
-Three functions carry `@numba.njit(cache=True)`: `structure.step_scalars`, `moc.step` and
-`response._integrate_kernel`. No `fastmath`, never object-mode `@jit`. Their bodies are
+Three functions carried `@numba.njit(cache=True)` at Stage 5: `structure.step_scalars`,
+`moc.step` and `response._integrate_kernel` (the review added small compiled helpers:
+`response._trace_frame`, `_structure_substep` and the others named in "Interfaces",
+`structure.effective_displacement`, `structure.substep_friction`). A function called on
+every sub-step takes scalars and small tuples of scalars only; arrays go to functions
+called once per run or that loop over them (`docs/style.md` §4, ruling 57: a sub-step
+function that took the schedule, buffers and column was not inlined and cost 12-100 %). No `fastmath`, never object-mode `@jit`. Their bodies are
 the Stage 4 code; what changed is the calling convention:
 
 * **Signatures take module-level NamedTuples of floats, ints, bools and numpy arrays**

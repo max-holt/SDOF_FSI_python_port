@@ -43,6 +43,12 @@ public API session (group 6), 3.11 to the supporting-modules session (group 5);
 substep designs are in `docs/review/substep_design.md` and summarised under group 4;
 stopped there for the owner before any change to the kernel.
 
+**Progress (session R.6, continued).** Design A approved (ruling 51), its first form
+reverted for speed, option 1 made (ruling 56): 4.9 done as `_structure_substep(state,
+applied_force, sdof_params, dt)` called by both loops, with 4.9c's simplifications; 4.6 is
+absorbed (the maxima live in `_structure_substep`); 4.1 and 4.5 done. **Held for the owner:**
+4.2 to 4.4 (see `substep_design.md`, "Group 4 after 4.9"). Not started: 4.7, 4.8, 4.10, 4.12.
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;

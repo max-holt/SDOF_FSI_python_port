@@ -6,21 +6,27 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
-Session R.6 (the single substep, plan group 4, 2026-11-24) **stopped for the owner**.
-Rulings 47-55 in the charter. Done: `coupling.fluid_column` in place of `JunctionCoupling`
-(`1eeb6d4`, ruling 49); step 0, the kernel starts the junction force itself, 7 -> 6
-arguments (`bfeb003`, ruling 53); both A/B within noise (0.975-1.041). Design A approved
-(ruling 51); 4.9a (`6ea80ba`) was bit-identical but the A/B against `bfeb003` showed compiled
-lumped runs 2.0x and JC runs 1.12-1.20x slower, so it is reverted (`b1ce745`, charter rule
-3). Cause: `_structure_substep` is not inlined and every call passes `_SubstepInputs` (14
-arrays) and `_RunState` flattened. Details, timings and three options for the owner in
-`docs/review/substep_design.md` "As built, and where it stopped". The uncommitted 4.9b is
-not in the repository. Kernel now: 6 args, complexity 23, as before 4.9. Pure-Python fast
-suite 186 s at every commit (base 186-197 s). Session gates (`-m slow`, final bench) not run
-yet: the session is not over.
+Session R.6 (the single substep, plan group 4, 2026-11-24) **done for this session**.
+Rulings 47-57 in the charter; `docs/style.md` §4 has the per-sub-step argument rule (57).
 
-Next: the owner's choice among the three options; then 4.9 again, 4.1-4.5, 4.7, 4.8, 4.10,
-4.12 in plan order.
+Done: `coupling.fluid_column` for `JunctionCoupling` (`1eeb6d4`, ruling 49); step 0, the
+kernel starts the junction force (`bfeb003`, 7 -> 6 arguments); design A's first form
+(`6ea80ba`) was 1.1-2.0x slower compiled and reverted (`b1ce745`); option 1 (ruling 56):
+4.9a / 4.9b (`256522a`, `0d1b15c`), the 4.9c simplifications (`1634342`, `2c239e4`,
+`c6abb02`, `f0bade5`, `643fcbd`, `dea48c7`), 4.1 (`6a6d423`), 4.5 (`ec3bbfe`), the kernel
+docstring. 4.6 absorbed by `_structure_substep`. Every commit gated (949 + 24 compiled,
+947 + 26 pure Python, snapshot and support exact in both modes), A/B timed and benched; the
+whole against `bfeb003`: 0.973-1.027 on ten cases. Kernel: 6 args, complexity 10 (was
+23), 59 statements (89), 153 code lines (183). Session gates: `-m slow` 150 passed;
+`tools/bench.py` row `ec3bbfe` (digests equal to the literal port; its times disturbed by
+the host, which slowed ~15 % during the session). Pure-Python fast suite +6.5 % for 4.9
+measured back to back (231 -> 246 s). Tables in `docs/review/substep_design.md`.
+
+Open for the owner: 4.2-4.4 against ruling 57 (three options in `substep_design.md`,
+"Group 4 after 4.9"). Next, in plan order: 4.7 (trace writers: one call per recorded
+sub-step, which also brings the kernel under 50 statements), 4.8, 4.10, 4.12. The A/B
+harness of this session is not committed (scratchpad: `child.py`, `ab.py`); it may be
+worth adding under `tools/` in the supporting-modules session.
 
 Session R.5 (parameter objects, plan group 3, 2026-11-24) **done**. Charter rulings 43-46
 (speed judged by an A/B run on one host or relative to the literal port, 5 % limit on both
