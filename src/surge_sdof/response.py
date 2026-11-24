@@ -566,28 +566,33 @@ def _record_sample(
         history[index] = a
 
 
+class _Frame(NamedTuple):
+    """One recorded sub-step: the values ``_trace_frame`` writes into a frame row.
+
+    Built by the kernel only on a traced sub-step, from the expressions it has always
+    passed. Units: forces in N, ``x`` / ``v`` / ``a`` in m, m/s, m/s².
+    """
+
+    substep_index: int  # running 0-based sub-step counter
+    sample_index: int  # 0-based sample index
+    load_phase: int  # PHASE_TRANSIT, PHASE_FORCED or PHASE_FREE_DECAY
+    x: float
+    v: float
+    a: float
+    elbow_a_force: float
+    elbow_b_force: float
+    unbalance_force: float
+    friction_force: float  # recomputed from the velocity change, as the trace defines it
+    is_sticking: bool  # |v before the sub-step| < the friction velocity step
+    junction_force: float  # 0.0 without fluid coupling
+
+
 @numba.njit(cache=True)
 def _trace_frame(
     buffers: tracing.TraceBuffers,
     frame: int,
-    n: int,
-    sample: int,
-    phase: int,
-    x: float,
-    v: float,
-    a: float,
-    f_a: float,
-    f_b: float,
-    f_u: float,
-    f_fric: float,
-    stick: bool,
-    d_f: float,
-    is_fluid_coupled: bool,
-    p_a: np.ndarray,
-    v_a: np.ndarray,
-    p_b: np.ndarray,
-    v_b: np.ndarray,
-    n_seg: int,
+    values: _Frame,
+    column: moc.FluidColumn,
 ) -> None:
     """Write one trace frame (Session V.1): the scalars into row ``frame`` of ``tr_f`` /
     ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, with fluid coupling, the column
@@ -597,6 +602,24 @@ def _trace_frame(
     tr_i = buffers.frame_index_columns
     tr_p = buffers.frame_pressure
     tr_v = buffers.frame_velocity
+    n = values.substep_index
+    sample = values.sample_index
+    phase = values.load_phase
+    x = values.x
+    v = values.v
+    a = values.a
+    f_a = values.elbow_a_force
+    f_b = values.elbow_b_force
+    f_u = values.unbalance_force
+    f_fric = values.friction_force
+    stick = values.is_sticking
+    d_f = values.junction_force
+    is_fluid_coupled = column.is_fluid_coupled
+    p_a = column.pressure_a
+    v_a = column.velocity_a
+    p_b = column.pressure_b
+    v_b = column.velocity_b
+    n_seg = column.column_cell_count
     tr_f[frame, COL_X] = x
     tr_f[frame, COL_V] = v
     tr_f[frame, COL_A] = a
@@ -810,11 +833,6 @@ def _integrate_kernel(
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
-    p_a = column.pressure_a
-    v_a = column.velocity_a
-    p_b = column.pressure_b
-    v_b = column.velocity_b
-    n_seg = column.column_cell_count
     x = 0.0
     v = 0.0
     a = 0.0
@@ -862,24 +880,21 @@ def _integrate_kernel(
                 _trace_frame(
                     buffers,
                     frame,
-                    n,
-                    tot_ind - 1,
-                    PHASE_TRANSIT if n < delay_substeps else PHASE_FORCED,
-                    x,
-                    v,
-                    a,
-                    flat_a[i],
-                    flat_b[i],
-                    f,
-                    mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                    abs(v_old) < friction_velocity_step,
-                    d_f if is_fluid_coupled else 0.0,
-                    is_fluid_coupled,
-                    p_a,
-                    v_a,
-                    p_b,
-                    v_b,
-                    n_seg,
+                    _Frame(
+                        n,
+                        tot_ind - 1,
+                        PHASE_TRANSIT if n < delay_substeps else PHASE_FORCED,
+                        x,
+                        v,
+                        a,
+                        flat_a[i],
+                        flat_b[i],
+                        f,
+                        mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
+                        abs(v_old) < friction_velocity_step,
+                        d_f if is_fluid_coupled else 0.0,
+                    ),
+                    column,
                 )
                 frame += 1
             n += 1
@@ -928,24 +943,21 @@ def _integrate_kernel(
                 _trace_frame(
                     buffers,
                     frame,
-                    n,
-                    tot_ind - 1,
-                    PHASE_FREE_DECAY,
-                    x,
-                    v,
-                    a,
-                    0.0,
-                    0.0,
-                    0.0,
-                    mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                    abs(v_old) < friction_velocity_step,
-                    d_f if is_fluid_coupled else 0.0,
-                    is_fluid_coupled,
-                    p_a,
-                    v_a,
-                    p_b,
-                    v_b,
-                    n_seg,
+                    _Frame(
+                        n,
+                        tot_ind - 1,
+                        PHASE_FREE_DECAY,
+                        x,
+                        v,
+                        a,
+                        0.0,
+                        0.0,
+                        0.0,
+                        mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
+                        abs(v_old) < friction_velocity_step,
+                        d_f if is_fluid_coupled else 0.0,
+                    ),
+                    column,
                 )
                 frame += 1
             n += 1
