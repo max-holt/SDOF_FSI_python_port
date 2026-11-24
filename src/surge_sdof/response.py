@@ -940,24 +940,24 @@ def _integrate_kernel(
     column: moc.FluidColumn,
     buffers: tracing.TraceBuffers,
 ) -> _KernelResult:
-    """The sample loop of ``_integrate`` (the Stage 5 kernel).
+    """The sample loop of ``_integrate`` (the Stage 5 kernel): for each sample, for each
+    sub-step, advance; then free decay until the decay product test fails.
 
     ``schedule.unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` holds
-    sample ``s``'s per-sub-step unbalance values. With ``column.is_fluid_coupled`` the MoC
-    column is advanced (``moc.step`` on the half-grid selected by the parity of
-    ``substep_index + parity_offset``) before each SDOF sub-step and ``dF`` added, from 0.0;
-    without, ``0.0`` is added (no fluid coupling). Returns a ``_KernelResult``;
-    ``response_history`` is filled in place for ``output_type`` 1-3.
+    sample ``s``'s per-sub-step unbalance values. Each sub-step: with
+    ``column.is_fluid_coupled`` the MoC column is advanced (``moc.step`` on the half-grid
+    selected by the parity of ``substep_index + parity_offset``) and returns ``dF``, from
+    0.0; the loop forms the applied force (forced phases ``dF + f`` or ``0.0 + f``, free
+    decay ``dF`` or ``0.0``); ``_structure_substep`` steps the structure, raises the maxima
+    and counts the sub-step. Returns a ``_KernelResult``; ``response_history`` is filled in
+    place for ``output_type`` 1-3.
 
-    Trace (Session V.1): with ``buffers.trace_every > 0`` every sub-step whose running
-    index ``substep_index`` is a multiple of it, while ``sample_number <=
-    nominal_forced_sample_count * 2`` and the capacity lasts, is written by
-    ``_trace_frame`` after the SDOF update (the elbow forces per forced sub-step come from
-    the schedule, ``transit_substep_count`` is the transit -> forced boundary). The friction
-    force is ``mass * (v_new - (v_before + (a_before + a_new) * half_dt)) / dt`` with the
-    same ``half_dt = dt / 2`` as ``step_scalars``; the stick flag is ``|v_before| <
-    friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the
-    buffers are empty.
+    Trace (Session V.1): a sub-step ``_is_frame_due`` says is due (stride, capacity, and in
+    free decay ``sample_number <= nominal_forced_sample_count * 2``) is written by
+    ``_trace_frame`` after the SDOF update, with the elbow forces of the schedule in the
+    forced phases (``transit_substep_count`` is the transit -> forced boundary) and the
+    friction force and stick flag of ``structure.substep_friction``. With ``trace_every ==
+    0`` no frame is due and the buffers are empty.
     """
     unbalance_force_by_substep = schedule.unbalance_force_by_substep
     sample_start = schedule.sample_start
