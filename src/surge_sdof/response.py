@@ -725,12 +725,7 @@ def _integrate(
         _integrate_kernel(
             flat,
             offsets,
-            sdof_params.mass,
-            sdof_params.stiffness,
-            sdof_params.damping,
-            sdof_params.friction_velocity_step,
-            sdof_params.support_gap,
-            sdof_params.closed_gap_stiffness_ratio,
+            sdof_params,
             substep_duration,
             int(substep_count),
             int(nominal_forced_sample_count),
@@ -801,12 +796,7 @@ def _integrate(
 def _integrate_kernel(
     flat: np.ndarray,
     offsets: np.ndarray,
-    mass: float,
-    stiffness: float,
-    damping: float,
-    fric_acc: float,
-    gap: float,
-    ratio2: float,
+    sdof_params: SdofParams,
     dt: float,
     step_qty: int,
     out_max: int,
@@ -851,9 +841,11 @@ def _integrate_kernel(
     the elbow forces per forced sub-step, ``delay_substeps`` the transit -> forced
     boundary). ``f_friction`` is ``mass * (v_new - (v_old + (a_old + a_new) * half_dt))
     / dt`` with the same ``half_dt = dt / 2`` as ``step_scalars``; ``stick`` is ``|v_old| <
-    fric_acc``. With ``trace_every == 0`` the branch is never entered and the arrays are
+    friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the arrays are
     empty.
     """
+    mass = sdof_params.mass
+    friction_velocity_step = sdof_params.friction_velocity_step
     x = 0.0
     v = 0.0
     a = 0.0
@@ -906,9 +898,7 @@ def _integrate_kernel(
                 f_applied = d_f + f
             else:
                 f_applied = 0.0 + f
-            x, v, a = step_scalars(
-                x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
-            )
+            x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
             if rec:
                 _trace_frame(
                     tr_f,
@@ -926,7 +916,7 @@ def _integrate_kernel(
                     flat_b[i],
                     f,
                     mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                    abs(v_old) < fric_acc,
+                    abs(v_old) < friction_velocity_step,
                     d_f if kind == 1 else 0.0,
                     kind,
                     p_a,
@@ -988,9 +978,7 @@ def _integrate_kernel(
                 f_applied = d_f
             else:
                 f_applied = 0.0
-            x, v, a = step_scalars(
-                x, v, a, f_applied, mass, stiffness, damping, fric_acc, gap, ratio2, dt
-            )
+            x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
             if rec:
                 _trace_frame(
                     tr_f,
@@ -1008,7 +996,7 @@ def _integrate_kernel(
                     0.0,
                     0.0,
                     mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                    abs(v_old) < fric_acc,
+                    abs(v_old) < friction_velocity_step,
                     d_f if kind == 1 else 0.0,
                     kind,
                     p_a,

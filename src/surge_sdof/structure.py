@@ -79,7 +79,7 @@ END_FIXITY_LAST_PASS = 10
 
 
 class SdofParams(NamedTuple):
-    """Constants of the SDOF update, in the order ``step_scalars`` takes them.
+    """Constants of the SDOF update; ``step_scalars`` and the compiled loop take them whole.
 
     Attributes
     ----------
@@ -421,12 +421,7 @@ def step_scalars(
     v: float,
     a: float,
     f_applied: float,
-    mass: float,
-    stiffness: float,
-    damping: float,
-    fric_acc: float,
-    gap: float,
-    ratio2: float,
+    sdof_params: SdofParams,
     dt: float,
 ) -> tuple[float, float, float]:
     """One VBA sub-step (lines 424-432) of the SDOF proxy.
@@ -443,8 +438,9 @@ def step_scalars(
     f_applied : float
         Everything the caller adds to the restoring and damping terms, N: ``forceA -
         forceB`` plus the coupling force ``dF``, or ``dF`` alone in free decay.
-    mass, stiffness, damping, fric_acc, gap, ratio2 : float
-        The ``SdofParams`` fields, in order (kg, N/m, N·s/m, m/s, m, dimensionless).
+    sdof_params : SdofParams
+        Mass (kg), stiffness (N/m), damping (N·s/m), friction velocity step (m/s), support
+        gap (m) and closed-gap stiffness ratio (dimensionless).
     dt : float
         Sub-step, s.
 
@@ -463,18 +459,24 @@ def step_scalars(
     * ``(a + aNew) * dt / 2`` is computed as ``(a + aNew) * half_dt``; scaling by a
       power of two commutes with rounding, so the doubles are identical to the VBA's.
     """
+    mass = sdof_params.mass
+    stiffness = sdof_params.stiffness
+    damping = sdof_params.damping
+    friction_velocity_step = sdof_params.friction_velocity_step
+    support_gap = sdof_params.support_gap
+    closed_gap_stiffness_ratio = sdof_params.closed_gap_stiffness_ratio
     half_dt = dt / 2
 
     # aNew = (F - (minUnsigned(gap, x) + max(0, Abs(x) - gap) * sign(x) * ratio^2)
     #             * stiffness - v * damping) / mass
     x_magnitude = abs(x)
-    if abs(gap) < x_magnitude:
-        x_within_gap = gap if x > 0 else -gap
-    elif gap == 0:
+    if abs(support_gap) < x_magnitude:
+        x_within_gap = support_gap if x > 0 else -support_gap
+    elif support_gap == 0:
         x_within_gap = x
     else:
-        x_within_gap = x if gap > 0 else -x
-    x_excess_magnitude = x_magnitude - gap
+        x_within_gap = x if support_gap > 0 else -x
+    x_excess_magnitude = x_magnitude - support_gap
     if x_excess_magnitude < 0:
         x_excess_magnitude = 0.0
     if x > 0:
@@ -483,17 +485,21 @@ def step_scalars(
         x_beyond_gap = -x_excess_magnitude
     else:
         x_beyond_gap = x_excess_magnitude * 0.0
-    a_new = (f_applied - (x_within_gap + x_beyond_gap * ratio2) * stiffness - v * damping) / mass
+    a_new = (
+        f_applied
+        - (x_within_gap + x_beyond_gap * closed_gap_stiffness_ratio) * stiffness
+        - v * damping
+    ) / mass
 
     trapezoid_velocity_change = (a + a_new) * half_dt
-    if abs(v) < fric_acc:
+    if abs(v) < friction_velocity_step:
         v_new = trapezoid_velocity_change
     else:
         # vNew = v + (a + aNew) * dt / 2 - sign(v, 0.000001) * fricAcc
         v_new = v + trapezoid_velocity_change
         if v > FRICTION_DEAD_ZONE:
-            v_new = v_new - fric_acc
+            v_new = v_new - friction_velocity_step
         elif v < -FRICTION_DEAD_ZONE:
-            v_new = v_new + fric_acc
+            v_new = v_new + friction_velocity_step
     x = x + (v + v_new) * half_dt
     return (x, v_new, a_new)

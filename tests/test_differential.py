@@ -337,7 +337,7 @@ def test_step_replays_the_legacy_substeps(idx):
     for s in trace.substeps:
         f = 0.0 if s.free_decay else float(s.f)
         x, v, a = (float(q) for q in s.pre)
-        post = structure.step_scalars(x, v, a, f, *params, dt)
+        post = structure.step_scalars(x, v, a, f, params, dt)
         assert all(type(q) is float for q in post)
         posts.append(post)
     assert_close(posts, [s.post for s in trace.substeps])
