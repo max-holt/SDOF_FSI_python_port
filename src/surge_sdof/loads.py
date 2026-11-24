@@ -157,6 +157,29 @@ def _walk_constants(force_history, sample_rate, span_length, celerity, substep_c
     )
 
 
+class _TransitSample(NamedTuple):
+    """One transit-phase sample of ``_schedule``: the force at elbow A is held, the force at
+    elbow B ramps between the current and next history values (N)."""
+
+    sample_number: int  # totInd, 1-based
+    elbow_a_force: float
+    elbow_b_force_current: float
+    elbow_b_force_next: float
+
+
+class _ForcedSample(NamedTuple):
+    """One forced-phase sample of ``_schedule`` (N): elbow A ramps between the first pair;
+    elbow B between the second pair for the first ``stepQTY - kOverlap`` sub-steps and
+    between the advanced pair for the remaining ``kOverlap``."""
+
+    elbow_a_force_current: float
+    elbow_a_force_next: float
+    elbow_b_force_current: float
+    elbow_b_force_next: float
+    elbow_b_force_advanced_current: float
+    elbow_b_force_advanced_next: float
+
+
 def _wraps_to_next_column(row: int, column: int, row_count: int, column_count: int) -> bool:
     """Whether the column-major walk goes from ``(row, column)`` to the top of the next
     column: the last row of any column but the last (1-based)."""
@@ -172,22 +195,15 @@ def _next_position(row: int, column: int, row_count: int, column_count: int) -> 
     return min(row + 1, row_count), column
 
 
-def _schedule(walk: _Run) -> Iterator[tuple]:
+def _schedule(walk: _Run) -> Iterator[_TransitSample | _ForcedSample]:
     """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
     ``elbow_forces`` (which differ only in their inner ``k`` loops).
 
-    Transit-phase items are ``(PHASE_TRANSIT, totInd, elbow_a_force, elbow_b_force_current,
-    elbow_b_force_next)``: the force at elbow A is held, the force at elbow B ramps between
-    the pair; the consumer truncates the sample at the VBA ``Exit For``
-    (``first_substep_number + k > unballanceStepQTY * stepQTY``). Forced-phase items are
-    ``(PHASE_FORCED, elbow_a_force_current,
-    elbow_a_force_next, elbow_b_force_current, elbow_b_force_next,
-    elbow_b_force_advanced_current, elbow_b_force_advanced_next)``: elbow A ramps between the
-    first pair, elbow B between the second pair for the first ``stepQTY - kOverlap``
-    sub-steps and between the third pair (after it advances) for the remaining
-    ``kOverlap``. The item is yielded after every index it needs is read, so a D-8
-    ``IndexError`` surfaces where the legacy raised it: at the first forced sample, after
-    every transit sample."""
+    Transit-phase samples are ``_TransitSample``; the consumer truncates the last one at the
+    VBA ``Exit For`` (``first_substep_number + k > unballanceStepQTY * stepQTY``).
+    Forced-phase samples are ``_ForcedSample``. Each item is yielded after every index it
+    needs is read, so a D-8 ``IndexError`` surfaces where the legacy raised it: at the first
+    forced sample, after every transit sample."""
     (
         force_history_one_based,
         history_row_count,
@@ -230,8 +246,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
             else:
                 next_history_column = min(history_column, history_column_count)
                 next_history_row = min(history_row + 1, history_row_count)
-            yield (
-                PHASE_TRANSIT,
+            yield _TransitSample(
                 sample_number,
                 elbow_a_force,
                 force_history_one_based[history_row][history_column],
@@ -273,8 +288,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
             elbow_b_next_row, elbow_b_next_column = _next_position(
                 elbow_b_row, elbow_b_column, history_row_count, history_column_count
             )
-            yield (
-                PHASE_FORCED,
+            yield _ForcedSample(
                 elbow_a_force_current,
                 elbow_a_force_next,
                 elbow_b_force_current,
@@ -343,8 +357,8 @@ def unbalance_force(
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
     for item in _schedule(walk):
-        if item[0] == PHASE_TRANSIT:
-            _phase, sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
+        if isinstance(item, _TransitSample):
+            sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
             sample_forces = []
             for k in range(substep_count):
@@ -358,7 +372,6 @@ def unbalance_force(
             yield sample_forces
         else:
             (
-                _phase,
                 elbow_a_force_current,
                 elbow_a_force_next,
                 elbow_b_force_current,
@@ -438,8 +451,8 @@ def elbow_forces(
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
     for item in _schedule(walk):
-        if item[0] == PHASE_TRANSIT:
-            _phase, sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
+        if isinstance(item, _TransitSample):
+            sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
             elbow_a_forces = []
             elbow_b_forces = []
@@ -454,7 +467,6 @@ def elbow_forces(
             yield (PHASE_TRANSIT, elbow_a_forces, elbow_b_forces)
         else:
             (
-                _phase,
                 elbow_a_force_current,
                 elbow_a_force_next,
                 elbow_b_force_current,
