@@ -260,9 +260,26 @@ def _stats(pressure: np.ndarray) -> tuple[float, float, float, float]:
     )
 
 
+_KIND_SPECIFIC_PARAMS = (
+    "p_osc",
+    "f_osc",
+    "p_noise_rms",
+    "f_cut",
+    "f_ref",
+    "seed",
+    "decay_cycles",
+    "decay_fraction",
+    "p_cap",
+)
+"""The ``History`` parameters only some generators set; ``_history`` defaults them to None."""
+
+
 def _history(
     history_type, time, pressure, decay_s, duration_s, noise_rms=None, **params
 ) -> History:
+    """The ``History`` of a generated pressure: its statistics, and ``params`` with every
+    kind-specific parameter the generator does not set as None."""
+    params = {**dict.fromkeys(_KIND_SPECIFIC_PARAMS), **params}
     peak, p_min, mean, rms = _stats(pressure)
     return History(
         kind=history_type,
@@ -325,15 +342,6 @@ def step(
         transit_s=transit_s,
         tail_s=tail_s,
         p_step=step_pressure,
-        p_osc=None,
-        f_osc=None,
-        p_noise_rms=None,
-        f_cut=None,
-        f_ref=None,
-        seed=None,
-        decay_cycles=None,
-        decay_fraction=None,
-        p_cap=None,
     )
 
 
@@ -424,13 +432,8 @@ def step_sine(
         p_step=step_pressure,
         p_osc=oscillation_amplitude,
         f_osc=oscillation_frequency,
-        p_noise_rms=None,
-        f_cut=None,
-        f_ref=None,
-        seed=None,
         decay_cycles=envelope_decay_cycles,
         decay_fraction=envelope_decay_fraction,
-        p_cap=None,
     )
 
 
@@ -443,6 +446,23 @@ def _lowpass(noise: np.ndarray, sample_rate: float, noise_cutoff_frequency: floa
     freqs = np.fft.rfftfreq(noise.shape[0], 1.0 / sample_rate)
     spectrum[freqs > noise_cutoff_frequency] = 0.0
     return np.fft.irfft(spectrum, n=noise.shape[0])
+
+
+def _scaled_to_peak(
+    noise: np.ndarray, step_pressure: float, peak_pressure_target: float
+) -> np.ndarray:
+    """``noise`` scaled so that ``step_pressure + noise`` peaks at ``peak_pressure_target``:
+    times ``(p_cap - p_step) / max(noise)``; Pa.
+
+    Raises
+    ------
+    ValueError
+        ``noise`` has no positive sample.
+    """
+    noise_max = float(noise.max())
+    if not noise_max > 0.0:
+        raise ValueError("the enveloped noise has no positive sample to scale on")
+    return noise * ((peak_pressure_target - step_pressure) / noise_max)
 
 
 def step_noise(
@@ -530,10 +550,7 @@ def step_noise(
         envelope_decay_cycles,
         envelope_decay_fraction,
     )
-    noise_max = float(noise.max())
-    if not noise_max > 0.0:
-        raise ValueError("the enveloped noise has no positive sample to scale on")
-    scaled_noise = noise * ((peak_pressure_target - step_pressure) / noise_max)
+    scaled_noise = _scaled_to_peak(noise, step_pressure, peak_pressure_target)
     pressure = np.zeros_like(time)
     pressure[lead_in_sample_count:] = step_pressure + scaled_noise
     noise_rms = float(math.sqrt(float(np.mean(scaled_noise * scaled_noise))))
@@ -549,8 +566,6 @@ def step_noise(
         transit_s=transit_s,
         tail_s=tail_s,
         p_step=step_pressure,
-        p_osc=None,
-        f_osc=None,
         p_noise_rms=requested_noise_rms,
         f_cut=noise_cutoff_frequency,
         f_ref=envelope_reference_frequency,
