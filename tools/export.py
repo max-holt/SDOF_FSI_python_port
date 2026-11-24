@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import cases  # noqa: E402  (tools/cases.py)
+import sweep_document  # noqa: E402  (tools/sweep_document.py)
 
 from surge_sdof import export, moc, response  # noqa: E402
 
@@ -116,10 +117,11 @@ def main_trace(args) -> None:
 
 
 def main_sweep(args) -> None:
-    rows, layout = cases.sweep_rows_from_csv(args.from_csv)
+    rows, layout = sweep_document.sweep_rows_from_csv(args.from_csv)
     # a 5b CSV records its tier, CPU, histories version and sha in every row; the options override
     uniform = {
-        k: cases.uniform_value(rows, k) for k in ("tier", "cpu", "histories_version", "git_sha")
+        k: sweep_document.uniform_value(rows, k)
+        for k in ("tier", "cpu", "histories_version", "git_sha")
     }
     tier = args.tier if args.tier is not None else uniform["tier"]
     doc = export.to_sweep_dict(
@@ -132,8 +134,8 @@ def main_sweep(args) -> None:
             if args.histories_version is not None
             else uniform["histories_version"]
         ),
-        regen=cases.golden_regen() if layout == "golden" else cases.sweep_regen(),
-        reference=cases.reference_block(),
+        regen=sweep_document.golden_regen() if layout == "golden" else sweep_document.sweep_regen(),
+        reference=sweep_document.reference_block(),
         sha=uniform["git_sha"] if uniform["git_sha"] else True,
     )
     n_bytes = export.write_json(args.out, doc)

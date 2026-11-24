@@ -33,6 +33,7 @@ DOC = (REPO / "docs" / "data_format.md").read_text(encoding="utf-8")
 sys.path.insert(0, str(REPO / "tools"))
 
 import cases  # noqa: E402  (tools/cases.py)
+import sweep_document  # noqa: E402  (tools/sweep_document.py)
 
 
 def _load_tool(name: str):
@@ -91,13 +92,13 @@ def trace_doc(case_id: str) -> dict:
 
 @functools.cache
 def golden_sweep_doc() -> dict:
-    rows, layout = cases.sweep_rows_from_csv(tg.CURVE_DIR / "cases.csv")
+    rows, layout = sweep_document.sweep_rows_from_csv(tg.CURVE_DIR / "cases.csv")
     assert layout == "golden"
     return export.to_sweep_dict(
         rows,
         source="tests/fixtures/curve_10in/cases.csv",
-        regen=cases.golden_regen(),
-        reference=cases.reference_block(),
+        regen=sweep_document.golden_regen(),
+        reference=sweep_document.reference_block(),
         sha=None,
         created="2026-10-26T00:00:00Z",
     )
@@ -344,7 +345,7 @@ def test_sweep_schema_and_reference_block_from_the_golden_csv():
 def test_sweep_csv_passthrough_and_rejection(tmp_path):
     path = tmp_path / "sweep.csv"
     path.write_text("case_id,size_in,mu,seed,error\nrun1,10,0.005,3,\nrun2,10,,,boom\n")
-    rows, layout = cases.sweep_rows_from_csv(path)
+    rows, layout = sweep_document.sweep_rows_from_csv(path)
     assert layout == "sweep" and len(rows) == 2
     doc = export.to_sweep_dict(rows, source=str(path), sha=None)
     assert doc["columns"]["seed"] == [3, None] and doc["columns"]["error"] == [None, "boom"]
@@ -352,7 +353,7 @@ def test_sweep_csv_passthrough_and_rejection(tmp_path):
     bad = tmp_path / "bad.csv"
     bad.write_text("case_id,nope\na,1\n")
     with pytest.raises(SystemExit, match="unknown columns"):
-        cases.sweep_rows_from_csv(bad)
+        sweep_document.sweep_rows_from_csv(bad)
 
 
 # ------------------------------------------------------------------ the CLI
