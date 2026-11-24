@@ -390,11 +390,11 @@ def build_trace(
         "d_f": frame_state[:, COL_JUNCTION_FORCE].copy(),
     }
     if jc is not None:
-        column_cell_count = int(jc.n_seg)
+        column_cell_count = int(jc.column.column_cell_count)
         grid_point_count = 2 * column_cell_count + 1
         fields.update(
             n_cells=grid_point_count,
-            pivot_seg_qty=int(jc.pivot),
+            pivot_seg_qty=int(jc.column.end_to_elbow_cell_count),
             pipe_seg_qty=column_cell_count,
             ext_qty=int(inactive_end_cell_count),
             p_cells=tr_p[:n_frames].copy(),
@@ -402,6 +402,6 @@ def build_trace(
             cell_position=np.arange(grid_point_count, dtype=np.float64)
             * (float(celerity) * float(substep_duration)),
             cell_kind=np.arange(grid_point_count) % 2,
-            moving_fraction=interleave(jc.frac_a, jc.frac_b),
+            moving_fraction=interleave(jc.column.moving_fraction_a, jc.column.moving_fraction_b),
         )
     return Trace(**fields)

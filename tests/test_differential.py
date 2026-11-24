@@ -714,9 +714,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
     out = []
     for s in trace.substeps:
         even = s.legacy_index % 2 == 0
-        d_f = moc.step(
-            even,
-            float(s.pre[2]) * dt,
+        column = moc.FluidColumn(
             p_a,
             v_a,
             p_b,
@@ -729,8 +727,8 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
             float(su["dacay_factor"]),
             vav_div,
             float(su["fluid_area"]),
-            d_f,
         )
+        d_f = moc.step(even, float(s.pre[2]) * dt, column, d_f)
         out.append((p_a.copy(), v_a.copy(), p_b.copy(), v_b.copy(), float(d_f)))
     return out
 
@@ -771,23 +769,7 @@ def advance_column(jc: coupling.JunctionCoupling, step_index: int, a: float, d_f
     """``moc.step`` on the arrays and scalars of ``jc``, as the kernel calls it: the
     half-grid ``step_index % 2`` selects, ``a * dt`` from the acceleration ``a``; returns
     the new junction force."""
-    return moc.step(
-        step_index % 2 == 0,
-        a * jc.dt,
-        jc.p_a,
-        jc.v_a,
-        jc.p_b,
-        jc.v_b,
-        jc.frac_a,
-        jc.frac_b,
-        jc.n_seg,
-        jc.pivot,
-        jc.rho_c,
-        jc.decay,
-        jc.vav_div,
-        jc.fluid_area,
-        d_f,
-    )
+    return moc.step(step_index % 2 == 0, a * jc.dt, jc.column, d_f)
 
 
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
@@ -808,16 +790,16 @@ def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
         vav_denominator="legacy",
         fraction_profile="legacy",
     )
-    assert jc.rho_c == kw["fluid_densty"] * kw["celerity"]
+    assert jc.column.rho_c == kw["fluid_densty"] * kw["celerity"]
     d_fs = []
     d_f = jc.d_f
     for s in trace.substeps:
         d_f = advance_column(jc, s.legacy_index, float(s.pre[2]), d_f)
         d_fs.append(d_f)
-        assert_close(jc.p_a, s.array_a[0])
-        assert_close(jc.v_a, s.array_a[1])
-        assert_close(jc.p_b, s.array_b[0])
-        assert_close(jc.v_b, s.array_b[1])
+        assert_close(jc.column.pressure_a, s.array_a[0])
+        assert_close(jc.column.velocity_a, s.array_a[1])
+        assert_close(jc.column.pressure_b, s.array_b[0])
+        assert_close(jc.column.velocity_b, s.array_b[1])
     assert_close(d_fs, [s.d_f for s in trace.substeps])
 
 
@@ -831,7 +813,7 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
     for n in range(50):
         d_f = advance_column(jc, n, 3.0, d_f)
         assert d_f == 0.0 and not np.signbit(d_f)
-    assert np.any(jc.v_a != 0.0)  # the column still moves with the mass
+    assert np.any(jc.column.velocity_a != 0.0)  # the column still moves with the mass
 
 
 # ------------------------------------------------------------------ response.py (JC)
@@ -1151,9 +1133,7 @@ def test_fixed_vav_divides_by_the_number_of_terms():
         p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
         v_a[:] = 1.0
         v_b[:] = 1.0
-        moc.step(
-            True,
-            0.0,
+        column = moc.FluidColumn(
             p_a,
             v_a,
             p_b,
@@ -1166,8 +1146,8 @@ def test_fixed_vav_divides_by_the_number_of_terms():
             1.001,
             moc.mean_velocity_divisor(n_seg, vav_denominator),
             0.01,
-            0.0,
         )
+        moc.step(True, 0.0, column, 0.0)
         assert v_a[0] == v_a[n_seg] == expected_v0
         assert np.all(v_b == 1.0 - (1.0 - expected_v0))  # dv - vAv + v_b with dv = 0
 

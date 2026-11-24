@@ -368,8 +368,12 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
     for i in range(tr.n_frames):
         d_f = td.advance_column(jc, int(tr.sub_step[i]), a_prev, d_f)
         assert d_f == tr.d_f[i]
-        assert np.array_equal(tr.p_cells[i], tracing.interleave(jc.p_a, jc.p_b))
-        assert np.array_equal(tr.v_cells[i], tracing.interleave(jc.v_a, jc.v_b))
+        assert np.array_equal(
+            tr.p_cells[i], tracing.interleave(jc.column.pressure_a, jc.column.pressure_b)
+        )
+        assert np.array_equal(
+            tr.v_cells[i], tracing.interleave(jc.column.velocity_a, jc.column.velocity_b)
+        )
         a_prev = float(tr.a[i])
     assert tr.n_frames > 100
 

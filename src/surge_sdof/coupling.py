@@ -61,16 +61,16 @@ class JunctionCoupling:
 
     Attributes
     ----------
-    p_a, v_a : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the A nodes ``0 .. N``.
-    p_b, v_b : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``.
+    column : moc.FluidColumn
+        The column state, grid and fluid constants.
+    dt : float
+        Sub-step, s.
     d_f : float
         The current junction force, N.
 
     Notes
     -----
-    The compiled loop (Stage 5) reads the attributes listed in ``__slots__`` and advances
+    The compiled loop (Stage 5) takes ``column`` and ``d_f`` and advances
     the column one sub-step at a time (``moc.step``) on the half-grid selected by
     ``step_index % 2`` (even first, as the VBA's index 0) with ``a * dt`` from the
     previous sub-step's acceleration; after the run ``d_f`` and the arrays hold the final
@@ -82,22 +82,7 @@ class JunctionCoupling:
     anything else (D-9: the MoC divides by it).
     """
 
-    __slots__ = (
-        "n_seg",
-        "pivot",
-        "frac_a",
-        "frac_b",
-        "p_a",
-        "v_a",
-        "p_b",
-        "v_b",
-        "dt",
-        "rho_c",
-        "fluid_area",
-        "decay",
-        "vav_div",
-        "d_f",
-    )
+    __slots__ = ("column", "dt", "d_f")
 
     def __init__(
         self,
@@ -115,13 +100,16 @@ class JunctionCoupling:
             # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
             # does not apply, so the check is made once here, before the first update.
             raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
-        self.n_seg = int(column_cell_count)
-        self.pivot = int(end_to_elbow_cell_count)
-        self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)
-        self.p_a, self.v_a, self.p_b, self.v_b = moc.column_at_rest(self.n_seg)
+        n_seg = int(column_cell_count)
+        pivot = int(end_to_elbow_cell_count)
+        frac_a, frac_b = moc.moving_fractions(n_seg, pivot, fraction_profile)
+        p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
         self.dt = float(substep_duration)
-        self.rho_c = float(characteristic_impedance)
-        self.fluid_area = float(flow_area)
-        self.decay = float(end_pressure_decay_factor)
-        self.vav_div = moc.mean_velocity_divisor(self.n_seg, vav_denominator)
+        rho_c = float(characteristic_impedance)
+        fluid_area = float(flow_area)
+        decay = float(end_pressure_decay_factor)
+        vav_div = moc.mean_velocity_divisor(n_seg, vav_denominator)
+        self.column = moc.FluidColumn(
+            p_a, v_a, p_b, v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay, vav_div, fluid_area
+        )
         self.d_f = 0.0

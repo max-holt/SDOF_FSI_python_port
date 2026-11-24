@@ -665,7 +665,9 @@ def _integrate(
     kind = int(junction_coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
-    grid_point_count = 2 * junction_coupling.n_seg + 1 if junction_coupling is not None else 0
+    grid_point_count = (
+        2 * junction_coupling.column.column_cell_count + 1 if junction_coupling is not None else 0
+    )
     delay_substeps = 0
     trace_every = 0 if trace_request is None else trace_request.stride
     if trace_request is not None:
@@ -699,27 +701,11 @@ def _integrate(
         frame_capacity = 0
     tr_f, tr_i, tr_p, tr_v = tracing.allocate_frames(frame_capacity, grid_point_count)
     if junction_coupling is not None:
-        column = (
-            junction_coupling.p_a,
-            junction_coupling.v_a,
-            junction_coupling.p_b,
-            junction_coupling.v_b,
-            junction_coupling.frac_a,
-            junction_coupling.frac_b,
-        )
-        scalars = (
-            junction_coupling.n_seg,
-            junction_coupling.pivot,
-            junction_coupling.rho_c,
-            junction_coupling.decay,
-            junction_coupling.vav_div,
-            junction_coupling.fluid_area,
-            junction_coupling.d_f,
-        )
+        column = junction_coupling.column
+        junction_force = junction_coupling.d_f
     else:
-        empty = np.zeros(0)
-        column = (empty, empty, empty, empty, empty, empty)
-        scalars = (0, 0, 0.0, 1.0, 1, 0.0, 0.0)
+        column = moc.empty_column()
+        junction_force = 0.0
 
     (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_sample_count, d_f, n_frames) = (
         _integrate_kernel(
@@ -733,8 +719,8 @@ def _integrate(
             bool(legacy_parity),
             response_history,
             int(kind),
-            *column,
-            *scalars,
+            column,
+            junction_force,
             int(trace_every),
             flat_a,
             flat_b,
@@ -804,18 +790,7 @@ def _integrate_kernel(
     legacy_parity: bool,
     history: np.ndarray,
     kind: int,
-    p_a: np.ndarray,
-    v_a: np.ndarray,
-    p_b: np.ndarray,
-    v_b: np.ndarray,
-    frac_a: np.ndarray,
-    frac_b: np.ndarray,
-    n_seg: int,
-    pivot: int,
-    rho_c: float,
-    decay: float,
-    vav_div: int,
-    fluid_area: float,
+    column: moc.FluidColumn,
     d_f: float,
     trace_every: int,
     flat_a: np.ndarray,
@@ -846,6 +821,11 @@ def _integrate_kernel(
     """
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
+    p_a = column.pressure_a
+    v_a = column.velocity_a
+    p_b = column.pressure_b
+    v_b = column.velocity_b
+    n_seg = column.column_cell_count
     x = 0.0
     v = 0.0
     a = 0.0
@@ -880,18 +860,7 @@ def _integrate_kernel(
                     moc.step(
                         (n + off) % 2 == 0,
                         a * dt,
-                        p_a,
-                        v_a,
-                        p_b,
-                        v_b,
-                        frac_a,
-                        frac_b,
-                        n_seg,
-                        pivot,
-                        rho_c,
-                        decay,
-                        vav_div,
-                        fluid_area,
+                        column,
                         d_f,
                     )
                 )
@@ -960,18 +929,7 @@ def _integrate_kernel(
                     moc.step(
                         (n + off) % 2 == 0,
                         a * dt,
-                        p_a,
-                        v_a,
-                        p_b,
-                        v_b,
-                        frac_a,
-                        frac_b,
-                        n_seg,
-                        pivot,
-                        rho_c,
-                        decay,
-                        vav_div,
-                        fluid_area,
+                        column,
                         d_f,
                     )
                 )

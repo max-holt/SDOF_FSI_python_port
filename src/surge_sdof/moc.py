@@ -53,6 +53,8 @@ history or output types. See ``docs/architecture.md``.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numba
 import numpy as np
 
@@ -72,6 +74,8 @@ __all__ = [
     "moving_fractions",
     "column_at_rest",
     "mean_velocity_divisor",
+    "FluidColumn",
+    "empty_column",
     "step",
 ]
 
@@ -438,22 +442,64 @@ def mean_velocity_divisor(column_cell_count: int, vav_denominator: str) -> int:
     raise ValueError(f"vav_denominator must be 'legacy' or 'fixed', got {vav_denominator!r}")
 
 
+class FluidColumn(NamedTuple):
+    """The MoC fluid column: its state arrays, grid and fluid constants.
+
+    One object for both solvers, so the compiled loop has one type: a junction-coupling
+    run passes the column ``coupling.JunctionCoupling`` builds, the lumped run
+    ``empty_column()``. The arrays are updated in place by ``step``; the junction force
+    evolves and is passed alongside, not held here.
+
+    Attributes
+    ----------
+    pressure_a, velocity_a : numpy.ndarray
+        Pressure (Pa) and velocity (m/s) on the A nodes ``0 .. N``.
+    pressure_b, velocity_b : numpy.ndarray
+        Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``.
+    moving_fraction_a, moving_fraction_b : numpy.ndarray
+        From ``moving_fractions``, dimensionless.
+    column_cell_count : int
+        ``N`` (VBA ``pipeSegQTY``).
+    end_to_elbow_cell_count : int
+        Cells from each end to the elbow at the foot of the leg (VBA ``pivotSegQTY``).
+    rho_c : float
+        Characteristic impedance ``fluidDensty * celerity``, Pa·s/m.
+    end_pressure_decay_factor : float
+        From ``end_pressure_decay_factor``, dimensionless.
+    mean_velocity_divisor : int
+        From ``mean_velocity_divisor``.
+    flow_area : float
+        Internal cross-sectional area, m².
+    """
+
+    pressure_a: np.ndarray
+    velocity_a: np.ndarray
+    pressure_b: np.ndarray
+    velocity_b: np.ndarray
+    moving_fraction_a: np.ndarray
+    moving_fraction_b: np.ndarray
+    column_cell_count: int
+    end_to_elbow_cell_count: int
+    rho_c: float
+    end_pressure_decay_factor: float
+    mean_velocity_divisor: int
+    flow_area: float
+
+
+def empty_column() -> FluidColumn:
+    """The column of a run without fluid coupling: six empty arrays and placeholder values
+    of the same types as a real column's, which the compiled loop never reads."""
+    no_column = np.zeros(0)
+    return FluidColumn(
+        no_column, no_column, no_column, no_column, no_column, no_column, 0, 0, 0.0, 1.0, 1, 0.0
+    )
+
+
 @numba.njit(cache=True)
 def step(
     even: bool,
     a_dt: float,
-    p_a: np.ndarray,
-    v_a: np.ndarray,
-    p_b: np.ndarray,
-    v_b: np.ndarray,
-    frac_a: np.ndarray,
-    frac_b: np.ndarray,
-    n_seg: int,
-    pivot: int,
-    rho_c: float,
-    decay: float,
-    vav_div: int,
-    fluid_area: float,
+    column: FluidColumn,
     d_f: float,
 ) -> float:
     """One MoC sub-step in place (VBA lines 795-847) and the new junction force ``dF``.
@@ -467,24 +513,8 @@ def step(
         the A velocities receive the mass acceleration).
     a_dt : float
         Structure acceleration times the sub-step, ``a * dt``, m/s.
-    p_a, v_a : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the A nodes ``0 .. N``; updated in place.
-    p_b, v_b : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``; updated in place.
-    frac_a, frac_b : numpy.ndarray
-        From ``moving_fractions``, dimensionless.
-    n_seg : int
-        ``pipeSegQTY``.
-    pivot : int
-        ``pivotSegQTY``.
-    rho_c : float
-        ``fluidDensty * celerity``, Pa·s/m.
-    decay : float
-        ``dacayFactor``, dimensionless.
-    vav_div : int
-        From ``mean_velocity_divisor``.
-    fluid_area : float
-        Internal cross-sectional area, m².
+    column : FluidColumn
+        The column; its four state arrays are updated in place.
     d_f : float
         Junction force after the previous sub-step, N.
 
@@ -498,7 +528,7 @@ def step(
     -----
     * Every expression keeps the VBA's operation order; the previous cell's values are
       carried in locals, ``2 * rhoC`` is hoisted (the same double).
-    * VBA quirk D-17: the divisor of the mean velocity is the caller's ``vav_div``.
+    * VBA quirk D-17: the divisor of the mean velocity is the column's ``mean_velocity_divisor``.
     * The dead ``useUndamped`` branch (VBA lines 803-818) is not ported.
     * Stage 5: compiled with ``numba.njit(cache=True)`` (no fastmath), body unchanged;
       with ``NUMBA_DISABLE_JIT=1`` it is this Python function. Inside the compiled
@@ -506,6 +536,18 @@ def step(
       caller's set-up (``response.peak_response_jc``, D-9) and an overflow propagates
       nan/inf to the structure state, where the end-of-run check raises (D-23).
     """
+    p_a = column.pressure_a
+    v_a = column.velocity_a
+    p_b = column.pressure_b
+    v_b = column.velocity_b
+    frac_a = column.moving_fraction_a
+    frac_b = column.moving_fraction_b
+    n_seg = column.column_cell_count
+    pivot = column.end_to_elbow_cell_count
+    rho_c = column.rho_c
+    decay = column.end_pressure_decay_factor
+    vav_div = column.mean_velocity_divisor
+    fluid_area = column.flow_area
     two_rho_c = 2 * rho_c
     if even:
         # vAv = arrayA(1, N) + sum over n = 0 .. N-1 of arrayA(1, n) + arrayB(1, n)
