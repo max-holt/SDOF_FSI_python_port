@@ -36,7 +36,6 @@ import gzip
 import json
 import os
 import pathlib
-import sys
 from decimal import Decimal
 
 import pytest
@@ -48,7 +47,6 @@ from playwright.sync_api import Error as PlaywrightError  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
 import build_viewer  # noqa: E402
 
 VIEWER = ROOT / "docs" / "viewer" / "viewer.html"

@@ -62,7 +62,6 @@ from surge_sdof import export, histories
 
 REPO = Path(__file__).resolve().parents[1]
 SUPPORT_DIR = Path(__file__).parent / "review_support"
-sys.path.insert(0, str(REPO / "tools"))  # tools/export.py imports tools/cases.py
 
 
 def _load_tool(name: str):

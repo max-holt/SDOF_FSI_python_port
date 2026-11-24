@@ -29,15 +29,12 @@ from __future__ import annotations
 
 import argparse
 import math
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cases  # tools/cases.py
+import sweep_document  # tools/sweep_document.py
 
-import cases  # noqa: E402  (tools/cases.py)
-import sweep_document  # noqa: E402  (tools/sweep_document.py)
-
-from surge_sdof import export, moc, response  # noqa: E402
+from surge_sdof import export, moc, response
 
 JSON_BUDGET_MB = 45.0
 """The default stride keeps the estimated trace JSON under this many MB (``estimate_bytes``)."""

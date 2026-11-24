@@ -7,12 +7,13 @@ the pipe properties of each size (``pipe``, ``check_pipe_table``) and the tiers'
 
 from __future__ import annotations
 
-import csv
 import math
 import random
 from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
+
+import fixture_cases  # tools/fixture_cases.py: the fixture loaders
 
 from surge_sdof import histories
 
@@ -71,9 +72,7 @@ TIERS = {
 
 def curve_sheet_nat_freqs() -> tuple[float, ...]:
     """The natural frequencies of the ``curve_10in`` lumped rows (15 values)."""
-    path = REPO / "tests" / "fixtures" / "curve_10in" / "cases.csv"
-    with path.open(newline="") as fh:
-        values = {float(r["nat_freq"]) for r in csv.DictReader(fh) if r["solver"] == "lumped"}
+    values = {float(r["nat_freq"]) for r in fixture_cases.load_cases() if r["solver"] == "lumped"}
     return tuple(sorted(values))
 
 

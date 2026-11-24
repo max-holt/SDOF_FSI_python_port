@@ -18,11 +18,12 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
+import cases  # tools/cases.py (through pythonpath = ["tools"])
 import numpy as np
 import pytest
+import sweep_document  # tools/sweep_document.py
 import test_golden as tg
 
 from surge_sdof import export, response
@@ -30,10 +31,6 @@ from surge_sdof.trace import PHASE_FREE_DECAY, PHASE_TRANSIT
 
 REPO = Path(__file__).resolve().parents[1]
 DOC = (REPO / "docs" / "data_format.md").read_text(encoding="utf-8")
-sys.path.insert(0, str(REPO / "tools"))
-
-import cases  # noqa: E402  (tools/cases.py)
-import sweep_document  # noqa: E402  (tools/sweep_document.py)
 
 
 def _load_tool(name: str):
