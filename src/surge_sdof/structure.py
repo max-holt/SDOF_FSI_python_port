@@ -65,6 +65,10 @@ FRICTION_DEAD_ZONE = 0.000001
 # (VBA ``solvePoly``, line 146).
 NEWTON_RELATIVE_TOLERANCE = 0.000001
 
+# Relaxation of each Newton update of ``solve_quartic``, dimensionless (VBA ``solvePoly``
+# ``Const relax = 0.25``, line 138).
+NEWTON_RELAXATION = 0.25
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -123,7 +127,6 @@ def solve_quartic(
     when ``|error / varA| < 1e-6``; there is no convergence check at exit. VBA quirk
     D-12: a negative base makes the Python seed complex where VBA raises error 5.
     """
-    relax = 0.25
     root = (-quartic_constant / cubic_coefficient) ** (1 / 3)
     for _i in range(1, 100 + 1):
         residual = (
@@ -132,7 +135,7 @@ def solve_quartic(
         if abs(residual / quartic_constant) < NEWTON_RELATIVE_TOLERANCE:
             break
         slope = 3 * cubic_coefficient * (root**2) + 4 * quartic_coefficient * (root**3)
-        root = root - relax * residual / slope
+        root = root - NEWTON_RELAXATION * residual / slope
     return root
 
 
