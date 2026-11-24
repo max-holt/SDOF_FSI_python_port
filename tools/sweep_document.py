@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 import fixture_cases as tg  # tools/fixture_cases.py: the fixture loaders
 import numpy as np
@@ -83,6 +84,19 @@ def uniform_value(rows, column: str):
     return values.pop() if len(values) == 1 else None
 
 
+class ReferenceCase(NamedTuple):
+    """One entry of the ``reference`` block: a case with its Excel values (the record's
+    ``_asdict()`` is the entry, keys in this order)."""
+
+    case_id: str
+    solver: str
+    source: dict  # where the case comes from in the workbook
+    inputs: dict  # the solver's inputs
+    output_names: list | None
+    excel_values: list  # floats, in the order of output_names
+    rtol: float  # the relative tolerance the golden tests hold the port to
+
+
 def reference_block() -> dict:
     """The three Example-sheet cases and the three JC golden rows with their Excel values."""
     params = tg.load_params()
@@ -94,15 +108,15 @@ def reference_block() -> dict:
         if "force_history" in case:
             inputs["force_history"] = np.asarray(case["force_history"], dtype=float).reshape(-1, 1)
         example.append(
-            {
-                "case_id": case["case_id"],
-                "solver": case["solver"],
-                "source": dict(case["source"]),
-                "inputs": inputs,
-                "output_names": list(case["output_names"]) if "output_names" in case else None,
-                "excel_values": [float(v) for v in case["expected"]],
-                "rtol": tg.EXAMPLE_RTOL,
-            }
+            ReferenceCase(
+                case_id=case["case_id"],
+                solver=case["solver"],
+                source=dict(case["source"]),
+                inputs=inputs,
+                output_names=list(case["output_names"]) if "output_names" in case else None,
+                excel_values=[float(v) for v in case["expected"]],
+                rtol=tg.EXAMPLE_RTOL,
+            )._asdict()
         )
     names = list(params["expected_outputs"])
     jc_rows = []
@@ -112,15 +126,15 @@ def reference_block() -> dict:
         inputs = tg.case_params(case, params)
         inputs["force"] = dict(params["force"])  # the sheet history's spec, not its 25135 values
         jc_rows.append(
-            {
-                "case_id": case["case_id"],
-                "solver": "jc",
-                "source": {"sheet": params["case_sheet"], "source_row": int(case["source_row"])},
-                "inputs": inputs,
-                "output_names": names,
-                "excel_values": [float(case[n]) for n in names],
-                "rtol": tg.RTOL["jc"],
-            }
+            ReferenceCase(
+                case_id=case["case_id"],
+                solver="jc",
+                source={"sheet": params["case_sheet"], "source_row": int(case["source_row"])},
+                inputs=inputs,
+                output_names=names,
+                excel_values=[float(case[n]) for n in names],
+                rtol=tg.RTOL["jc"],
+            )._asdict()
         )
     return {"example_cases": example, "jc_golden_rows": jc_rows}
 
