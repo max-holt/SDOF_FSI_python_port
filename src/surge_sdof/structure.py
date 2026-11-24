@@ -52,6 +52,10 @@ VBA_PI = 3.14159265358979
 # critical), dimensionless. Unit conversion of the input (VBA lines 391 and 728).
 PERCENT = 100
 
+# Gravitational acceleration, m/s², as the VBA writes it (lines 392 and 729). The only
+# constant that fixes the model's units to metres and seconds.
+GRAVITY = 9.81
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -233,7 +237,7 @@ def lumped_params(
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
-    friction_velocity_step = 0.5 * friction_coefficient * 9.81 * substep_duration
+    friction_velocity_step = 0.5 * friction_coefficient * GRAVITY * substep_duration
     return SdofParams(
         float(mass),
         float(stiffness),
@@ -325,7 +329,7 @@ def jc_params(
     friction_velocity_step = (
         0.5
         * friction_coefficient
-        * 9.81
+        * GRAVITY
         * substep_duration
         * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)
         / mass
