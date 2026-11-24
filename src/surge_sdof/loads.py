@@ -157,11 +157,17 @@ def _walk_constants(force_history, sample_rate, span_length, celerity, substep_c
     )
 
 
+def _wraps_to_next_column(row: int, column: int, row_count: int, column_count: int) -> bool:
+    """Whether the column-major walk goes from ``(row, column)`` to the top of the next
+    column: the last row of any column but the last (1-based)."""
+    return row + 1 > row_count and column < column_count
+
+
 def _next_position(row: int, column: int, row_count: int, column_count: int) -> tuple[int, int]:
     """The 1-based ``(row, column)`` after ``(row, column)`` in the column-major walk of the
     history: one row down, or the top of the next column from the last row of any column but
     the last; the last element is its own successor. Integer only."""
-    if row + 1 > row_count and column < column_count:
+    if _wraps_to_next_column(row, column, row_count, column_count):
         return 1, min(column + 1, column_count)
     return min(row + 1, row_count), column
 
@@ -216,7 +222,9 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
             else:
                 history_column = elbow_b_column
                 history_row = elbow_b_row
-            if history_row + 1 > history_row_count and history_column < history_column_count:
+            if _wraps_to_next_column(
+                history_row, history_column, history_row_count, history_column_count
+            ):
                 next_history_column = min(history_column + 1, history_column_count)
                 next_history_row = 1
             else:
