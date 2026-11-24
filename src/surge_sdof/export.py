@@ -25,7 +25,13 @@ from pathlib import Path
 import numpy as np
 
 from surge_sdof.response import PeakResponse
-from surge_sdof.trace import PHASE_FREE_DECAY, PHASE_TRANSIT, Trace
+from surge_sdof.trace import (
+    FRAME_COLUMNS,
+    INT_FRAME_COLUMNS,
+    PHASE_FREE_DECAY,
+    PHASE_TRANSIT,
+    Trace,
+)
 from surge_sdof.viz.geometry import LoopLayout, layout_from_trace
 
 __all__ = [
@@ -55,22 +61,6 @@ SWEEP_SCHEMA_VERSION = 2
 KIND_TRACE = "trace"
 KIND_SWEEP = "sweep"
 
-FRAME_COLUMNS = (
-    "t",
-    "sub_step",
-    "sample",
-    "phase",
-    "x",
-    "v",
-    "a",
-    "f_a",
-    "f_b",
-    "f_unbalance",
-    "f_friction",
-    "stick",
-    "d_f",
-)
-"""``trace.frames`` columns, in the document's order."""
 
 SWEEP_COLUMNS = (
     "case_id",
@@ -155,8 +145,6 @@ SWEEP_INT_COLUMNS = frozenset(
     {"tier", "size_in", "seed", "n_samples", "pipe_seg_qty", "pivot_seg_qty", "jc_short_pipe"}
 )
 
-_INT_FRAME_COLUMNS = frozenset({"sub_step", "sample", "phase", "stick"})
-
 
 # ------------------------------------------------------------------ provenance
 
@@ -230,7 +218,7 @@ def _jsonable(value, where: str = "value"):
 
 def _column(a: np.ndarray, name: str) -> list:
     """A frame column as a JSON list: ints for the int columns, floats otherwise."""
-    if name in _INT_FRAME_COLUMNS:
+    if name in INT_FRAME_COLUMNS:
         return np.asarray(a).astype(np.int64).tolist()
     arr = np.asarray(a, dtype=np.float64)
     if not np.all(np.isfinite(arr)):

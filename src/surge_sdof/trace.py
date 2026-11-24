@@ -71,6 +71,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "MAX_TRACE_VALUES",
+    "FRAME_COLUMNS",
+    "INT_FRAME_COLUMNS",
     "PHASE_TRANSIT",
     "PHASE_FORCED",
     "PHASE_FREE_DECAY",
@@ -102,10 +104,34 @@ PHASE_FREE_DECAY = 2  # no unbalance force; the structure rings down (VBA phase 
     COL_FRICTION_FORCE,
     COL_JUNCTION_FORCE,
 ) = range(8)
-FRAME_STATE_COLUMN_COUNT = 8
 # Columns of the int64 frame array ``frame_index_columns (capacity, FRAME_INDEX_COLUMN_COUNT)``.
 COL_SUBSTEP_INDEX, COL_SAMPLE_INDEX, COL_LOAD_PHASE, COL_IS_STICKING = range(4)
-FRAME_INDEX_COLUMN_COUNT = 4
+
+_STATE = "state"  # a column of ``TraceBuffers.frame_state`` (float64)
+_INDEX = "index"  # a column of ``TraceBuffers.frame_index_columns`` (int64)
+FRAME_COLUMN_TABLE = (
+    # (Trace field and trace-document column, kernel array, kernel column), in the document's
+    # order. ``t`` is derived from ``sub_step`` and ``dt``; ``stick`` is the int column != 0.
+    ("t", None, None),
+    ("sub_step", _INDEX, COL_SUBSTEP_INDEX),
+    ("sample", _INDEX, COL_SAMPLE_INDEX),
+    ("phase", _INDEX, COL_LOAD_PHASE),
+    ("x", _STATE, COL_X),
+    ("v", _STATE, COL_V),
+    ("a", _STATE, COL_A),
+    ("f_a", _STATE, COL_ELBOW_A_FORCE),
+    ("f_b", _STATE, COL_ELBOW_B_FORCE),
+    ("f_unbalance", _STATE, COL_UNBALANCE_FORCE),
+    ("f_friction", _STATE, COL_FRICTION_FORCE),
+    ("stick", _INDEX, COL_IS_STICKING),
+    ("d_f", _STATE, COL_JUNCTION_FORCE),
+)
+FRAME_COLUMNS = tuple(name for name, _, _ in FRAME_COLUMN_TABLE)
+"""The per-frame fields of ``Trace``: the ``trace.frames`` columns, in the document's order."""
+INT_FRAME_COLUMNS = frozenset(name for name, array, _ in FRAME_COLUMN_TABLE if array == _INDEX)
+"""The frame columns written as integers (the int64 kernel columns)."""
+FRAME_STATE_COLUMN_COUNT = sum(array == _STATE for _, array, _ in FRAME_COLUMN_TABLE)
+FRAME_INDEX_COLUMN_COUNT = sum(array == _INDEX for _, array, _ in FRAME_COLUMN_TABLE)
 
 MAX_TRACE_VALUES = 50_000_000
 """Memory guard: the largest number of 8-byte values (``frame_capacity * (float columns +
@@ -480,9 +506,10 @@ def build_trace(
     substep_duration = settings.substep_duration
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
-    frame_state = buffers.frame_state[:n_frames]
-    frame_index_columns = buffers.frame_index_columns[:n_frames]
-    sub_step = frame_index_columns[:, COL_SUBSTEP_INDEX].copy()
+    kernel_arrays = {
+        _STATE: buffers.frame_state[:n_frames],
+        _INDEX: buffers.frame_index_columns[:n_frames],
+    }
     fields = {
         "solver": solver,
         "trace_every": int(buffers.trace_every),
@@ -491,20 +518,12 @@ def build_trace(
         "out_max": int(nominal_forced_sample_count),
         "params": params,
         "inputs": inputs,
-        "t": (sub_step + 1) * float(substep_duration),
-        "sub_step": sub_step,
-        "sample": frame_index_columns[:, COL_SAMPLE_INDEX].copy(),
-        "phase": frame_index_columns[:, COL_LOAD_PHASE].copy(),
-        "x": frame_state[:, COL_X].copy(),
-        "v": frame_state[:, COL_V].copy(),
-        "a": frame_state[:, COL_A].copy(),
-        "f_a": frame_state[:, COL_ELBOW_A_FORCE].copy(),
-        "f_b": frame_state[:, COL_ELBOW_B_FORCE].copy(),
-        "f_unbalance": frame_state[:, COL_UNBALANCE_FORCE].copy(),
-        "f_friction": frame_state[:, COL_FRICTION_FORCE].copy(),
-        "stick": frame_index_columns[:, COL_IS_STICKING] != 0,
-        "d_f": frame_state[:, COL_JUNCTION_FORCE].copy(),
     }
+    for name, array, column_index in FRAME_COLUMN_TABLE:
+        if array is not None:
+            fields[name] = kernel_arrays[array][:, column_index].copy()
+    fields["t"] = (fields["sub_step"] + 1) * float(substep_duration)
+    fields["stick"] = fields["stick"] != 0
     if column.is_fluid_coupled:
         column_cell_count = int(column.column_cell_count)
         grid_point_count = 2 * column_cell_count + 1
