@@ -909,14 +909,8 @@ def _integrate_kernel(
     friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
-    x = 0.0
-    v = 0.0
-    a = 0.0
-    x_max = 0.0
-    v_max = 0.0
-    a_max = 0.0
+    state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first sub-step
     unbalance_force_max = 0.0
-    substep_index = 0  # running sub-step counter
     parity_offset = 0  # the MoC parity index is substep_index + parity_offset
     sample_number = 0
     forced_sample_count = sample_start.shape[0] - 1
@@ -929,7 +923,6 @@ def _integrate_kernel(
     a_before = 0.0
 
     # ------------------------------------------------- transit and forced phases
-    state = _RunState(x, v, a, x_max, v_max, a_max, substep_index)
     for s in range(forced_sample_count):
         sample_number += 1
         if is_per_phase_parity:
@@ -985,22 +978,15 @@ def _integrate_kernel(
             _record_sample(
                 response_history, output_type, sample_number - 1, state.x, state.v, state.a
             )
-    x = state.x
-    v = state.v
-    a = state.a
-    x_max = state.x_max
-    v_max = state.v_max
-    a_max = state.a_max
-    substep_index = state.substep_index
-
     # ---------------------------------------------------------- free decay
     forced_samples = sample_number
-    decay_start_displacement = x
-    while _free_decay_product(x, decay_start_displacement) > FREE_DECAY_THRESHOLD:
+    decay_start_displacement = state.x
+    while _free_decay_product(state.x, decay_start_displacement) > FREE_DECAY_THRESHOLD:
         sample_number += 1
         if is_per_phase_parity:
-            parity_offset = (sample_number - 1) * substep_count + 1 - substep_index
+            parity_offset = (sample_number - 1) * substep_count + 1 - state.substep_index
         for _k in range(substep_count):
+            substep_index = state.substep_index
             # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
             # the forced samples and an equal allowance for free decay; later free decay is integrated
             # but not recorded.
@@ -1011,13 +997,13 @@ def _integrate_kernel(
                 and sample_number <= nominal_forced_sample_count * 2
             )
             if record_frame:
-                v_before = v
-                a_before = a
+                v_before = state.v
+                a_before = state.a
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
                         (substep_index + parity_offset) % 2 == 0,
-                        a * dt,
+                        state.a * dt,
                         column,
                         junction_force,
                     )
@@ -1025,7 +1011,7 @@ def _integrate_kernel(
                 applied_force = junction_force
             else:
                 applied_force = 0.0
-            x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
+            state = _structure_substep(state, applied_force, sdof_params, dt)
             if record_frame:
                 _trace_frame(
                     buffers,
@@ -1034,42 +1020,37 @@ def _integrate_kernel(
                         substep_index,
                         sample_number - 1,
                         PHASE_FREE_DECAY,
-                        x,
-                        v,
-                        a,
+                        state.x,
+                        state.v,
+                        state.a,
                         0.0,
                         0.0,
                         0.0,
-                        mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
+                        mass * (state.v - (v_before + (a_before + state.a) * half_dt)) / dt,
                         abs(v_before) < friction_velocity_step,
                         junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
                 )
                 frame_count += 1
-            substep_index += 1
-            if abs(a) > a_max:
-                a_max = abs(a)
-            if abs(v) > v_max:
-                v_max = abs(v)
-            if abs(x) > x_max:
-                x_max = abs(x)
-            if _free_decay_product(x, decay_start_displacement) <= FREE_DECAY_THRESHOLD:
+            if _free_decay_product(state.x, decay_start_displacement) <= FREE_DECAY_THRESHOLD:
                 decay_start_displacement = 0.0
         # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
         # the forced samples and an equal allowance for free decay; later free decay is integrated
         # but not recorded.
         if output_type > 0 and sample_number <= nominal_forced_sample_count * 2:
-            _record_sample(response_history, output_type, sample_number - 1, x, v, a)
+            _record_sample(
+                response_history, output_type, sample_number - 1, state.x, state.v, state.a
+            )
 
     return _KernelResult(
-        x_max,
-        v_max,
-        a_max,
+        state.x_max,
+        state.v_max,
+        state.a_max,
         unbalance_force_max,
-        x,
-        v,
-        a,
+        state.x,
+        state.v,
+        state.a,
         sample_number,
         forced_samples,
         frame_count,
