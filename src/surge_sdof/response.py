@@ -664,6 +664,17 @@ def _largest_magnitude(values: np.ndarray) -> float:
 
 
 @numba.njit(cache=True)
+def _decay_reference(x: float, x_zero: float) -> float:
+    """``xZero`` after a free-decay sub-step: unchanged while ``x * xZero`` still exceeds
+    ``FREE_DECAY_THRESHOLD``, 0.0 once it does not (VBA lines 593, 1188), which ends free
+    decay at the end of the sample. The product is checked for overflow
+    (``_free_decay_product``, D-23)."""
+    if _free_decay_product(x, x_zero) <= FREE_DECAY_THRESHOLD:
+        return 0.0
+    return x_zero
+
+
+@numba.njit(cache=True)
 def _record_sample(
     history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
 ) -> None:
@@ -1073,8 +1084,7 @@ def _integrate_kernel(
                     column,
                 )
                 frame_count += 1
-            if _free_decay_product(state.x, decay_start_displacement) <= FREE_DECAY_THRESHOLD:
-                decay_start_displacement = 0.0
+            decay_start_displacement = _decay_reference(state.x, decay_start_displacement)
         if is_in_record_window:
             _record_sample(
                 response_history, output_type, sample_number - 1, state.x, state.v, state.a
