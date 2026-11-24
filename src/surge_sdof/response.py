@@ -1024,7 +1024,7 @@ def _integrate_kernel(
                         unbalance_force,
                         mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
                         abs(before.v) < friction_velocity_step,
-                        junction_force if is_fluid_coupled else 0.0,
+                        junction_force,
                     ),
                     column,
                 )
@@ -1079,7 +1079,7 @@ def _integrate_kernel(
                         0.0,
                         mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
                         abs(before.v) < friction_velocity_step,
-                        junction_force if is_fluid_coupled else 0.0,
+                        junction_force,
                     ),
                     column,
                 )
