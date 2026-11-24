@@ -456,7 +456,7 @@ class FluidColumn(NamedTuple):
     """The MoC fluid column: its state arrays, grid and fluid constants.
 
     One object for both solvers, so the compiled loop has one type: a junction-coupling
-    run passes the column ``coupling.JunctionCoupling`` builds, the lumped run
+    run passes the column ``coupling.fluid_column`` builds, the lumped run
     ``empty_column()``. The arrays are updated in place by ``step``; the junction force
     evolves and is passed alongside, not held here.
 

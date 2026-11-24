@@ -63,7 +63,7 @@ def test_default_profile_is_fixed():
     """F-4 is on by default in the tabulation, the coupling and the solver."""
     pipe, pivot = 30, 8
     assert moc.moving_fractions.__defaults__ == ("fixed",)
-    assert inspect.signature(coupling.JunctionCoupling).parameters["fraction_profile"].default == (
+    assert inspect.signature(coupling.fluid_column).parameters["fraction_profile"].default == (
         "fixed"
     )
     assert inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default == (
@@ -222,18 +222,16 @@ def test_pivot_4_is_a_value_error_on_the_fixed_path_and_d4_on_the_legacy_path():
     with pytest.raises(ValueError, match="pivot > ext"):
         moc.moving_fractions(20, 4, "fixed")
     with pytest.raises(ValueError, match="pivot > ext"):
-        coupling.JunctionCoupling(
+        coupling.fluid_column(
             moc.ColumnGrid(20, 4),
-            1e-4,
             coupling.FluidConstants(1e6, 0.01, 1.01),
             fraction_profile="fixed",
         )
     with pytest.raises(ZeroDivisionError):  # D-4
         moc.moving_fractions(20, 4, "legacy")
     with pytest.raises(ZeroDivisionError):
-        coupling.JunctionCoupling(
+        coupling.fluid_column(
             moc.ColumnGrid(20, 4),
-            1e-4,
             coupling.FluidConstants(1e6, 0.01, 1.01),
             fraction_profile="legacy",
         )

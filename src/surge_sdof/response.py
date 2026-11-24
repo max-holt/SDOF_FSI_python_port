@@ -6,8 +6,8 @@ line 309) from the Stage 4 modules: ``structure`` (portal-frame proxy, SDOF kern
 solver; the sample loop, max trackers, result history, free-decay phase and
 output-type switch live in one shared ``_integrate``. ``peak_response_jc`` reproduces
 ``GetPeakResponseJC`` (line 622): its own fluid-corrected set-up (``structure.jc_params``,
-``moc.grid_size``, the short-pipe fallback to ``peak_response``) and the
-``JunctionCoupling`` passed to the same loop; the two set-ups are not merged.
+``moc.grid_size``, the short-pipe fallback to ``peak_response``) and the fluid column
+``coupling.fluid_column`` builds, passed to the same loop; the two set-ups are not merged.
 
 Approved fixes F-1 and F-2 (NOTES.md) are keyword flags of ``peak_response_jc``:
 ``vav_denominator`` ("legacy": ``vAv`` divided by ``2N - 1``, D-17; "fixed": by the
@@ -24,9 +24,8 @@ Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kern
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
 ``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
 sample offsets, passes ``SdofParams`` whole and the fluid column (``moc.empty_column()``
-for the lumped solver, its coupling flag off; the ``JunctionCoupling``'s column, on), runs
-the kernel,
-writes ``dF`` back to the coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
+for the lumped solver, its coupling flag off; ``coupling.fluid_column``'s, on), runs the
+kernel and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
 arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
@@ -75,7 +74,7 @@ import numpy as np
 
 from surge_sdof import loads, moc, structure
 from surge_sdof import trace as tracing
-from surge_sdof.coupling import FluidConstants, JunctionCoupling
+from surge_sdof.coupling import FluidConstants, fluid_column
 from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.trace import (
     COL_A,
@@ -305,7 +304,9 @@ def peak_response(
     settings = RunSettings(
         substep_duration, step_qty, nominal_forced_sample_count, output_type, False
     )
-    return _integrate(unbalance_force_samples, sdof_params, settings, None, trace_request)
+    return _integrate(
+        unbalance_force_samples, sdof_params, settings, moc.empty_column(), trace_request
+    )
 
 
 def peak_response_jc(
@@ -461,9 +462,8 @@ def peak_response_jc(
             trace_every,
         )
     characteristic_impedance = fluid_densty * celerity
-    junction_coupling = JunctionCoupling(
+    column = fluid_column(
         grid,
-        substep_duration,
         FluidConstants(characteristic_impedance, fluid_area, end_pressure_decay_factor),
         vav_denominator,
         fraction_profile,
@@ -506,9 +506,7 @@ def peak_response_jc(
         output_type,
         parity == "per_phase",
     )
-    return _integrate(
-        unbalance_force_samples, sdof_params, settings, junction_coupling, trace_request
-    )
+    return _integrate(unbalance_force_samples, sdof_params, settings, column, trace_request)
 
 
 def _trace_stride(trace_every) -> int:
@@ -711,7 +709,7 @@ def _integrate(
     unbalance_force_samples,
     sdof_params: SdofParams,
     settings: RunSettings,
-    junction_coupling: JunctionCoupling | None,
+    column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
@@ -720,10 +718,9 @@ def _integrate(
     sample.
 
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
-    ``unbalance_force_samples`` once, passes ``sdof_params`` and the fluid column of
-    ``junction_coupling`` (``None``: ``moc.empty_column()``, no fluid coupling; a
-    ``JunctionCoupling``: its column, whose arrays are updated in place, and its ``d_f``,
-    written back), builds the ``PeakResponse``.
+    ``unbalance_force_samples`` once, passes ``sdof_params``, the fluid ``column``
+    (``moc.empty_column()``, no fluid coupling, or ``coupling.fluid_column``'s, whose
+    arrays are updated in place) and a junction force of 0.0, builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
@@ -753,9 +750,7 @@ def _integrate(
     response_history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
 
     # ----------------------------------------------------------------- trace set-up
-    grid_point_count = (
-        2 * junction_coupling.column.column_cell_count + 1 if junction_coupling is not None else 0
-    )
+    grid_point_count = 2 * column.column_cell_count + 1 if column.is_fluid_coupled else 0
     transit_substep_count = 0
     trace_every = 0 if trace_request is None else trace_request.stride
     if trace_request is not None:
@@ -797,24 +792,15 @@ def _integrate(
         elbow_b_force_by_substep,
         int(transit_substep_count),
     )
-    if junction_coupling is not None:
-        column = junction_coupling.column
-        junction_force = junction_coupling.d_f
-    else:
-        column = moc.empty_column()
-        junction_force = 0.0
-
     result = _integrate_kernel(
         schedule,
         sdof_params,
         settings,
         response_history,
         column,
-        junction_force,
+        0.0,
         buffers,
     )
-    if junction_coupling is not None:
-        junction_coupling.d_f = float(result.junction_force)
 
     if not (math.isfinite(result.x) and math.isfinite(result.v) and math.isfinite(result.a)):
         raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23

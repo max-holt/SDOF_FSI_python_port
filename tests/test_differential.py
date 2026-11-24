@@ -766,54 +766,51 @@ def test_moc_step_fixed_vav_divisor_changes_the_mean_velocity_only():
 # ------------------------------------------------------------------ coupling.py
 
 
-def advance_column(jc: coupling.JunctionCoupling, step_index: int, a: float, d_f: float):
-    """``moc.step`` on the arrays and scalars of ``jc``, as the kernel calls it: the
-    half-grid ``step_index % 2`` selects, ``a * dt`` from the acceleration ``a``; returns
-    the new junction force."""
-    return moc.step(step_index % 2 == 0, a * jc.dt, jc.column, d_f)
+def advance_column(column: moc.FluidColumn, dt: float, step_index: int, a: float, d_f: float):
+    """``moc.step`` on ``column``, as the kernel calls it: the half-grid ``step_index % 2``
+    selects, ``a * dt`` from the acceleration ``a``; returns the new junction force."""
+    return moc.step(step_index % 2 == 0, a * dt, column, d_f)
 
 
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
 def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
-    """Drive ``moc.step`` on a ``JunctionCoupling``'s column with the legacy's per-phase
+    """Drive ``moc.step`` on a ``coupling.fluid_column`` with the legacy's per-phase
     parity index and its pre-update state and compare ``dF`` and the column after every
     sub-step."""
     _id, _force, kw = JC_SMALL[idx]
     trace = jc_small_trace(idx)
     su = trace.setup
-    jc = coupling.JunctionCoupling(
+    column = coupling.fluid_column(
         moc.ColumnGrid(su["pipe_seg_qty"], su["pivot_seg_qty"]),
-        su["dt"],
         coupling.FluidConstants(su["rho_c"], kw["fluid_area"], su["dacay_factor"]),
         vav_denominator="legacy",
         fraction_profile="legacy",
     )
-    assert jc.column.rho_c == kw["fluid_densty"] * kw["celerity"]
+    assert column.rho_c == kw["fluid_densty"] * kw["celerity"]
     d_fs = []
-    d_f = jc.d_f
+    d_f = 0.0
     for s in trace.substeps:
-        d_f = advance_column(jc, s.legacy_index, float(s.pre[2]), d_f)
+        d_f = advance_column(column, su["dt"], s.legacy_index, float(s.pre[2]), d_f)
         d_fs.append(d_f)
-        assert_close(jc.column.pressure_a, s.array_a[0])
-        assert_close(jc.column.velocity_a, s.array_a[1])
-        assert_close(jc.column.pressure_b, s.array_b[0])
-        assert_close(jc.column.velocity_b, s.array_b[1])
+        assert_close(column.pressure_a, s.array_a[0])
+        assert_close(column.velocity_a, s.array_a[1])
+        assert_close(column.pressure_b, s.array_b[0])
+        assert_close(column.velocity_b, s.array_b[1])
     assert_close(d_fs, [s.d_f for s in trace.substeps])
 
 
 def test_junction_coupling_without_fluid_area_returns_exact_zero():
     _id, _force, kw = JC_SMALL[0]
     su = jc_small_trace(0).setup
-    jc = coupling.JunctionCoupling(
+    column = coupling.fluid_column(
         moc.ColumnGrid(su["pipe_seg_qty"], su["pivot_seg_qty"]),
-        su["dt"],
         coupling.FluidConstants(su["rho_c"], 0.0, su["dacay_factor"]),
     )
-    d_f = jc.d_f
+    d_f = 0.0
     for n in range(50):
-        d_f = advance_column(jc, n, 3.0, d_f)
+        d_f = advance_column(column, su["dt"], n, 3.0, d_f)
         assert d_f == 0.0 and not np.signbit(d_f)
-    assert np.any(jc.column.velocity_a != 0.0)  # the column still moves with the mass
+    assert np.any(column.velocity_a != 0.0)  # the column still moves with the mass
 
 
 # ------------------------------------------------------------------ response.py (JC)
@@ -1113,7 +1110,7 @@ def test_peak_response_jc_defaults_are_the_approved_fixes():
     assert params["vav_denominator"].default == "fixed"
     assert params["parity"].default == "running"
     assert params["fraction_profile"].default == "fixed"
-    jc_params = inspect.signature(coupling.JunctionCoupling).parameters
+    jc_params = inspect.signature(coupling.fluid_column).parameters
     assert jc_params["vav_denominator"].default == "fixed"
     assert jc_params["fraction_profile"].default == "fixed"
     _id, force, kw = JC_SMALL[0]
