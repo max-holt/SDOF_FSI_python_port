@@ -788,21 +788,51 @@ def _integrate(
     sample), then free decay while ``x * xZero > 0.01``; max trackers; result history per
     sample.
 
-    Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
-    ``unbalance_force_samples`` once, passes ``sdof_params``, the fluid ``column``
-    (``moc.empty_column()``, no fluid coupling, or ``coupling.fluid_column``'s, whose
-    arrays are updated in place), builds the ``PeakResponse``.
+    Python orchestrator of ``_integrate_kernel`` (Stage 5), in three steps: prepare the
+    kernel's inputs (``_kernel_inputs``), run the kernel on them with ``sdof_params`` and
+    the fluid ``column`` (``moc.empty_column()``, no fluid coupling, or
+    ``coupling.fluid_column``'s, whose arrays are updated in place), and build the
+    ``PeakResponse`` (``_peak_response``; the trace by ``trace.build_trace``).
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
     per-phase index ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written
-    as ``n + off`` with ``off`` fixed per sample (D-19, approved fix F-2).
+    as ``n + off`` with ``off`` fixed per sample (D-19, approved fix F-2)."""
+    schedule, response_history, buffers = _kernel_inputs(
+        unbalance_force_samples, settings, column, trace_request
+    )
+    result = _integrate_kernel(
+        schedule,
+        sdof_params,
+        settings,
+        response_history,
+        column,
+        buffers,
+    )
 
-    Session V.1: with a ``trace_request`` (its ``stride`` > 0) the elbow forces of
-    ``trace_request.elbow_force_samples`` are flattened like ``unbalance_force_samples``,
-    the trace arrays are allocated (``trace.check_memory``, ``trace.allocate_frames``) and
-    the kernel fills them; ``trace.build_trace`` makes the ``Trace``. Without one the kernel
-    takes a stride of 0 and empty arrays."""
+    if not (math.isfinite(result.x) and math.isfinite(result.v) and math.isfinite(result.a)):
+        raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
+
+    trace = None
+    if trace_request is not None:
+        trace = tracing.build_trace(
+            trace_request, settings, sdof_params, buffers, int(result.frame_count), column
+        )
+    return _peak_response(result, sdof_params, settings.output_type, response_history, trace)
+
+
+def _kernel_inputs(
+    unbalance_force_samples,
+    settings: RunSettings,
+    column: moc.FluidColumn,
+    trace_request: tracing.TraceRequest | None,
+) -> tuple[_ForceSchedule, np.ndarray, tracing.TraceBuffers]:
+    """The kernel's inputs: the ``_ForceSchedule`` (``unbalance_force_samples`` flattened
+    once, and with a ``trace_request`` the elbow forces of
+    ``trace_request.elbow_force_samples`` flattened the same way), the zeroed response
+    history (``nominal_forced_sample_count * 2`` samples for ``output_type`` 1-3, empty for
+    0) and the trace buffers (Session V.1: sized by ``trace.check_memory`` and allocated by
+    ``trace.allocate_frames``; without a request a stride of 0 and empty buffers)."""
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
@@ -863,18 +893,19 @@ def _integrate(
         elbow_b_force_by_substep,
         int(transit_substep_count),
     )
-    result = _integrate_kernel(
-        schedule,
-        sdof_params,
-        settings,
-        response_history,
-        column,
-        buffers,
-    )
+    return schedule, response_history, buffers
 
-    if not (math.isfinite(result.x) and math.isfinite(result.v) and math.isfinite(result.a)):
-        raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
 
+def _peak_response(
+    result: _KernelResult,
+    sdof_params: SdofParams,
+    output_type: int,
+    response_history: np.ndarray,
+    trace: Trace | None,
+) -> PeakResponse:
+    """The ``PeakResponse`` of a finished run: the kernel's maxima as Python floats, the
+    static-equivalent force from the largest displacement, the history for ``output_type``
+    1-3, the free-decay sample count and the ``trace``."""
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
     static_equivalent_force_max = (
         abs(
@@ -884,11 +915,6 @@ def _integrate(
         )
         * sdof_params.stiffness
     )
-    trace = None
-    if trace_request is not None:
-        trace = tracing.build_trace(
-            trace_request, settings, sdof_params, buffers, int(result.frame_count), column
-        )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent_force_max),
         max_displacement=float(result.x_max),
