@@ -668,7 +668,8 @@ def _record_sample(
     history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
 ) -> None:
     """Store the end-of-sample state in ``history[index]``: ``x`` for ``output_type`` 1,
-    ``v`` for 2, ``a`` for 3 (the VBA ``Select Case outputType`` after each sample)."""
+    ``v`` for 2, ``a`` for 3 (the VBA ``Select Case outputType`` after each sample); any
+    other ``output_type`` (0: peaks only) stores nothing."""
     if output_type == 1:
         history[index] = x
     elif output_type == 2:
@@ -1017,10 +1018,7 @@ def _integrate_kernel(
                     column,
                 )
                 frame_count += 1
-        if output_type > 0:
-            _record_sample(
-                response_history, output_type, sample_number - 1, state.x, state.v, state.a
-            )
+        _record_sample(response_history, output_type, sample_number - 1, state.x, state.v, state.a)
     unbalance_force_max = _largest_magnitude(unbalance_force_by_substep)
 
     # ---------------------------------------------------------- free decay
@@ -1077,10 +1075,7 @@ def _integrate_kernel(
                 frame_count += 1
             if _free_decay_product(state.x, decay_start_displacement) <= FREE_DECAY_THRESHOLD:
                 decay_start_displacement = 0.0
-        # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
-        # the forced samples and an equal allowance for free decay; later free decay is integrated
-        # but not recorded.
-        if output_type > 0 and sample_number <= nominal_forced_sample_count * 2:
+        if is_in_record_window:
             _record_sample(
                 response_history, output_type, sample_number - 1, state.x, state.v, state.a
             )
