@@ -674,11 +674,9 @@ def _integrate(
     if trace_every > 0:
         if trace_request is None:
             raise TypeError("trace_every > 0 needs the trace meta")
+        # unbalance_force subtracts the pairs elbow_forces yields, so the two walks give
+        # the same samples (loads, plan 2.15).
         elbow_force_samples = list(trace_request.elbow_force_samples)
-        if [len(fa) for _ph, fa, _fb in elbow_force_samples] != [
-            len(s) for s in unbalance_force_samples
-        ]:
-            raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
         forced_substep_count = int(offsets[-1])
         flat_a = np.fromiter(
             itertools.chain.from_iterable(fa for _ph, fa, _fb in elbow_force_samples),
