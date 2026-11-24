@@ -6,6 +6,65 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.4 (constants and control flow, plan group 2, 2026-11-24) **done**. Rulings 39-42
+in the charter: gates before each commit, the pure-Python run of a commit green before the
+next is made, push only when all are green (39); plan 2.2, the coupling kind as a plain
+flag, moved to group 3 because it changes a kernel parameter's type (40); 2.15 approved
+(41), then reverted (42).
+
+Done, one constant or one refactoring per commit: the load-phase pair `loads.PHASE_TRANSIT`
+/ `PHASE_FORCED`, re-exported by `trace` with `PHASE_FREE_DECAY` (2.1); in `structure`
+`PERCENT`, `GRAVITY`, `FRICTION_DEAD_ZONE`, `NEWTON_RELATIVE_TOLERANCE`, `NEWTON_RELAXATION`,
+`NEWTON_ITERATION_LIMIT`, `END_FIXITY_LAST_PASS` (2.4, 2.5); `response.FREE_DECAY_THRESHOLD`
+(2.6); `moc.LEGACY_B_INACTIVE_START_CELL_COUNT` (2.7); supporting code (2.9): `MM_PER_M` and
+`PA_PER_BAR` in `tools/cases.py`, `MM_PER_M` in `tools/sweep_jc.py` (`od / 2000` kept, with a
+comment: one divisor, splitting it regroups), `STEP_TO_PEAK_RATIO`,
+`DEFAULT_ENVELOPE_DECAY_CYCLES` / `_FRACTION` in `histories`, `BYTES_PER_MB` in
+`tools/export.py`, the second `1.33` in `check_pipe_table`; the `rho_c == 0` guard as the
+first statement of the `JunctionCoupling` constructor (2.10); the trace stride inside the one
+optional `_TraceRequest` (2.11); `loads._next_position` for the four identical "next index,
+wrapping to the next column" blocks of the forced phase (the advance block is the same rule)
+and the predicate `_wraps_to_next_column` for the transit block (2.13); the two schedule
+item shapes as `_TransitSample` / `_ForcedSample` (2.14). Each constant is the literal it
+replaces, of the same type, in the same place; VBA quotations in comments keep the literal.
+
+2.15 (one per-sample walk; `unbalance_force` subtracting the `elbow_forces` pair; the
+cross-check removed) was made bit-identical and gated, then measured: the compiled lumped
+path is about 20 % slower (golden r20, 0.177 s to 0.213 s, A/B on this host), because the
+untraced run then builds both elbow-force lists. Reverted on the owner's word (two revert
+commits, each gated); C-07 is open again, to be looked at with 4.12.
+
+Where the brief and `plan.md` differ, the plan was followed: the friction `0.5` stays inline
+with its derivation comment (plan 2.8, `docs/style.md` §6, ruling 14), not a constant;
+`out_max * 2` named once (C-N08) is a rejected nit and was not made; splitting `_schedule`
+into a phase-1 and a phase-2 function is R.2's optional SC-14, not part of the governing C-08,
+and was not made.
+
+Proposal for the owner (behaviour change, not made): convert inputs to SI once at the
+boundary. In the solver core only `damping_percent / PERCENT` is left; moving it to the entry
+(`damping_ratio = damping_percent / 100`, then `2 * sqrt(k m) * damping_ratio`) regroups the
+damping product and changes `damping` by at most about one ulp (relative 1e-16), so the
+results by rounding level (golden errors unchanged at their 1e-13 tolerance; every snapshot
+and support document with damping would be rewritten). In the tools, the pipe table in mm
+(`tools/sweep_jc.py`) could be held in metres: the pipe properties move in the last bits and
+the stored sweep rows and `sweep_histories.txt` change at rounding level. Recommendation: not
+worth a DEVIATIONS row for either; the named factors read clearly.
+
+Gates: every commit `make lint` and the compiled fast suite (snapshot and support checks
+included) before it was made, and the pure-Python suite on a worktree of it before the next
+(949 passed + 24 skipped / 947 + 26 throughout; log of each commit in the session). The
+container restarted once, during the pure-Python run of a674054; that run was repeated
+(green) before the next commit. A fuzz of `unbalance_force` and `elbow_forces` (6000 random
+histories and shapes, values and the D-7 / D-8 error positions compared exactly) against the
+previous commit ran for 2.13, 2.13b, 2.14 and 2.15. Session gates on `213e3ef`: `-m slow` 150
+passed; `tools/bench.py --skip-full-python` (`docs/bench/213e3ef.json`): digests all equal to
+the literal port, results the same as `9dd2f4b`. The host changed with the restart (2.10 GHz
+against 2.30 GHz: the unchanged literal port runs 1.26-1.34x the time of `9dd2f4b`); against
+the literal reference no case is slower (numba lumped 0.100 to 0.098, JC full 0.608 to 0.572).
+
+Next: plan group 3. Write `docs/review/parameter_objects.md` (the groups, with 2.2 and the
+kernel-signature names of ruling 21) and stop for the owner before 3.1.
+
 Session R.3, part 2 (the renames, 2026-11-23) **done**. The owner approved
 `docs/nomenclature.md` with two changes and answered Q-N1 to Q-N8 (charter rulings 29-38;
 the nomenclature records the answers). Then, one quantity or family per commit across
