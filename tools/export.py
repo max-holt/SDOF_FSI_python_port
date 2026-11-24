@@ -42,6 +42,8 @@ JSON_BUDGET_MB = 45.0
 """The default stride keeps the estimated trace JSON under this many MB (``estimate_bytes``)."""
 BYTES_PER_FLOAT = 20
 """A float via ``repr`` plus its comma, on average."""
+BYTES_PER_MB = 1e6
+"""Bytes per megabyte (decimal MB, as ``JSON_BUDGET_MB`` and the printed sizes use)."""
 
 
 def estimated_cells(kw: dict, solver: str) -> int:
@@ -78,7 +80,7 @@ def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: fl
     grid_point_count = estimated_cells(kw, solver)
     n_samples = int(force.size)
     per_frame = BYTES_PER_FLOAT * (len(export.FRAME_COLUMNS) + 2 * grid_point_count)
-    frames_allowed = (budget_mb * 1e6 - BYTES_PER_FLOAT * n_samples) / per_frame
+    frames_allowed = (budget_mb * BYTES_PER_MB - BYTES_PER_FLOAT * n_samples) / per_frame
     if frames_allowed < 1:
         raise SystemExit(
             f"the budget {budget_mb} MB cannot hold even one frame of {grid_point_count} cells"
@@ -104,8 +106,8 @@ def main_trace(args) -> None:
     )
     on_disk = Path(args.out).stat().st_size
     print(
-        f"wrote {args.out}: {n_bytes / 1e6:.2f} MB of JSON"
-        + (f", {on_disk / 1e6:.2f} MB gzipped" if on_disk != n_bytes else "")
+        f"wrote {args.out}: {n_bytes / BYTES_PER_MB:.2f} MB of JSON"
+        + (f", {on_disk / BYTES_PER_MB:.2f} MB gzipped" if on_disk != n_bytes else "")
     )
 
 
@@ -134,7 +136,7 @@ def main_sweep(args) -> None:
     print(
         f"{args.from_csv} ({layout} layout): {len(rows)} rows, "
         f"{len(doc['reference']['example_cases'])} + {len(doc['reference']['jc_golden_rows'])} "
-        f"reference cases; wrote {args.out} ({n_bytes / 1e6:.2f} MB)"
+        f"reference cases; wrote {args.out} ({n_bytes / BYTES_PER_MB:.2f} MB)"
     )
 
 
