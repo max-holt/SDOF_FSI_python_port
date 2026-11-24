@@ -380,3 +380,15 @@ The single-substep session (plan group 4).
 55. **Trace depth.** If the A/B shows that the column reaching `_trace_frame` two calls deep
     costs more than noise on a traced run, the session stops and reports; it does not
     restructure on its own.
+56. **Option 1, once** (after the revert of `6ea80ba`). A small
+    `_structure_substep(state, applied_force, sdof_params, dt)` steps the structure, updates
+    the maxima and counts the substep; it takes no schedule, buffers or column, and the trace
+    write stays in each loop as one call behind `if record_frame:`. Two commits (forced loop,
+    then free decay), each gated and A/B timed against the commit before. If any compiled
+    case is more than 5 % slower after either, that commit is reverted and the session goes
+    to option 3 (two loops kept, 4.6 and 4.7 made, and `findings.md` records that the
+    duplicated substep stays because sharing it costs speed); no Design B, no third variant.
+    Then the rest of group 4 in plan order, and the session gates.
+57. **Per-substep arguments** (`docs/style.md` §4): a function called on every substep takes
+    only scalars and small tuples of scalars; arrays go only to functions called once per run
+    or that loop over them internally.

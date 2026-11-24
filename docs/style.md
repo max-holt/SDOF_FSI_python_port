@@ -34,6 +34,7 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - numba.njit(cache=True) only. Never fastmath, parallel or inline='always'.
 - Parameters arrive as module-level NamedTuples. Arrays inside them are updated in place. Scalars that evolve are passed in and returned.
 - No jitclass, StructRef or typed containers.
+- A function called on every substep takes only scalars and small tuples of scalars. Arrays are passed only to functions that are called once per run or that loop over them internally (owner's ruling, R.6: a substep function passed the schedule, trace buffers and fluid column was not inlined and cost 12-100 %).
 - The same source must run and give the same bits with NUMBA_DISABLE_JIT=1.
 
 ## 5. Arithmetic is behaviour
