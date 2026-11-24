@@ -6,19 +6,21 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
-Session R.6 (the single substep, plan group 4, 2026-11-24) **in progress, stopped for the
-owner**. Rulings 47-50 recorded (`f516442`). `JunctionCoupling` replaced by
-`coupling.fluid_column` (ruling 49, `1eeb6d4`): gates green (949 + 24 compiled, 947 + 26
-pure Python, snapshot and support checks exact in both modes); bench `a67c7f1`
-(`docs/bench/1eeb6d4.json`, digests equal to the literal port); interleaved A/B against
-`f516442`, 5 rounds: 0.983-1.022 per case. The kernel is unchanged; its returned junction
-force is now read by nobody (step 0 of the design removes it, if approved). The two substep
-designs are in `docs/review/substep_design.md` (A recommended); waiting for the owner's
-choice and Q-R6-1 (4.9 ahead of 4.1-4.8?) and Q-R6-2 (step 0). Kernel before: 7 args,
-complexity 23 (radon 32), 89 statements, 183 code lines. The A/B harness used this session
-is not committed (scratchpad); it times eight cases (lumped r20 / r80, JC r96 n2000 with the
-legacy and default flags and traced at stride 25, lumped r20 traced, JC r96 / r97 full) in
-fresh child processes per worktree, alternating order per round.
+Session R.6 (the single substep, plan group 4, 2026-11-24) **stopped for the owner**.
+Rulings 47-55 in the charter. Done: `coupling.fluid_column` in place of `JunctionCoupling`
+(`1eeb6d4`, ruling 49); step 0, the kernel starts the junction force itself, 7 -> 6
+arguments (`bfeb003`, ruling 53); both A/B within noise (0.975-1.041). Design A approved
+(ruling 51); 4.9a (`6ea80ba`) was bit-identical but the A/B against `bfeb003` showed compiled
+lumped runs 2.0x and JC runs 1.12-1.20x slower, so it is reverted (`b1ce745`, charter rule
+3). Cause: `_structure_substep` is not inlined and every call passes `_SubstepInputs` (14
+arrays) and `_RunState` flattened. Details, timings and three options for the owner in
+`docs/review/substep_design.md` "As built, and where it stopped". The uncommitted 4.9b is
+not in the repository. Kernel now: 6 args, complexity 23, as before 4.9. Pure-Python fast
+suite 186 s at every commit (base 186-197 s). Session gates (`-m slow`, final bench) not run
+yet: the session is not over.
+
+Next: the owner's choice among the three options; then 4.9 again, 4.1-4.5, 4.7, 4.8, 4.10,
+4.12 in plan order.
 
 Session R.5 (parameter objects, plan group 3, 2026-11-24) **done**. Charter rulings 43-46
 (speed judged by an A/B run on one host or relative to the literal port, 5 % limit on both

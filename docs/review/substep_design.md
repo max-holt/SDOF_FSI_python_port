@@ -293,3 +293,34 @@ the rest of group 4 in plan order, 4.6 dropped where A absorbed it (ruling 52); 
 made (ruling 53); the 5 % limit on the compiled paths, the pure-Python change recorded
 (ruling 54); a traced-run cost of the two-deep `_trace_frame` call beyond noise stops the
 session (ruling 55).
+
+## As built, and where it stopped (session R.6)
+
+| commit | what | A/B, new / old (compiled; 5 rounds, min of 3 runs) | pure-Python fast suite |
+|---|---|---|---|
+| `1eeb6d4` | ruling 49, `coupling.fluid_column` | 0.983-1.022 | 186 s |
+| `bfeb003` | step 0: the kernel starts the junction force | 0.975-1.041 | 186 s |
+| `6ea80ba` | 4.9a: `_structure_substep` from the forced loop | lumped r20 2.014, r80 1.951, r20 traced 1.398; JC r96 n2000 1.175 (legacy flags), 1.164 (default), 1.122 (traced); JC r96 full 1.135, r97 full 1.197 | 186 s |
+| `b1ce745` | revert of `6ea80ba` (charter rule 3) | | |
+
+4.9a was bit-identical (snapshot and support checks exact in both modes, 949 + 24 and
+947 + 26) but far beyond the 5 % limit (ruling 54). Under `NUMBA_DISABLE_JIT=1` the bench
+lumped rows went from 0.95 s to 1.73 s (r20) and 0.88 s to 1.55 s (r80); the pure-Python
+fast suite did not move. Cause, from the optimized LLVM module of `_integrate_kernel`: before
+4.9a `step_scalars` is inlined into the kernel; after it `_structure_substep` is a real call
+on every substep, and Numba passes its NamedTuple arguments flattened, so each call moves
+`_SubstepInputs` (`SdofParams`, `_ForceSchedule`, `TraceBuffers`, `FluidColumn`: 14 arrays)
+and the eight `_RunState` fields. This is the cost K-1 records for the toy, here on every
+substep rather than only on traced ones. 4.9b (the free-decay loop on the same function)
+was written but not gated or committed; it is kept outside the repository.
+
+Not tried, for the owner to choose from (none is made without a ruling, ruling 55):
+
+1. A small `_structure_substep(state, applied_force, sdof_params, dt) -> _RunState`
+   (step, maxima, counter: no schedule, buffers or column), small enough for LLVM to
+   inline; the trace write stays in each loop behind `if record_frame:` as one call to a
+   frame writer that takes `_frame_loads`. The substep is then one call plus a guarded
+   trace call per loop.
+2. Design B, with the record-frame predicate evaluated in the loop so the recorder is
+   called only on a recorded substep.
+3. Stop at 4.6 and 4.7 as the plan's fallback names, and leave the two loops.
