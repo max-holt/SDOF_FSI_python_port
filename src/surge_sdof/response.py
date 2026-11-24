@@ -702,6 +702,45 @@ def _trace_frame(
         frame_velocity[frame_index, 2 * column_cell_count] = velocity_a[column_cell_count]
 
 
+class _RunState(NamedTuple):
+    """What one SDOF sub-step changes: the state, the running maxima and the sub-step count.
+
+    Passed into ``_structure_substep`` and returned by it (``docs/style.md`` §4: scalars
+    that evolve are passed in and returned; a per-sub-step function takes scalars only).
+    """
+
+    x: float  # m
+    v: float  # m/s
+    a: float  # m/s²
+    x_max: float  # largest |x| so far, m
+    v_max: float  # largest |v| so far, m/s
+    a_max: float  # largest |a| so far, m/s²
+    substep_index: int  # running 0-based sub-step counter: the next sub-step's index
+
+
+@numba.njit(cache=True)
+def _structure_substep(
+    state: _RunState, applied_force: float, sdof_params: SdofParams, dt: float
+) -> _RunState:
+    """Step the structure one sub-step under ``applied_force`` (N), update the running
+    maxima of ``|a|``, ``|v|``, ``|x|`` and count the sub-step.
+
+    ``step_scalars`` advances ``x``, ``v``, ``a`` over ``dt`` (s); the maxima are raised in
+    the order ``a``, ``v``, ``x``. Scalars in, scalars out (``docs/style.md`` §4).
+    """
+    x, v, a = step_scalars(state.x, state.v, state.a, applied_force, sdof_params, dt)
+    x_max = state.x_max
+    v_max = state.v_max
+    a_max = state.a_max
+    if abs(a) > a_max:
+        a_max = abs(a)
+    if abs(v) > v_max:
+        v_max = abs(v)
+    if abs(x) > x_max:
+        x_max = abs(x)
+    return _RunState(x, v, a, x_max, v_max, a_max, state.substep_index + 1)
+
+
 def _integrate(
     unbalance_force_samples,
     sdof_params: SdofParams,
@@ -890,25 +929,27 @@ def _integrate_kernel(
     a_before = 0.0
 
     # ------------------------------------------------- transit and forced phases
+    state = _RunState(x, v, a, x_max, v_max, a_max, substep_index)
     for s in range(forced_sample_count):
         sample_number += 1
         if is_per_phase_parity:
-            parity_offset = (sample_number - 1) * substep_count - substep_index
+            parity_offset = (sample_number - 1) * substep_count - state.substep_index
         for i in range(sample_start[s], sample_start[s + 1]):
             unbalance_force = float(unbalance_force_by_substep[i])
+            substep_index = state.substep_index
             record_frame = (
                 trace_every > 0
                 and substep_index % trace_every == 0
                 and frame_count < frame_capacity
             )
             if record_frame:
-                v_before = v
-                a_before = a
+                v_before = state.v
+                a_before = state.a
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
                         (substep_index + parity_offset) % 2 == 0,
-                        a * dt,
+                        state.a * dt,
                         column,
                         junction_force,
                     )
@@ -916,7 +957,7 @@ def _integrate_kernel(
                 applied_force = junction_force + unbalance_force
             else:
                 applied_force = 0.0 + unbalance_force
-            x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
+            state = _structure_substep(state, applied_force, sdof_params, dt)
             if record_frame:
                 _trace_frame(
                     buffers,
@@ -925,30 +966,32 @@ def _integrate_kernel(
                         substep_index,
                         sample_number - 1,
                         PHASE_TRANSIT if substep_index < transit_substep_count else PHASE_FORCED,
-                        x,
-                        v,
-                        a,
+                        state.x,
+                        state.v,
+                        state.a,
                         elbow_a_force_by_substep[i],
                         elbow_b_force_by_substep[i],
                         unbalance_force,
-                        mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
+                        mass * (state.v - (v_before + (a_before + state.a) * half_dt)) / dt,
                         abs(v_before) < friction_velocity_step,
                         junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
                 )
                 frame_count += 1
-            substep_index += 1
-            if abs(a) > a_max:
-                a_max = abs(a)
-            if abs(v) > v_max:
-                v_max = abs(v)
-            if abs(x) > x_max:
-                x_max = abs(x)
             if abs(unbalance_force) > unbalance_force_max:
                 unbalance_force_max = abs(unbalance_force)
         if output_type > 0:
-            _record_sample(response_history, output_type, sample_number - 1, x, v, a)
+            _record_sample(
+                response_history, output_type, sample_number - 1, state.x, state.v, state.a
+            )
+    x = state.x
+    v = state.v
+    a = state.a
+    x_max = state.x_max
+    v_max = state.v_max
+    a_max = state.a_max
+    substep_index = state.substep_index
 
     # ---------------------------------------------------------- free decay
     forced_samples = sample_number
