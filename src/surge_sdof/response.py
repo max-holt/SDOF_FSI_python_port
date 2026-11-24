@@ -550,6 +550,33 @@ class RunSettings(NamedTuple):
     is_per_phase_parity: bool
 
 
+class _ForceSchedule(NamedTuple):
+    """The forces of the transit and forced phases, one value per sub-step, as the kernel
+    reads them. Built by ``_integrate`` from the ``loads`` generators.
+
+    Attributes
+    ----------
+    unbalance_force_by_substep : numpy.ndarray
+        float64, ``forceA - forceB`` per forced sub-step, N; sample ``s`` is
+        ``unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` (the truncated
+        last transit sample keeps its length).
+    sample_start : numpy.ndarray
+        int64, samples + 1: where each sample's sub-steps start.
+    elbow_a_force_by_substep, elbow_b_force_by_substep : numpy.ndarray
+        float64, the elbow forces laid out the same way, N (traced runs only; empty
+        otherwise).
+    transit_substep_count : int
+        Sub-steps of the transit phase (0 when not tracing): the boundary between the
+        transit and forced phases the trace records.
+    """
+
+    unbalance_force_by_substep: np.ndarray
+    sample_start: np.ndarray
+    elbow_a_force_by_substep: np.ndarray
+    elbow_b_force_by_substep: np.ndarray
+    transit_substep_count: int
+
+
 class _TraceRequest(NamedTuple):
     """A traced run: the stride and what ``_integrate`` needs beyond the kernel arrays to
     build a ``Trace``."""
@@ -743,6 +770,7 @@ def _integrate(
         flat_a = flat_b = np.zeros(0)
         frame_capacity = 0
     buffers = tracing.allocate_frames(frame_capacity, grid_point_count, int(trace_every))
+    schedule = _ForceSchedule(flat, offsets, flat_a, flat_b, int(delay_substeps))
     if junction_coupling is not None:
         column = junction_coupling.column
         junction_force = junction_coupling.d_f
@@ -752,16 +780,12 @@ def _integrate(
 
     (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_sample_count, d_f, n_frames) = (
         _integrate_kernel(
-            flat,
-            offsets,
+            schedule,
             sdof_params,
             settings,
             response_history,
             column,
             junction_force,
-            flat_a,
-            flat_b,
-            int(delay_substeps),
             buffers,
         )
     )
@@ -810,16 +834,12 @@ def _integrate(
 
 @numba.njit(cache=True)
 def _integrate_kernel(
-    flat: np.ndarray,
-    offsets: np.ndarray,
+    schedule: _ForceSchedule,
     sdof_params: SdofParams,
     settings: RunSettings,
     history: np.ndarray,
     column: moc.FluidColumn,
     d_f: float,
-    flat_a: np.ndarray,
-    flat_b: np.ndarray,
-    delay_substeps: int,
     buffers: tracing.TraceBuffers,
 ):
     """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
@@ -840,6 +860,11 @@ def _integrate_kernel(
     friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the arrays are
     empty.
     """
+    flat = schedule.unbalance_force_by_substep
+    offsets = schedule.sample_start
+    flat_a = schedule.elbow_a_force_by_substep
+    flat_b = schedule.elbow_b_force_by_substep
+    delay_substeps = schedule.transit_substep_count
     dt = settings.substep_duration
     step_qty = settings.substep_count
     out_max = settings.nominal_forced_sample_count
