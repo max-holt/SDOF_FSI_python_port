@@ -61,6 +61,10 @@ GRAVITY = 9.81
 # ``fricAcc <= |v| < FRICTION_DEAD_ZONE`` no friction acts in that sub-step.
 FRICTION_DEAD_ZONE = 0.000001
 
+# Convergence test of ``solve_quartic``: stop when ``|residual / c0| <`` this, dimensionless
+# (VBA ``solvePoly``, line 146).
+NEWTON_RELATIVE_TOLERANCE = 0.000001
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -125,7 +129,7 @@ def solve_quartic(
         residual = (
             quartic_constant + cubic_coefficient * (root**3) + quartic_coefficient * (root**4)
         )
-        if abs(residual / quartic_constant) < 0.000001:
+        if abs(residual / quartic_constant) < NEWTON_RELATIVE_TOLERANCE:
             break
         slope = 3 * cubic_coefficient * (root**2) + 4 * quartic_coefficient * (root**3)
         root = root - relax * residual / slope
