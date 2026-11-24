@@ -1,9 +1,9 @@
 # Parameter objects — proposal (plan group 3)
 
 Session R.5, 24 Nov 2026. Written before any group is built, as `docs/review/plan.md`
-(group 3) and charter rulings 10 and 46 ask. **Status: proposed, not approved.** Plan 3.1
-is made (`structure.step_scalars` takes `SdofParams`, commit `2f1dce2`) as the proof on one
-function; nothing below is.
+(group 3) and charter rulings 10 and 46 ask. **Status: approved by the owner in session R.5
+and built** (commits `a212356` to `f2f11d5`, after 3.1 in `2f1dce2`). Where the build
+departs from the proposal, "As built" at the end says so.
 
 ## Rules the proposal follows
 
@@ -184,3 +184,31 @@ pure-Python suite before the next; an A/B timing against the session's base on t
 
 Not in this session: 3.7 (span, restraint and fluid objects for `lumped_params` /
 `jc_params`), 3.10 (entry-point extraction) and 3.11 (the set-up query).
+
+## As built (session R.5)
+
+* The kernel's argument order is `_integrate_kernel(schedule, sdof_params, settings,
+  response_history, column, junction_force, buffers)`: each object took the place of the
+  arguments it replaced, so the history stays before the column.
+* Commit 8 also drops the `substep_duration` local of `_integrate`, which only fed
+  `build_trace`.
+* Commit 10 became four R0 commits: `moc.step`, `_trace_frame`, `_integrate_kernel`, and
+  the names outside the kernels (`_integrate`'s schedule locals, the `JunctionCoupling`
+  constructor's locals, `trace.py` comments).
+* A/B timing against the session base on one host (ruling 43; min of 5 runs per case, 5
+  alternating rounds; an A/A run of the same harness spread up to ±5 % on the 90 ms JC case
+  and ±2 % on the full JC cases), new / old:
+
+  | after | lumped r20 | lumped r80 | JC r96 n2000 (legacy flags) | the same, default flags | the same, traced | lumped r20 traced | JC r96 full | JC r97 full |
+  |---|---|---|---|---|---|---|---|---|
+  | 3.1 `2f1dce2` | 1.011 | 0.972 | 1.006 | 1.013 | 1.014 | 1.007 | 1.007 | 0.995 |
+  | 3.2 `a212356` | 0.997 | 0.990 | 1.000 | 0.985 | 1.001 | 1.004 | 1.006 | 0.990 |
+  | 3.3 `34e1f37` | 1.026 | 1.024 | 0.970 | 0.999 | 1.004 | 1.013 | 0.980 | 0.992 |
+  | 3.4 `13c6a81` | 1.000 | 0.989 | 0.998 | 1.001 | 1.033 | 1.013 | 0.993 | 1.019 |
+  | 3.5 `df4cf62` | 1.000 | 1.008 | 0.995 | 0.999 | 1.013 | 0.987 | 0.985 | 1.012 |
+  | all, `ec0a6fd` (7 rounds) | 1.009 | 0.980 | 1.016 | 1.015 | 0.992 | 1.008 | 0.989 | 0.988 |
+
+  Each row is cumulative against the base (`77ba687`). The proposal named A/B runs after
+  2.2 and `_ForceSchedule` too; they were not timed on their own: 2.2 (`dcd6677`) is inside
+  the 3.3 row, `_Frame` (`1ad37d7`) and `_ForceSchedule` (`bef7c63`) inside the 3.4 and 3.5
+  rows. No case moved beyond the A/A spread; the 5 % limit was not approached.

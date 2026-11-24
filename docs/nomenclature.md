@@ -379,6 +379,21 @@ Not renamed in R.3 by design: every **K** name (kernel parameters and locals, th
 keywords, `PeakResponse` / `Trace` / `LoopLayout` / `History` fields, exported keys and
 columns, the keywords of `canonical` and `from_params`).
 
+## Applied (session R.5)
+
+Every **K** name is applied, as a parameter-object field (`docs/review/parameter_objects.md`)
+or as a parameter or local of `moc.step`, `structure.step_scalars`, `response._trace_frame`,
+`response._integrate_kernel`, `response._integrate` and the `JunctionCoupling` constructor;
+the coupling kind is `FluidColumn.is_fluid_coupled` (plan 2.2). `forced_samples` stays until
+plan group 4 (ruling 33). Where the table's name could not be used as written:
+
+| table | code | why |
+|---|---|---|
+| `moving_fraction_a` / `_b`, `end_pressure_decay_factor`, `mean_velocity_divisor` as locals of `moc.step` | `fractions_a` / `fractions_b`, `decay_factor`, `velocity_divisor` | in `moc` those names are functions (as for `moc.moving_fractions`, R.3); the `FluidColumn` fields keep the table's names |
+| `decay_factor`, `velocity_divisor` as locals of the `JunctionCoupling` constructor | the same | one spelling for the locals that feed the same fields |
+| `frame_index` (the `_trace_frame` row) | `frame_index` | as the table; the kernel's running count is `frame_count` |
+| `column_arrays`, `column_scalars`, `no_column` | `FluidColumn`, `moc.empty_column()` (its local `no_column`) | the tuples went into the column object, as the table foresaw |
+
 ## Answers (owner, R.3; charter rulings 29-38)
 
 * **Q-N1.** "Public" is the user-facing entry points only (style §2): every other function

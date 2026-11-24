@@ -6,23 +6,65 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
-Session R.5 (parameter objects, plan group 3, 2026-11-24) **stopped at the proposal**, as
-`docs/review/plan.md` asks before group 3 is built (ruling 46: the plan wins over the brief).
-Done: charter rulings 43-46 (speed judged by an A/B run on one host or relative to the
-literal port, 5 % limit on both paths; 2.2 in this session; no SI conversion at the
-boundary; plan wins, proposal in `docs/review/parameter_objects.md`). Plan 3.1 as the proof
-on one function (`2f1dce2`): `structure.step_scalars(x, v, a, f_applied, sdof_params, dt)`,
-the kernel receives `SdofParams` whole (11 -> 6 and 36 -> 31 arguments). Gates: lint and
-the compiled fast suite (949 + 24) before the commit, pure Python (947 + 26) on a worktree
-after it; snapshot exact in both modes. A/B against the session base on this host (min of 5
-runs, 5 alternating rounds; an A/A run of the same harness spreads up to ±5 % on the 90 ms
-JC case and about ±2 % on the full JC cases): 0.97x-1.01x, every case within that noise.
-`tools/bench.py --skip-full-python` (`docs/bench/a1c1724.json`): digests equal to the
-literal port, results the same as `213e3ef`; relative to the literal port numba r20 0.091
-(was 0.098), JC r96 full 0.537 (was 0.572). `-m slow` 150 passed.
+Session R.5 (parameter objects, plan group 3, 2026-11-24) **done**. Charter rulings 43-46
+(speed judged by an A/B run on one host or relative to the literal port, 5 % limit on both
+paths; plan 2.2 in this session; no SI conversion at the boundary, the R.4 proposal
+declined; the plan wins over the brief, the groups go to `docs/review/parameter_objects.md`).
 
-Next: the owner's answer on `docs/review/parameter_objects.md`; then its commits 1-10 in
-order, an A/B timing after each commit that touches the substep loop.
+Plan 3.1 first, as the proof on one function (`2f1dce2`: `step_scalars` takes `SdofParams`,
+the kernel receives it whole); A/B within noise; bench `a1c1724`. Then, as the plan asks,
+stopped and wrote `docs/review/parameter_objects.md`; the owner approved it as proposed, and
+it is built, one object per commit, innermost first: `moc.FluidColumn` (`moc.step` 15 -> 4;
+`JunctionCoupling` holds `column`, `dt`, `d_f`; `moc.empty_column()` for the lumped run, the
+same type); plan 2.2, `FluidColumn.is_fluid_coupled` in place of the kind code 0 / 1;
+`trace.TraceBuffers` (the four frame buffers and the stride, from `allocate_frames`);
+`response._Frame` (`_trace_frame` 23 -> 4); `response.RunSettings` (built by the entry
+points; `_integrate` 9 -> 5); `response._ForceSchedule`; `response._KernelResult` (the
+kernel 36 -> 7); `trace.TraceRequest` moved from `response`, `build_trace` 15 -> 6;
+`moc.ColumnGrid` (returned by `grid_size`) and `coupling.FluidConstants`
+(`JunctionCoupling` 8 -> 5); then four R0 commits applying the K names of
+`docs/nomenclature.md` (ruling 21; the four local names that differ because of a clash with
+a `moc` function are in its "Applied (session R.5)" table). The kernel keeps 7 arguments:
+the junction force (an evolving scalar) and the response history (an output array) are not
+grouped with an input tuple; the reason and the other functions still above 6 (entry
+points, 3.7, 5.5, an ungated tool) are in `findings.md`.
+
+Argument counts, before and after (`ruff` PLR0913 counting):
+
+| function | before | after |
+|---|---|---|
+| `response._integrate_kernel` | 36 | 7 |
+| `response._trace_frame` | 23 | 4 |
+| `moc.step` | 15 | 4 |
+| `trace.build_trace` | 15 | 6 |
+| `structure.step_scalars` | 11 | 6 |
+| `response._integrate` | 9 | 5 |
+| `coupling.JunctionCoupling.__init__` | 8 | 5 |
+| `trace.allocate_frames` | 2 | 3 |
+
+Gates: every code commit `make lint` and the compiled fast suite (949 passed + 24 skipped)
+before it was made, the pure-Python suite (947 + 26) on a worktree of it before the next;
+the snapshot and support checks exact in both modes throughout; no test count changed.
+Tests changed only in how they call (`moc.step` and `JunctionCoupling` with the new objects,
+`jc.column.*` for the column arrays, `allocate_frames` with the stride). A/B timing against
+the session base on this host after 3.1, 3.2, 3.3, 3.4, 3.5 and for the whole session (table
+in `parameter_objects.md`): 0.97x-1.03x per case, within the A/A spread of the harness
+(up to ±5 % on the 90 ms JC case); whole session 0.980x-1.016x. Session gates on `f2f11d5`:
+`-m slow` 150 passed; `tools/bench.py --skip-full-python` (`docs/bench/f2f11d5.json`):
+digests all equal to the literal port, results the same as `a1c1724`. Its ratios to the
+literal port are worse than `a1c1724`'s (numba r20 0.121 against 0.091, JC r96 full 0.668
+against 0.537) although the code paths A/B as equal: the host drifted during the run (the
+literal JC case took 128 s against 106 s in the morning, and the pure-Python rows, whose
+code barely changed, moved the same way). An interleaved A/B straight after the bench
+(base `77ba687` against `f2f11d5`, 5 rounds) had both slower than in the morning and new /
+old at 0.94x-1.03x. By ruling 43 the A/B decides; the bench row is kept as measured.
+
+Next: the rest of group 3 (3.7 span / restraint / fluid objects for `lumped_params` /
+`jc_params`, 3.10 entry-point extraction, 3.11 the set-up query), then write
+`docs/review/substep_design.md` and stop for the owner before group 4. Observation for the
+owner, not acted on: `JunctionCoupling` now holds only the column, `dt` (read by tests only)
+and `d_f` (0.0 at entry, written back after the run and read by tests only); under ruling 2
+it could become a function returning the `FluidColumn`.
 
 Session R.4 (constants and control flow, plan group 2, 2026-11-24) **done**. Rulings 39-42
 in the charter: gates before each commit, the pure-Python run of a commit green before the

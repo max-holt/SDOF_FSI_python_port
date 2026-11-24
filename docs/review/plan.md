@@ -29,6 +29,13 @@ takes `SdofParams`; the kernel receives it whole), as the proof on one function:
 exact in both modes, A/B timing within noise. The groups for 3.2 to 3.8, with 2.2, are
 proposed in `docs/review/parameter_objects.md` (names, fields, which functions take each,
 the commit order); stopped there for the owner, as this plan asks before group 3 is built.
+The owner approved it in the session, and it is built: 3.2 (`FluidColumn`), 2.2 (the flag on
+the column), 3.3 (`TraceBuffers`, `_Frame`), 3.4 (`RunSettings`, `_ForceSchedule`), 3.5
+(`_KernelResult`), 3.6 (`build_trace` takes the request, settings and column;
+`TraceRequest` moved to `trace`), 3.8 (`ColumnGrid`, `FluidConstants`), then the K names of
+the nomenclature (four R0 commits). Every function of the group takes at most 6 arguments
+except the kernel (7, the reason in `findings.md`). Left in group 3: 3.7, 3.10, 3.11. Next:
+those, then `docs/review/substep_design.md` before group 4.
 
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
