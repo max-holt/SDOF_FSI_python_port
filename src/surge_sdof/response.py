@@ -654,56 +654,57 @@ class _Frame(NamedTuple):
 @numba.njit(cache=True)
 def _trace_frame(
     buffers: tracing.TraceBuffers,
-    frame: int,
+    frame_index: int,
     values: _Frame,
     column: moc.FluidColumn,
 ) -> None:
-    """Write one trace frame (Session V.1): the scalars into row ``frame`` of ``tr_f`` /
-    ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, with fluid coupling, the column
-    interleaved ``A0 B0 A1 ... A(N)`` into ``tr_p`` / ``tr_v``. Reads only; the solver
+    """Write one trace frame (Session V.1): the scalars of ``values`` into row
+    ``frame_index`` of ``buffers.frame_state`` / ``buffers.frame_index_columns`` (columns
+    ``trace.COL_*``) and, with fluid coupling, the column interleaved ``A0 B0 A1 ... A(N)``
+    into ``buffers.frame_pressure`` / ``buffers.frame_velocity``. Reads only; the solver
     state is untouched."""
-    tr_f = buffers.frame_state
-    tr_i = buffers.frame_index_columns
-    tr_p = buffers.frame_pressure
-    tr_v = buffers.frame_velocity
-    n = values.substep_index
-    sample = values.sample_index
-    phase = values.load_phase
+    frame_state = buffers.frame_state
+    frame_index_columns = buffers.frame_index_columns
+    frame_pressure = buffers.frame_pressure
+    frame_velocity = buffers.frame_velocity
+    substep_index = values.substep_index
+    sample_index = values.sample_index
+    load_phase = values.load_phase
     x = values.x
     v = values.v
     a = values.a
-    f_a = values.elbow_a_force
-    f_b = values.elbow_b_force
-    f_u = values.unbalance_force
-    f_fric = values.friction_force
-    stick = values.is_sticking
-    d_f = values.junction_force
+    elbow_a_force = values.elbow_a_force
+    elbow_b_force = values.elbow_b_force
+    unbalance_force = values.unbalance_force
+    friction_force = values.friction_force
+    is_sticking = values.is_sticking
+    junction_force = values.junction_force
     is_fluid_coupled = column.is_fluid_coupled
-    p_a = column.pressure_a
-    v_a = column.velocity_a
-    p_b = column.pressure_b
-    v_b = column.velocity_b
-    n_seg = column.column_cell_count
-    tr_f[frame, COL_X] = x
-    tr_f[frame, COL_V] = v
-    tr_f[frame, COL_A] = a
-    tr_f[frame, COL_ELBOW_A_FORCE] = f_a
-    tr_f[frame, COL_ELBOW_B_FORCE] = f_b
-    tr_f[frame, COL_UNBALANCE_FORCE] = f_u
-    tr_f[frame, COL_FRICTION_FORCE] = f_fric
-    tr_f[frame, COL_JUNCTION_FORCE] = d_f
-    tr_i[frame, COL_SUBSTEP_INDEX] = n
-    tr_i[frame, COL_SAMPLE_INDEX] = sample
-    tr_i[frame, COL_LOAD_PHASE] = phase
-    tr_i[frame, COL_IS_STICKING] = 1 if stick else 0
+    pressure_a = column.pressure_a
+    velocity_a = column.velocity_a
+    pressure_b = column.pressure_b
+    velocity_b = column.velocity_b
+    column_cell_count = column.column_cell_count
+    frame_state[frame_index, COL_X] = x
+    frame_state[frame_index, COL_V] = v
+    frame_state[frame_index, COL_A] = a
+    frame_state[frame_index, COL_ELBOW_A_FORCE] = elbow_a_force
+    frame_state[frame_index, COL_ELBOW_B_FORCE] = elbow_b_force
+    frame_state[frame_index, COL_UNBALANCE_FORCE] = unbalance_force
+    frame_state[frame_index, COL_FRICTION_FORCE] = friction_force
+    frame_state[frame_index, COL_JUNCTION_FORCE] = junction_force
+    frame_index_columns[frame_index, COL_SUBSTEP_INDEX] = substep_index
+    frame_index_columns[frame_index, COL_SAMPLE_INDEX] = sample_index
+    frame_index_columns[frame_index, COL_LOAD_PHASE] = load_phase
+    frame_index_columns[frame_index, COL_IS_STICKING] = 1 if is_sticking else 0
     if is_fluid_coupled:
-        for c in range(n_seg):
-            tr_p[frame, 2 * c] = p_a[c]
-            tr_p[frame, 2 * c + 1] = p_b[c]
-            tr_v[frame, 2 * c] = v_a[c]
-            tr_v[frame, 2 * c + 1] = v_b[c]
-        tr_p[frame, 2 * n_seg] = p_a[n_seg]
-        tr_v[frame, 2 * n_seg] = v_a[n_seg]
+        for c in range(column_cell_count):
+            frame_pressure[frame_index, 2 * c] = pressure_a[c]
+            frame_pressure[frame_index, 2 * c + 1] = pressure_b[c]
+            frame_velocity[frame_index, 2 * c] = velocity_a[c]
+            frame_velocity[frame_index, 2 * c + 1] = velocity_b[c]
+        frame_pressure[frame_index, 2 * column_cell_count] = pressure_a[column_cell_count]
+        frame_velocity[frame_index, 2 * column_cell_count] = velocity_a[column_cell_count]
 
 
 def _integrate(
