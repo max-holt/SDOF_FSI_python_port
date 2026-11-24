@@ -15,6 +15,7 @@ rows. ``tools/export.py`` is the CLI.
 
 from __future__ import annotations
 
+import csv
 import datetime as _dt
 import gzip as _gzip
 import json
@@ -52,6 +53,7 @@ __all__ = [
     "dumps",
     "write_json",
     "read_json",
+    "read_csv",
 ]
 
 SCHEMA_VERSION = 1
@@ -62,88 +64,84 @@ KIND_TRACE = "trace"
 KIND_SWEEP = "sweep"
 
 
-SWEEP_COLUMNS = (
-    "case_id",
-    "tier",
-    "subset",
-    "size_in",
-    "od_mm",
-    "thk_mm",
-    "length_m",
-    "nat_freq_hz",
-    "history_type",
-    "f_osc_hz",
-    "seed",
-    "amplitude_fraction",
-    "mu",
-    "p_design_bar",
-    "p_cap_bar",
-    "p_peak_bar",
-    "p_mean_bar",
-    "p_rms_bar",
-    "noise_rms_bar",
-    "sample_freq",
-    "lead_in_s",
-    "transit_s",
-    "tail_s",
-    "decay_s",
-    "duration_s",
-    "n_samples",
-    "p_step",
-    "p_osc",
-    "p_noise_rms",
-    "f_cut_hz",
-    "f_ref_hz",
-    "decay_cycles",
-    "decay_fraction",
-    "p_cap",
-    "histories_version",
-    "fluid_area_m2",
-    "mass_per_unit_len",
-    "ei",
-    "rho_c",
-    "portal_height_m",
-    "mass_total_kg",
-    "pipe_seg_qty",
-    "pivot_seg_qty",
-    "jc_short_pipe",
-    "history_peak",
-    "history_mean",
-    "history_rms",
-    "f_eq_lumped",
-    "f_eq_jc",
-    "ratio_f_eq",
-    "v_peak_lumped",
-    "v_peak_jc",
-    "ratio_v_peak",
-    "momentum_lumped",
-    "momentum_jc",
-    "ke_peak_lumped",
-    "ke_peak_jc",
-    "x_peak_lumped",
-    "x_peak_jc",
-    "a_peak_lumped",
-    "a_peak_jc",
-    "f_peak_lumped",
-    "f_peak_jc",
-    "f_eq_over_LD2_lumped",
-    "f_eq_over_LD2_jc",
-    "daf_lumped",
-    "daf_jc",
-    "t_lumped_s",
-    "t_jc_s",
-    "cpu",
-    "git_sha",
-    "error",
+SWEEP_SOLVERS = ("lumped", "jc")
+"""The two solvers of a sweep row, in column order (``{solver}`` in ``_SWEEP_COLUMN_TABLE``)."""
+_SWEEP_COLUMN_TABLE = (
+    # (column, type of its JSON value), in the document's order; a name with ``{solver}`` is
+    # one column per entry of SWEEP_SOLVERS, in that order. Units are in the names.
+    ("case_id", str),
+    ("tier", int),
+    ("subset", str),
+    ("size_in", int),
+    ("od_mm", float),
+    ("thk_mm", float),
+    ("length_m", float),
+    ("nat_freq_hz", float),
+    ("history_type", str),
+    ("f_osc_hz", float),
+    ("seed", int),
+    ("amplitude_fraction", float),
+    ("mu", float),
+    ("p_design_bar", float),
+    ("p_cap_bar", float),
+    ("p_peak_bar", float),
+    ("p_mean_bar", float),
+    ("p_rms_bar", float),
+    ("noise_rms_bar", float),
+    ("sample_freq", float),
+    ("lead_in_s", float),
+    ("transit_s", float),
+    ("tail_s", float),
+    ("decay_s", float),
+    ("duration_s", float),
+    ("n_samples", int),
+    ("p_step", float),
+    ("p_osc", float),
+    ("p_noise_rms", float),
+    ("f_cut_hz", float),
+    ("f_ref_hz", float),
+    ("decay_cycles", float),
+    ("decay_fraction", float),
+    ("p_cap", float),
+    ("histories_version", str),
+    ("fluid_area_m2", float),
+    ("mass_per_unit_len", float),
+    ("ei", float),
+    ("rho_c", float),
+    ("portal_height_m", float),
+    ("mass_total_kg", float),
+    ("pipe_seg_qty", int),
+    ("pivot_seg_qty", int),
+    ("jc_short_pipe", int),
+    ("history_peak", float),
+    ("history_mean", float),
+    ("history_rms", float),
+    ("f_eq_{solver}", float),
+    ("ratio_f_eq", float),
+    ("v_peak_{solver}", float),
+    ("ratio_v_peak", float),
+    ("momentum_{solver}", float),
+    ("ke_peak_{solver}", float),
+    ("x_peak_{solver}", float),
+    ("a_peak_{solver}", float),
+    ("f_peak_{solver}", float),
+    ("f_eq_over_LD2_{solver}", float),
+    ("daf_{solver}", float),
+    ("t_{solver}_s", float),
+    ("cpu", str),
+    ("git_sha", str),
+    ("error", str),
 )
+_SWEEP_COLUMN_TYPES = {
+    name.format(solver=solver): column_type
+    for name, column_type in _SWEEP_COLUMN_TABLE
+    for solver in (SWEEP_SOLVERS if "{solver}" in name else (None,))
+}
+SWEEP_COLUMNS = tuple(_SWEEP_COLUMN_TYPES)
 """``sweep.columns`` names, in the document's order: the Session 5b sweep CSV columns
 (``tools/sweep_jc.py``), sweep ``schema_version`` 2 (the W.1 schema 1 had thirty)."""
-SWEEP_STRING_COLUMNS = frozenset(
-    {"case_id", "subset", "history_type", "histories_version", "cpu", "git_sha", "error"}
-)
-SWEEP_INT_COLUMNS = frozenset(
-    {"tier", "size_in", "seed", "n_samples", "pipe_seg_qty", "pivot_seg_qty", "jc_short_pipe"}
-)
+SWEEP_STRING_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is str)
+SWEEP_INT_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is int)
 
 
 # ------------------------------------------------------------------ provenance
@@ -529,3 +527,16 @@ def read_json(path: str | Path):
     else:
         raw = path.read_bytes()
     return json.loads(raw.decode("utf-8"))
+
+
+def read_csv(path: str | Path) -> tuple[tuple[str, ...], list[dict]]:
+    """The header and the rows of a CSV file, every cell as its text (``""`` when empty).
+
+    The one reader of the sweep CSVs and of the golden case table; it does no typing:
+    ``to_sweep_dict`` types the cells of a sweep row.
+    """
+    with Path(path).open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        header = tuple(reader.fieldnames or ())
+        rows = list(reader)
+    return header, rows

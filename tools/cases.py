@@ -16,7 +16,6 @@ one the committed ``example_jc_step.json`` was made with.
 from __future__ import annotations
 
 import argparse
-import csv
 import math
 import re
 from pathlib import Path
@@ -286,12 +285,9 @@ def sweep_rows_from_csv(path: str | Path) -> tuple[list[dict], str]:
     ``golden_sweep_rows``; a Session 5b CSV whose header is a subset of the sweep columns
     passes through (missing columns null). Returns ``(rows, layout)`` with layout
     ``"golden"`` or ``"sweep"``."""
-    from surge_sdof.export import SWEEP_COLUMNS
+    from surge_sdof.export import SWEEP_COLUMNS, read_csv
 
-    with open(path, newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        header = tuple(reader.fieldnames or ())
-        rows = list(reader)
+    header, rows = read_csv(path)
     if all(h in header for h in GOLDEN_CSV_HEADER):
         set_name = Path(path).resolve().parent.name
         return golden_sweep_rows(rows, tg.load_params(), set_name), "golden"

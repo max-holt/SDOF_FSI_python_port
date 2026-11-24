@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from surge_sdof import export
+
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -77,7 +79,7 @@ def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path)
     # CSV round trip: the history is rebuilt bitwise from the row's generator columns
     path = tmp_path / "one.csv"
     sw.write_csv(path, [row])
-    (back,) = sw.read_csv(path)
+    _, (back,) = export.read_csv(path)
     h = sw.history_from_row(back)
     direct = sw.case_history(case, sw.pipe(case.size_in).design_pressure)
     assert np.array_equal(h.pressure, direct.pressure)

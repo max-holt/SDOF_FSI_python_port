@@ -483,11 +483,6 @@ def write_csv(path: Path, rows: list[dict]) -> None:
             w.writerow({k: ("" if v is None else v) for k, v in row.items()})
 
 
-def read_csv(path: Path) -> list[dict]:
-    with Path(path).open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
-
-
 def _worker(args):
     case, tier, subset, cpu, sha = args
     return run_case(case, tier, subset, cpu, sha)
@@ -562,7 +557,7 @@ def _f(v):
 
 
 def _load(path: Path) -> list[dict]:
-    rows = read_csv(path)
+    _, rows = export.read_csv(path)
     for r in rows:
         for k in (
             "size_in",
