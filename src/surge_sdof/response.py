@@ -98,6 +98,12 @@ from surge_sdof.vba_compat import clng
 
 __all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
 
+# Free decay runs while ``x * xZero`` exceeds this, m² (VBA ``Do While x * xZero > 0.01``,
+# lines 569 and 1109; ``xZero`` is ``x`` at the end of the forced phase, then 0 once the
+# product falls to it, lines 593 and 1188). VBA quirk D-21 preserved: an absolute
+# threshold, ``|x| > 0.1`` m at entry.
+FREE_DECAY_THRESHOLD = 0.01
+
 
 @dataclass(frozen=True)
 class PeakResponse:
@@ -950,7 +956,7 @@ def _integrate_kernel(
     # ---------------------------------------------------------- free decay
     forced_samples = tot_ind
     x_zero = x
-    while _free_decay_product(x, x_zero) > 0.01:
+    while _free_decay_product(x, x_zero) > FREE_DECAY_THRESHOLD:
         tot_ind += 1
         if legacy_parity:
             off = (tot_ind - 1) * step_qty + 1 - n
@@ -1024,7 +1030,7 @@ def _integrate_kernel(
                 v_max = abs(v)
             if abs(x) > x_max:
                 x_max = abs(x)
-            if _free_decay_product(x, x_zero) <= 0.01:
+            if _free_decay_product(x, x_zero) <= FREE_DECAY_THRESHOLD:
                 x_zero = 0.0
         # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
         # the forced samples and an equal allowance for free decay; later free decay is integrated
