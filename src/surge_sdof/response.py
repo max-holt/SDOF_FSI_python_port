@@ -612,6 +612,18 @@ def _free_decay_product(x: float, x_zero: float) -> float:
 
 
 @numba.njit(cache=True)
+def _largest_magnitude(values: np.ndarray) -> float:
+    """The largest ``abs()`` of ``values``, from 0.0, as a running maximum over them in
+    order (a NaN never wins the comparison). Called once per run (``docs/style.md`` §4)."""
+    largest = 0.0
+    for value in values:
+        magnitude = abs(float(value))
+        if magnitude > largest:
+            largest = magnitude
+    return largest
+
+
+@numba.njit(cache=True)
 def _record_sample(
     history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
 ) -> None:
@@ -910,7 +922,6 @@ def _integrate_kernel(
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
     state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first sub-step
-    unbalance_force_max = 0.0
     parity_offset = 0  # the MoC parity index is substep_index + parity_offset
     sample_number = 0
     forced_sample_count = sample_start.shape[0] - 1
@@ -972,12 +983,12 @@ def _integrate_kernel(
                     column,
                 )
                 frame_count += 1
-            if abs(unbalance_force) > unbalance_force_max:
-                unbalance_force_max = abs(unbalance_force)
         if output_type > 0:
             _record_sample(
                 response_history, output_type, sample_number - 1, state.x, state.v, state.a
             )
+    unbalance_force_max = _largest_magnitude(unbalance_force_by_substep)
+
     # ---------------------------------------------------------- free decay
     forced_samples = sample_number
     decay_start_displacement = state.x
