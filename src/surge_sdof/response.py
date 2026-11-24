@@ -612,6 +612,25 @@ def _free_decay_product(x: float, x_zero: float) -> float:
 
 
 @numba.njit(cache=True)
+def _is_frame_due(
+    trace_every: int,
+    substep_index: int,
+    frame_count: int,
+    frame_capacity: int,
+    is_in_record_window: bool,
+) -> bool:
+    """Whether sub-step ``substep_index`` is recorded as a trace frame: tracing is on, the
+    index is a multiple of the stride, the frame capacity lasts and the sample lies in the
+    recorded window (always, in the transit and forced phases). Scalars only."""
+    return (
+        trace_every > 0
+        and substep_index % trace_every == 0
+        and frame_count < frame_capacity
+        and is_in_record_window
+    )
+
+
+@numba.njit(cache=True)
 def _parity_offset(
     is_per_phase_parity: bool,
     sample_number: int,
@@ -950,8 +969,6 @@ def _integrate_kernel(
     trace_every = buffers.trace_every
     frame_capacity = buffers.frame_index_columns.shape[0]
     half_dt = dt / 2
-    v_before = 0.0
-    a_before = 0.0
 
     # ------------------------------------------------- transit and forced phases
     for s in range(forced_sample_count):
@@ -962,14 +979,10 @@ def _integrate_kernel(
         for i in range(sample_start[s], sample_start[s + 1]):
             unbalance_force = float(unbalance_force_by_substep[i])
             substep_index = state.substep_index
-            record_frame = (
-                trace_every > 0
-                and substep_index % trace_every == 0
-                and frame_count < frame_capacity
+            record_frame = _is_frame_due(
+                trace_every, substep_index, frame_count, frame_capacity, True
             )
-            if record_frame:
-                v_before = state.v
-                a_before = state.a
+            before = state
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
@@ -997,8 +1010,8 @@ def _integrate_kernel(
                         elbow_a_force_by_substep[i],
                         elbow_b_force_by_substep[i],
                         unbalance_force,
-                        mass * (state.v - (v_before + (a_before + state.a) * half_dt)) / dt,
-                        abs(v_before) < friction_velocity_step,
+                        mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
+                        abs(before.v) < friction_velocity_step,
                         junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
@@ -1018,20 +1031,16 @@ def _integrate_kernel(
         parity_offset = _parity_offset(
             is_per_phase_parity, sample_number, substep_count, state.substep_index, 1
         )
+        # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
+        # the forced samples and an equal allowance for free decay; later free decay is integrated
+        # but not recorded.
+        is_in_record_window = sample_number <= nominal_forced_sample_count * 2
         for _k in range(substep_count):
             substep_index = state.substep_index
-            # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
-            # the forced samples and an equal allowance for free decay; later free decay is integrated
-            # but not recorded.
-            record_frame = (
-                trace_every > 0
-                and substep_index % trace_every == 0
-                and frame_count < frame_capacity
-                and sample_number <= nominal_forced_sample_count * 2
+            record_frame = _is_frame_due(
+                trace_every, substep_index, frame_count, frame_capacity, is_in_record_window
             )
-            if record_frame:
-                v_before = state.v
-                a_before = state.a
+            before = state
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
@@ -1059,8 +1068,8 @@ def _integrate_kernel(
                         0.0,
                         0.0,
                         0.0,
-                        mass * (state.v - (v_before + (a_before + state.a) * half_dt)) / dt,
-                        abs(v_before) < friction_velocity_step,
+                        mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
+                        abs(before.v) < friction_velocity_step,
                         junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
