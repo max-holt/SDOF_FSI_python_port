@@ -74,23 +74,25 @@ function. The trace is recorded inside it (by `_trace_frame`, still its own func
 ```python
 class _RunState(NamedTuple):
     """What one substep changes: the SDOF state, the running maxima and the counters."""
-    x: float               # m
-    v: float               # m/s
-    a: float               # m/s²
-    x_max: float           # largest |x| so far, m
+
+    x: float  # m
+    v: float  # m/s
+    a: float  # m/s²
+    x_max: float  # largest |x| so far, m
     v_max: float
     a_max: float
-    substep_index: int     # running 0-based substep counter
-    frame_count: int       # trace frames written
+    substep_index: int  # running 0-based substep counter
+    frame_count: int  # trace frames written
 
 
 class _SubstepInputs(NamedTuple):
     """What a substep reads and never changes; built once per kernel call."""
+
     sdof_params: SdofParams
     substep_duration: float
-    schedule: _ForceSchedule   # for the frame's phase and elbow forces (fact 1)
+    schedule: _ForceSchedule  # for the frame's phase and elbow forces (fact 1)
     buffers: tracing.TraceBuffers
-    column: moc.FluidColumn    # read by the frame writer only
+    column: moc.FluidColumn  # read by the frame writer only
 
 
 @numba.njit(cache=True)
@@ -121,13 +123,20 @@ for s in range(forced_sample_count):
     for i in range(sample_start[s], sample_start[s + 1]):
         unbalance_force = float(unbalance_force_by_substep[i])
         if is_fluid_coupled:
-            junction_force = float(moc.step(
-                (state.substep_index + parity_offset) % 2 == 0, state.a * dt, column, junction_force
-            ))
+            junction_force = float(
+                moc.step(
+                    (state.substep_index + parity_offset) % 2 == 0,
+                    state.a * dt,
+                    column,
+                    junction_force,
+                )
+            )
             applied_force = junction_force + unbalance_force
         else:
             applied_force = 0.0 + unbalance_force
-        state = _advance_structure(state, applied_force, junction_force, sample_number - 1, True, inputs)
+        state = _advance_structure(
+            state, applied_force, junction_force, sample_number - 1, True, inputs
+        )
     _record_sample(response_history, output_type, sample_number - 1, state.x, state.v, state.a)
 unbalance_force_max = _largest_magnitude(unbalance_force_by_substep)
 
@@ -139,14 +148,20 @@ while _free_decay_product(state.x, decay_start_displacement) > FREE_DECAY_THRESH
     is_in_record_window = sample_number <= nominal_forced_sample_count * 2
     for _k in range(substep_count):
         if is_fluid_coupled:
-            junction_force = float(moc.step(
-                (state.substep_index + parity_offset) % 2 == 0, state.a * dt, column, junction_force
-            ))
+            junction_force = float(
+                moc.step(
+                    (state.substep_index + parity_offset) % 2 == 0,
+                    state.a * dt,
+                    column,
+                    junction_force,
+                )
+            )
             applied_force = junction_force
         else:
             applied_force = 0.0
-        state = _advance_structure(state, applied_force, junction_force, sample_number - 1,
-                                   is_in_record_window, inputs)
+        state = _advance_structure(
+            state, applied_force, junction_force, sample_number - 1, is_in_record_window, inputs
+        )
         decay_start_displacement = _decay_reference(state.x, decay_start_displacement)
     if is_in_record_window:
         _record_sample(response_history, output_type, sample_number - 1, state.x, state.v, state.a)
@@ -180,10 +195,10 @@ def _track_peaks(peaks: np.ndarray, x: float, v: float, a: float) -> None:
 
 @numba.njit(cache=True)
 def _record_frame(
-    recorder: _FrameRecorder,      # (schedule, buffers, column), built once per kernel call
+    recorder: _FrameRecorder,  # (schedule, buffers, column), built once per kernel call
     frame_count: int,
-    key: _FrameKey,                # (substep_index, sample_index, is_in_record_window)
-    before: tuple[float, float],   # v, a before the step (friction, stick)
+    key: _FrameKey,  # (substep_index, sample_index, is_in_record_window)
+    before: tuple[float, float],  # v, a before the step (friction, stick)
     after: tuple[float, float, float],
     junction_force: float,
 ) -> int:
@@ -194,18 +209,26 @@ Each loop body becomes (forced; free decay differs in the force lines and the wi
 and adds the re-test):
 
 ```python
-        unbalance_force = float(unbalance_force_by_substep[i])
-        if is_fluid_coupled:
-            junction_force = float(moc.step((substep_index + parity_offset) % 2 == 0, a * dt, column, junction_force))
-            applied_force = junction_force + unbalance_force
-        else:
-            applied_force = 0.0 + unbalance_force
-        x_new, v_new, a_new = step_scalars(x, v, a, applied_force, sdof_params, dt)
-        frame_count = _record_frame(recorder, frame_count, _FrameKey(substep_index, sample_number - 1, True),
-                                    (v, a), (x_new, v_new, a_new), junction_force)
-        x, v, a = x_new, v_new, a_new
-        _track_peaks(peaks, x, v, a)
-        substep_index += 1
+unbalance_force = float(unbalance_force_by_substep[i])
+if is_fluid_coupled:
+    junction_force = float(
+        moc.step((substep_index + parity_offset) % 2 == 0, a * dt, column, junction_force)
+    )
+    applied_force = junction_force + unbalance_force
+else:
+    applied_force = 0.0 + unbalance_force
+x_new, v_new, a_new = step_scalars(x, v, a, applied_force, sdof_params, dt)
+frame_count = _record_frame(
+    recorder,
+    frame_count,
+    _FrameKey(substep_index, sample_number - 1, True),
+    (v, a),
+    (x_new, v_new, a_new),
+    junction_force,
+)
+x, v, a = x_new, v_new, a_new
+_track_peaks(peaks, x, v, a)
+substep_index += 1
 ```
 
 * **Applied force:** the caller, as in A.
