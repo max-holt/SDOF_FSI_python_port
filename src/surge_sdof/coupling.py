@@ -93,8 +93,8 @@ class JunctionCoupling:
     D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the constructor raises
     ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather than in the first
     MoC update) and ``ValueError`` on the fixed one (the port's guard: the ramp needs
-    ``pivot > ext``). ``fluid.characteristic_impedance = 0`` raises ``FloatingPointError`` before
-    anything else (D-9: the MoC divides by it).
+    ``pivot > ext``). ``fluid.characteristic_impedance = 0`` raises ``FloatingPointError``
+    before anything else (D-9: the MoC divides by it).
     """
 
     __slots__ = ("column", "dt", "d_f")
@@ -112,28 +112,30 @@ class JunctionCoupling:
             # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
             # does not apply, so the check is made once here, before the first update.
             raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
-        n_seg = int(grid.column_cell_count)
-        pivot = int(grid.end_to_elbow_cell_count)
-        frac_a, frac_b = moc.moving_fractions(n_seg, pivot, fraction_profile)
-        p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
+        column_cell_count = int(grid.column_cell_count)
+        end_to_elbow_cell_count = int(grid.end_to_elbow_cell_count)
+        moving_fraction_a, moving_fraction_b = moc.moving_fractions(
+            column_cell_count, end_to_elbow_cell_count, fraction_profile
+        )
+        pressure_a, velocity_a, pressure_b, velocity_b = moc.column_at_rest(column_cell_count)
         self.dt = float(substep_duration)
-        rho_c = float(fluid.characteristic_impedance)
-        fluid_area = float(fluid.flow_area)
-        decay = float(fluid.end_pressure_decay_factor)
-        vav_div = moc.mean_velocity_divisor(n_seg, vav_denominator)
+        characteristic_impedance = float(fluid.characteristic_impedance)
+        flow_area = float(fluid.flow_area)
+        decay_factor = float(fluid.end_pressure_decay_factor)
+        velocity_divisor = moc.mean_velocity_divisor(column_cell_count, vav_denominator)
         self.column = moc.FluidColumn(
-            p_a,
-            v_a,
-            p_b,
-            v_b,
-            frac_a,
-            frac_b,
-            n_seg,
-            pivot,
-            rho_c,
-            decay,
-            vav_div,
-            fluid_area,
+            pressure_a,
+            velocity_a,
+            pressure_b,
+            velocity_b,
+            moving_fraction_a,
+            moving_fraction_b,
+            column_cell_count,
+            end_to_elbow_cell_count,
+            characteristic_impedance,
+            decay_factor,
+            velocity_divisor,
+            flow_area,
             True,
         )
         self.d_f = 0.0

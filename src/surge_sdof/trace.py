@@ -40,9 +40,10 @@ The staggered grid is stored **interleaved**: ``A0 B0 A1 B1 ... A(N-1) B(N-1) A(
 ``n_cells = 2N + 1`` (``cell_kind`` 0 = A node, 1 = B cell). ``cell_position`` is
 ``j * celerity * dt`` m from the first A node (a cell is ``2 c dt`` long; the column runs
 ``ext_qty`` end cells, the leg up to the pivot, the span between the pivots, the other leg
-and ``ext_qty`` end cells, see ``moc.grid_size``). ``moving_fraction`` is ``frac_a`` /
-``frac_b`` interleaved the same way, the values ``moc.step`` multiplies ``a dt`` by
-(``frac_a[0]`` and ``frac_a[N]`` are the unused zeros of ``moc.moving_fractions``).
+and ``ext_qty`` end cells, see ``moc.grid_size``). ``moving_fraction`` is the column's
+``moving_fraction_a`` / ``moving_fraction_b`` interleaved the same way, the values
+``moc.step`` multiplies ``a dt`` by (``moving_fraction_a[0]`` and ``moving_fraction_a[N]``
+are the unused zeros of ``moc.moving_fractions``).
 ``p_cells`` and ``v_cells`` are copies of the four arrays exactly as the model stores them:
 pressures in Pa, velocities in m/s relative to the pipe, after the acceleration injection
 and the ``vAv`` subtraction of the sub-step.
@@ -82,7 +83,7 @@ __all__ = [
 # third code, which only the solver loop records.
 PHASE_FREE_DECAY = 2  # no unbalance force; the structure rings down (VBA phase 3)
 
-# Columns of the kernel's float64 frame array ``tr_f (capacity, FRAME_STATE_COLUMN_COUNT)``.
+# Columns of the kernel's float64 frame array ``frame_state (capacity, FRAME_STATE_COLUMN_COUNT)``.
 (
     COL_X,
     COL_V,
@@ -94,7 +95,7 @@ PHASE_FREE_DECAY = 2  # no unbalance force; the structure rings down (VBA phase 
     COL_JUNCTION_FORCE,
 ) = range(8)
 FRAME_STATE_COLUMN_COUNT = 8
-# Columns of the int64 frame array ``tr_i (capacity, FRAME_INDEX_COLUMN_COUNT)``.
+# Columns of the int64 frame array ``frame_index_columns (capacity, FRAME_INDEX_COLUMN_COUNT)``.
 COL_SUBSTEP_INDEX, COL_SAMPLE_INDEX, COL_LOAD_PHASE, COL_IS_STICKING = range(4)
 FRAME_INDEX_COLUMN_COUNT = 4
 

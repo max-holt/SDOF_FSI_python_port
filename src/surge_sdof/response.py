@@ -739,13 +739,13 @@ def _integrate(
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
     unbalance_force_samples = list(unbalance_force_samples)
-    offsets = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
+    sample_start = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
     for i, sample in enumerate(unbalance_force_samples):
-        offsets[i + 1] = offsets[i] + len(sample)
-    flat = np.fromiter(
+        sample_start[i + 1] = sample_start[i] + len(sample)
+    unbalance_force_by_substep = np.fromiter(
         itertools.chain.from_iterable(unbalance_force_samples),
         dtype=np.float64,
-        count=int(offsets[-1]),
+        count=int(sample_start[-1]),
     )
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
@@ -756,7 +756,7 @@ def _integrate(
     grid_point_count = (
         2 * junction_coupling.column.column_cell_count + 1 if junction_coupling is not None else 0
     )
-    delay_substeps = 0
+    transit_substep_count = 0
     trace_every = 0 if trace_request is None else trace_request.stride
     if trace_request is not None:
         elbow_force_samples = list(trace_request.elbow_force_samples)
@@ -764,18 +764,20 @@ def _integrate(
             len(s) for s in unbalance_force_samples
         ]:
             raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
-        forced_substep_count = int(offsets[-1])
-        flat_a = np.fromiter(
+        forced_substep_count = int(sample_start[-1])
+        elbow_a_force_by_substep = np.fromiter(
             itertools.chain.from_iterable(fa for _ph, fa, _fb in elbow_force_samples),
             np.float64,
             count=forced_substep_count,
         )
-        flat_b = np.fromiter(
+        elbow_b_force_by_substep = np.fromiter(
             itertools.chain.from_iterable(fb for _ph, _fa, fb in elbow_force_samples),
             np.float64,
             count=forced_substep_count,
         )
-        delay_substeps = sum(len(fa) for ph, fa, _fb in elbow_force_samples if ph == PHASE_TRANSIT)
+        transit_substep_count = sum(
+            len(fa) for ph, fa, _fb in elbow_force_samples if ph == PHASE_TRANSIT
+        )
         frame_capacity = tracing.check_memory(
             forced_substep_count,
             len(unbalance_force_samples),
@@ -785,10 +787,16 @@ def _integrate(
             grid_point_count,
         )
     else:
-        flat_a = flat_b = np.zeros(0)
+        elbow_a_force_by_substep = elbow_b_force_by_substep = np.zeros(0)
         frame_capacity = 0
     buffers = tracing.allocate_frames(frame_capacity, grid_point_count, int(trace_every))
-    schedule = _ForceSchedule(flat, offsets, flat_a, flat_b, int(delay_substeps))
+    schedule = _ForceSchedule(
+        unbalance_force_by_substep,
+        sample_start,
+        elbow_a_force_by_substep,
+        elbow_b_force_by_substep,
+        int(transit_substep_count),
+    )
     if junction_coupling is not None:
         column = junction_coupling.column
         junction_force = junction_coupling.d_f
