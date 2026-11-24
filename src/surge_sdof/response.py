@@ -63,7 +63,6 @@ set-up (D-4) rather than in the first MoC update.
 
 from __future__ import annotations
 
-import itertools
 import math
 import operator
 from dataclasses import dataclass
@@ -828,22 +827,17 @@ def _kernel_inputs(
     trace_request: tracing.TraceRequest | None,
 ) -> tuple[_ForceSchedule, np.ndarray, tracing.TraceBuffers]:
     """The kernel's inputs: the ``_ForceSchedule`` (``unbalance_force_samples`` flattened
-    once, and with a ``trace_request`` the elbow forces of
-    ``trace_request.elbow_force_samples`` flattened the same way), the zeroed response
+    by ``loads.flatten_unbalance_force``, and with a ``trace_request`` the elbow forces of
+    ``trace_request.elbow_force_samples`` by ``loads.flatten_elbow_forces``, whose sample
+    starts must agree), the zeroed response
     history (``nominal_forced_sample_count * 2`` samples for ``output_type`` 1-3, empty for
     0) and the trace buffers (Session V.1: sized by ``trace.check_memory`` and allocated by
     ``trace.allocate_frames``; without a request a stride of 0 and empty buffers)."""
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
-    unbalance_force_samples = list(unbalance_force_samples)
-    sample_start = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
-    for i, sample in enumerate(unbalance_force_samples):
-        sample_start[i + 1] = sample_start[i] + len(sample)
-    unbalance_force_by_substep = np.fromiter(
-        itertools.chain.from_iterable(unbalance_force_samples),
-        dtype=np.float64,
-        count=int(sample_start[-1]),
+    unbalance_force_by_substep, sample_start = loads.flatten_unbalance_force(
+        unbalance_force_samples
     )
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
@@ -855,28 +849,18 @@ def _kernel_inputs(
     transit_substep_count = 0
     trace_every = 0 if trace_request is None else trace_request.stride
     if trace_request is not None:
-        elbow_force_samples = list(trace_request.elbow_force_samples)
-        if [len(fa) for _ph, fa, _fb in elbow_force_samples] != [
-            len(s) for s in unbalance_force_samples
-        ]:
+        (
+            elbow_a_force_by_substep,
+            elbow_b_force_by_substep,
+            elbow_sample_start,
+            transit_substep_count,
+        ) = loads.flatten_elbow_forces(trace_request.elbow_force_samples)
+        if not np.array_equal(elbow_sample_start, sample_start):
             raise AssertionError("elbow_forces and unbalance_force disagree on the samples")
         forced_substep_count = int(sample_start[-1])
-        elbow_a_force_by_substep = np.fromiter(
-            itertools.chain.from_iterable(fa for _ph, fa, _fb in elbow_force_samples),
-            np.float64,
-            count=forced_substep_count,
-        )
-        elbow_b_force_by_substep = np.fromiter(
-            itertools.chain.from_iterable(fb for _ph, _fa, fb in elbow_force_samples),
-            np.float64,
-            count=forced_substep_count,
-        )
-        transit_substep_count = sum(
-            len(fa) for ph, fa, _fb in elbow_force_samples if ph == PHASE_TRANSIT
-        )
         frame_capacity = tracing.check_memory(
             forced_substep_count,
-            len(unbalance_force_samples),
+            len(sample_start) - 1,
             int(nominal_forced_sample_count),
             int(substep_count),
             trace_every,

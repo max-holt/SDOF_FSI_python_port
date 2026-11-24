@@ -29,7 +29,7 @@ what the caller does at sample boundaries. See ``docs/architecture.md``.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import NamedTuple
 
 import numpy as np
@@ -50,6 +50,8 @@ __all__ = [
     "overlap_substeps",
     "unbalance_force",
     "elbow_forces",
+    "flatten_unbalance_force",
+    "flatten_elbow_forces",
 ]
 
 
@@ -496,3 +498,65 @@ def elbow_forces(
                     + elbow_b_force_advanced_next * next_sample_weight[advanced_ramp_index]
                 )
             yield (PHASE_FORCED, elbow_a_forces, elbow_b_forces)
+
+
+def flatten_unbalance_force(samples: Iterable[list[float]]) -> tuple[np.ndarray, np.ndarray]:
+    """The schedule of ``unbalance_force`` as the compiled loop reads it.
+
+    Parameters
+    ----------
+    samples : iterable of list of float
+        The ``unbalance_force`` generator (consumed here, so its D-7 / D-8 errors surface
+        where they always have: at the sample that raises).
+
+    Returns
+    -------
+    unbalance_force_by_substep : numpy.ndarray
+        float64, every sample's per-sub-step ``forceA - forceB`` in order, N.
+    sample_start : numpy.ndarray
+        int64, samples + 1: where each sample's sub-steps start (the truncated last
+        transit sample keeps its length).
+    """
+    unbalance_forces = []
+    sample_start = [0]
+    for sample in samples:
+        unbalance_forces.extend(sample)
+        sample_start.append(len(unbalance_forces))
+    return np.array(unbalance_forces, dtype=np.float64), np.array(sample_start, dtype=np.int64)
+
+
+def flatten_elbow_forces(
+    samples: Iterable[tuple[int, list[float], list[float]]],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """The schedule of ``elbow_forces`` as the compiled loop's trace reads it.
+
+    Parameters
+    ----------
+    samples : iterable of (int, list of float, list of float)
+        The ``elbow_forces`` generator (consumed here).
+
+    Returns
+    -------
+    elbow_a_force_by_substep, elbow_b_force_by_substep : numpy.ndarray
+        float64, every sample's per-sub-step elbow forces in order, N.
+    sample_start : numpy.ndarray
+        int64, samples + 1, as ``flatten_unbalance_force`` (the caller compares the two).
+    transit_substep_count : int
+        Sub-steps of the transit phase: the transit -> forced boundary.
+    """
+    elbow_a_forces = []
+    elbow_b_forces = []
+    sample_start = [0]
+    transit_substep_count = 0
+    for phase, sample_elbow_a_forces, sample_elbow_b_forces in samples:
+        elbow_a_forces.extend(sample_elbow_a_forces)
+        elbow_b_forces.extend(sample_elbow_b_forces)
+        sample_start.append(len(elbow_a_forces))
+        if phase == PHASE_TRANSIT:
+            transit_substep_count += len(sample_elbow_a_forces)
+    return (
+        np.array(elbow_a_forces, dtype=np.float64),
+        np.array(elbow_b_forces, dtype=np.float64),
+        np.array(sample_start, dtype=np.int64),
+        transit_substep_count,
+    )
