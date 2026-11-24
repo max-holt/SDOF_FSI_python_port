@@ -702,6 +702,111 @@ def _trace_frame(
         frame_velocity[frame_index, 2 * column_cell_count] = velocity_a[column_cell_count]
 
 
+class _RunState(NamedTuple):
+    """What one substep changes: the SDOF state, the running maxima and the counters.
+
+    Passed into ``_structure_substep`` and returned by it (``docs/style.md`` §4: scalars
+    that evolve are passed in and returned).
+    """
+
+    x: float  # m
+    v: float  # m/s
+    a: float  # m/s²
+    x_max: float  # largest |x| so far, m
+    v_max: float  # largest |v| so far, m/s
+    a_max: float  # largest |a| so far, m/s²
+    substep_index: int  # running 0-based sub-step counter
+    frame_count: int  # trace frames written
+
+
+class _SubstepInputs(NamedTuple):
+    """What a substep reads and never changes; built once per kernel call."""
+
+    sdof_params: SdofParams
+    substep_duration: float  # s
+    schedule: _ForceSchedule  # the trace frame's phase and elbow forces, by sub-step index
+    buffers: tracing.TraceBuffers
+    column: moc.FluidColumn  # read by the frame writer only
+
+
+@numba.njit(cache=True)
+def _structure_substep(
+    state: _RunState,
+    applied_force: float,
+    junction_force: float,
+    sample_index: int,
+    is_in_record_window: bool,
+    inputs: _SubstepInputs,
+) -> _RunState:
+    """Step the structure one sub-step, write its trace frame if one is due, and track the
+    running maxima.
+
+    ``applied_force`` (N) is the force the caller formed for this sub-step (after advancing
+    the fluid column, which leaves the SDOF state untouched); ``junction_force`` (N) is
+    recorded in the frame. A frame is due when ``substep_index`` is a multiple of the
+    stride, the capacity lasts and ``is_in_record_window``. The frame's load phase, elbow
+    forces and unbalance force are the schedule's at ``substep_index`` (in the forced loop
+    the sub-step index equals the schedule index). The friction force is ``mass * (v_new -
+    (v_before + (a_before + a_new) * half_dt)) / dt`` with the same ``half_dt = dt / 2`` as
+    ``step_scalars``; the stick flag is ``|v_before| < friction_velocity_step``. Returns
+    the new ``_RunState``.
+    """
+    sdof_params = inputs.sdof_params
+    dt = inputs.substep_duration
+    schedule = inputs.schedule
+    buffers = inputs.buffers
+    column = inputs.column
+    x = state.x
+    v = state.v
+    a = state.a
+    x_max = state.x_max
+    v_max = state.v_max
+    a_max = state.a_max
+    substep_index = state.substep_index
+    frame_count = state.frame_count
+    trace_every = buffers.trace_every
+    frame_capacity = buffers.frame_index_columns.shape[0]
+    record_frame = (
+        trace_every > 0
+        and substep_index % trace_every == 0
+        and frame_count < frame_capacity
+        and is_in_record_window
+    )
+    v_before = v
+    a_before = a
+    x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
+    if record_frame:
+        half_dt = dt / 2
+        _trace_frame(
+            buffers,
+            frame_count,
+            _Frame(
+                substep_index,
+                sample_index,
+                PHASE_TRANSIT if substep_index < schedule.transit_substep_count else PHASE_FORCED,
+                x,
+                v,
+                a,
+                schedule.elbow_a_force_by_substep[substep_index],
+                schedule.elbow_b_force_by_substep[substep_index],
+                float(schedule.unbalance_force_by_substep[substep_index]),
+                sdof_params.mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
+                abs(v_before) < sdof_params.friction_velocity_step,
+                junction_force if column.is_fluid_coupled else 0.0,
+            ),
+            column,
+        )
+        frame_count += 1
+    substep_index += 1
+    if abs(a) > a_max:
+        a_max = abs(a)
+    if abs(v) > v_max:
+        v_max = abs(v)
+    if abs(x) > x_max:
+        x_max = abs(x)
+    return _RunState(x, v, a, x_max, v_max, a_max, substep_index, frame_count)
+
+
 def _integrate(
     unbalance_force_samples,
     sdof_params: SdofParams,
@@ -858,9 +963,6 @@ def _integrate_kernel(
     """
     unbalance_force_by_substep = schedule.unbalance_force_by_substep
     sample_start = schedule.sample_start
-    elbow_a_force_by_substep = schedule.elbow_a_force_by_substep
-    elbow_b_force_by_substep = schedule.elbow_b_force_by_substep
-    transit_substep_count = schedule.transit_substep_count
     dt = settings.substep_duration
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
@@ -890,25 +992,19 @@ def _integrate_kernel(
     a_before = 0.0
 
     # ------------------------------------------------- transit and forced phases
+    state = _RunState(x, v, a, x_max, v_max, a_max, substep_index, frame_count)
+    inputs = _SubstepInputs(sdof_params, dt, schedule, buffers, column)
     for s in range(forced_sample_count):
         sample_number += 1
         if is_per_phase_parity:
-            parity_offset = (sample_number - 1) * substep_count - substep_index
+            parity_offset = (sample_number - 1) * substep_count - state.substep_index
         for i in range(sample_start[s], sample_start[s + 1]):
             unbalance_force = float(unbalance_force_by_substep[i])
-            record_frame = (
-                trace_every > 0
-                and substep_index % trace_every == 0
-                and frame_count < frame_capacity
-            )
-            if record_frame:
-                v_before = v
-                a_before = a
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
-                        (substep_index + parity_offset) % 2 == 0,
-                        a * dt,
+                        (state.substep_index + parity_offset) % 2 == 0,
+                        state.a * dt,
                         column,
                         junction_force,
                     )
@@ -916,39 +1012,23 @@ def _integrate_kernel(
                 applied_force = junction_force + unbalance_force
             else:
                 applied_force = 0.0 + unbalance_force
-            x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
-            if record_frame:
-                _trace_frame(
-                    buffers,
-                    frame_count,
-                    _Frame(
-                        substep_index,
-                        sample_number - 1,
-                        PHASE_TRANSIT if substep_index < transit_substep_count else PHASE_FORCED,
-                        x,
-                        v,
-                        a,
-                        elbow_a_force_by_substep[i],
-                        elbow_b_force_by_substep[i],
-                        unbalance_force,
-                        mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
-                        abs(v_before) < friction_velocity_step,
-                        junction_force if is_fluid_coupled else 0.0,
-                    ),
-                    column,
-                )
-                frame_count += 1
-            substep_index += 1
-            if abs(a) > a_max:
-                a_max = abs(a)
-            if abs(v) > v_max:
-                v_max = abs(v)
-            if abs(x) > x_max:
-                x_max = abs(x)
+            state = _structure_substep(
+                state, applied_force, junction_force, sample_number - 1, True, inputs
+            )
             if abs(unbalance_force) > unbalance_force_max:
                 unbalance_force_max = abs(unbalance_force)
         if output_type > 0:
-            _record_sample(response_history, output_type, sample_number - 1, x, v, a)
+            _record_sample(
+                response_history, output_type, sample_number - 1, state.x, state.v, state.a
+            )
+    x = state.x
+    v = state.v
+    a = state.a
+    x_max = state.x_max
+    v_max = state.v_max
+    a_max = state.a_max
+    substep_index = state.substep_index
+    frame_count = state.frame_count
 
     # ---------------------------------------------------------- free decay
     forced_samples = sample_number
