@@ -346,3 +346,22 @@ The parameter-objects session (plan group 3).
 46. **The brief and the plan.** Where `docs/review/plan.md` and a session brief differ, the
     plan wins. The parameter-object groups are written to
     `docs/review/parameter_objects.md` (ruling 10) and shown to the owner in full.
+
+## Rulings (owner, session R.6, 24 Nov 2026)
+
+The single-substep session (plan group 4).
+
+47. **Plan 3.7 and 3.10 to the public API session.** The span, restraint and fluid objects
+    for the set-up functions (3.7) and the entry-point extraction (3.10) move to the public
+    API session, which designs the input groups; made now, those groups would be designed
+    twice.
+48. **Plan 3.11 to the supporting-modules session.** The single set-up query moves to group
+    5, because the tools are its main users.
+49. **`JunctionCoupling` replaced by a function.** It holds only the `FluidColumn` and two
+    values that only tests read (`dt`, and `d_f`, which is 0.0 at entry). It becomes a
+    function that returns the `FluidColumn`, as its own commit before the substep work;
+    the tests are pointed at the values they actually check.
+50. **Benchmark rows and host drift.** The `tools/bench.py` row is recorded as measured,
+    but a host that drifts during a session decides nothing: the interleaved A/B run of the
+    old code against the new on the same host does (ruling 43). Where `plan.md` and the
+    session brief differ, `plan.md` wins (ruling 46).
