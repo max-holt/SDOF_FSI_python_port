@@ -174,6 +174,22 @@ second review (`docs/review/plan_r2.md`). They bind the rest of the review along
 38. **The two long exported column names** (`daf_*`, `f_eq_over_LD2_*`) are undecided and
     settled in the public API session; "DAF" is the paper's own term.
 
+## Rulings (owner, session R.4, 24 Nov 2026)
+
+The constants and control-flow session (plan group 2).
+
+39. **Gate timing.** In the renames session commits were made while their gates were still
+    running in the background, and the branch was pushed with half of them unfinished; two
+    bad commits had to be rebuilt. From now on `make lint` and the compiled fast suite,
+    the snapshot tests included, run and pass before each commit is made, and the
+    pure-Python run (`NUMBA_DISABLE_JIT=1`) of a commit passes before the next commit is
+    made. The branch is pushed only when every commit's gates are green.
+40. **Plan 2.2 deferred.** The coupling kind as a plain flag changes the type of a kernel
+    parameter (`_integrate_kernel`, `_trace_frame`), which is a kernel-signature change
+    (R4). It moves to group 3, where the kernel signatures change anyway.
+41. **Plan 2.15 approved** for session R.4 (R3: one schedule walk, the run-time
+    cross-check of the two walks removed).
+
 ## Gates
 
 | when | gate |
