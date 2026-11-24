@@ -114,7 +114,7 @@ def _schedule(force, kw):
     elbows = list(loads.elbow_forces(force, *_loads_args(kw)))
     flat = np.array([f for s in samples for f in s])
     offsets = np.cumsum([0] + [len(s) for s in samples])
-    delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == 0)
+    delay_substeps = sum(len(fa) for ph, fa, _fb in elbows if ph == tracing.PHASE_TRANSIT)
     unb = loads.transit_delay(kw["physical_length"], kw["celerity"], kw["sample_freq"])
     out_max = int(np.size(force)) + clng(unb)
     return flat, offsets, delay_substeps, out_max

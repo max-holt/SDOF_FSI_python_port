@@ -36,7 +36,15 @@ import numpy as np
 
 from surge_sdof.vba_compat import clng, vba_2d, vba_floor
 
+# The load phases this module produces, as recorded in the trace (``trace.PHASE_*``, the
+# integer codes of the exported ``phase`` column; docs/data_format.md). The third phase,
+# free decay, has no unbalance force and is defined with its consumers (``trace``).
+PHASE_TRANSIT = 0  # force A held at the first sample while force B ramps (VBA phase 1)
+PHASE_FORCED = 1  # both elbow forces interpolate through the history (VBA phase 2)
+
 __all__ = [
+    "PHASE_TRANSIT",
+    "PHASE_FORCED",
     "as_history_2d",
     "transit_delay",
     "overlap_substeps",
@@ -153,11 +161,11 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
     """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
     ``elbow_forces`` (which differ only in their inner ``k`` loops).
 
-    Transit-phase items are ``(0, totInd, elbow_a_force, elbow_b_force_current,
+    Transit-phase items are ``(PHASE_TRANSIT, totInd, elbow_a_force, elbow_b_force_current,
     elbow_b_force_next)``: the force at elbow A is held, the force at elbow B ramps between
     the pair; the consumer truncates the sample at the VBA ``Exit For``
     (``first_substep_number + k > unballanceStepQTY * stepQTY``). Forced-phase items are
-    ``(1, elbow_a_force_current,
+    ``(PHASE_FORCED, elbow_a_force_current,
     elbow_a_force_next, elbow_b_force_current, elbow_b_force_next,
     elbow_b_force_advanced_current, elbow_b_force_advanced_next)``: elbow A ramps between the
     first pair, elbow B between the second pair for the first ``stepQTY - kOverlap``
@@ -206,7 +214,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
                 next_history_column = min(history_column, history_column_count)
                 next_history_row = min(history_row + 1, history_row_count)
             yield (
-                0,
+                PHASE_TRANSIT,
                 sample_number,
                 elbow_a_force,
                 force_history_one_based[history_row][history_column],
@@ -260,7 +268,7 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
                 elbow_b_next_column = elbow_b_column
                 elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
             yield (
-                1,
+                PHASE_FORCED,
                 elbow_a_force_current,
                 elbow_a_force_next,
                 elbow_b_force_current,
@@ -329,7 +337,7 @@ def unbalance_force(
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
     for item in _schedule(walk):
-        if item[0] == 0:
+        if item[0] == PHASE_TRANSIT:
             _phase, sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
             sample_forces = []
@@ -397,8 +405,8 @@ def elbow_forces(
     Yields
     ------
     phase : int
-        0 for the transit phase (``forceA`` held at the first sample while ``forceB``
-        ramps), 1 for the forced phase (both ramp).
+        ``PHASE_TRANSIT`` (0: ``forceA`` held at the first sample while ``forceB``
+        ramps) or ``PHASE_FORCED`` (1: both ramp).
     elbow_a_force, elbow_b_force : list of float
         The force at elbow A and the delayed force at elbow B, N, per sub-step; the same
         lengths as the ``unbalance_force`` samples (the last delay sample truncated).
@@ -424,7 +432,7 @@ def elbow_forces(
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
     for item in _schedule(walk):
-        if item[0] == 0:
+        if item[0] == PHASE_TRANSIT:
             _phase, sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
             elbow_a_forces = []
@@ -437,7 +445,7 @@ def elbow_forces(
                 )
                 if first_substep_number + k > transit_delay_substeps:
                     break
-            yield (0, elbow_a_forces, elbow_b_forces)
+            yield (PHASE_TRANSIT, elbow_a_forces, elbow_b_forces)
         else:
             (
                 _phase,
@@ -469,4 +477,4 @@ def elbow_forces(
                     elbow_b_force_advanced_current * current_sample_weight[advanced_ramp_index]
                     + elbow_b_force_advanced_next * next_sample_weight[advanced_ramp_index]
                 )
-            yield (1, elbow_a_forces, elbow_b_forces)
+            yield (PHASE_FORCED, elbow_a_forces, elbow_b_forces)

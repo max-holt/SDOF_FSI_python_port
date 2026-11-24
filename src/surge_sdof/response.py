@@ -684,7 +684,7 @@ def _integrate(
             np.float64,
             count=forced_substep_count,
         )
-        delay_substeps = sum(len(fa) for ph, fa, _fb in elbow_force_samples if ph == 0)
+        delay_substeps = sum(len(fa) for ph, fa, _fb in elbow_force_samples if ph == PHASE_TRANSIT)
         frame_capacity = tracing.check_memory(
             forced_substep_count,
             len(unbalance_force_samples),

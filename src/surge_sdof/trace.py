@@ -55,6 +55,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from surge_sdof.loads import PHASE_FORCED, PHASE_TRANSIT
 from surge_sdof.structure import SdofParams
 
 __all__ = [
@@ -70,9 +71,9 @@ __all__ = [
     "build_trace",
 ]
 
-PHASE_TRANSIT = 0
-PHASE_FORCED = 1
-PHASE_FREE_DECAY = 2
+# PHASE_TRANSIT and PHASE_FORCED are produced by ``loads`` and re-exported here with the
+# third code, which only the solver loop records.
+PHASE_FREE_DECAY = 2  # no unbalance force; the structure rings down (VBA phase 3)
 
 # Columns of the kernel's float64 frame array ``tr_f (capacity, FRAME_STATE_COLUMN_COUNT)``.
 (
