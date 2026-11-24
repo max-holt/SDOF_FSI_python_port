@@ -404,8 +404,8 @@ def test_capacity_arithmetic():
     assert tracing.frame_capacity(100, 10, 12, 5, 1) == 170
     assert tracing.frame_capacity(100, 10, 12, 5, 7) == -(-170 // 7) == 25
     assert tracing.frame_capacity(100, 30, 12, 5, 1) == 100  # window already spent
-    assert tracing.allocate_frames(0, 9)[2].shape == (0, 0)
-    assert tracing.allocate_frames(3, 9)[2].shape == (3, 9) and tracing.allocate_frames(3, 0)[
+    assert tracing.allocate_frames(0, 9, 0)[2].shape == (0, 0)
+    assert tracing.allocate_frames(3, 9, 1)[2].shape == (3, 9) and tracing.allocate_frames(3, 0, 1)[
         3
     ].shape == (3, 0)
 

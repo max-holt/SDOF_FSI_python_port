@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -66,6 +67,7 @@ __all__ = [
     "Trace",
     "frame_capacity",
     "check_memory",
+    "TraceBuffers",
     "allocate_frames",
     "interleave",
     "build_trace",
@@ -280,10 +282,36 @@ def check_memory(
     )
 
 
-def allocate_frames(
-    frame_capacity: int, grid_point_count: int
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """``(tr_f, tr_i, tr_p, tr_v)`` zeroed for the kernel: ``(cap, FRAME_STATE_COLUMN_COUNT)``
+class TraceBuffers(NamedTuple):
+    """The frame buffers the compiled loop fills, and the stride it fills them at.
+
+    One type for every run: an untraced run passes zero-row buffers and a stride of 0. The
+    four buffers come first, so ``buffers[2]`` is the pressure buffer.
+
+    Attributes
+    ----------
+    frame_state : numpy.ndarray
+        ``(capacity, FRAME_STATE_COLUMN_COUNT)`` float64: the columns ``COL_X`` ..
+        ``COL_JUNCTION_FORCE`` per frame.
+    frame_index_columns : numpy.ndarray
+        ``(capacity, FRAME_INDEX_COLUMN_COUNT)`` int64: ``COL_SUBSTEP_INDEX`` ..
+        ``COL_IS_STICKING`` per frame.
+    frame_pressure, frame_velocity : numpy.ndarray
+        ``(capacity, grid_point_count)`` float64: the column interleaved ``A0 B0 A1 ... AN``
+        per frame, Pa and m/s (no columns for a lumped run).
+    trace_every : int
+        Record every ``trace_every``-th sub-step; 0 records nothing.
+    """
+
+    frame_state: np.ndarray
+    frame_index_columns: np.ndarray
+    frame_pressure: np.ndarray
+    frame_velocity: np.ndarray
+    trace_every: int
+
+
+def allocate_frames(frame_capacity: int, grid_point_count: int, trace_every: int) -> TraceBuffers:
+    """``TraceBuffers`` zeroed for the kernel: ``(cap, FRAME_STATE_COLUMN_COUNT)``
     float64, ``(cap, FRAME_INDEX_COLUMN_COUNT)`` int64 and two ``(cap, grid_point_count)`` float64
     (``grid_point_count`` is 0 for lumped; both are ``(0, 0)`` when ``frame_capacity`` is 0).
 
@@ -293,13 +321,16 @@ def allocate_frames(
         From ``frame_capacity`` / ``check_memory``.
     grid_point_count : int
         ``2N + 1`` or 0.
+    trace_every : int
+        The stride, 0 when not tracing.
     """
     allocated_grid_point_count = grid_point_count if frame_capacity > 0 else 0
-    return (
+    return TraceBuffers(
         np.zeros((frame_capacity, FRAME_STATE_COLUMN_COUNT)),
         np.zeros((frame_capacity, FRAME_INDEX_COLUMN_COUNT), dtype=np.int64),
         np.zeros((frame_capacity, allocated_grid_point_count)),
         np.zeros((frame_capacity, allocated_grid_point_count)),
+        trace_every,
     )
 
 
@@ -331,16 +362,12 @@ def interleave(a_nodes: np.ndarray, b_cells: np.ndarray) -> np.ndarray:
 def build_trace(
     solver: str,
     inputs: dict,
-    trace_every: int,
     substep_duration: float,
     substep_count: int,
     nominal_forced_sample_count: int,
     params: SdofParams,
     n_frames: int,
-    tr_f: np.ndarray,
-    tr_i: np.ndarray,
-    tr_p: np.ndarray,
-    tr_v: np.ndarray,
+    buffers: TraceBuffers,
     jc=None,
     celerity: float = 0.0,
     inactive_end_cell_count: int = 0,
@@ -350,13 +377,12 @@ def build_trace(
 
     Parameters
     ----------
-    solver, inputs, trace_every, substep_duration, substep_count, nominal_forced_sample_count,
-    params
+    solver, inputs, substep_duration, substep_count, nominal_forced_sample_count, params
         The one-off fields.
     n_frames : int
         Frames the kernel wrote.
-    tr_f, tr_i, tr_p, tr_v : numpy.ndarray
-        From ``allocate_frames``, filled by the kernel.
+    buffers : TraceBuffers
+        From ``allocate_frames``, filled by the kernel (its ``trace_every`` is the stride).
     jc : coupling.JunctionCoupling or None
         The junction of a JC run (its grid and moving fractions), None for lumped.
     celerity : float
@@ -364,12 +390,12 @@ def build_trace(
     inactive_end_cell_count : int
         ``moc.INACTIVE_END_CELL_COUNT`` for a JC run.
     """
-    frame_state = tr_f[:n_frames]
-    frame_index_columns = tr_i[:n_frames]
+    frame_state = buffers.frame_state[:n_frames]
+    frame_index_columns = buffers.frame_index_columns[:n_frames]
     sub_step = frame_index_columns[:, COL_SUBSTEP_INDEX].copy()
     fields = {
         "solver": solver,
-        "trace_every": int(trace_every),
+        "trace_every": int(buffers.trace_every),
         "dt": float(substep_duration),
         "step_qty": int(substep_count),
         "out_max": int(nominal_forced_sample_count),
@@ -397,8 +423,8 @@ def build_trace(
             pivot_seg_qty=int(jc.column.end_to_elbow_cell_count),
             pipe_seg_qty=column_cell_count,
             ext_qty=int(inactive_end_cell_count),
-            p_cells=tr_p[:n_frames].copy(),
-            v_cells=tr_v[:n_frames].copy(),
+            p_cells=buffers.frame_pressure[:n_frames].copy(),
+            v_cells=buffers.frame_velocity[:n_frames].copy(),
             cell_position=np.arange(grid_point_count, dtype=np.float64)
             * (float(celerity) * float(substep_duration)),
             cell_kind=np.arange(grid_point_count) % 2,

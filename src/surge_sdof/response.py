@@ -568,10 +568,7 @@ def _record_sample(
 
 @numba.njit(cache=True)
 def _trace_frame(
-    tr_f: np.ndarray,
-    tr_i: np.ndarray,
-    tr_p: np.ndarray,
-    tr_v: np.ndarray,
+    buffers: tracing.TraceBuffers,
     frame: int,
     n: int,
     sample: int,
@@ -596,6 +593,10 @@ def _trace_frame(
     ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, with fluid coupling, the column
     interleaved ``A0 B0 A1 ... A(N)`` into ``tr_p`` / ``tr_v``. Reads only; the solver
     state is untouched."""
+    tr_f = buffers.frame_state
+    tr_i = buffers.frame_index_columns
+    tr_p = buffers.frame_pressure
+    tr_v = buffers.frame_velocity
     tr_f[frame, COL_X] = x
     tr_f[frame, COL_V] = v
     tr_f[frame, COL_A] = a
@@ -700,7 +701,7 @@ def _integrate(
     else:
         flat_a = flat_b = np.zeros(0)
         frame_capacity = 0
-    tr_f, tr_i, tr_p, tr_v = tracing.allocate_frames(frame_capacity, grid_point_count)
+    buffers = tracing.allocate_frames(frame_capacity, grid_point_count, int(trace_every))
     if junction_coupling is not None:
         column = junction_coupling.column
         junction_force = junction_coupling.d_f
@@ -721,14 +722,10 @@ def _integrate(
             response_history,
             column,
             junction_force,
-            int(trace_every),
             flat_a,
             flat_b,
             int(delay_substeps),
-            tr_f,
-            tr_i,
-            tr_p,
-            tr_v,
+            buffers,
         )
     )
     if junction_coupling is not None:
@@ -751,16 +748,12 @@ def _integrate(
         trace = tracing.build_trace(
             trace_request.solver,
             trace_request.inputs,
-            trace_every,
             substep_duration,
             substep_count,
             nominal_forced_sample_count,
             sdof_params,
             int(n_frames),
-            tr_f,
-            tr_i,
-            tr_p,
-            tr_v,
+            buffers,
             jc=junction_coupling,
             celerity=trace_request.celerity,
             inactive_end_cell_count=moc.INACTIVE_END_CELL_COUNT,
@@ -791,14 +784,10 @@ def _integrate_kernel(
     history: np.ndarray,
     column: moc.FluidColumn,
     d_f: float,
-    trace_every: int,
     flat_a: np.ndarray,
     flat_b: np.ndarray,
     delay_substeps: int,
-    tr_f: np.ndarray,
-    tr_i: np.ndarray,
-    tr_p: np.ndarray,
-    tr_v: np.ndarray,
+    buffers: tracing.TraceBuffers,
 ):
     """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
 
@@ -839,7 +828,8 @@ def _integrate_kernel(
     n_samples = offsets.shape[0] - 1
     # trace (Session V.1)
     frame = 0
-    cap = tr_i.shape[0]
+    trace_every = buffers.trace_every
+    cap = buffers.frame_index_columns.shape[0]
     half_dt = dt / 2
     v_old = 0.0
     a_old = 0.0
@@ -870,10 +860,7 @@ def _integrate_kernel(
             x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
             if rec:
                 _trace_frame(
-                    tr_f,
-                    tr_i,
-                    tr_p,
-                    tr_v,
+                    buffers,
                     frame,
                     n,
                     tot_ind - 1,
@@ -939,10 +926,7 @@ def _integrate_kernel(
             x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
             if rec:
                 _trace_frame(
-                    tr_f,
-                    tr_i,
-                    tr_p,
-                    tr_v,
+                    buffers,
                     frame,
                     n,
                     tot_ind - 1,
