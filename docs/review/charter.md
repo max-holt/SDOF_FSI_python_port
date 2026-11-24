@@ -329,3 +329,20 @@ Still not visible, and recorded as such:
   stride of the one budget case. The stride itself is pinned, its arithmetic is not.
 * `0.5 * mass_total * v**2` → `0.5 * v**2 * mass_total` (`tools/sweep_jc.py:391`), and the
   like: equal bits by construction, forbidden all the same (rule 2).
+
+## Rulings (owner, session R.5, 24 Nov 2026)
+
+The parameter-objects session (plan group 3).
+
+43. **Speed comparisons.** Speed is judged by an A/B run of the old code against the new on
+    the same host in the same session, or by time relative to the literal port measured in
+    the same run. Raw times from different sessions are not comparable: the host changes
+    between sessions. The 5 % limit applies to that comparison, on the lumped and on the
+    junction-coupling path alike.
+44. **Plan 2.2 in group 3.** The coupling kind as a plain boolean flag is made in this
+    session, with the kernel signatures it changes (ruling 40).
+45. **No SI conversion at the boundary.** The proposal in `NOTES.md` (R.4) to convert inputs
+    to SI once at the entry is declined; the named factors stay where they are.
+46. **The brief and the plan.** Where `docs/review/plan.md` and a session brief differ, the
+    plan wins. The parameter-object groups are written to
+    `docs/review/parameter_objects.md` (ruling 10) and shown to the owner in full.
