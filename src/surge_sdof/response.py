@@ -281,6 +281,7 @@ def peak_response(
     trace_request = None
     if trace_every:
         trace_request = _TraceRequest(
+            trace_every,
             "peak_response",
             {
                 "force_history": force_history_2d,
@@ -308,7 +309,6 @@ def peak_response(
         None,
         nominal_forced_sample_count,
         output_type,
-        trace_every=trace_every,
         trace_request=trace_request,
     )
 
@@ -484,6 +484,7 @@ def peak_response_jc(
     trace_request = None
     if trace_every:
         trace_request = _TraceRequest(
+            trace_every,
             "peak_response_jc",
             {
                 "force_history": force_history_2d,
@@ -517,7 +518,6 @@ def peak_response_jc(
         nominal_forced_sample_count,
         output_type,
         legacy_parity=(parity == "per_phase"),
-        trace_every=trace_every,
         trace_request=trace_request,
     )
 
@@ -531,8 +531,10 @@ def _trace_stride(trace_every) -> int:
 
 
 class _TraceRequest(NamedTuple):
-    """What ``_integrate`` needs beyond the kernel arrays to build a ``Trace``."""
+    """A traced run: the stride and what ``_integrate`` needs beyond the kernel arrays to
+    build a ``Trace``."""
 
+    stride: int  # trace_every > 0: record every stride-th sub-step
     solver: str
     inputs: dict
     celerity: float
@@ -624,7 +626,6 @@ def _integrate(
     nominal_forced_sample_count: int,
     output_type: int,
     legacy_parity: bool = False,
-    trace_every: int = 0,
     trace_request: _TraceRequest | None = None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
@@ -642,11 +643,11 @@ def _integrate(
     ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
     with ``off`` fixed per sample (D-19, approved fix F-2).
 
-    Session V.1: with ``trace_every > 0`` the elbow forces of
+    Session V.1: with a ``trace_request`` (its ``stride`` > 0) the elbow forces of
     ``trace_request.elbow_force_samples`` are flattened like ``unbalance_force_samples``,
     the trace arrays are allocated (``trace.check_memory``, ``trace.allocate_frames``) and
-    the kernel fills them; ``trace.build_trace`` makes the ``Trace``. With 0 the kernel takes
-    empty arrays."""
+    the kernel fills them; ``trace.build_trace`` makes the ``Trace``. Without one the kernel
+    takes a stride of 0 and empty arrays."""
     substep_duration = float(substep_duration)
     unbalance_force_samples = list(unbalance_force_samples)
     offsets = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
@@ -666,9 +667,8 @@ def _integrate(
     # ----------------------------------------------------------------- trace set-up
     grid_point_count = 2 * junction_coupling.n_seg + 1 if junction_coupling is not None else 0
     delay_substeps = 0
-    if trace_every > 0:
-        if trace_request is None:
-            raise TypeError("trace_every > 0 needs the trace meta")
+    trace_every = 0 if trace_request is None else trace_request.stride
+    if trace_request is not None:
         # unbalance_force subtracts the pairs elbow_forces yields, so the two walks give
         # the same samples (loads, plan 2.15).
         elbow_force_samples = list(trace_request.elbow_force_samples)
@@ -764,7 +764,7 @@ def _integrate(
         * sdof_params.stiffness
     )
     trace = None
-    if trace_every > 0:
+    if trace_request is not None:
         trace = tracing.build_trace(
             trace_request.solver,
             trace_request.inputs,
