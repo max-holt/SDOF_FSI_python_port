@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from surge_sdof import moc, structure
-from surge_sdof.trace import Trace
+from surge_sdof.trace import InterleavedGrid, Trace, interleaved_grid
 
 __all__ = [
     "LoopLayout",
@@ -124,14 +124,7 @@ def _segments(grid_point_moving_fraction: np.ndarray) -> tuple[int, int, int, in
 
 
 def loop_layout(
-    grid_point_position: np.ndarray,
-    grid_point_kind: np.ndarray,
-    grid_point_moving_fraction: np.ndarray,
-    end_to_elbow_cell_count: int,
-    column_cell_count: int,
-    ext_qty: int,
-    cell_length: float,
-    portal_frame_height: float,
+    grid: InterleavedGrid, cell_length: float, portal_frame_height: float
 ) -> LoopLayout:
     """Lay the interleaved column on the expansion loop, uniformly by ``grid_point_position``.
 
@@ -146,9 +139,9 @@ def loop_layout(
 
     Parameters
     ----------
-    grid_point_position, grid_point_kind, grid_point_moving_fraction : numpy.ndarray
-        Length ``2N + 1`` (``Trace`` layout).
-    end_to_elbow_cell_count, column_cell_count, ext_qty : int
+    grid : trace.InterleavedGrid
+        The column's grid points, ``2N + 1`` of them (``Trace`` layout); the column has
+        ``moc.INACTIVE_END_CELL_COUNT`` inactive cells at each end.
     cell_length : float
         ``2 * celerity * dt``, m.
     portal_frame_height : float
@@ -158,8 +151,8 @@ def loop_layout(
     -------
     LoopLayout
     """
-    centreline_position = np.asarray(grid_point_position, dtype=np.float64)
-    moving_fraction_array = np.asarray(grid_point_moving_fraction, dtype=np.float64)
+    centreline_position = np.asarray(grid.position, dtype=np.float64)
+    moving_fraction_array = np.asarray(grid.moving_fraction, dtype=np.float64)
     inlet_elbow_index, run_start_index, run_end_index, outlet_elbow_index = _segments(
         moving_fraction_array
     )
@@ -207,11 +200,11 @@ def loop_layout(
     )
     return LoopLayout(
         cell_position=centreline_position,
-        cell_kind=np.asarray(grid_point_kind),
+        cell_kind=np.asarray(grid.kind),
         moving_fraction=moving_fraction_array,
-        pivot_seg_qty=int(end_to_elbow_cell_count),
-        pipe_seg_qty=int(column_cell_count),
-        ext_qty=int(ext_qty),
+        pivot_seg_qty=int(grid.end_to_elbow_cell_count),
+        pipe_seg_qty=int(grid.column_cell_count),
+        ext_qty=int(moc.INACTIVE_END_CELL_COUNT),
         cell_length=float(cell_length),
         portal_height=float(portal_frame_height),
         spacing=grid_point_spacing,
@@ -254,9 +247,7 @@ def _moving_fractions_display(column_cell_count: int, end_to_elbow_cell_count: i
         return moving_fraction_a, moving_fraction_b
 
 
-def lumped_grid(
-    inputs: dict, substep_duration: float
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int, float]:
+def lumped_grid(inputs: dict, substep_duration: float) -> tuple[InterleavedGrid, float]:
     """The MoC grid a lumped case *would* have, for the lumped layout.
 
     Parameters
@@ -269,14 +260,11 @@ def lumped_grid(
 
     Returns
     -------
-    cell_position, cell_kind, moving_fraction : numpy.ndarray
-        Interleaved as ``Trace`` (``trace.interleave``).
-    column_cell_count, end_to_elbow_cell_count : int
+    grid : trace.InterleavedGrid
+        Interleaved as ``Trace``.
     portal_height : float
         m.
     """
-    from surge_sdof.trace import interleave
-
     portal_frame_height = structure.solve_portal_height(
         inputs["physical_length"],
         inputs["flexural_rigidity_ei"],
@@ -289,18 +277,15 @@ def lumped_grid(
     moving_fraction_a, moving_fraction_b = _moving_fractions_display(
         column_cell_count, end_to_elbow_cell_count
     )
-    grid_point_count = 2 * column_cell_count + 1
-    grid_point_position = np.arange(grid_point_count, dtype=np.float64) * (
-        float(inputs["celerity"]) * float(substep_duration)
-    )
-    return (
-        grid_point_position,
-        np.arange(grid_point_count) % 2,
-        interleave(moving_fraction_a, moving_fraction_b),
+    grid = interleaved_grid(
         column_cell_count,
         end_to_elbow_cell_count,
-        portal_frame_height,
+        moving_fraction_a,
+        moving_fraction_b,
+        inputs["celerity"],
+        substep_duration,
     )
+    return grid, portal_frame_height
 
 
 def layout_from_trace(trace: Trace) -> LoopLayout:
@@ -324,31 +309,13 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
             inputs["mass_per_unit_len"],
             inputs["nat_freq"],
         )
-        return loop_layout(
+        grid = InterleavedGrid(
             trace.cell_position,
             trace.cell_kind,
             trace.moving_fraction,
-            trace.pivot_seg_qty,
             trace.pipe_seg_qty,
-            trace.ext_qty,
-            cell_length,
-            portal_frame_height,
+            trace.pivot_seg_qty,
         )
-    (
-        grid_point_position,
-        grid_point_kind,
-        grid_point_moving_fraction,
-        column_cell_count,
-        end_to_elbow_cell_count,
-        portal_frame_height,
-    ) = lumped_grid(inputs, trace.dt)
-    return loop_layout(
-        grid_point_position,
-        grid_point_kind,
-        grid_point_moving_fraction,
-        end_to_elbow_cell_count,
-        column_cell_count,
-        moc.INACTIVE_END_CELL_COUNT,
-        cell_length,
-        portal_frame_height,
-    )
+        return loop_layout(grid, cell_length, portal_frame_height)
+    grid, portal_frame_height = lumped_grid(inputs, trace.dt)
+    return loop_layout(grid, cell_length, portal_frame_height)

@@ -83,6 +83,8 @@ __all__ = [
     "TraceBuffers",
     "allocate_frames",
     "interleave",
+    "InterleavedGrid",
+    "interleaved_grid",
     "build_trace",
     "FrameRow",
     "write_frame_row",
@@ -473,6 +475,63 @@ def interleave(a_nodes: np.ndarray, b_cells: np.ndarray) -> np.ndarray:
     return out
 
 
+class InterleavedGrid(NamedTuple):
+    """The fluid column's grid as the trace lays it out: ``A0 B0 A1 ... A(N)``.
+
+    Attributes
+    ----------
+    position : numpy.ndarray
+        ``2N + 1`` float64: distance of each grid point from the first A node, m.
+    kind : numpy.ndarray
+        ``2N + 1`` ints: 0 for an A node, 1 for a B cell.
+    moving_fraction : numpy.ndarray
+        ``2N + 1``: the moving fractions of the A nodes and B cells, interleaved.
+    column_cell_count : int
+        ``N``, the cells of the column (``moc.grid_size``).
+    end_to_elbow_cell_count : int
+        Cells from each end of the column to the elbow between leg and span.
+    """
+
+    position: np.ndarray
+    kind: np.ndarray
+    moving_fraction: np.ndarray
+    column_cell_count: int
+    end_to_elbow_cell_count: int
+
+
+def interleaved_grid(
+    column_cell_count: int,
+    end_to_elbow_cell_count: int,
+    moving_fraction_a: np.ndarray,
+    moving_fraction_b: np.ndarray,
+    celerity: float,
+    substep_duration: float,
+) -> InterleavedGrid:
+    """The ``InterleavedGrid`` of a column of ``column_cell_count`` cells: grid points
+    ``celerity * substep_duration`` apart (half a cell), A nodes and B cells alternating.
+
+    Parameters
+    ----------
+    column_cell_count, end_to_elbow_cell_count : int
+        The grid (``moc.grid_size``).
+    moving_fraction_a, moving_fraction_b : numpy.ndarray
+        Length ``N + 1`` and ``N`` (``moc.moving_fractions``).
+    celerity : float
+        m/s.
+    substep_duration : float
+        s.
+    """
+    grid_point_count = 2 * column_cell_count + 1
+    return InterleavedGrid(
+        position=np.arange(grid_point_count, dtype=np.float64)
+        * (float(celerity) * float(substep_duration)),
+        kind=np.arange(grid_point_count) % 2,
+        moving_fraction=interleave(moving_fraction_a, moving_fraction_b),
+        column_cell_count=column_cell_count,
+        end_to_elbow_cell_count=end_to_elbow_cell_count,
+    )
+
+
 def build_trace(
     request: TraceRequest,
     settings: RunSettings,
@@ -525,18 +584,23 @@ def build_trace(
     fields["t"] = (fields["sub_step"] + 1) * float(substep_duration)
     fields["stick"] = fields["stick"] != 0
     if column.is_fluid_coupled:
-        column_cell_count = int(column.column_cell_count)
-        grid_point_count = 2 * column_cell_count + 1
+        grid = interleaved_grid(
+            int(column.column_cell_count),
+            int(column.end_to_elbow_cell_count),
+            column.moving_fraction_a,
+            column.moving_fraction_b,
+            celerity,
+            substep_duration,
+        )
         fields.update(
-            n_cells=grid_point_count,
-            pivot_seg_qty=int(column.end_to_elbow_cell_count),
-            pipe_seg_qty=column_cell_count,
+            n_cells=int(grid.position.shape[0]),
+            pivot_seg_qty=grid.end_to_elbow_cell_count,
+            pipe_seg_qty=grid.column_cell_count,
             ext_qty=int(moc.INACTIVE_END_CELL_COUNT),
             p_cells=buffers.frame_pressure[:n_frames].copy(),
             v_cells=buffers.frame_velocity[:n_frames].copy(),
-            cell_position=np.arange(grid_point_count, dtype=np.float64)
-            * (float(celerity) * float(substep_duration)),
-            cell_kind=np.arange(grid_point_count) % 2,
-            moving_fraction=interleave(column.moving_fraction_a, column.moving_fraction_b),
+            cell_position=grid.position,
+            cell_kind=grid.kind,
+            moving_fraction=grid.moving_fraction,
         )
     return Trace(**fields)
