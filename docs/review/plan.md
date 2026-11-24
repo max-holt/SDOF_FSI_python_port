@@ -24,6 +24,12 @@ of 2.6 is C-N08, a rejected nit, and was not made. The friction `0.5` stays inli
 derivation comment (2.8, `docs/style.md` §6, ruling 14). Next: write
 `docs/review/parameter_objects.md` and stop for the owner (before 3.1).
 
+**Progress (session R.5, 24 Nov 2026).** Rulings 43-46 recorded. 3.1 done (`step_scalars`
+takes `SdofParams`; the kernel receives it whole), as the proof on one function: snapshot
+exact in both modes, A/B timing within noise. The groups for 3.2 to 3.8, with 2.2, are
+proposed in `docs/review/parameter_objects.md` (names, fields, which functions take each,
+the commit order); stopped there for the owner, as this plan asks before group 3 is built.
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
