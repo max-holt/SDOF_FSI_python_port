@@ -157,6 +157,15 @@ def _walk_constants(force_history, sample_rate, span_length, celerity, substep_c
     )
 
 
+def _next_position(row: int, column: int, row_count: int, column_count: int) -> tuple[int, int]:
+    """The 1-based ``(row, column)`` after ``(row, column)`` in the column-major walk of the
+    history: one row down, or the top of the next column from the last row of any column but
+    the last; the last element is its own successor. Integer only."""
+    if row + 1 > row_count and column < column_count:
+        return 1, min(column + 1, column_count)
+    return min(row + 1, row_count), column
+
+
 def _schedule(walk: _Run) -> Iterator[tuple]:
     """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
     ``elbow_forces`` (which differ only in their inner ``k`` loops).
@@ -237,18 +246,12 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
     # -------------------------------------------------------------------- forced phase
     for history_column in range(1, history_column_count + 1):
         for history_row in range(1, history_row_count + 1):
-            if history_row + 1 > history_row_count and history_column < history_column_count:
-                next_history_column = min(history_column + 1, history_column_count)
-                next_history_row = 1
-            else:
-                next_history_column = history_column
-                next_history_row = min(history_row + 1, history_row_count)
-            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
-                elbow_b_next_column = min(elbow_b_column + 1, history_column_count)
-                elbow_b_next_row = 1
-            else:
-                elbow_b_next_column = elbow_b_column
-                elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
+            next_history_row, next_history_column = _next_position(
+                history_row, history_column, history_row_count, history_column_count
+            )
+            elbow_b_next_row, elbow_b_next_column = _next_position(
+                elbow_b_row, elbow_b_column, history_row_count, history_column_count
+            )
             elbow_a_force_current = force_history_one_based[history_row][history_column]
             elbow_a_force_next = force_history_one_based[next_history_row][next_history_column]
             elbow_b_force_current = force_history_one_based[elbow_b_row][elbow_b_column]
@@ -256,17 +259,12 @@ def _schedule(walk: _Run) -> Iterator[tuple]:
             # forceB for k = 0 To stepQTY - kOverlap - 1 comes from the current / next pair; the
             # VBA then advances iB/jB and reads the pair for k = stepQTY - kOverlap To
             # stepQTY - 1 (the advance does not depend on the k loop)
-            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
-                elbow_b_column = min(elbow_b_column + 1, history_column_count)
-                elbow_b_row = 1
-            else:
-                elbow_b_row = min(elbow_b_row + 1, history_row_count)
-            if elbow_b_row + 1 > history_row_count and elbow_b_column < history_column_count:
-                elbow_b_next_column = min(elbow_b_column + 1, history_column_count)
-                elbow_b_next_row = 1
-            else:
-                elbow_b_next_column = elbow_b_column
-                elbow_b_next_row = min(elbow_b_row + 1, history_row_count)
+            elbow_b_row, elbow_b_column = _next_position(
+                elbow_b_row, elbow_b_column, history_row_count, history_column_count
+            )
+            elbow_b_next_row, elbow_b_next_column = _next_position(
+                elbow_b_row, elbow_b_column, history_row_count, history_column_count
+            )
             yield (
                 PHASE_FORCED,
                 elbow_a_force_current,
