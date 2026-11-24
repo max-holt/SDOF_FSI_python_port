@@ -78,6 +78,11 @@ __all__ = [
 INACTIVE_END_CELL_COUNT = 4
 """VBA ``Const extQTY = 4``: cells at each end that receive no mass acceleration."""
 
+LEGACY_B_INACTIVE_START_CELL_COUNT = 3
+"""VBA ``interpFractionB``'s first test ``n < 3`` (line 124): B cells at the start of the
+column that receive no mass acceleration on the legacy profile. VBA quirk D-4 preserved:
+``interpFractionA`` and the far end use ``extQTY`` (4) instead."""
+
 JUNCTION_FORCE_FILTER_WEIGHT = 0.25
 """VBA ``Const dampingA = 0.25``: weight of the previous junction force ``dF`` in its first-order
 low-pass filter (not a damping)."""
@@ -229,7 +234,7 @@ def moving_fraction_b(n: int, end_to_elbow_cell_count: int, column_cell_count: i
     ``n < extQTY`` (4), so ``n = 3`` takes the ramp branch and ``pivotSegQTY = 4``
     divides by zero.
     """
-    if n < 3:  # VBA quirk D-4 preserved
+    if n < LEGACY_B_INACTIVE_START_CELL_COUNT:  # VBA quirk D-4 preserved
         return 0.0
     elif n < end_to_elbow_cell_count:
         return (
