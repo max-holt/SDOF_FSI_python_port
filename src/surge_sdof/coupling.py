@@ -78,7 +78,8 @@ class JunctionCoupling:
     D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the constructor raises
     ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather than in the first
     MoC update) and ``ValueError`` on the fixed one (the port's guard: the ramp needs
-    ``pivot > ext``).
+    ``pivot > ext``). ``characteristic_impedance = 0`` raises ``FloatingPointError`` before
+    anything else (D-9: the MoC divides by it).
     """
 
     __slots__ = (
@@ -109,6 +110,11 @@ class JunctionCoupling:
         vav_denominator: str = "fixed",
         fraction_profile: str = "fixed",
     ):
+        if characteristic_impedance == 0:
+            # D-9: the MoC divides by rhoC at every sub-step. The legacy raised
+            # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
+            # does not apply, so the check is made once here, before the first update.
+            raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
         self.n_seg = int(column_cell_count)
         self.pivot = int(end_to_elbow_cell_count)
         self.frac_a, self.frac_b = moc.moving_fractions(self.n_seg, self.pivot, fraction_profile)

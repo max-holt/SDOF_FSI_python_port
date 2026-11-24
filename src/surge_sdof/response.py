@@ -468,11 +468,6 @@ def peak_response_jc(
             trace_every,
         )
     characteristic_impedance = fluid_densty * celerity
-    if characteristic_impedance == 0:
-        # D-9: the MoC divides by rhoC at every sub-step. The legacy raised
-        # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
-        # does not apply, so the check is made once here, before the first update.
-        raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
     junction_coupling = JunctionCoupling(
         column_cell_count,
         end_to_elbow_cell_count,
