@@ -9,8 +9,11 @@ regen template, reference block);
 floats via ``repr`` (the json module's default), no NaN (``allow_nan=False`` raises), UTF-8,
 LF, compact separators, optional gzip.
 
-Nothing here runs a solver or touches one: the module reads a ``PeakResponse`` and plain
-rows. ``tools/export.py`` is the CLI.
+Nothing here runs a solver: the module reads a ``PeakResponse`` and plain rows. Two
+things reach outside it: the loop geometry (``viz.geometry``) asks the solver's set-up for
+the grid a lumped trace would have, and both document builders, unless given the
+provenance, ask git for the checkout's sha and stamp the current time (``_provenance``).
+``tools/export.py`` is the CLI.
 """
 
 from __future__ import annotations
@@ -22,18 +25,17 @@ import json
 import math
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from surge_sdof.response import PeakResponse
-from surge_sdof.trace import (
-    FRAME_COLUMNS,
-    INT_FRAME_COLUMNS,
-    PHASE_FREE_DECAY,
-    PHASE_TRANSIT,
-    Trace,
-)
-from surge_sdof.viz.geometry import LoopLayout, layout_from_trace
+from surge_sdof.trace import FRAME_COLUMNS, INT_FRAME_COLUMNS, PHASE_FREE_DECAY, PHASE_TRANSIT
+from surge_sdof.viz.geometry import layout_from_trace
+
+if TYPE_CHECKING:
+    from surge_sdof.response import PeakResponse
+    from surge_sdof.trace import Trace
+    from surge_sdof.viz.geometry import LoopLayout
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -172,6 +174,15 @@ def created_utc(now: _dt.datetime | None = None) -> str:
     return now.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _provenance(sha: str | None | bool, created: str | None) -> tuple[str | None, str]:
+    """``(meta.git_sha, meta.created_utc)`` of a document: ``sha`` True asks git for the
+    checkout's HEAD (``git_sha``), ``created`` None stamps now (``created_utc``)."""
+    return (
+        git_sha() if sha is True else sha,
+        created if created is not None else created_utc(),
+    )
+
+
 # ------------------------------------------------------------------ values
 
 
@@ -306,6 +317,40 @@ def _cells(trace: Trace) -> dict:
     return blocks
 
 
+def _meta_params(result: PeakResponse) -> dict:
+    """``meta.params`` of a trace document: the SDOF constants, the sub-step and the run's
+    trace settings."""
+    trace = result.trace
+    sdof_params = trace.params
+    return {
+        "mass": _finite(float(sdof_params.mass), "params.mass"),
+        "stiffness": _finite(float(sdof_params.stiffness), "params.stiffness"),
+        "damping": _finite(float(sdof_params.damping), "params.damping"),
+        "fric_acc": _finite(float(sdof_params.friction_velocity_step), "params.fric_acc"),
+        "gap": _finite(float(sdof_params.support_gap), "params.gap"),
+        "ratio2": _finite(float(sdof_params.closed_gap_stiffness_ratio), "params.ratio2"),
+        "dt": _finite(float(trace.dt), "params.dt"),
+        "step_qty": int(trace.step_qty),
+        "out_max": int(trace.out_max),
+        "trace_every": int(trace.trace_every),
+        "capped": int(bool(is_capped(result))),
+    }
+
+
+def _meta_outputs(result: PeakResponse) -> dict:
+    """``meta.outputs`` of a trace document: the run's five maxima and its free-decay samples."""
+    return {
+        "max_static_equivalent_force": _finite(
+            float(result.max_static_equivalent_force), "outputs"
+        ),
+        "max_displacement": _finite(float(result.max_displacement), "outputs"),
+        "max_velocity": _finite(float(result.max_velocity), "outputs"),
+        "max_acceleration": _finite(float(result.max_acceleration), "outputs"),
+        "max_applied_force": _finite(float(result.max_applied_force), "outputs"),
+        "free_decay_samples": int(result.free_decay_samples),
+    }
+
+
 def to_trace_dict(
     result: PeakResponse,
     case_id: str,
@@ -341,7 +386,7 @@ def to_trace_dict(
         raise ValueError("the result has no trace; run the solver with trace_every > 0")
     layout = layout_from_trace(trace)
     is_junction_coupled = trace.p_cells is not None
-    sdof_params = trace.params
+    git_sha_value, created_utc_value = _provenance(sha, created)
     doc = {
         "kind": KIND_TRACE,
         "schema_version": SCHEMA_VERSION,
@@ -349,33 +394,12 @@ def to_trace_dict(
             "case_id": str(case_id),
             "solver": str(trace.solver),
             "inputs": _jsonable(dict(trace.inputs), "inputs"),
-            "params": {
-                "mass": _finite(float(sdof_params.mass), "params.mass"),
-                "stiffness": _finite(float(sdof_params.stiffness), "params.stiffness"),
-                "damping": _finite(float(sdof_params.damping), "params.damping"),
-                "fric_acc": _finite(float(sdof_params.friction_velocity_step), "params.fric_acc"),
-                "gap": _finite(float(sdof_params.support_gap), "params.gap"),
-                "ratio2": _finite(float(sdof_params.closed_gap_stiffness_ratio), "params.ratio2"),
-                "dt": _finite(float(trace.dt), "params.dt"),
-                "step_qty": int(trace.step_qty),
-                "out_max": int(trace.out_max),
-                "trace_every": int(trace.trace_every),
-                "capped": int(bool(is_capped(result))),
-            },
-            "outputs": {
-                "max_static_equivalent_force": _finite(
-                    float(result.max_static_equivalent_force), "outputs"
-                ),
-                "max_displacement": _finite(float(result.max_displacement), "outputs"),
-                "max_velocity": _finite(float(result.max_velocity), "outputs"),
-                "max_acceleration": _finite(float(result.max_acceleration), "outputs"),
-                "max_applied_force": _finite(float(result.max_applied_force), "outputs"),
-                "free_decay_samples": int(result.free_decay_samples),
-            },
+            "params": _meta_params(result),
+            "outputs": _meta_outputs(result),
             "n_frames": int(trace.n_frames) + 1,
             "n_cells": int(trace.n_cells) if is_junction_coupled else 0,
-            "git_sha": git_sha() if sha is True else sha,
-            "created_utc": created if created is not None else created_utc(),
+            "git_sha": git_sha_value,
+            "created_utc": created_utc_value,
         },
         "geometry": _geometry(layout),
         "frames": _frames(trace),
@@ -477,13 +501,14 @@ def to_sweep_dict(
         }
     if reference is None:
         reference = {"example_cases": [], "jc_golden_rows": []}
+    git_sha_value, created_utc_value = _provenance(sha, created)
     return {
         "kind": KIND_SWEEP,
         "schema_version": SWEEP_SCHEMA_VERSION,
         "meta": {
-            "git_sha": git_sha() if sha is True else sha,
+            "git_sha": git_sha_value,
             "tier": tier,
-            "created_utc": created if created is not None else created_utc(),
+            "created_utc": created_utc_value,
             "cpu": cpu,
             "histories_version": histories_version,
             "source": str(source),
