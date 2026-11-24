@@ -524,25 +524,25 @@ def empty_column() -> FluidColumn:
 
 @numba.njit(cache=True)
 def step(
-    even: bool,
-    a_dt: float,
+    is_even_substep: bool,
+    structure_velocity_step: float,
     column: FluidColumn,
-    d_f: float,
+    junction_force: float,
 ) -> float:
     """One MoC sub-step in place (VBA lines 795-847) and the new junction force ``dF``.
 
     Parameters
     ----------
-    even : bool
+    is_even_substep : bool
         Half-grid to update. Even sub-steps update the A nodes from the B cells
         (mean-velocity subtraction, decaying end nodes, then the B velocities receive
         the mass acceleration); odd sub-steps update the B cells from the A nodes (then
         the A velocities receive the mass acceleration).
-    a_dt : float
+    structure_velocity_step : float
         Structure acceleration times the sub-step, ``a * dt``, m/s.
     column : FluidColumn
         The column; its four state arrays are updated in place.
-    d_f : float
+    junction_force : float
         Junction force after the previous sub-step, N.
 
     Returns
@@ -563,42 +563,42 @@ def step(
       caller's set-up (``response.peak_response_jc``, D-9) and an overflow propagates
       nan/inf to the structure state, where the end-of-run check raises (D-23).
     """
-    p_a = column.pressure_a
-    v_a = column.velocity_a
-    p_b = column.pressure_b
-    v_b = column.velocity_b
-    frac_a = column.moving_fraction_a
-    frac_b = column.moving_fraction_b
-    n_seg = column.column_cell_count
-    pivot = column.end_to_elbow_cell_count
+    pressure_a = column.pressure_a
+    velocity_a = column.velocity_a
+    pressure_b = column.pressure_b
+    velocity_b = column.velocity_b
+    fractions_a = column.moving_fraction_a
+    fractions_b = column.moving_fraction_b
+    column_cell_count = column.column_cell_count
+    end_to_elbow_cell_count = column.end_to_elbow_cell_count
     rho_c = column.rho_c
-    decay = column.end_pressure_decay_factor
-    vav_div = column.mean_velocity_divisor
-    fluid_area = column.flow_area
+    decay_factor = column.end_pressure_decay_factor
+    velocity_divisor = column.mean_velocity_divisor
+    flow_area = column.flow_area
     two_rho_c = 2 * rho_c
-    if even:
+    if is_even_substep:
         # vAv = arrayA(1, N) + sum over n = 0 .. N-1 of arrayA(1, n) + arrayB(1, n)
-        mean_velocity = v_a[n_seg]
-        for n in range(0, n_seg):
-            mean_velocity = mean_velocity + v_a[n]
-            mean_velocity = mean_velocity + v_b[n]
-        mean_velocity = mean_velocity / vav_div
+        mean_velocity = velocity_a[column_cell_count]
+        for n in range(0, column_cell_count):
+            mean_velocity = mean_velocity + velocity_a[n]
+            mean_velocity = mean_velocity + velocity_b[n]
+        mean_velocity = mean_velocity / velocity_divisor
         # decaying boundary (the live branch; useUndamped is dead and not ported)
-        p_a[0] = p_b[0] / decay
-        p_a[n_seg] = p_b[n_seg - 1] / decay
-        v_a[0] = v_b[0] - mean_velocity
-        v_a[n_seg] = v_b[n_seg - 1] - mean_velocity
+        pressure_a[0] = pressure_b[0] / decay_factor
+        pressure_a[column_cell_count] = pressure_b[column_cell_count - 1] / decay_factor
+        velocity_a[0] = velocity_b[0] - mean_velocity
+        velocity_a[column_cell_count] = velocity_b[column_cell_count - 1] - mean_velocity
         # A nodes 1 .. N-1 from B cells n-1 and n
-        pressure_b_lower = p_b[0]
-        velocity_b_lower = v_b[0]
-        for n in range(1, n_seg):
-            pressure_b_upper = p_b[n]
-            velocity_b_upper = v_b[n]
-            p_a[n] = (pressure_b_lower + pressure_b_upper) / 2 + rho_c * (
+        pressure_b_lower = pressure_b[0]
+        velocity_b_lower = velocity_b[0]
+        for n in range(1, column_cell_count):
+            pressure_b_upper = pressure_b[n]
+            velocity_b_upper = velocity_b[n]
+            pressure_a[n] = (pressure_b_lower + pressure_b_upper) / 2 + rho_c * (
                 velocity_b_lower - velocity_b_upper
             ) / 2
-            v_a[n] = (
-                a_dt * frac_a[n]
+            velocity_a[n] = (
+                structure_velocity_step * fractions_a[n]
                 - mean_velocity
                 + (pressure_b_lower - pressure_b_upper) / two_rho_c
                 + (velocity_b_lower + velocity_b_upper) / 2
@@ -606,48 +606,57 @@ def step(
             pressure_b_lower = pressure_b_upper
             velocity_b_lower = velocity_b_upper
         # B velocities receive the mass acceleration and lose the mean velocity
-        for n in range(0, n_seg):
-            v_b[n] = a_dt * frac_b[n] - mean_velocity + v_b[n]
-        d_f = (
-            JUNCTION_FORCE_FILTER_WEIGHT * d_f
+        for n in range(0, column_cell_count):
+            velocity_b[n] = structure_velocity_step * fractions_b[n] - mean_velocity + velocity_b[n]
+        junction_force = (
+            JUNCTION_FORCE_FILTER_WEIGHT * junction_force
             + (1 - JUNCTION_FORCE_FILTER_WEIGHT)
-            * fluid_area
-            * (p_a[pivot] + p_a[pivot - 1] - p_a[n_seg - pivot] - p_a[n_seg - pivot + 1])
+            * flow_area
+            * (
+                pressure_a[end_to_elbow_cell_count]
+                + pressure_a[end_to_elbow_cell_count - 1]
+                - pressure_a[column_cell_count - end_to_elbow_cell_count]
+                - pressure_a[column_cell_count - end_to_elbow_cell_count + 1]
+            )
             / 2
         )
     else:
         # B cells 0 .. N-1 from A nodes n and n+1
-        pressure_a_lower = p_a[0]
-        velocity_a_lower = v_a[0]
-        for n in range(0, n_seg):
-            pressure_a_upper = p_a[n + 1]
-            velocity_a_upper = v_a[n + 1]
-            p_b[n] = (pressure_a_lower + pressure_a_upper) / 2 + rho_c * (
+        pressure_a_lower = pressure_a[0]
+        velocity_a_lower = velocity_a[0]
+        for n in range(0, column_cell_count):
+            pressure_a_upper = pressure_a[n + 1]
+            velocity_a_upper = velocity_a[n + 1]
+            pressure_b[n] = (pressure_a_lower + pressure_a_upper) / 2 + rho_c * (
                 velocity_a_lower - velocity_a_upper
             ) / 2
-            v_b[n] = (
-                a_dt * frac_b[n]
+            velocity_b[n] = (
+                structure_velocity_step * fractions_b[n]
                 + (pressure_a_lower - pressure_a_upper) / two_rho_c
                 + (velocity_a_lower + velocity_a_upper) / 2
             )
             pressure_a_lower = pressure_a_upper
             velocity_a_lower = velocity_a_upper
         # A velocities receive the mass acceleration
-        for n in range(1, n_seg):
-            v_a[n] = a_dt * frac_a[n] + v_a[n]
-        # For Ben to review: in the odd MoC substep the junction force reads B-grid pressures
-        # at pivot and N - pivot, while the even substep reads the equivalent of pivot - 1 and
-        # N - pivot, so the odd-step inlet tap sits one cell inward. Positions, in cells from
-        # the inlet end: A node n is at n, B cell n is at n + 0.5. The even substep averages
-        # A nodes pivot - 1 and pivot (at pivot - 0.5, the position of B cell pivot - 1) and
-        # A nodes N - pivot and N - pivot + 1 (at N - pivot + 0.5, B cell N - pivot): taps at
-        # equal distances from the two ends. Example, N = 20, pivot = 6: even taps at 5.5 and
-        # 14.5 (5.5 from each end); odd taps p_b[6] at 6.5 and p_b[14] at 14.5, the inlet one
-        # cell nearer the centre. The one-index alternative is p_b[pivot - 1] (at 5.5) in
-        # place of p_b[pivot]. Moving it to pivot - 1 changed the equivalent static force by at
-        # most 0.3 % over 16 cases (spans 6 to 48 m, 3 to 22 Hz), largest on the 6 m span.
-        # The expression is the VBA's (lines 846, 971, 1067, 1164) and stays; DEVIATIONS D-24.
-        d_f = JUNCTION_FORCE_FILTER_WEIGHT * d_f + (
+        for n in range(1, column_cell_count):
+            velocity_a[n] = structure_velocity_step * fractions_a[n] + velocity_a[n]
+        # For Ben to review (pivot: end_to_elbow_cell_count, N: column_cell_count): in the odd MoC
+        # substep the junction force reads B-grid pressures at pivot and N - pivot, while the even
+        # substep reads the equivalent of pivot - 1 and N - pivot, so the odd-step inlet tap sits
+        # one cell inward. Positions, in cells from the inlet end: A node n is at n, B cell n is at
+        # n + 0.5. The even substep averages A nodes pivot - 1 and pivot (at pivot - 0.5, the
+        # position of B cell pivot - 1) and A nodes N - pivot and N - pivot + 1 (at N - pivot + 0.5,
+        # B cell N - pivot): taps at equal distances from the two ends. Example, N = 20, pivot = 6:
+        # even taps at 5.5 and 14.5 (5.5 from each end); odd taps pressure_b[6] at 6.5 and
+        # pressure_b[14] at 14.5, the inlet one cell nearer the centre. The one-index alternative is
+        # pressure_b[pivot - 1] (at 5.5) in place of pressure_b[pivot]. Moving it to pivot - 1
+        # changed the equivalent static force by at most 0.3 % over 16 cases (spans 6 to 48 m, 3 to
+        # 22 Hz), largest on the 6 m span. The expression is the VBA's (lines 846, 971, 1067, 1164)
+        # and stays; DEVIATIONS D-24.
+        junction_force = JUNCTION_FORCE_FILTER_WEIGHT * junction_force + (
             1 - JUNCTION_FORCE_FILTER_WEIGHT
-        ) * fluid_area * (p_b[pivot] - p_b[n_seg - pivot])
-    return d_f
+        ) * flow_area * (
+            pressure_b[end_to_elbow_cell_count]
+            - pressure_b[column_cell_count - end_to_elbow_cell_count]
+        )
+    return junction_force
