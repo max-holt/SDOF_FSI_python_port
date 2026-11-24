@@ -56,6 +56,11 @@ PERCENT = 100
 # constant that fixes the model's units to metres and seconds.
 GRAVITY = 9.81
 
+# Velocity below which the slip branch applies no friction, m/s: the VBA's
+# ``sign(v, 0.000001)`` (lines 428 and 856). VBA quirk D-20 preserved: for
+# ``fricAcc <= |v| < FRICTION_DEAD_ZONE`` no friction acts in that sub-step.
+FRICTION_DEAD_ZONE = 0.000001
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -471,9 +476,9 @@ def step_scalars(
     else:
         # vNew = v + (a + aNew) * dt / 2 - sign(v, 0.000001) * fricAcc
         v_new = v + trapezoid_velocity_change
-        if v > 0.000001:
+        if v > FRICTION_DEAD_ZONE:
             v_new = v_new - fric_acc
-        elif v < -0.000001:
+        elif v < -FRICTION_DEAD_ZONE:
             v_new = v_new + fric_acc
     x = x + (v + v_new) * half_dt
     return (x, v_new, a_new)
