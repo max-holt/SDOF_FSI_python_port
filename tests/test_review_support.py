@@ -78,6 +78,9 @@ def _load_tool(name: str):
 
 export_cli = _load_tool("export")
 sweep_jc = _load_tool("sweep_jc")
+# sweep_jc's own modules, entered in sys.modules by its imports (review session R.8, plan 5.12)
+sweep_grid = sys.modules["sweep_grid"]
+sweep_rows = sys.modules["sweep_rows"]
 
 PURE_PYTHON = os.environ.get("NUMBA_DISABLE_JIT", "0") not in ("", "0")
 
@@ -150,7 +153,7 @@ EXPORT_ARGV = {
 # ``tests/test_properties.py`` (derandomised or not).
 CASES = json.loads((Path(__file__).parent / "review_support_cases.json").read_text("utf-8"))
 # Stored document -> [generator, positional arguments, keyword arguments]. The first four
-# are histories of the sweep (``sweep_jc.case_history``); the rest leave every default.
+# are histories of the sweep (``sweep_rows.case_history``); the rest leave every default.
 HISTORY_CALLS = CASES["history_calls"]
 # Snapshot key -> attribute of today's ``History``.
 _HISTORY_FIELDS = {key: key for key in histories.PARAM_KEYS} | {
@@ -222,10 +225,10 @@ def generated_sweep_histories() -> dict:
     out = {}
     for key in keys:
         size_in, history_type, f_osc_hz, seed, amplitude_fraction = key
-        case = sweep_jc.Case(
+        case = sweep_grid.Case(
             size_in, None, None, history_type, f_osc_hz, seed, amplitude_fraction, None
         )
-        out[key] = sweep_jc.case_history(case, sweep_jc.pipe(size_in).design_pressure)
+        out[key] = sweep_rows.case_history(case, sweep_grid.pipe(size_in).design_pressure)
     return out
 
 
@@ -277,7 +280,7 @@ def stored_sweep_histories() -> dict:
 
 
 def _stored_history(case, p_design: float) -> histories.History:
-    """``sweep_jc.case_history`` replaced: the stored history of the case (``p_design``
+    """``sweep_rows.case_history`` replaced: the stored history of the case (``p_design``
     follows from ``case.size_in``, which is part of the key)."""
     return stored_sweep_histories()[
         _history_key(
@@ -301,15 +304,16 @@ def run_sweep(out_dir: Path, stored_histories: bool = True) -> Path:
     # the tool's process pool pickles its worker by module name, so the module is
     # importable for the duration of the run and no longer
     sys.modules["sweep_jc"] = sweep_jc
-    saved = sweep_jc.case_history, sweep_jc.ProcessPoolExecutor
+    # run_case and case_history live in tools/sweep_rows.py since review session R.8
+    saved = sweep_rows.case_history, sweep_jc.ProcessPoolExecutor
     if stored_histories:
         stored_sweep_histories()  # parsed once, before the workers fork
-        sweep_jc.case_history, sweep_jc.ProcessPoolExecutor = _stored_history, _pool
+        sweep_rows.case_history, sweep_jc.ProcessPoolExecutor = _stored_history, _pool
     try:
         with _in_repo():
             sweep_jc.main([*SWEEP_ARGV, "--out", str(out_dir)])
     finally:
-        sweep_jc.case_history, sweep_jc.ProcessPoolExecutor = saved
+        sweep_rows.case_history, sweep_jc.ProcessPoolExecutor = saved
         del sys.modules["sweep_jc"]
     (path,) = Path(out_dir).glob("*.csv")
     return path
