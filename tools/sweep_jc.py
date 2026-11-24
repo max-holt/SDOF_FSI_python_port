@@ -340,12 +340,35 @@ def _timed(fn, *args, **kwargs):
     return result, time.perf_counter() - t0, None
 
 
-def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
+class RunProvenance(NamedTuple):
+    """What a sweep row records about the run rather than the case."""
+
+    tier: int
+    subset: str  # "" or "subset<pct>"
+    cpu: str
+    sha: str  # short sha, "-dirty" appended for uncommitted changes, or "nogit"
+
+
+def run_case(case: Case, provenance: RunProvenance) -> dict:
     """Both solvers on one case; the CSV row."""
     pipe_properties = pipe(case.size_in)
     pressure_history = case_history(case, pipe_properties.design_pressure)
     force_history = pressure_history.force(pipe_properties.flow_area)
-    solver_arguments = solver_kwargs(case, pipe_properties)
+    row = _case_columns(case, pipe_properties, pressure_history, force_history, provenance)
+    lumped_result, jc_result = _solver_results(row, case, pipe_properties, force_history)
+    _result_columns(row, case, pipe_properties, pressure_history, (lumped_result, jc_result))
+    return row
+
+
+def _case_columns(
+    case: Case,
+    pipe_properties: Pipe,
+    pressure_history: histories.History,
+    force_history: np.ndarray,
+    provenance: RunProvenance,
+) -> dict:
+    """The row with every column that does not need a solver: the case, the pipe, the set-up,
+    the history and its generator parameters, the provenance."""
     setup = response.solver_setup(
         SUBSTEP_COUNT,
         SAMPLE_RATE,
@@ -365,8 +388,8 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     row = dict.fromkeys(COLUMNS)
     row.update(
         case_id=case.case_id,
-        tier=tier,
-        subset=subset,
+        tier=provenance.tier,
+        subset=provenance.subset,
         size_in=case.size_in,
         od_mm=pipe_properties.outside_diameter_mm,
         thk_mm=pipe_properties.wall_thickness_mm,
@@ -399,13 +422,22 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
         history_peak=float(np.abs(force_history).max()),
         history_mean=float(force_history.mean()),
         history_rms=float(math.sqrt(float(np.mean(force_history * force_history)))),
-        cpu=cpu,
-        git_sha=sha,
+        cpu=provenance.cpu,
+        git_sha=provenance.sha,
     )
     params = pressure_history.params()
     for column, key in HISTORY_PARAM_COLUMNS:
         row[column] = params[key]
 
+    return row
+
+
+def _solver_results(
+    row: dict, case: Case, pipe_properties: Pipe, force_history: np.ndarray
+) -> tuple:
+    """``(lumped, jc)``: both solvers run on the case, each timed into ``row``; a failure is
+    recorded in ``row["error"]`` and gives None, never skipped silently."""
+    solver_arguments = solver_kwargs(case, pipe_properties)
     errors = []
     lumped_result, row["t_lumped_s"], err = _timed(
         response.peak_response, force_history, **solver_arguments
@@ -421,6 +453,20 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     )
     if err:
         errors.append(f"jc: {err}")
+    row["error"] = "; ".join(errors) if errors else None
+    return lumped_result, jc_result
+
+
+def _result_columns(
+    row: dict,
+    case: Case,
+    pipe_properties: Pipe,
+    pressure_history: histories.History,
+    results: tuple,
+) -> None:
+    """The result columns of each solver that ran, and the JC / lumped ratios, into ``row``."""
+    lumped_result, jc_result = results
+    total_mass = row["mass_total_kg"]
     outside_diameter_squared = (pipe_properties.outside_diameter_mm / MM_PER_M) ** 2
     peak_pressure_force = pressure_history.peak * pipe_properties.flow_area
     for name, result in (("lumped", lumped_result), ("jc", jc_result)):
@@ -442,8 +488,6 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
             jc_result.max_static_equivalent_force / lumped_result.max_static_equivalent_force
         )
         row["ratio_v_peak"] = jc_result.max_velocity / lumped_result.max_velocity
-    row["error"] = "; ".join(errors) if errors else None
-    return row
 
 
 # ------------------------------------------------------------------ the run
@@ -486,8 +530,8 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 
 def _worker(args):
-    case, tier, subset, cpu, sha = args
-    return run_case(case, tier, subset, cpu, sha)
+    case, provenance = args
+    return run_case(case, provenance)
 
 
 def run(args) -> Path:
@@ -515,7 +559,8 @@ def run(args) -> Path:
         )
     t_start = time.perf_counter()
     rows = []
-    jobs = [(c, tier, subset, cpu, sha) for c in cases]
+    provenance = RunProvenance(tier, subset, cpu, sha)
+    jobs = [(c, provenance) for c in cases]
     done = 0
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         for row in pool.map(_worker, jobs, chunksize=1):
