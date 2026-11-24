@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import cases  # noqa: E402  (tools/cases.py)
 
-from surge_sdof import export, moc, structure  # noqa: E402
+from surge_sdof import export, moc, response  # noqa: E402
 
 JSON_BUDGET_MB = 45.0
 """The default stride keeps the estimated trace JSON under this many MB (``estimate_bytes``)."""
@@ -50,12 +50,16 @@ def estimated_cells(kw: dict, solver: str) -> int:
     """``2N + 1`` cells a JC run will carry (0 for lumped or a short-pipe fallback)."""
     if solver != "jc":
         return 0
-    substep_duration = 1.0 / (kw["sample_freq"] * kw["step_qty"])
-    portal_frame_height = structure.solve_portal_height(
-        kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
+    setup = response.solver_setup(
+        kw["step_qty"],
+        kw["sample_freq"],
+        kw["physical_length"],
+        kw["flexural_rigidity_ei"],
+        kw["mass_per_unit_len"],
+        kw["nat_freq"],
     )
-    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        kw["physical_length"], portal_frame_height, kw["celerity"], substep_duration
+    column_cell_count, end_to_elbow_cell_count = response.column_grid(
+        setup, kw["physical_length"], kw["celerity"]
     )
     return (
         0

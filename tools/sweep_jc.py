@@ -45,7 +45,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from surge_sdof import export, histories, moc, response, structure  # noqa: E402
+from surge_sdof import export, histories, moc, response  # noqa: E402
 
 # ------------------------------------------------------------------ fixed inputs
 
@@ -346,15 +346,17 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     pressure_history = case_history(case, pipe_properties.design_pressure)
     force_history = pressure_history.force(pipe_properties.flow_area)
     solver_arguments = solver_kwargs(case, pipe_properties)
-    portal_frame_height = structure.solve_portal_height(
+    setup = response.solver_setup(
+        SUBSTEP_COUNT,
+        SAMPLE_RATE,
         case.length_m,
         pipe_properties.flexural_rigidity,
         pipe_properties.mass_per_length,
         case.natural_frequency,
     )
-    substep_duration = 1 / (SAMPLE_RATE * SUBSTEP_COUNT)
-    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        case.length_m, portal_frame_height, CELERITY, substep_duration
+    portal_frame_height = setup.portal_frame_height
+    column_cell_count, end_to_elbow_cell_count = response.column_grid(
+        setup, case.length_m, CELERITY
     )
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
