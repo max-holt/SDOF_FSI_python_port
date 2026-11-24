@@ -62,6 +62,7 @@ YOUNGS_MODULUS = 195e9  # Pa (curve_10in!H14)
 ALLOWABLE_STRESS = 138e6  # Pa, A106 Gr B (owner)
 P_DESIGN_EXPECTED_BAR = {10: 78.8, 12: 75.3, 16: 64.7, 18: 76.7}  # owner's figures, ±0.1 bar
 PA_PER_BAR = 1e5  # Pa per bar: a pressure in bar times this is in Pa
+MM_PER_M = 1000  # mm per m: the pipe table gives diameters and wall thicknesses in mm
 
 SUBSTEP_COUNT = 40
 SAMPLE_RATE = 1000.0
@@ -121,14 +122,16 @@ def pipe(size_in: int) -> Pipe:
     """The curve_10in sheet's formulas for one size (H11, H13, H15, J15) and the hoop-stress
     design pressure ``2 t S / OD``."""
     od_mm, thk_mm = PIPES[size_in]
-    inside_radius = (od_mm / 2 - thk_mm) / 1000
+    inside_radius = (od_mm / 2 - thk_mm) / MM_PER_M
+    # od / 2000: the halving and the mm-to-m conversion as one divisor; kept as written,
+    # since two divisions would round differently.
     outside_radius = od_mm / 2000
     flow_area = math.pi * inside_radius**2
     mass_per_length = math.pi * (
         inside_radius**2 * FLUID_DENSITY + (outside_radius**2 - inside_radius**2) * PIPE_DENSITY
     )
     second_moment_of_area = (math.pi / 4) * (outside_radius**4 - inside_radius**4)
-    design_pressure = 2 * (thk_mm / 1000) * ALLOWABLE_STRESS / (od_mm / 1000)
+    design_pressure = 2 * (thk_mm / MM_PER_M) * ALLOWABLE_STRESS / (od_mm / MM_PER_M)
     return Pipe(
         size_in,
         od_mm,
@@ -416,7 +419,7 @@ def run_case(case: Case, tier: int, subset: str, cpu: str, sha: str) -> dict:
     )
     if err:
         errors.append(f"jc: {err}")
-    outside_diameter_squared = (pipe_properties.outside_diameter_mm / 1000) ** 2
+    outside_diameter_squared = (pipe_properties.outside_diameter_mm / MM_PER_M) ** 2
     peak_pressure_force = pressure_history.peak * pipe_properties.flow_area
     for name, result in (("lumped", lumped_result), ("jc", jc_result)):
         if result is None:
