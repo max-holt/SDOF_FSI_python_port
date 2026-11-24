@@ -15,6 +15,15 @@ fixes are group 7. The answers are under each question at the end.
 group 3: the kernel-signature names (ruling 21); for the public API session: public keywords,
 returned dataclass fields and exported names. Next: group 2.
 
+**Progress (session R.4, 24 Nov 2026).** Group 2 done: 2.1, 2.4 to 2.7, 2.9 to 2.11, 2.13,
+2.14, one constant or one refactoring per commit. 2.2 moved to group 3 (ruling 40: it
+changes a kernel parameter's type). 2.15 was approved for R.4 (ruling 41), made, and
+reverted by the owner (ruling 42: about 20 % slower on the compiled lumped path); C-07 is
+open, to be looked at again with 4.12 (the schedule flattened in `loads`). The `out_max * 2` half
+of 2.6 is C-N08, a rejected nit, and was not made. The friction `0.5` stays inline with its
+derivation comment (2.8, `docs/style.md` §6, ruling 14). Next: write
+`docs/review/parameter_objects.md` and stop for the owner (before 3.1).
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
@@ -126,7 +135,7 @@ files. 1.7 and the `step_scalars` part of 1.1 touch compiled code: cache wipe, b
 | # | commit | findings | risk |
 |---|---|---|---|
 | 2.1 | One named phase pair, used in `loads`, `response`, `trace`, the tests | C-09 | R1 |
-| 2.2 | The coupling kind as a plain flag (fluid coupling on or off, a bool) in place of `KIND` 0 / 1 and the literal `1` in the kernels (ruling 2, in place of a constant pair) | C-09 | R2 |
+| 2.2 | **Moved to group 3 (ruling 40).** The coupling kind as a plain flag (fluid coupling on or off, a bool) in place of `KIND` 0 / 1 and the literal `1` in the kernels (ruling 2, in place of a constant pair) | C-09 | R2 |
 | 2.3 | ~~Unit factors in `pressure.setup` and `pump_boundary`~~: removed (R.1b) | C-33 | R1 |
 | 2.4 | `/ 100` percent of critical in `structure` | C-33 | R1 |
 | 2.5 | `9.81`; the friction dead band; the Newton tolerance, relaxation and pass counts | C-34 | R1 |
@@ -166,6 +175,7 @@ names change here, as fields, under the names `docs/nomenclature.md` proposes (r
 | # | commit | findings | risk |
 |---|---|---|---|
 | 3.0a-d | Moved to group 0 (R.3) | | |
+| 2.2 | Moved here from group 2 (ruling 40): the coupling kind as a plain bool flag in place of `kind` 0 / 1 in `_integrate_kernel` and `_trace_frame`, with the column object of 3.2 | C-09 | R4 |
 | 3.1 | `step_scalars` takes `SdofParams`; the kernel receives it whole | C-10, C-01 | R4 |
 | 3.2 | Fluid-column NamedTuple (four state arrays, two weight arrays, counts, `rho_c`, decay factor, divisor, area) built by `JunctionCoupling`; `moc.step` and the kernel take it; a named constructor for the empty column with today's literal types | C-01, C-03, C-04, C-N07, C-N13 | R4 |
 | 3.3 | Trace-buffers NamedTuple returned by `trace.allocate`, taken by the kernel and `trace.build` | C-01, C-15, S-08, SP-15 | R4 |

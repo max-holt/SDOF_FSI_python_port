@@ -189,6 +189,10 @@ The constants and control-flow session (plan group 2).
     (R4). It moves to group 3, where the kernel signatures change anyway.
 41. **Plan 2.15 approved** for session R.4 (R3: one schedule walk, the run-time
     cross-check of the two walks removed).
+42. **Plan 2.15 reverted.** Made bit-identical in R.4, it slowed the compiled lumped path by
+    about 20 % (golden r20, 0.177 s to 0.213 s on one host: the untraced run then builds
+    both elbow-force lists and subtracts them). The owner chose to revert it and its
+    cross-check removal; C-07 stays open.
 
 ## Gates
 
