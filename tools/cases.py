@@ -19,6 +19,7 @@ import argparse
 import math
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 import fixture_cases as tg  # tools/fixture_cases.py: the fixture loaders
 import numpy as np
@@ -50,43 +51,70 @@ def golden_case(case_id: str):
     raise SystemExit(f"unknown case id {case_id!r}")
 
 
-def step_case(args):
+class StepSpec(NamedTuple):
+    """A plain built-in step case: the ``--step`` options (``add_source_arguments``), under
+    their argparse names. Units: bar, mm, m², s, m, Hz, kg/m³, kg/m, N·m², m/s, percent."""
+
+    amplitude_bar: float
+    internal_diameter_mm: float
+    area: float | None  # fluid area, m²; overrides internal_diameter_mm when set
+    lead_in_s: float
+    duration_s: float
+    length: float
+    nat_freq: float
+    mu: float
+    solver: str
+    sample_freq: float
+    step_qty: int
+    celerity: float
+    mass_per_len: float
+    ei: float
+    fluid_density: float
+    damping: float
+
+
+def step_spec(args) -> StepSpec:
+    """The ``StepSpec`` of the parsed ``add_source_arguments`` options."""
+    return StepSpec(**{name: getattr(args, name) for name in StepSpec._fields})
+
+
+def step_case(spec: StepSpec):
     """A plain step: zero for ``lead_in_s`` (at least one sample), then ``amplitude_bar`` x
     flow area for ``duration_s``."""
     params = tg.load_params()
     flow_area = (
-        args.area if args.area else math.pi * (args.internal_diameter_mm / MM_PER_M) ** 2 / 4.0
+        spec.area if spec.area else math.pi * (spec.internal_diameter_mm / MM_PER_M) ** 2 / 4.0
     )
-    lead_in_sample_count = max(1, int(round(args.lead_in_s * args.sample_freq)))
-    hold_sample_count = max(1, int(round(args.duration_s * args.sample_freq)))
+    lead_in_sample_count = max(1, int(round(spec.lead_in_s * spec.sample_freq)))
+    hold_sample_count = max(1, int(round(spec.duration_s * spec.sample_freq)))
     force = np.full(
-        (lead_in_sample_count + hold_sample_count, 1), args.amplitude_bar * PA_PER_BAR * flow_area
+        (lead_in_sample_count + hold_sample_count, 1), spec.amplitude_bar * PA_PER_BAR * flow_area
     )
     force[:lead_in_sample_count, 0] = 0.0
     kw = {
-        "step_qty": args.step_qty,
-        "sample_freq": args.sample_freq,
-        "physical_length": args.length,
-        "flexural_rigidity_ei": args.ei,
-        "celerity": args.celerity,
-        "mass_per_unit_len": args.mass_per_len,
-        "damping_percent": args.damping,
-        "dynamic_fric": args.mu,
-        "nat_freq": args.nat_freq,
+        "step_qty": spec.step_qty,
+        "sample_freq": spec.sample_freq,
+        "physical_length": spec.length,
+        "flexural_rigidity_ei": spec.ei,
+        "celerity": spec.celerity,
+        "mass_per_unit_len": spec.mass_per_len,
+        "damping_percent": spec.damping,
+        "dynamic_fric": spec.mu,
+        "nat_freq": spec.nat_freq,
         "restrain_freq_ratio": params["restrain_freq_ratio"],
         "gap": params["gap"],
-        "fluid_densty": args.fluid_density,
+        "fluid_densty": spec.fluid_density,
         "fluid_area": flow_area,
     }
-    return force, kw, args.solver
+    return force, kw, spec.solver
 
 
-def step_name(args) -> str:
+def step_name(spec: StepSpec) -> str:
     return (
-        f"step {args.amplitude_bar:g} bar at t = {args.lead_in_s:g} s, "
-        + (f"area {args.area:g} m², " if args.area else f"{args.internal_diameter_mm:g} mm, ")
-        + f"L = {args.length:g} m, "
-        f"{args.nat_freq:g} Hz, mu = {args.mu:g} ({args.solver})"
+        f"step {spec.amplitude_bar:g} bar at t = {spec.lead_in_s:g} s, "
+        + (f"area {spec.area:g} m², " if spec.area else f"{spec.internal_diameter_mm:g} mm, ")
+        + f"L = {spec.length:g} m, "
+        f"{spec.nat_freq:g} Hz, mu = {spec.mu:g} ({spec.solver})"
     )
 
 
@@ -162,8 +190,9 @@ def case_from_args(args):
     if args.golden:
         force, kw, solver = golden_case(args.golden)
         return force, kw, solver, args.name or args.golden
-    force, kw, solver = step_case(args)
-    return force, kw, solver, args.name or step_name(args)
+    spec = step_spec(args)
+    force, kw, solver = step_case(spec)
+    return force, kw, solver, args.name or step_name(spec)
 
 
 # ------------------------------------------------------------------ sweep (fixtures)
