@@ -577,6 +577,40 @@ class _ForceSchedule(NamedTuple):
     transit_substep_count: int
 
 
+class _KernelResult(NamedTuple):
+    """What the compiled sample loop returns.
+
+    Attributes
+    ----------
+    x_max, v_max, a_max : float
+        Largest ``abs(x)``, ``abs(v)``, ``abs(a)`` of the run: m, m/s, m/s².
+    unbalance_force_max : float
+        Largest ``abs(forceA - forceB)`` of the forced phases, N (VBA ``FMax``).
+    x, v, a : float
+        State at the end of the run.
+    sample_number : int
+        Samples integrated, free decay included (VBA ``totInd``).
+    forced_sample_count : int
+        Samples of the transit and forced phases.
+    junction_force : float
+        The junction force after the last sub-step, N (0.0 without fluid coupling).
+    frame_count : int
+        Trace frames written.
+    """
+
+    x_max: float
+    v_max: float
+    a_max: float
+    unbalance_force_max: float
+    x: float
+    v: float
+    a: float
+    sample_number: int
+    forced_sample_count: int
+    junction_force: float
+    frame_count: int
+
+
 class _TraceRequest(NamedTuple):
     """A traced run: the stride and what ``_integrate`` needs beyond the kernel arrays to
     build a ``Trace``."""
@@ -707,9 +741,9 @@ def _integrate(
     written back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
-    ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA per-phase index
-    ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
-    with ``off`` fixed per sample (D-19, approved fix F-2).
+    ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
+    per-phase index ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written
+    as ``n + off`` with ``off`` fixed per sample (D-19, approved fix F-2).
 
     Session V.1: with a ``trace_request`` (its ``stride`` > 0) the elbow forces of
     ``trace_request.elbow_force_samples`` are flattened like ``unbalance_force_samples``,
@@ -778,28 +812,26 @@ def _integrate(
         column = moc.empty_column()
         junction_force = 0.0
 
-    (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_sample_count, d_f, n_frames) = (
-        _integrate_kernel(
-            schedule,
-            sdof_params,
-            settings,
-            response_history,
-            column,
-            junction_force,
-            buffers,
-        )
+    result = _integrate_kernel(
+        schedule,
+        sdof_params,
+        settings,
+        response_history,
+        column,
+        junction_force,
+        buffers,
     )
     if junction_coupling is not None:
-        junction_coupling.d_f = float(d_f)
+        junction_coupling.d_f = float(result.junction_force)
 
-    if not (math.isfinite(x) and math.isfinite(v) and math.isfinite(a)):
+    if not (math.isfinite(result.x) and math.isfinite(result.v) and math.isfinite(result.a)):
         raise FloatingPointError("SDOF state is not finite (VBA error 6: overflow)")  # D-23
 
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
     static_equivalent_force_max = (
         abs(
             structure.effective_displacement(
-                x_max, sdof_params.support_gap, sdof_params.closed_gap_stiffness_ratio
+                result.x_max, sdof_params.support_gap, sdof_params.closed_gap_stiffness_ratio
             )
         )
         * sdof_params.stiffness
@@ -813,7 +845,7 @@ def _integrate(
             substep_count,
             nominal_forced_sample_count,
             sdof_params,
-            int(n_frames),
+            int(result.frame_count),
             buffers,
             jc=junction_coupling,
             celerity=trace_request.celerity,
@@ -821,13 +853,13 @@ def _integrate(
         )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent_force_max),
-        max_displacement=float(x_max),
-        max_velocity=float(v_max),
-        max_acceleration=float(a_max),
-        max_applied_force=float(f_max),
+        max_displacement=float(result.x_max),
+        max_velocity=float(result.v_max),
+        max_acceleration=float(result.a_max),
+        max_applied_force=float(result.unbalance_force_max),
         history=response_history if output_type > 0 else None,
         output_type=output_type,
-        free_decay_samples=int(tot_ind - forced_sample_count),
+        free_decay_samples=int(result.sample_number - result.forced_sample_count),
         trace=trace,
     )
 
@@ -841,15 +873,14 @@ def _integrate_kernel(
     column: moc.FluidColumn,
     d_f: float,
     buffers: tracing.TraceBuffers,
-):
+) -> _KernelResult:
     """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
 
     ``flat[offsets[s]:offsets[s + 1]]`` holds sample ``s``'s per-sub-step unbalance
     values. With ``column.is_fluid_coupled`` the MoC column is advanced (``moc.step`` on
     the half-grid selected by the parity of ``n + off``) before each SDOF sub-step and
-    ``dF`` added; without, ``0.0`` is added (no fluid coupling). Returns ``(x_max, v_max, a_max, f_max, x, v,
-    a, tot_ind, forced_samples, d_f, n_frames)``; ``history`` is filled in place for
-    ``output_type`` 1-3.
+    ``dF`` added; without, ``0.0`` is added (no fluid coupling). Returns a
+    ``_KernelResult``; ``history`` is filled in place for ``output_type`` 1-3.
 
     Trace (Session V.1): with ``trace_every > 0`` every sub-step whose running index
     ``n`` is a multiple of it, while ``tot_ind <= out_max * 2`` and the capacity lasts,
@@ -857,8 +888,8 @@ def _integrate_kernel(
     the elbow forces per forced sub-step, ``delay_substeps`` the transit -> forced
     boundary). ``f_friction`` is ``mass * (v_new - (v_old + (a_old + a_new) * half_dt))
     / dt`` with the same ``half_dt = dt / 2`` as ``step_scalars``; ``stick`` is ``|v_old| <
-    friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the arrays are
-    empty.
+    friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the
+    arrays are empty.
     """
     flat = schedule.unbalance_force_by_substep
     offsets = schedule.sample_start
@@ -1015,4 +1046,4 @@ def _integrate_kernel(
         if output_type > 0 and tot_ind <= out_max * 2:
             _record_sample(history, output_type, tot_ind - 1, x, v, a)
 
-    return (x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, frame)
+    return _KernelResult(x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, frame)
