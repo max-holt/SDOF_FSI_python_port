@@ -585,8 +585,6 @@ class _KernelResult(NamedTuple):
         Samples integrated, free decay included (VBA ``totInd``).
     forced_sample_count : int
         Samples of the transit and forced phases.
-    junction_force : float
-        The junction force after the last sub-step, N (0.0 without fluid coupling).
     frame_count : int
         Trace frames written.
     """
@@ -600,7 +598,6 @@ class _KernelResult(NamedTuple):
     a: float
     sample_number: int
     forced_sample_count: int
-    junction_force: float
     frame_count: int
 
 
@@ -720,7 +717,7 @@ def _integrate(
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
     ``unbalance_force_samples`` once, passes ``sdof_params``, the fluid ``column``
     (``moc.empty_column()``, no fluid coupling, or ``coupling.fluid_column``'s, whose
-    arrays are updated in place) and a junction force of 0.0, builds the ``PeakResponse``.
+    arrays are updated in place), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
@@ -798,7 +795,6 @@ def _integrate(
         settings,
         response_history,
         column,
-        0.0,
         buffers,
     )
 
@@ -839,7 +835,6 @@ def _integrate_kernel(
     settings: RunSettings,
     response_history: np.ndarray,
     column: moc.FluidColumn,
-    junction_force: float,
     buffers: tracing.TraceBuffers,
 ) -> _KernelResult:
     """The sample loop of ``_integrate`` (the Stage 5 kernel).
@@ -847,8 +842,8 @@ def _integrate_kernel(
     ``schedule.unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` holds
     sample ``s``'s per-sub-step unbalance values. With ``column.is_fluid_coupled`` the MoC
     column is advanced (``moc.step`` on the half-grid selected by the parity of
-    ``substep_index + parity_offset``) before each SDOF sub-step and ``dF`` added; without,
-    ``0.0`` is added (no fluid coupling). Returns a ``_KernelResult``;
+    ``substep_index + parity_offset``) before each SDOF sub-step and ``dF`` added, from 0.0;
+    without, ``0.0`` is added (no fluid coupling). Returns a ``_KernelResult``;
     ``response_history`` is filled in place for ``output_type`` 1-3.
 
     Trace (Session V.1): with ``buffers.trace_every > 0`` every sub-step whose running
@@ -874,6 +869,7 @@ def _integrate_kernel(
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
+    junction_force = 0.0  # N; stays 0.0 without fluid coupling
     x = 0.0
     v = 0.0
     a = 0.0
@@ -1033,6 +1029,5 @@ def _integrate_kernel(
         a,
         sample_number,
         forced_samples,
-        junction_force,
         frame_count,
     )
