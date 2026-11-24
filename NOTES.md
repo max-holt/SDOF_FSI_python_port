@@ -6,6 +6,31 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.7 (the rest of plan group 4, 2026-11-24) **done**. Rulings 58-61 in the charter.
+4.2 to 4.4 dropped: `moc.step` keeps its even / odd flag, a recorded exception in
+`docs/style.md` §11; C-04 and C-05 closed. `tools/review_ab.py` committed: the interleaved
+A/B of two revisions (`--rounds`, `--repeats`, `--only`; `HEAD HEAD` for the A/A spread).
+Done, one commit each, gated (949 + 24 compiled, 947 + 26 pure Python, snapshot and support
+exact in both modes) and A/B timed against the commit before: 4.7 (`8af0627`, the frame as
+one `_record_frame` call per loop, row and column writers), 4.8 (`51c8a73`, the writers in
+`trace.py`), 4.10 (`fee6c4d`, `_integrate` = `_kernel_inputs`, kernel, `_peak_response`),
+4.12 (`6fa4507`, the flattening in `loads`; exact on 6000 random histories with the D-7 /
+D-8 errors; compiled lumped 2-8 % faster). C-07 stays open (the two walks are kept: the
+one-walk form cost about 20 % in R.4). Findings C-06, C-14, C-15, C-22 done. Session gates:
+`-m slow` 150 passed; bench row `6fa4507` (digests equal; host-disturbed times); cumulative
+A/B against the session start `1d3bb7a`: lumped 0.885 / 0.935, everything else within
+noise on a repeat (0.972-1.021). Pure-Python fast suite 220-232 s per commit (226 s at the
+session start). Bench-row commits of this session are labelled "R.6" in their subject (a
+helper script's label); the rows are this session's.
+
+Metrics, session start -> end: `_integrate_kernel` 6 args, complexity 10 -> 10, statements
+59 -> 56, code lines 153 -> 140 (the statement target of 50 is still missed: the two
+`_FrameLoads` blocks and two multi-line `moc.step` calls remain in the loops);
+`_integrate` complexity 6 -> 3 (radon 18 -> 5), statements 33 -> 8, code lines 103 -> 28,
+with `_kernel_inputs` (51 code lines) and `_peak_response` (26) split out.
+
+Next: plan group 5 (supporting modules and tools; 3.11 joins it, ruling 48).
+
 Session R.6 (the single substep, plan group 4, 2026-11-24) **done for this session**.
 Rulings 47-57 in the charter; `docs/style.md` §4 has the per-sub-step argument rule (57).
 

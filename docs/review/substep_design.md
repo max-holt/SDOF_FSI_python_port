@@ -377,3 +377,20 @@ reads four column entries), are what ruling 57 now rules out. Options: (a) 4.2 o
 the parity branch in the loops; (b) 4.2 and a 4.3 / 4.4 in which the half-grid functions
 compute the junction force themselves (each loops over the column, so ruling 57 allows it;
 C-05's separation is then not made); (c) drop 4.2 to 4.4.
+
+## Session R.7: the rest of group 4
+
+4.2 to 4.4 dropped (ruling 58). Each commit gated as before and A/B timed with
+`tools/review_ab.py` against the commit before:
+
+| commit | what | A/B new / old |
+|---|---|---|
+| `8af0627` | 4.7: `_record_frame`, `_write_frame_row`, `_write_frame_column` | 0.948-1.065; traced cases again (9 rounds, min of 5): JC 1.007, lumped 1.032 |
+| `51c8a73` | 4.8: the writers to `trace.py` | 0.970-1.009 |
+| `fee6c4d` | 4.10: `_kernel_inputs`, kernel, `_peak_response` | 0.930-1.017 |
+| `6fa4507` | 4.12: `loads.flatten_unbalance_force`, `flatten_elbow_forces` | lumped r20 0.977, r80 0.886, r20 traced 0.928 (again: 0.975, 0.927, 0.924); JC 0.978-1.018 |
+| `6fa4507` against `1d3bb7a` (session start) | 9 rounds | lumped 0.885, 0.935, traced 0.980; JC and free decay 0.985-1.075, the high ones again with 11 rounds, min of 5: 0.972-1.021 |
+
+4.12 was checked on 6000 random histories and shapes against the code before it: the same
+arrays byte for byte and the same exceptions (785 D-7 `ZeroDivisionError`, 161 D-8
+`IndexError`). It keeps the two generators, so C-07 stays open.

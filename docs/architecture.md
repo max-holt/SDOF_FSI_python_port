@@ -64,8 +64,11 @@ history, `loads.transit_delay` gives `unballanceStepQTY` (samples) and with it `
 (mass kg, stiffness N/m, damping N·s/m, `friction_velocity_step` m/s, `support_gap` m,
 `closed_gap_stiffness_ratio`), and
 `loads.unbalance_force` is created as a generator. Per sample, `_integrate` pulls the next
-`list` of per-sub-step `forceA − forceB` values (N) from the generator (`_integrate`
-flattens them into the `_ForceSchedule` the compiled kernel reads).
+`list` of per-sub-step `forceA − forceB` values (N) from the generator (`loads.flatten_unbalance_force`, called by `_integrate`'s preparation
+step `_kernel_inputs`, flattens them into the `_ForceSchedule` the compiled kernel reads;
+review session R.7, plan 4.12). `_integrate` is three steps: `_kernel_inputs` (the schedule,
+the zeroed history, the trace buffers), `_integrate_kernel`, and `_peak_response` (after
+the D-23 finiteness check and `trace.build_trace`).
 
 One sub-step, in the kernel's order (review session R.6; the same in both loops, the
 differences named):
@@ -85,8 +88,11 @@ differences named):
    *old* `(x, v)` through `structure.effective_displacement`, the trapezoidal `v_new` with
    the stick/slip friction ladder, the trapezoidal `x`), raises the maxima of `|a|`, `|v|`,
    `|x|` and counts the sub-step. Scalars in and out (`docs/style.md` §4).
-5. On a frame, `structure.substep_friction` gives the friction force and stick flag from
-   `before` and the new state, and `_trace_frame` writes the row (and the column, coupled).
+5. On a frame, one call: `frame_count = _record_frame(buffers, frame_count, _FrameLoads(...),
+   before, state, frame_inputs)`. The loop passes its own labels (`_FrameLoads`: indices,
+   phase, elbow and unbalance forces, junction force); `_record_frame` takes the friction
+   force and stick flag from `structure.substep_friction` and writes the row
+   (`trace.write_frame_row`) and, coupled, the column (`trace.write_frame_column`).
 6. Free decay only: `_decay_reference(x, xZero)` sets `xZero = 0.0` once `x * xZero` falls
    to `FREE_DECAY_THRESHOLD`.
 
@@ -187,8 +193,15 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   `response._decay_reference`, `response._largest_magnitude` (review session R.6, scalars
   only except the last, which is called once per run), `structure.substep_friction(sdof_params,
   v_before, a_before, v, a, dt)` (the trace's friction force and stick flag),
-  `response._trace_frame(buffers, frame_index, values, column)` (the compiled per-frame
-  write; `values` a `response._Frame`), `response._record_sample(history, output_type,
+  `response._record_frame(buffers, frame_index, loads, before, after, inputs) -> int` (the
+  compiled per-frame record, called on recorded sub-steps only; `loads` a
+  `response._FrameLoads`, `inputs` a `response._FrameInputs(sdof_params, substep_duration,
+  column)`), `trace.write_frame_row(buffers, frame_index, values)` (`values` a
+  `trace.FrameRow`) and `trace.write_frame_column(buffers, frame_index, column)` (review
+  session R.7, plan 4.7 / 4.8), `response._kernel_inputs(unbalance_force_samples, settings,
+  column, trace_request)` and `response._peak_response(result, sdof_params, output_type,
+  response_history, trace)` (plan 4.10), `loads.flatten_unbalance_force(samples)` and
+  `loads.flatten_elbow_forces(samples)` (plan 4.12), `response._record_sample(history, output_type,
   index, x, v, a)` (the per-sample history write, called once per sample; it stores nothing
   for `output_type` 0),
   `response._free_decay_product(x, x_zero)` and `trace.build_trace(request, settings,
@@ -227,7 +240,8 @@ observed bitwise:
 
 Three functions carried `@numba.njit(cache=True)` at Stage 5: `structure.step_scalars`,
 `moc.step` and `response._integrate_kernel` (the review added small compiled helpers:
-`response._trace_frame`, `_structure_substep` and the others named in "Interfaces",
+`response._record_frame`, `trace.write_frame_row` / `write_frame_column`,
+`_structure_substep` and the others named in "Interfaces",
 `structure.effective_displacement`, `structure.substep_friction`). A function called on
 every sub-step takes scalars and small tuples of scalars only; arrays go to functions
 called once per run or that loop over them (`docs/style.md` §4, ruling 57: a sub-step
@@ -245,8 +259,9 @@ the Stage 4 code; what changed is the calling convention:
   `moc.empty_column()`, the same type with empty arrays and placeholder values the kernel
   never reads, so the kernel compiles once for both solvers; the trace buffers pass as one
   `TraceBuffers`. Each compiled function unpacks a tuple into locals once at its top; the
-  kernel passes the column one call deep per sub-step (to `moc.step`, and to `_trace_frame`
-  on a traced sub-step) and nothing deeper (rule K-1, `docs/review/plan.md` group 3). The
+  kernel passes the column one call deep per sub-step (to `moc.step`) and, on a recorded
+  sub-step only, two deep (`_record_frame` -> `trace.write_frame_column`, review session R.7:
+  measured within noise on the traced cases; rule K-1, `docs/review/plan.md` group 3). The
   junction force is an argument and a return value, not a field (it evolves). The kernel
   returns a `_KernelResult`; `_integrate` (the column's arrays were updated in place)
   casts to Python floats and builds the `PeakResponse`.
@@ -384,7 +399,9 @@ docstring of `trace.py` is the reference; the design points:
   sub-step the kernel tests `rec = trace_every > 0 and n % trace_every == 0 and frame < cap`
   (phase 3 also `tot_ind <= out_max · 2`), saves `v_old, a_old` before `step_scalars` when
   `rec`, and calls the compiled `_trace_frame` after it, which writes the row and, for `kind`
-  1, copies the four column arrays. The recording reads the state and writes the trace arrays
+  1, copies the four column arrays (Session V.1; since review session R.7 the test is
+  `_is_frame_due` and the call `_record_frame`, which writes through `trace.write_frame_row`
+  and `trace.write_frame_column`). The recording reads the state and writes the trace arrays
   only; the state arithmetic is the same whether or not it runs, so the traced run's
   `PeakResponse` equals the untraced one bitwise (`tests/test_trace.py`, both solvers, strides
   1 / 3 / 7, output types, both flag sets). With `trace_every == 0` the branch is never entered
@@ -400,8 +417,8 @@ docstring of `trace.py` is the reference; the design points:
   `moving_fraction` (`frac_a` / `frac_b` interleaved, the weights `moc.step` applies to
   `a dt`). A JC call that takes the short-pipe fallback returns a lumped trace (`solver ==
   "peak_response"`, JC fields None).
-* **Numba cache.** `_trace_frame` and the `trace.F_* / I_*` constants are compiled into
-  `_integrate_kernel`; after editing `trace.py` run `make clean-cache` (the `cache=True`
+* **Numba cache.** `trace.write_frame_row`, `trace.write_frame_column` and the `trace.COL_*`
+  constants are compiled into `_integrate_kernel`; after editing `trace.py` run `make clean-cache` (the `cache=True`
   staleness note above applies).
 
 ## Session W.1 — the data files

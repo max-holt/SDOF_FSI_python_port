@@ -49,6 +49,12 @@ applied_force, sdof_params, dt)` called by both loops, with 4.9c's simplificatio
 absorbed (the maxima live in `_structure_substep`); 4.1 and 4.5 done. **Held for the owner:**
 4.2 to 4.4 (see `substep_design.md`, "Group 4 after 4.9"). Not started: 4.7, 4.8, 4.10, 4.12.
 
+**Progress (session R.7, 24 Nov 2026).** Rulings 58-61. 4.2 to 4.4 dropped (ruling 58,
+`moc.step` a recorded exception in `docs/style.md` §11); `tools/review_ab.py` committed
+(ruling 59); 4.7, 4.8, 4.10, 4.12 done, one commit each, gated and A/B timed. Group 4 is
+complete except 4.13 (removed in R.1b). Next: group 5 (supporting modules and tools, with
+3.11 moved there by ruling 48).
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
@@ -223,18 +229,18 @@ that makes this worth trying; it is not evidence for the real kernel.
 
 | # | commit | findings | risk |
 |---|---|---|---|
-| 4.1 | Compile `effective_displacement`; `step_scalars` calls it for the ladder | C-10 | R4 |
-| 4.2 | Split `moc.step` into the two half-grid functions; the parity test stays at the callers | C-04, C-N22 | R4 |
-| 4.3 | Junction-force functions out of the half-grid updates, into the coupling layer | C-05 | R4 |
-| 4.4 | One compiled column advance (parity, half-grid update, junction force) called by the kernel twice (`coupling_force` is gone, 3.0a) | C-03 | R4 |
-| 4.5 | Friction and stick derivation as a compiled function beside `step_scalars` | C-14 | R3 |
-| 4.6 | Peak trackers extracted | C-02 | R4 |
-| 4.7 | Trace frame: scalar-row writer and column writer; the kernel's recording branch calls one function | C-15, C-02 | R4 |
-| 4.8 | `_trace_frame` and its writers moved to `trace.py` | C-14 | R3 |
-| 4.9 | The sub-step body as one function called from the forced loop and the free-decay loop; the `f_applied` forms stay in the loops | C-02 | R4 |
-| 4.10 | `_integrate` split into prepare, run, build result | C-06 | R3 |
+| 4.1 | **Done (R.6).** Compile `effective_displacement`; `step_scalars` calls it for the ladder | C-10 | R4 |
+| 4.2 | **Dropped (R.7, ruling 58).** Split `moc.step` into the two half-grid functions; the parity test stays at the callers | C-04, C-N22 | R4 |
+| 4.3 | **Dropped (R.7, ruling 58).** Junction-force functions out of the half-grid updates, into the coupling layer | C-05 | R4 |
+| 4.4 | **Dropped (R.7, ruling 58).** One compiled column advance (parity, half-grid update, junction force) called by the kernel twice (`coupling_force` is gone, 3.0a) | C-03 | R4 |
+| 4.5 | **Done (R.6).** Friction and stick derivation as a compiled function beside `step_scalars` | C-14 | R3 |
+| 4.6 | **Absorbed by 4.9 (R.6).** Peak trackers extracted | C-02 | R4 |
+| 4.7 | **Done (R.7).** Trace frame: scalar-row writer and column writer; the kernel's recording branch calls one function | C-15, C-02 | R4 |
+| 4.8 | **Done (R.7).** `_trace_frame` and its writers moved to `trace.py` | C-14 | R3 |
+| 4.9 | **Done (R.6, option 1).** The sub-step body as one function called from the forced loop and the free-decay loop; the `f_applied` forms stay in the loops | C-02 | R4 |
+| 4.10 | **Done (R.7).** `_integrate` split into prepare, run, build result | C-06 | R3 |
 | 4.11 | Moved to group 2 (2.13 to 2.15, R.3) | C-07, C-08 | |
-| 4.12 | Flattening of the schedule moved into `loads` (the cross-check went with 2.15) | C-22 | R3 |
+| 4.12 | **Done (R.7); C-07 stays open.** Flattening of the schedule moved into `loads` (the cross-check went with 2.15) | C-22 | R3 |
 | 4.13 | ~~`pressure`: the shared characteristic solve~~: removed (R.1b) | C-N01 | R3 |
 
 Before 4.1, write `docs/review/substep_design.md` (the substep designs) and stop for the
