@@ -412,16 +412,43 @@ def to_trace_dict(
 # ------------------------------------------------------------------ sweep
 
 
+def _sweep_string(value, where: str) -> str | None:
+    """A string column's value: the string, or None for an empty one (an empty CSV cell)."""
+    if isinstance(value, str):
+        return value or None  # an empty CSV cell is null
+    raise TypeError(f"{where}: expected a string or None, got {type(value).__name__}")
+
+
+def _sweep_int(name: str, value, where: str) -> int:
+    """An int column's value: an int, or a float with no fractional part."""
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(f"{where}: {name} must be an integer, got {value!r}")
+        value = int(value)
+    if not isinstance(value, int):
+        raise TypeError(f"{where}: expected an int or None, got {type(value).__name__}")
+    return value
+
+
+def _sweep_float(value, where: str) -> float:
+    """A float column's value: a finite float (an int is converted)."""
+    if isinstance(value, int):
+        value = float(value)
+    if not isinstance(value, float):
+        raise TypeError(f"{where}: expected a number or None, got {type(value).__name__}")
+    return _finite(value, where)
+
+
 def _sweep_value(name: str, value, row: int):
+    """The JSON value of one sweep cell: None, or the column's type (``_SWEEP_COLUMN_TABLE``);
+    a CSV cell's text is parsed first. The checks run in this order."""
     where = f"columns.{name}[{row}]"
     if value is None:
         return None
     if isinstance(value, np.generic):
         value = value.item()
     if name in SWEEP_STRING_COLUMNS:
-        if isinstance(value, str):
-            return value or None  # an empty CSV cell is null
-        raise TypeError(f"{where}: expected a string or None, got {type(value).__name__}")
+        return _sweep_string(value, where)
     if isinstance(value, str):
         if value == "":
             return None
@@ -429,18 +456,8 @@ def _sweep_value(name: str, value, row: int):
     if isinstance(value, bool):
         raise TypeError(f"{where}: a bool is not a sweep value")
     if name in SWEEP_INT_COLUMNS:
-        if isinstance(value, float):
-            if not value.is_integer():
-                raise ValueError(f"{where}: {name} must be an integer, got {value!r}")
-            value = int(value)
-        if not isinstance(value, int):
-            raise TypeError(f"{where}: expected an int or None, got {type(value).__name__}")
-        return value
-    if isinstance(value, int):
-        value = float(value)
-    if not isinstance(value, float):
-        raise TypeError(f"{where}: expected a number or None, got {type(value).__name__}")
-    return _finite(value, where)
+        return _sweep_int(name, value, where)
+    return _sweep_float(value, where)
 
 
 def to_sweep_dict(
