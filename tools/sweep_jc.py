@@ -154,7 +154,7 @@ def check_pipe_table(verbose: bool = True) -> None:
         if verbose:
             print(
                 f"{size:>2} in  OD {PIPES[size][0]:6.1f} mm  t {PIPES[size][1]:6.3f} mm  "
-                f"p_design {got:6.2f} bar (owner {expected})  cap {1.33 * got:6.2f} bar"
+                f"p_design {got:6.2f} bar (owner {expected})  cap {histories.PEAK_TO_DESIGN_PRESSURE_RATIO * got:6.2f} bar"
             )
     params = json.loads((REPO / "tests/fixtures/curve_10in/params.json").read_text())
     p10 = pipe(10)
