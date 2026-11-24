@@ -63,6 +63,7 @@ from surge_sdof.vba_compat import clng
 __all__ = [
     "INACTIVE_END_CELL_COUNT",
     "JUNCTION_FORCE_FILTER_WEIGHT",
+    "ColumnGrid",
     "grid_size",
     "is_short_pipe",
     "end_pressure_decay_factor",
@@ -97,9 +98,18 @@ included) or the lead author's corrected functions (approved fix F-4)."""
 
 
 # VBA lines 733-734
+class ColumnGrid(NamedTuple):
+    """The size of the MoC grid: ``N`` cells in the whole column (VBA ``pipeSegQTY``)
+    and the cells from each end to the elbow at the foot of the leg (VBA ``pivotSegQTY``).
+    """
+
+    column_cell_count: int
+    end_to_elbow_cell_count: int
+
+
 def grid_size(
     span_length: float, portal_frame_height: float, celerity: float, substep_duration: float
-) -> tuple[int, int]:
+) -> ColumnGrid:
     """``(pipeSegQTY, pivotSegQTY)`` of the MoC grid (VBA lines 733-734).
 
     Parameters
@@ -115,7 +125,7 @@ def grid_size(
 
     Returns
     -------
-    tuple of int
+    ColumnGrid
         ``pipeSegQTY`` (cells in the whole column: the span, about ``L / (2 c dt)`` cells,
         plus ``pivotSegQTY + 1`` cells at each end; even by construction) and
         ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
@@ -130,7 +140,7 @@ def grid_size(
     column_cell_count = (
         2 + clng(span_length / (4 * celerity * substep_duration) + end_to_elbow_cell_count) * 2
     )
-    return column_cell_count, end_to_elbow_cell_count
+    return ColumnGrid(column_cell_count, end_to_elbow_cell_count)
 
 
 # VBA line 736

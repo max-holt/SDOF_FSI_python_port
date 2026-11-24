@@ -75,7 +75,7 @@ import numpy as np
 
 from surge_sdof import loads, moc, structure
 from surge_sdof import trace as tracing
-from surge_sdof.coupling import JunctionCoupling
+from surge_sdof.coupling import FluidConstants, JunctionCoupling
 from surge_sdof.structure import SdofParams, step_scalars
 from surge_sdof.trace import (
     COL_A,
@@ -441,10 +441,8 @@ def peak_response_jc(
     end_pressure_decay_factor = moc.end_pressure_decay_factor(
         celerity, substep_duration, physical_length
     )
-    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        physical_length, portal_frame_height, celerity, substep_duration
-    )
-    if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count):
+    grid = moc.grid_size(physical_length, portal_frame_height, celerity, substep_duration)
+    if moc.is_short_pipe(grid.column_cell_count, grid.end_to_elbow_cell_count):
         # insufficient length, use lumped mass (VBA 736-740)
         return peak_response(
             force_history,
@@ -464,12 +462,9 @@ def peak_response_jc(
         )
     characteristic_impedance = fluid_densty * celerity
     junction_coupling = JunctionCoupling(
-        column_cell_count,
-        end_to_elbow_cell_count,
+        grid,
         substep_duration,
-        characteristic_impedance,
-        fluid_area,
-        end_pressure_decay_factor,
+        FluidConstants(characteristic_impedance, fluid_area, end_pressure_decay_factor),
         vav_denominator,
         fraction_profile,
     )

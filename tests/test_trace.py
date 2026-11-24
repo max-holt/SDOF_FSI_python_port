@@ -355,12 +355,13 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
     tr = res.trace
     dt = tr.dt
     jc = coupling.JunctionCoupling(
-        tr.pipe_seg_qty,
-        tr.pivot_seg_qty,
+        moc.ColumnGrid(tr.pipe_seg_qty, tr.pivot_seg_qty),
         dt,
-        kw["fluid_densty"] * kw["celerity"],
-        kw["fluid_area"],
-        moc.end_pressure_decay_factor(kw["celerity"], dt, kw["physical_length"]),
+        coupling.FluidConstants(
+            kw["fluid_densty"] * kw["celerity"],
+            kw["fluid_area"],
+            moc.end_pressure_decay_factor(kw["celerity"], dt, kw["physical_length"]),
+        ),
         "fixed",
     )
     a_prev = 0.0

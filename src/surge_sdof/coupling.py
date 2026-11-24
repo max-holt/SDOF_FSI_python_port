@@ -25,9 +25,30 @@ See ``docs/architecture.md``.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from surge_sdof import moc
 
-__all__ = ["JunctionCoupling"]
+__all__ = ["FluidConstants", "JunctionCoupling"]
+
+
+class FluidConstants(NamedTuple):
+    """The fluid constants of the column.
+
+    Attributes
+    ----------
+    characteristic_impedance : float
+        Acoustic impedance ``fluidDensty * celerity``, Pa·s/m (kg/(m²·s)).
+    flow_area : float
+        Internal cross-sectional area of the pipe, m².
+    end_pressure_decay_factor : float
+        ``dacayFactor`` from ``moc.end_pressure_decay_factor``, dimensionless, per even
+        update.
+    """
+
+    characteristic_impedance: float
+    flow_area: float
+    end_pressure_decay_factor: float
 
 
 class JunctionCoupling:
@@ -39,19 +60,13 @@ class JunctionCoupling:
 
     Parameters
     ----------
-    column_cell_count : int
-        ``pipeSegQTY``, cells in the whole column (from ``moc.grid_size``).
-    end_to_elbow_cell_count : int
+    grid : moc.ColumnGrid
+        From ``moc.grid_size``: ``pipeSegQTY``, cells in the whole column, and
         ``pivotSegQTY``, cells from each end to the portal-frame pivot.
     substep_duration : float
         Sub-step, s.
-    characteristic_impedance : float
-        Acoustic impedance ``fluidDensty * celerity``, Pa·s/m (kg/(m²·s)).
-    flow_area : float
-        Internal cross-sectional area of the pipe, m².
-    end_pressure_decay_factor : float
-        ``dacayFactor`` from ``moc.end_pressure_decay_factor``, dimensionless, per even
-        update.
+    fluid : FluidConstants
+        The characteristic impedance, flow area and end-pressure decay factor.
     vav_denominator : {"fixed", "legacy"}, optional
         Divisor of the mean-velocity sum: ``2N + 1`` (approved fix F-1, default) or the
         VBA's ``2N - 1`` (D-17).
@@ -78,7 +93,7 @@ class JunctionCoupling:
     D-19) is the loop's choice. With ``pivot_seg_qty = 4`` the constructor raises
     ``ZeroDivisionError`` on the legacy profile (D-4, at set-up rather than in the first
     MoC update) and ``ValueError`` on the fixed one (the port's guard: the ramp needs
-    ``pivot > ext``). ``characteristic_impedance = 0`` raises ``FloatingPointError`` before
+    ``pivot > ext``). ``fluid.characteristic_impedance = 0`` raises ``FloatingPointError`` before
     anything else (D-9: the MoC divides by it).
     """
 
@@ -86,28 +101,25 @@ class JunctionCoupling:
 
     def __init__(
         self,
-        column_cell_count: int,
-        end_to_elbow_cell_count: int,
+        grid: moc.ColumnGrid,
         substep_duration: float,
-        characteristic_impedance: float,
-        flow_area: float,
-        end_pressure_decay_factor: float,
+        fluid: FluidConstants,
         vav_denominator: str = "fixed",
         fraction_profile: str = "fixed",
     ):
-        if characteristic_impedance == 0:
+        if fluid.characteristic_impedance == 0:
             # D-9: the MoC divides by rhoC at every sub-step. The legacy raised
             # FloatingPointError there (numpy errstate); inside the compiled kernel errstate
             # does not apply, so the check is made once here, before the first update.
             raise FloatingPointError("rhoC = fluidDensty * celerity is 0: the MoC divides by it")
-        n_seg = int(column_cell_count)
-        pivot = int(end_to_elbow_cell_count)
+        n_seg = int(grid.column_cell_count)
+        pivot = int(grid.end_to_elbow_cell_count)
         frac_a, frac_b = moc.moving_fractions(n_seg, pivot, fraction_profile)
         p_a, v_a, p_b, v_b = moc.column_at_rest(n_seg)
         self.dt = float(substep_duration)
-        rho_c = float(characteristic_impedance)
-        fluid_area = float(flow_area)
-        decay = float(end_pressure_decay_factor)
+        rho_c = float(fluid.characteristic_impedance)
+        fluid_area = float(fluid.flow_area)
+        decay = float(fluid.end_pressure_decay_factor)
         vav_div = moc.mean_velocity_divisor(n_seg, vav_denominator)
         self.column = moc.FluidColumn(
             p_a,

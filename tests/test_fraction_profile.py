@@ -222,11 +222,21 @@ def test_pivot_4_is_a_value_error_on_the_fixed_path_and_d4_on_the_legacy_path():
     with pytest.raises(ValueError, match="pivot > ext"):
         moc.moving_fractions(20, 4, "fixed")
     with pytest.raises(ValueError, match="pivot > ext"):
-        coupling.JunctionCoupling(20, 4, 1e-4, 1e6, 0.01, 1.01, fraction_profile="fixed")
+        coupling.JunctionCoupling(
+            moc.ColumnGrid(20, 4),
+            1e-4,
+            coupling.FluidConstants(1e6, 0.01, 1.01),
+            fraction_profile="fixed",
+        )
     with pytest.raises(ZeroDivisionError):  # D-4
         moc.moving_fractions(20, 4, "legacy")
     with pytest.raises(ZeroDivisionError):
-        coupling.JunctionCoupling(20, 4, 1e-4, 1e6, 0.01, 1.01, fraction_profile="legacy")
+        coupling.JunctionCoupling(
+            moc.ColumnGrid(20, 4),
+            1e-4,
+            coupling.FluidConstants(1e6, 0.01, 1.01),
+            fraction_profile="legacy",
+        )
     # pivot 5: no ramp cell, a 0 -> 1 step, valid on both paths
     fa, fb = fixed(20, 5)
     assert ramp_cells(fa)[0].size == 0 and fa[3] == 0.0 and fa[4] == 1.0

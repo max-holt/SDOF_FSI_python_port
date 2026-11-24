@@ -782,12 +782,9 @@ def test_junction_coupling_reproduces_the_legacy_df_sequence(idx):
     trace = jc_small_trace(idx)
     su = trace.setup
     jc = coupling.JunctionCoupling(
-        su["pipe_seg_qty"],
-        su["pivot_seg_qty"],
+        moc.ColumnGrid(su["pipe_seg_qty"], su["pivot_seg_qty"]),
         su["dt"],
-        su["rho_c"],
-        kw["fluid_area"],
-        su["dacay_factor"],
+        coupling.FluidConstants(su["rho_c"], kw["fluid_area"], su["dacay_factor"]),
         vav_denominator="legacy",
         fraction_profile="legacy",
     )
@@ -808,7 +805,9 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
     _id, _force, kw = JC_SMALL[0]
     su = jc_small_trace(0).setup
     jc = coupling.JunctionCoupling(
-        su["pipe_seg_qty"], su["pivot_seg_qty"], su["dt"], su["rho_c"], 0.0, su["dacay_factor"]
+        moc.ColumnGrid(su["pipe_seg_qty"], su["pivot_seg_qty"]),
+        su["dt"],
+        coupling.FluidConstants(su["rho_c"], 0.0, su["dacay_factor"]),
     )
     d_f = jc.d_f
     for n in range(50):
