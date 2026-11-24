@@ -727,6 +727,7 @@ def _replay_moc(trace: LegacyTrace, vav_denominator="legacy"):
             float(su["dacay_factor"]),
             vav_div,
             float(su["fluid_area"]),
+            True,
         )
         d_f = moc.step(even, float(s.pre[2]) * dt, column, d_f)
         out.append((p_a.copy(), v_a.copy(), p_b.copy(), v_b.copy(), float(d_f)))
@@ -1146,6 +1147,7 @@ def test_fixed_vav_divides_by_the_number_of_terms():
             1.001,
             moc.mean_velocity_divisor(n_seg, vav_denominator),
             0.01,
+            True,
         )
         moc.step(True, 0.0, column, 0.0)
         assert v_a[0] == v_a[n_seg] == expected_v0

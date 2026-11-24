@@ -8,8 +8,8 @@ current ``a``), and adds the result to the unbalance force (transit and forced p
 uses it alone (free decay).
 
 The compiled loop of Stage 5 (``response._integrate_kernel``) cannot call Python objects,
-so ``response._integrate`` unpacks the coupling: a kind code (0 = none, 1 =
-``JunctionCoupling``) and, for the junction, its column arrays and scalars; the kernel
+so ``response._integrate`` passes it the coupling's ``moc.FluidColumn`` (its
+``is_fluid_coupled`` flag on) or ``moc.empty_column()`` (off) and the junction force; the kernel
 calls ``moc.step`` on the half-grid ``step_index % 2`` selects, keeps ``dF`` as a float,
 and ``_integrate`` writes ``d_f`` back.
 
@@ -110,6 +110,18 @@ class JunctionCoupling:
         decay = float(end_pressure_decay_factor)
         vav_div = moc.mean_velocity_divisor(n_seg, vav_denominator)
         self.column = moc.FluidColumn(
-            p_a, v_a, p_b, v_b, frac_a, frac_b, n_seg, pivot, rho_c, decay, vav_div, fluid_area
+            p_a,
+            v_a,
+            p_b,
+            v_b,
+            frac_a,
+            frac_b,
+            n_seg,
+            pivot,
+            rho_c,
+            decay,
+            vav_div,
+            fluid_area,
+            True,
         )
         self.d_f = 0.0

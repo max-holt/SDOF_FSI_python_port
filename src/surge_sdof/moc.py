@@ -470,6 +470,10 @@ class FluidColumn(NamedTuple):
         From ``mean_velocity_divisor``.
     flow_area : float
         Internal cross-sectional area, m².
+    is_fluid_coupled : bool
+        Fluid coupling on (a junction-coupling run) or off (the empty column of a lumped
+        run); the compiled loop advances the column and adds the junction force only when
+        it is on.
     """
 
     pressure_a: np.ndarray
@@ -484,6 +488,7 @@ class FluidColumn(NamedTuple):
     end_pressure_decay_factor: float
     mean_velocity_divisor: int
     flow_area: float
+    is_fluid_coupled: bool
 
 
 def empty_column() -> FluidColumn:
@@ -491,7 +496,19 @@ def empty_column() -> FluidColumn:
     of the same types as a real column's, which the compiled loop never reads."""
     no_column = np.zeros(0)
     return FluidColumn(
-        no_column, no_column, no_column, no_column, no_column, no_column, 0, 0, 0.0, 1.0, 1, 0.0
+        no_column,
+        no_column,
+        no_column,
+        no_column,
+        no_column,
+        no_column,
+        0,
+        0,
+        0.0,
+        1.0,
+        1,
+        0.0,
+        False,
     )
 
 

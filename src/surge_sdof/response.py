@@ -23,8 +23,9 @@ the profile once (``moc.moving_fractions``).
 Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
 ``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
-sample offsets, unpacks ``SdofParams`` and the coupling (``None`` for the lumped solver,
-kind 0; a ``JunctionCoupling`` with its column arrays and scalars, kind 1), runs the kernel,
+sample offsets, passes ``SdofParams`` whole and the fluid column (``moc.empty_column()``
+for the lumped solver, its coupling flag off; the ``JunctionCoupling``'s column, on), runs
+the kernel,
 writes ``dF`` back to the coupling and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
 arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
@@ -584,7 +585,7 @@ def _trace_frame(
     f_fric: float,
     stick: bool,
     d_f: float,
-    kind: int,
+    is_fluid_coupled: bool,
     p_a: np.ndarray,
     v_a: np.ndarray,
     p_b: np.ndarray,
@@ -592,7 +593,7 @@ def _trace_frame(
     n_seg: int,
 ) -> None:
     """Write one trace frame (Session V.1): the scalars into row ``frame`` of ``tr_f`` /
-    ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, for ``kind`` 1, the column
+    ``tr_i`` (columns ``trace.F_*`` / ``trace.I_*``) and, with fluid coupling, the column
     interleaved ``A0 B0 A1 ... A(N)`` into ``tr_p`` / ``tr_v``. Reads only; the solver
     state is untouched."""
     tr_f[frame, COL_X] = x
@@ -607,7 +608,7 @@ def _trace_frame(
     tr_i[frame, COL_SAMPLE_INDEX] = sample
     tr_i[frame, COL_LOAD_PHASE] = phase
     tr_i[frame, COL_IS_STICKING] = 1 if stick else 0
-    if kind == 1:
+    if is_fluid_coupled:
         for c in range(n_seg):
             tr_p[frame, 2 * c] = p_a[c]
             tr_p[frame, 2 * c + 1] = p_b[c]
@@ -634,9 +635,10 @@ def _integrate(
     sample.
 
     Python orchestrator of ``_integrate_kernel`` (Stage 5): flattens
-    ``unbalance_force_samples`` once, unpacks ``sdof_params`` and ``junction_coupling``
-    (``None``: no fluid coupling, kind 0; a ``JunctionCoupling``: kind 1, its arrays are
-    updated in place and its ``d_f`` written back), builds the ``PeakResponse``.
+    ``unbalance_force_samples`` once, passes ``sdof_params`` and the fluid column of
+    ``junction_coupling`` (``None``: ``moc.empty_column()``, no fluid coupling; a
+    ``JunctionCoupling``: its column, whose arrays are updated in place, and its ``d_f``,
+    written back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
     ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
@@ -662,7 +664,6 @@ def _integrate(
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
     response_history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
-    kind = int(junction_coupling is not None)
 
     # ----------------------------------------------------------------- trace set-up
     grid_point_count = (
@@ -718,7 +719,6 @@ def _integrate(
             int(output_type),
             bool(legacy_parity),
             response_history,
-            int(kind),
             column,
             junction_force,
             int(trace_every),
@@ -789,7 +789,6 @@ def _integrate_kernel(
     output_type: int,
     legacy_parity: bool,
     history: np.ndarray,
-    kind: int,
     column: moc.FluidColumn,
     d_f: float,
     trace_every: int,
@@ -804,9 +803,9 @@ def _integrate_kernel(
     """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
 
     ``flat[offsets[s]:offsets[s + 1]]`` holds sample ``s``'s per-sub-step unbalance
-    values. ``kind`` 1 advances the MoC column (``moc.step`` on the half-grid selected by
-    the parity of ``n + off``) before each SDOF sub-step and adds ``dF``; ``kind`` 0 adds
-    ``0.0`` (no fluid coupling). Returns ``(x_max, v_max, a_max, f_max, x, v,
+    values. With ``column.is_fluid_coupled`` the MoC column is advanced (``moc.step`` on
+    the half-grid selected by the parity of ``n + off``) before each SDOF sub-step and
+    ``dF`` added; without, ``0.0`` is added (no fluid coupling). Returns ``(x_max, v_max, a_max, f_max, x, v,
     a, tot_ind, forced_samples, d_f, n_frames)``; ``history`` is filled in place for
     ``output_type`` 1-3.
 
@@ -821,6 +820,7 @@ def _integrate_kernel(
     """
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
+    is_fluid_coupled = column.is_fluid_coupled
     p_a = column.pressure_a
     v_a = column.velocity_a
     p_b = column.pressure_b
@@ -855,7 +855,7 @@ def _integrate_kernel(
             if rec:
                 v_old = v
                 a_old = a
-            if kind == 1:
+            if is_fluid_coupled:
                 d_f = float(
                     moc.step(
                         (n + off) % 2 == 0,
@@ -886,8 +886,8 @@ def _integrate_kernel(
                     f,
                     mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
                     abs(v_old) < friction_velocity_step,
-                    d_f if kind == 1 else 0.0,
-                    kind,
+                    d_f if is_fluid_coupled else 0.0,
+                    is_fluid_coupled,
                     p_a,
                     v_a,
                     p_b,
@@ -924,7 +924,7 @@ def _integrate_kernel(
             if rec:
                 v_old = v
                 a_old = a
-            if kind == 1:
+            if is_fluid_coupled:
                 d_f = float(
                     moc.step(
                         (n + off) % 2 == 0,
@@ -955,8 +955,8 @@ def _integrate_kernel(
                     0.0,
                     mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
                     abs(v_old) < friction_velocity_step,
-                    d_f if kind == 1 else 0.0,
-                    kind,
+                    d_f if is_fluid_coupled else 0.0,
+                    is_fluid_coupled,
                     p_a,
                     v_a,
                     p_b,
