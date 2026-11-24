@@ -36,6 +36,8 @@ TRACE_FRAMES = 2000
 JC_KEYS = ("fluid_densty", "fluid_area")
 MM_PER_M = 1000.0
 """Millimetres per metre: the step case's internal diameter is given in mm."""
+PA_PER_BAR = 1e5
+"""Pascals per bar: the step case's amplitude is given in bar."""
 
 
 def golden_case(case_id: str):
@@ -64,7 +66,7 @@ def step_case(args):
     lead_in_sample_count = max(1, int(round(args.lead_in_s * args.sample_freq)))
     hold_sample_count = max(1, int(round(args.duration_s * args.sample_freq)))
     force = np.full(
-        (lead_in_sample_count + hold_sample_count, 1), args.amplitude_bar * 1e5 * flow_area
+        (lead_in_sample_count + hold_sample_count, 1), args.amplitude_bar * PA_PER_BAR * flow_area
     )
     force[:lead_in_sample_count, 0] = 0.0
     kw = {
