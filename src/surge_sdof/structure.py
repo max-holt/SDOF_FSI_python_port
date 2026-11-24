@@ -42,6 +42,7 @@ __all__ = [
     "jc_params",
     "effective_displacement",
     "step_scalars",
+    "substep_friction",
 ]
 
 # VBA ``Const pi = 3.14159265358979`` (15 digits; differs from math.pi by 3e-15 and a
@@ -489,3 +490,22 @@ def step_scalars(
             v_new = v_new + friction_velocity_step
     x = x + (v + v_new) * half_dt
     return (x, v_new, a_new)
+
+
+@numba.njit(cache=True)
+def substep_friction(
+    sdof_params: SdofParams, v_before: float, a_before: float, v: float, a: float, dt: float
+) -> tuple[float, bool]:
+    """The friction force of one ``step_scalars`` sub-step, as the trace records it, and
+    whether the sub-step stuck.
+
+    The friction force is what the trapezoidal velocity change misses: ``mass * (v -
+    (v_before + (a_before + a) * half_dt)) / dt`` (N), with the same ``half_dt = dt / 2``
+    as ``step_scalars``; the sub-step sticks when ``|v_before| < friction_velocity_step``.
+    ``v_before``, ``a_before`` are the state before the sub-step, ``v``, ``a`` after it
+    (m/s, m/s²); ``dt`` in s. Scalars only.
+    """
+    half_dt = dt / 2
+    friction_force = sdof_params.mass * (v - (v_before + (a_before + a) * half_dt)) / dt
+    is_sticking = abs(v_before) < sdof_params.friction_velocity_step
+    return friction_force, is_sticking

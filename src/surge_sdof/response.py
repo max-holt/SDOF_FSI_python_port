@@ -969,8 +969,6 @@ def _integrate_kernel(
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
     is_per_phase_parity = settings.is_per_phase_parity
-    mass = sdof_params.mass
-    friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
     state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first sub-step
@@ -980,7 +978,6 @@ def _integrate_kernel(
     frame_count = 0
     trace_every = buffers.trace_every
     frame_capacity = buffers.frame_index_columns.shape[0]
-    half_dt = dt / 2
 
     # ------------------------------------------------- transit and forced phases
     for s in range(forced_sample_count):
@@ -1009,6 +1006,9 @@ def _integrate_kernel(
                 applied_force = 0.0 + unbalance_force
             state = _structure_substep(state, applied_force, sdof_params, dt)
             if record_frame:
+                friction_force, is_sticking = structure.substep_friction(
+                    sdof_params, before.v, before.a, state.v, state.a, dt
+                )
                 _trace_frame(
                     buffers,
                     frame_count,
@@ -1022,8 +1022,8 @@ def _integrate_kernel(
                         elbow_a_force_by_substep[i],
                         elbow_b_force_by_substep[i],
                         unbalance_force,
-                        mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
-                        abs(before.v) < friction_velocity_step,
+                        friction_force,
+                        is_sticking,
                         junction_force,
                     ),
                     column,
@@ -1064,6 +1064,9 @@ def _integrate_kernel(
                 applied_force = 0.0
             state = _structure_substep(state, applied_force, sdof_params, dt)
             if record_frame:
+                friction_force, is_sticking = structure.substep_friction(
+                    sdof_params, before.v, before.a, state.v, state.a, dt
+                )
                 _trace_frame(
                     buffers,
                     frame_count,
@@ -1077,8 +1080,8 @@ def _integrate_kernel(
                         0.0,
                         0.0,
                         0.0,
-                        mass * (state.v - (before.v + (before.a + state.a) * half_dt)) / dt,
-                        abs(before.v) < friction_velocity_step,
+                        friction_force,
+                        is_sticking,
                         junction_force,
                     ),
                     column,
