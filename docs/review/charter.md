@@ -392,3 +392,21 @@ The single-substep session (plan group 4).
 57. **Per-substep arguments** (`docs/style.md` §4): a function called on every substep takes
     only scalars and small tuples of scalars; arrays go only to functions called once per run
     or that loop over them internally.
+
+## Rulings (owner, session R.7, 24 Nov 2026)
+
+The rest of plan group 4.
+
+58. **Plan 4.2 to 4.4 dropped** (option c of `substep_design.md`). `moc.step` stays one
+    function with its even / odd flag, a recorded exception in `docs/style.md` §11:
+    splitting it either adds branches to the kernel loops or passes the column two calls
+    deep per substep. C-04 and C-05 are closed with that reason.
+59. **The A/B harness is committed** as `tools/review_ab.py`, with a short usage note: it
+    decides the speed gate (rulings 43, 50, 54).
+60. **Kernel targets.** A kernel complexity of 10 meets the target; statements above 50 are
+    accepted until 4.7.
+61. **Plan 4.12** (the schedule flattened in `loads`; it reopens C-07). The A/B is reported
+    either way, the compiled lumped path being dominated by the schedule generator. Every
+    per-substep force and the D-7 and D-8 error positions stay exact, checked on 6000
+    random histories as in session R.4. If 4.12 cannot be made exact and no slower, it is
+    reverted and C-07 stays open with the reason; no second variant.

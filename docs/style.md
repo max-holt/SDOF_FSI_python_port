@@ -65,3 +65,4 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 
 ## 11. Recorded exceptions
 - Add a line here, with the reason, for any function that keeps a deliberate departure from this guide. A user-facing entry point that still exceeds the 6-argument limit after the public API session is recorded here (owner's ruling, R.3).
+- `moc.step` keeps its `is_even_substep` flag (one function for the two half-grid updates; section 3 asks for two functions). Splitting it either adds a parity branch to each kernel loop or needs a column advance that passes the column two calls deep per substep, which section 4 rules out (owner's ruling, R.7; plan 4.2 to 4.4 dropped).
