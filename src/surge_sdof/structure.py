@@ -48,6 +48,10 @@ __all__ = [
 # substitution would not be bit-preserving, port_review §1.1).
 VBA_PI = 3.14159265358979
 
+# Percent per unit fraction: ``damping_percent / PERCENT`` is the damping ratio (fraction of
+# critical), dimensionless. Unit conversion of the input (VBA lines 391 and 728).
+PERCENT = 100
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -225,7 +229,7 @@ def lumped_params(
     # Written for the single expansion-loop shape.
     mass = (span_length + portal_frame_height * 4 / 3) * mass_per_length
     stiffness = ((natural_frequency * 2 * VBA_PI) ** 2) * mass
-    damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / 100
+    damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / PERCENT
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
@@ -313,7 +317,7 @@ def jc_params(
         2
         * ((stiffness * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)) ** 0.5)
         * damping_percent
-        / 100
+        / PERCENT
     )  # assume critical damping is relative to total mass
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part (as in lumped_params). The weight is that of the total mass (pipe and
