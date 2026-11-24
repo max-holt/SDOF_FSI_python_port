@@ -85,6 +85,9 @@ DEFAULT_ENVELOPE_DECAY_CYCLES = 10.0
 """Default cycles (of the oscillation or the noise reference frequency) over which the
 envelope of ``step_sine`` and ``step_noise`` falls by its decay fraction.
 The sweep's convention."""
+DEFAULT_ENVELOPE_DECAY_FRACTION = 0.8
+"""Default fall of that envelope over ``DEFAULT_ENVELOPE_DECAY_CYCLES``, dimensionless: it
+reaches ``1 - 0.8 = 0.2`` of its start. The sweep's convention."""
 
 PARAM_KEYS = (
     "kind",
@@ -358,7 +361,7 @@ def step_sine(
     oscillation_amplitude: float,
     oscillation_frequency: float,
     envelope_decay_cycles: float = DEFAULT_ENVELOPE_DECAY_CYCLES,
-    envelope_decay_fraction: float = 0.8,
+    envelope_decay_fraction: float = DEFAULT_ENVELOPE_DECAY_FRACTION,
     *,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
@@ -448,7 +451,7 @@ def step_noise(
     noise_cutoff_frequency: float | None = None,
     noise_seed: int = 0,
     envelope_decay_cycles: float = DEFAULT_ENVELOPE_DECAY_CYCLES,
-    envelope_decay_fraction: float = 0.8,
+    envelope_decay_fraction: float = DEFAULT_ENVELOPE_DECAY_FRACTION,
     *,
     envelope_reference_frequency: float,
     peak_pressure_target: float,
@@ -572,7 +575,7 @@ def canonical(
     f_cut: float | None = None,
     p_noise_rms: float = 1.0,
     decay_cycles: float = DEFAULT_ENVELOPE_DECAY_CYCLES,
-    decay_fraction: float = 0.8,
+    decay_fraction: float = DEFAULT_ENVELOPE_DECAY_FRACTION,
     sample_freq: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
