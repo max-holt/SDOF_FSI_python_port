@@ -37,6 +37,12 @@ the nomenclature (four R0 commits). Every function of the group takes at most 6 
 except the kernel (7, the reason in `findings.md`). Left in group 3: 3.7, 3.10, 3.11. Next:
 those, then `docs/review/substep_design.md` before group 4.
 
+**Progress (session R.6, 24 Nov 2026).** Rulings 47-50 recorded: 3.7 and 3.10 move to the
+public API session (group 6), 3.11 to the supporting-modules session (group 5);
+`JunctionCoupling` is replaced by `coupling.fluid_column` (ruling 49, `1eeb6d4`). The two
+substep designs are in `docs/review/substep_design.md` and summarised under group 4;
+stopped there for the owner before any change to the kernel.
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
@@ -195,11 +201,12 @@ names change here, as fields, under the names `docs/nomenclature.md` proposes (r
 | 3.4 | Run-settings NamedTuple (`dt`, sub-steps per sample, capacity, `output_type`, parity flag) | C-01 | R4 |
 | 3.5 | NamedTuple return of the kernel | C-01 | R4 |
 | 3.6 | Grid description passed to `trace.build` in place of the coupling object, and its run fields as one object; annotate it | C-14, S-08, SP-15 | R3 |
-| 3.7 | Span, restraint and fluid objects for `lumped_params` / `jc_params`; shared return block | C-17 | R3 |
+| 3.7 | Span, restraint and fluid objects for `lumped_params` / `jc_params`; shared return block. **Moved to the public API session (ruling 47)**, which designs the input groups | C-17 | R3 |
 | 3.8 | Grid and fluid-constant objects for `JunctionCoupling.__init__` | C-18 | R3 |
 | 3.9 | ~~`pressure` column NamedTuple~~: removed (R.1b) | C-16, C-N02 | R3 |
-| 3.10 | Entry points: extract the sample grid and the trace wrapper; keyword arguments in the short-pipe fallback | C-11 | R3 |
-| 3.11 | One set-up query in the core (sub-step, portal height, grid), used by `response` | S-06 (core half) | R3 |
+| 3.10 | Entry points: extract the sample grid and the trace wrapper; keyword arguments in the short-pipe fallback. **Moved to the public API session (ruling 47)** | C-11 | R3 |
+| 3.11 | One set-up query in the core (sub-step, portal height, grid), used by `response`. **Moved to the supporting-modules session (ruling 48)**, whose tools are its main users | S-06 (core half) | R3 |
+| 3.12 | `JunctionCoupling` replaced by `coupling.fluid_column(grid, fluid, vav_denominator, fraction_profile) -> FluidColumn` (ruling 49); done in R.6, `1eeb6d4` | C-03, C-N13 | R3 |
 
 3.1 to 3.5 are the commits the bench matters for. After each: cache wipe, both modes,
 snapshot; `tools/bench.py` at the end of the session and a revert of the session's last
@@ -226,6 +233,31 @@ that makes this worth trying; it is not evidence for the real kernel.
 
 Before 4.1, write `docs/review/substep_design.md` (the substep designs) and stop for the
 owner.
+
+**The two designs (session R.6; in full, with the loop bodies, in
+`docs/review/substep_design.md`).** Common to both: each loop computes its own applied
+force, verbatim and never merged, and therefore also advances the column first (the force
+needs the junction force the advance returns); the unbalance-force maximum is taken once
+over the schedule by `_largest_magnitude` (same comparisons, same order); the free-decay
+re-test stays in its loop.
+
+* **A (recommended): one substep function.**
+  `_advance_structure(state: _RunState, applied_force, junction_force, sample_index,
+  is_in_record_window, inputs: _SubstepInputs) -> _RunState`: the SDOF step, the trace frame
+  if one is due (`_trace_frame`, with the frame's phase and elbow forces read from the
+  schedule at `substep_index`, which equals the forced loop's `i`), the three maxima, the
+  counters. `_RunState` = `x, v, a, x_max, v_max, a_max, substep_index, frame_count`,
+  returned (§4); `_SubstepInputs` = `sdof_params, substep_duration, schedule, buffers,
+  column`. Each loop body: the unbalance force (forced only), the column advance, the
+  applied force, one call. Kernel complexity about 8.
+* **B: two short loops sharing per-concern helpers** (4.6 and 4.7 without 4.9).
+  `_track_peaks(peaks, x, v, a)` on a three-element array updated in place;
+  `_record_frame(recorder, frame_count, key, before, after, junction_force) -> frame_count`.
+  Each loop body: force lines, `step_scalars`, `_record_frame`, `_track_peaks`, the counter.
+  Kernel complexity about 8; the substep sequence is still written twice, as calls.
+
+Open for the owner: the order (4.9 now, ahead of 4.1 to 4.8, or the plan's order: Q-R6-1)
+and step 0 (the kernel starts the junction force at 0.0 itself: Q-R6-2).
 
 `tools/bench.py` runs after every commit of this group, not only at the session end (R.2's
 order change): the extracted helpers create exactly the call depth the Numba rule of group
