@@ -410,3 +410,23 @@ The rest of plan group 4.
     per-substep force and the D-7 and D-8 error positions stay exact, checked on 6000
     random histories as in session R.4. If 4.12 cannot be made exact and no slower, it is
     reverted and C-07 stays open with the reason; no second variant.
+
+## Rulings (owner, session R.8, 24 Nov 2026)
+
+The supporting-modules session (plan group 5, with 3.11 moved there by ruling 48).
+
+62. **The kernel stays at 56 statements.** `response._integrate_kernel` is a recorded
+    exception in `docs/style.md` §11: what is left above the target of 50 is the two
+    frame-label blocks and the two `moc.step` calls, and shortening them further would hide
+    the substep sequence.
+63. **C-07 stays open by decision.** The one-walk schedule cost about 20 % on the compiled
+    lumped path (rulings 42, 61); the two walks are kept.
+64. **Mislabelled bench-row subjects.** The bench-row commits of session R.7 whose subject
+    says "R.6" are left as they are; `NOTES.md` states which they are.
+65. **Gates as before** (ruling 39): `make lint` and the compiled fast suite pass before
+    each commit, the pure-Python run of a commit passes before the next, and the branch is
+    pushed only when every commit is green. A change to code the solvers or the sweep run
+    through is timed with `tools/review_ab.py` against the commit before; the 5 % limit
+    applies (rulings 43, 54).
+66. **The plan wins** where `docs/review/plan.md` and the session brief differ (rulings 46,
+    50).

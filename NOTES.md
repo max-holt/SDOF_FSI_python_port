@@ -20,8 +20,10 @@ one-walk form cost about 20 % in R.4). Findings C-06, C-14, C-15, C-22 done. Ses
 `-m slow` 150 passed; bench row `6fa4507` (digests equal; host-disturbed times); cumulative
 A/B against the session start `1d3bb7a`: lumped 0.885 / 0.935, everything else within
 noise on a repeat (0.972-1.021). Pure-Python fast suite 220-232 s per commit (226 s at the
-session start). Bench-row commits of this session are labelled "R.6" in their subject (a
-helper script's label); the rows are this session's.
+session start). Three of this session's four bench-row commits (`b716bcb`, `3cbb504`, `0b38259`, the rows of
+`8af0627`, `51c8a73`, `fee6c4d`) say "R.6" in their subject (a helper script's label); the
+fourth (`fd722c4`, row `6fa4507`) says "R.7". The rows are this session's; the subjects are
+left as they are (ruling 64).
 
 Metrics, session start -> end: `_integrate_kernel` 6 args, complexity 10 -> 10, statements
 59 -> 56, code lines 153 -> 140 (the statement target of 50 is still missed: the two
