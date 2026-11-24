@@ -6,6 +6,24 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.5 (parameter objects, plan group 3, 2026-11-24) **stopped at the proposal**, as
+`docs/review/plan.md` asks before group 3 is built (ruling 46: the plan wins over the brief).
+Done: charter rulings 43-46 (speed judged by an A/B run on one host or relative to the
+literal port, 5 % limit on both paths; 2.2 in this session; no SI conversion at the
+boundary; plan wins, proposal in `docs/review/parameter_objects.md`). Plan 3.1 as the proof
+on one function (`2f1dce2`): `structure.step_scalars(x, v, a, f_applied, sdof_params, dt)`,
+the kernel receives `SdofParams` whole (11 -> 6 and 36 -> 31 arguments). Gates: lint and
+the compiled fast suite (949 + 24) before the commit, pure Python (947 + 26) on a worktree
+after it; snapshot exact in both modes. A/B against the session base on this host (min of 5
+runs, 5 alternating rounds; an A/A run of the same harness spreads up to ±5 % on the 90 ms
+JC case and about ±2 % on the full JC cases): 0.97x-1.01x, every case within that noise.
+`tools/bench.py --skip-full-python` (`docs/bench/a1c1724.json`): digests equal to the
+literal port, results the same as `213e3ef`; relative to the literal port numba r20 0.091
+(was 0.098), JC r96 full 0.537 (was 0.572). `-m slow` 150 passed.
+
+Next: the owner's answer on `docs/review/parameter_objects.md`; then its commits 1-10 in
+order, an A/B timing after each commit that touches the substep loop.
+
 Session R.4 (constants and control flow, plan group 2, 2026-11-24) **done**. Rulings 39-42
 in the charter: gates before each commit, the pure-Python run of a commit green before the
 next is made, push only when all are green (39); plan 2.2, the coupling kind as a plain
