@@ -65,7 +65,7 @@ Three facts the designs rest on, each checked against the code:
   will show (the compiled paths are the ones the 5 % limit has been applied to so far, and
   the A/B below covers them). Flagged, not hidden.
 
-## Design A (recommended) — one substep function
+## Design A (recommended; approved) — one substep function
 
 The loops keep what differs (parity offset, unbalance force, column advance, applied
 force, the free-decay re-test, the history window); everything they share is one compiled
@@ -262,3 +262,11 @@ reaching complexity under 10 needs an arithmetic change, the session stops and r
   session. Or follow the plan's order and leave 4.9 to the end of group 4.
 * **Q-R6-2, step 0.** Make it (kernel 7 -> 6 arguments, the dead returned junction force
   gone), or leave the kernel signature as it is?
+
+## The owner's decision (session R.6)
+
+Design A, with the shared function named `_structure_substep` (ruling 51); 4.9 now, then
+the rest of group 4 in plan order, 4.6 dropped where A absorbed it (ruling 52); step 0
+made (ruling 53); the 5 % limit on the compiled paths, the pure-Python change recorded
+(ruling 54); a traced-run cost of the two-deep `_trace_frame` call beyond noise stops the
+session (ruling 55).

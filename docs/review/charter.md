@@ -365,3 +365,18 @@ The single-substep session (plan group 4).
     but a host that drifts during a session decides nothing: the interleaved A/B run of the
     old code against the new on the same host does (ruling 43). Where `plan.md` and the
     session brief differ, `plan.md` wins (ruling 46).
+
+51. **Substep design A approved** (`docs/review/substep_design.md`). The shared function is
+    named for all it does (`_structure_substep`: it steps the structure, writes the trace
+    frame and tracks the maxima), with a first docstring line listing the three jobs.
+52. **Plan 4.9 ahead of 4.1 to 4.8** (Q-R6-1). After it the rest of group 4 follows in plan
+    order; 4.6 is dropped where design A has absorbed it. A long session stops at a green
+    commit and says where.
+53. **Step 0 approved** (Q-R6-2): the kernel starts the junction force at 0.0 and no longer
+    returns it.
+54. **The 5 % limit applies to the compiled paths.** The pure-Python change is recorded in
+    the bench notes; the owner is told if the pure-Python fast suite, a per-commit gate,
+    takes more than about a quarter longer.
+55. **Trace depth.** If the A/B shows that the column reaching `_trace_frame` two calls deep
+    costs more than noise on a traced run, the session stops and reports; it does not
+    restructure on its own.
