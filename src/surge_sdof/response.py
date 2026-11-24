@@ -302,16 +302,10 @@ def peak_response(
             celerity,
             loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
-    return _integrate(
-        unbalance_force_samples,
-        sdof_params,
-        substep_duration,
-        step_qty,
-        None,
-        nominal_forced_sample_count,
-        output_type,
-        trace_request=trace_request,
+    settings = RunSettings(
+        substep_duration, step_qty, nominal_forced_sample_count, output_type, False
     )
+    return _integrate(unbalance_force_samples, sdof_params, settings, None, trace_request)
 
 
 def peak_response_jc(
@@ -510,16 +504,15 @@ def peak_response_jc(
             celerity,
             loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
-    return _integrate(
-        unbalance_force_samples,
-        sdof_params,
+    settings = RunSettings(
         substep_duration,
         step_qty,
-        junction_coupling,
         nominal_forced_sample_count,
         output_type,
-        legacy_parity=(parity == "per_phase"),
-        trace_request=trace_request,
+        parity == "per_phase",
+    )
+    return _integrate(
+        unbalance_force_samples, sdof_params, settings, junction_coupling, trace_request
     )
 
 
@@ -529,6 +522,32 @@ def _trace_stride(trace_every) -> int:
     if trace_every < 0:
         raise ValueError(f"trace_every must be >= 0, got {trace_every}")
     return trace_every
+
+
+class RunSettings(NamedTuple):
+    """The settings of one run of the sample loop, built by the solver entry points.
+
+    Attributes
+    ----------
+    substep_duration : float
+        One sub-step, ``1 / (sample_freq * step_qty)``, s.
+    substep_count : int
+        Sub-steps per sample (VBA ``stepQTY``).
+    nominal_forced_sample_count : int
+        History samples plus the rounded transit delay (VBA ``outMax``); the response
+        history and the trace keep twice this many samples.
+    output_type : int
+        0 (peaks only) or 1 / 2 / 3 (the history of ``x`` / ``v`` / ``a``).
+    is_per_phase_parity : bool
+        The VBA per-phase MoC parity index (``parity="per_phase"``, D-19) in place of the
+        running sub-step counter; always False for the lumped solver.
+    """
+
+    substep_duration: float
+    substep_count: int
+    nominal_forced_sample_count: int
+    output_type: int
+    is_per_phase_parity: bool
 
 
 class _TraceRequest(NamedTuple):
@@ -645,13 +664,9 @@ def _trace_frame(
 def _integrate(
     unbalance_force_samples,
     sdof_params: SdofParams,
-    substep_duration: float,
-    substep_count: int,
+    settings: RunSettings,
     junction_coupling: JunctionCoupling | None,
-    nominal_forced_sample_count: int,
-    output_type: int,
-    legacy_parity: bool = False,
-    trace_request: _TraceRequest | None = None,
+    trace_request: _TraceRequest | None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
     driven by ``unbalance_force_samples`` (one list of per-sub-step unbalance values per
@@ -665,7 +680,7 @@ def _integrate(
     written back), builds the ``PeakResponse``.
 
     ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
-    ``n`` (0 at the first sub-step), or with ``legacy_parity`` the VBA per-phase index
+    ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA per-phase index
     ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written as ``n + off``
     with ``off`` fixed per sample (D-19, approved fix F-2).
 
@@ -674,7 +689,10 @@ def _integrate(
     the trace arrays are allocated (``trace.check_memory``, ``trace.allocate_frames``) and
     the kernel fills them; ``trace.build_trace`` makes the ``Trace``. Without one the kernel
     takes a stride of 0 and empty arrays."""
-    substep_duration = float(substep_duration)
+    substep_duration = float(settings.substep_duration)
+    substep_count = settings.substep_count
+    nominal_forced_sample_count = settings.nominal_forced_sample_count
+    output_type = settings.output_type
     unbalance_force_samples = list(unbalance_force_samples)
     offsets = np.zeros(len(unbalance_force_samples) + 1, dtype=np.int64)
     for i, sample in enumerate(unbalance_force_samples):
@@ -737,11 +755,7 @@ def _integrate(
             flat,
             offsets,
             sdof_params,
-            substep_duration,
-            int(substep_count),
-            int(nominal_forced_sample_count),
-            int(output_type),
-            bool(legacy_parity),
+            settings,
             response_history,
             column,
             junction_force,
@@ -799,11 +813,7 @@ def _integrate_kernel(
     flat: np.ndarray,
     offsets: np.ndarray,
     sdof_params: SdofParams,
-    dt: float,
-    step_qty: int,
-    out_max: int,
-    output_type: int,
-    legacy_parity: bool,
+    settings: RunSettings,
     history: np.ndarray,
     column: moc.FluidColumn,
     d_f: float,
@@ -830,6 +840,11 @@ def _integrate_kernel(
     friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the arrays are
     empty.
     """
+    dt = settings.substep_duration
+    step_qty = settings.substep_count
+    out_max = settings.nominal_forced_sample_count
+    output_type = settings.output_type
+    legacy_parity = settings.is_per_phase_parity
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
