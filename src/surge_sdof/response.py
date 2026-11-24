@@ -612,6 +612,27 @@ def _free_decay_product(x: float, x_zero: float) -> float:
 
 
 @numba.njit(cache=True)
+def _parity_offset(
+    is_per_phase_parity: bool,
+    sample_number: int,
+    substep_count: int,
+    substep_index: int,
+    first_substep_number: int,
+) -> int:
+    """What the kernel adds to the running ``substep_index`` to get the MoC parity index,
+    fixed for one sample, at the sample's first sub-step.
+
+    0 for the running counter (F-2). With the VBA per-phase index (D-19) the parity index
+    is ``k + (totInd - 1) * stepQTY`` with the VBA's ``k`` starting at
+    ``first_substep_number`` in each sample (0 in the transit and forced phases, 1 in free
+    decay); ``sample_number`` is ``totInd``. Integers only.
+    """
+    if not is_per_phase_parity:
+        return 0
+    return (sample_number - 1) * substep_count + first_substep_number - substep_index
+
+
+@numba.njit(cache=True)
 def _largest_magnitude(values: np.ndarray) -> float:
     """The largest ``abs()`` of ``values``, from 0.0, as a running maximum over them in
     order (a NaN never wins the comparison). Called once per run (``docs/style.md`` §4)."""
@@ -922,7 +943,6 @@ def _integrate_kernel(
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
     state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first sub-step
-    parity_offset = 0  # the MoC parity index is substep_index + parity_offset
     sample_number = 0
     forced_sample_count = sample_start.shape[0] - 1
     # trace (Session V.1)
@@ -936,8 +956,9 @@ def _integrate_kernel(
     # ------------------------------------------------- transit and forced phases
     for s in range(forced_sample_count):
         sample_number += 1
-        if is_per_phase_parity:
-            parity_offset = (sample_number - 1) * substep_count - state.substep_index
+        parity_offset = _parity_offset(
+            is_per_phase_parity, sample_number, substep_count, state.substep_index, 0
+        )
         for i in range(sample_start[s], sample_start[s + 1]):
             unbalance_force = float(unbalance_force_by_substep[i])
             substep_index = state.substep_index
@@ -994,8 +1015,9 @@ def _integrate_kernel(
     decay_start_displacement = state.x
     while _free_decay_product(state.x, decay_start_displacement) > FREE_DECAY_THRESHOLD:
         sample_number += 1
-        if is_per_phase_parity:
-            parity_offset = (sample_number - 1) * substep_count + 1 - state.substep_index
+        parity_offset = _parity_offset(
+            is_per_phase_parity, sample_number, substep_count, state.substep_index, 1
+        )
         for _k in range(substep_count):
             substep_index = state.substep_index
             # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
