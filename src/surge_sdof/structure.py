@@ -69,6 +69,10 @@ NEWTON_RELATIVE_TOLERANCE = 0.000001
 # ``Const relax = 0.25``, line 138).
 NEWTON_RELAXATION = 0.25
 
+# Iteration limit of ``solve_quartic`` (VBA ``For i = 1 To 100``, line 144); there is no
+# convergence check at exit.
+NEWTON_ITERATION_LIMIT = 100
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -128,7 +132,7 @@ def solve_quartic(
     D-12: a negative base makes the Python seed complex where VBA raises error 5.
     """
     root = (-quartic_constant / cubic_coefficient) ** (1 / 3)
-    for _i in range(1, 100 + 1):
+    for _i in range(1, NEWTON_ITERATION_LIMIT + 1):
         residual = (
             quartic_constant + cubic_coefficient * (root**3) + quartic_coefficient * (root**4)
         )
