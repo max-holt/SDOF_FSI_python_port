@@ -34,6 +34,8 @@ from surge_sdof import loads, response  # noqa: E402
 TRACE_FRAMES = 2000
 """Default target for the traced frames of the forced phases (``default_trace_every``)."""
 JC_KEYS = ("fluid_densty", "fluid_area")
+MM_PER_M = 1000.0
+"""Millimetres per metre: the step case's internal diameter is given in mm."""
 
 
 def golden_case(case_id: str):
@@ -57,7 +59,7 @@ def step_case(args):
     flow area for ``duration_s``."""
     params = tg.load_params()
     flow_area = (
-        args.area if args.area else math.pi * (args.internal_diameter_mm / 1000.0) ** 2 / 4.0
+        args.area if args.area else math.pi * (args.internal_diameter_mm / MM_PER_M) ** 2 / 4.0
     )
     lead_in_sample_count = max(1, int(round(args.lead_in_s * args.sample_freq)))
     hold_sample_count = max(1, int(round(args.duration_s * args.sample_freq)))
