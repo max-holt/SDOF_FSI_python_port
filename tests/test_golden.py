@@ -16,6 +16,9 @@ inputs, keyword arguments and expected outputs): ``example_pressure`` (``GetPres
 
 Tolerance record
 ----------------
+The values are ``RTOL`` and ``EXAMPLE_RTOL`` of ``tools/fixture_cases.py``, which also holds
+the loaders; this module re-exports them.
+
 Relative tolerance per solver, ``|py - xl| <= RTOL * |xl|`` for each of the five outputs:
 
 * ``lumped`` (``GetPeakResponse``): RTOL = 5e-12. Measured on 2026-10-20 over all 75
@@ -43,61 +46,33 @@ Each case also writes its actual/expected values to ``tests/.golden_cache/<case_
 (git-ignored) for ``tools/golden_report.py``.
 """
 
-import csv
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
+from fixture_cases import (  # the loaders and tolerances, shared with the tools
+    CACHE_DIR,
+    CURVE_DIR,  # noqa: F401  (re-exported: tests and tools read tg.CURVE_DIR)
+    EXAMPLE_DIR,  # noqa: F401  (re-exported)
+    EXAMPLE_RTOL,
+    FIXTURES_DIR,  # noqa: F401  (re-exported)
+    MANIFEST,
+    RTOL,
+    case_params,
+    load_cases,
+    load_example_cases,
+    load_force,
+    load_params,
+)
 
 from surge_sdof import legacy_port as lp
 
-RTOL = {
-    "lumped": 5e-12,  # measured: worst 8.3e-13 over 75 cases
-    "jc": 5e-12,  # measured: worst 8.6e-13 over 3 cases (2026-10-21)
-}
-EXAMPLE_RTOL = 1e-12  # measured: worst 2.8e-14 over the 3 Example cases
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-with open(FIXTURES_DIR / "manifest.json") as _fh:
-    MANIFEST = json.load(_fh)
-CURVE_DIR = FIXTURES_DIR / MANIFEST["sets"]["curve_10in"]["dir"]
-EXAMPLE_DIR = FIXTURES_DIR / MANIFEST["sets"]["example"]["dir"]
-CACHE_DIR = Path(__file__).parent / ".golden_cache"
 SOLVERS = {
     "lumped": lp.get_peak_response,
     "jc": lp.get_peak_response_jc,
     "pressure": lp.get_pressure_response,
 }
 MARKERS = {"lumped": pytest.mark.slow, "jc": pytest.mark.jc_slow}
-
-
-def load_params():
-    with open(CURVE_DIR / "params.json") as fh:
-        return json.load(fh)
-
-
-def load_cases():
-    with open(CURVE_DIR / "cases.csv", newline="") as fh:
-        return list(csv.DictReader(fh))
-
-
-def load_force(params):
-    """The force history exactly as Excel built it: first n_samples of the chosen column,
-    multiplied left to right by the recorded multipliers, as an (n, 1) column."""
-    spec = params["force"]
-    with open(CURVE_DIR / spec["file"], newline="") as fh:
-        reader = csv.DictReader(fh)
-        col = np.array([float(row[spec["column"]]) for row in reader])
-    col = col[: params["n_samples"]]
-    for m in spec["multipliers"]:
-        col = col * m
-    return col.reshape(-1, 1)
-
-
-def load_example_cases():
-    with open(EXAMPLE_DIR / "cases.json") as fh:
-        return json.load(fh)
 
 
 PARAMS = load_params()
@@ -134,32 +109,6 @@ def check_and_cache(case_id, solver, source, output_names, actual, expected, rto
         )
     for name, a, e, r in zip(output_names, actual, expected, rel_err, strict=True):
         assert abs(a - e) <= rtol * abs(e), f"{name}: python {a!r} vs excel {e!r} (rel {r:.3e})"
-
-
-def case_params(case, params):
-    common = {
-        k: params[k]
-        for k in (
-            "step_qty",
-            "sample_freq",
-            "flexural_rigidity_ei",
-            "celerity",
-            "mass_per_unit_len",
-            "damping_percent",
-            "restrain_freq_ratio",
-            "gap",
-            "output_type",
-        )
-    }
-    if case["solver"] == "jc":
-        common["fluid_densty"] = params["fluid_densty"]
-        common["fluid_area"] = params["fluid_area"]
-    return dict(
-        common,
-        physical_length=float(case["physical_length"]),
-        nat_freq=float(case["nat_freq"]),
-        dynamic_fric=float(case["dynamic_fric"]),
-    )
 
 
 # ------------------------------------------------------------------ fixture integrity

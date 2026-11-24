@@ -34,6 +34,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# tools/fixture_cases.py (the fixture loaders, shared with the tools) and tools/cases.py
+pythonpath = ["tools"]
 # Golden curve cases are excluded by default; `pytest -m slow` runs the 75 lumped cases
 # (minutes; machine-dependent, ~10 min on a 4-core cloud container), `pytest -m "slow or
 # jc_slow"` adds the 3 junction-coupling cases (about an hour or more in pure Python).

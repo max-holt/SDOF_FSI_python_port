@@ -31,6 +31,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 import test_golden as tg
+from fixture_cases import FIXED_FLAGS, LEGACY_FLAGS
 
 from surge_sdof import coupling, loads, moc, response, structure
 from surge_sdof import legacy_port as lp
@@ -815,8 +816,6 @@ def test_junction_coupling_without_fluid_area_returns_exact_zero():
 
 # ------------------------------------------------------------------ response.py (JC)
 
-LEGACY_FLAGS = {"vav_denominator": "legacy", "parity": "per_phase", "fraction_profile": "legacy"}
-
 
 @pytest.mark.parametrize("idx", range(len(JC_SMALL)), ids=JC_SMALL_IDS)
 def test_jc_params_match_legacy(idx):
@@ -1101,8 +1100,6 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
 
 
 # ------------------------------------------------------------------ approved fixes F-1, F-2
-
-FIXED_FLAGS = {"vav_denominator": "fixed", "parity": "running", "fraction_profile": "fixed"}
 
 
 def test_peak_response_jc_defaults_are_the_approved_fixes():

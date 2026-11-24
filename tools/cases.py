@@ -19,17 +19,12 @@ import argparse
 import csv
 import math
 import re
-import sys
 from pathlib import Path
 
+import fixture_cases as tg  # tools/fixture_cases.py: the fixture loaders
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
-
-import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
-
-from surge_sdof import loads, response  # noqa: E402
+from surge_sdof import loads, response
 
 TRACE_FRAMES = 2000
 """Default target for the traced frames of the forced phases (``default_trace_every``)."""

@@ -79,7 +79,8 @@ def _cases():
 
 def worker(worktree: str, repeats: int, only: list[str]) -> None:
     """Time the cases of the code in ``worktree``; print ``{case: seconds}`` as JSON."""
-    sys.path[:0] = [os.path.join(worktree, "src"), os.path.join(worktree, "tests")]
+    # tools/ for the fixture loaders that tests/test_golden.py imports (from session R.8)
+    sys.path[:0] = [os.path.join(worktree, d) for d in ("src", "tests", "tools")]
     timings = {}
     for name, run in _cases().items():
         if only and name not in only:
