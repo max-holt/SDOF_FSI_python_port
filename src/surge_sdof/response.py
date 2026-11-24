@@ -843,38 +843,40 @@ def _integrate_kernel(
     schedule: _ForceSchedule,
     sdof_params: SdofParams,
     settings: RunSettings,
-    history: np.ndarray,
+    response_history: np.ndarray,
     column: moc.FluidColumn,
-    d_f: float,
+    junction_force: float,
     buffers: tracing.TraceBuffers,
 ) -> _KernelResult:
-    """The sample loop of ``_integrate`` on scalars and arrays only (Stage 5 kernel).
+    """The sample loop of ``_integrate`` (the Stage 5 kernel).
 
-    ``flat[offsets[s]:offsets[s + 1]]`` holds sample ``s``'s per-sub-step unbalance
-    values. With ``column.is_fluid_coupled`` the MoC column is advanced (``moc.step`` on
-    the half-grid selected by the parity of ``n + off``) before each SDOF sub-step and
-    ``dF`` added; without, ``0.0`` is added (no fluid coupling). Returns a
-    ``_KernelResult``; ``history`` is filled in place for ``output_type`` 1-3.
+    ``schedule.unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` holds
+    sample ``s``'s per-sub-step unbalance values. With ``column.is_fluid_coupled`` the MoC
+    column is advanced (``moc.step`` on the half-grid selected by the parity of
+    ``substep_index + parity_offset``) before each SDOF sub-step and ``dF`` added; without,
+    ``0.0`` is added (no fluid coupling). Returns a ``_KernelResult``;
+    ``response_history`` is filled in place for ``output_type`` 1-3.
 
-    Trace (Session V.1): with ``trace_every > 0`` every sub-step whose running index
-    ``n`` is a multiple of it, while ``tot_ind <= out_max * 2`` and the capacity lasts,
-    is written by ``_trace_frame`` after the SDOF update (``flat_a`` / ``flat_b`` are
-    the elbow forces per forced sub-step, ``delay_substeps`` the transit -> forced
-    boundary). ``f_friction`` is ``mass * (v_new - (v_old + (a_old + a_new) * half_dt))
-    / dt`` with the same ``half_dt = dt / 2`` as ``step_scalars``; ``stick`` is ``|v_old| <
+    Trace (Session V.1): with ``buffers.trace_every > 0`` every sub-step whose running
+    index ``substep_index`` is a multiple of it, while ``sample_number <=
+    nominal_forced_sample_count * 2`` and the capacity lasts, is written by
+    ``_trace_frame`` after the SDOF update (the elbow forces per forced sub-step come from
+    the schedule, ``transit_substep_count`` is the transit -> forced boundary). The friction
+    force is ``mass * (v_new - (v_before + (a_before + a_new) * half_dt)) / dt`` with the
+    same ``half_dt = dt / 2`` as ``step_scalars``; the stick flag is ``|v_before| <
     friction_velocity_step``. With ``trace_every == 0`` the branch is never entered and the
-    arrays are empty.
+    buffers are empty.
     """
-    flat = schedule.unbalance_force_by_substep
-    offsets = schedule.sample_start
-    flat_a = schedule.elbow_a_force_by_substep
-    flat_b = schedule.elbow_b_force_by_substep
-    delay_substeps = schedule.transit_substep_count
+    unbalance_force_by_substep = schedule.unbalance_force_by_substep
+    sample_start = schedule.sample_start
+    elbow_a_force_by_substep = schedule.elbow_a_force_by_substep
+    elbow_b_force_by_substep = schedule.elbow_b_force_by_substep
+    transit_substep_count = schedule.transit_substep_count
     dt = settings.substep_duration
-    step_qty = settings.substep_count
-    out_max = settings.nominal_forced_sample_count
+    substep_count = settings.substep_count
+    nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
-    legacy_parity = settings.is_per_phase_parity
+    is_per_phase_parity = settings.is_per_phase_parity
     mass = sdof_params.mass
     friction_velocity_step = sdof_params.friction_velocity_step
     is_fluid_coupled = column.is_fluid_coupled
@@ -884,113 +886,120 @@ def _integrate_kernel(
     x_max = 0.0
     v_max = 0.0
     a_max = 0.0
-    f_max = 0.0
-    n = 0  # running sub-step counter
-    off = 0  # step_index = n + off
-    tot_ind = 0
-    n_samples = offsets.shape[0] - 1
+    unbalance_force_max = 0.0
+    substep_index = 0  # running sub-step counter
+    parity_offset = 0  # the MoC parity index is substep_index + parity_offset
+    sample_number = 0
+    forced_sample_count = sample_start.shape[0] - 1
     # trace (Session V.1)
-    frame = 0
+    frame_count = 0
     trace_every = buffers.trace_every
-    cap = buffers.frame_index_columns.shape[0]
+    frame_capacity = buffers.frame_index_columns.shape[0]
     half_dt = dt / 2
-    v_old = 0.0
-    a_old = 0.0
+    v_before = 0.0
+    a_before = 0.0
 
     # ------------------------------------------------- transit and forced phases
-    for s in range(n_samples):
-        tot_ind += 1
-        if legacy_parity:
-            off = (tot_ind - 1) * step_qty - n
-        for i in range(offsets[s], offsets[s + 1]):
-            f = float(flat[i])
-            rec = trace_every > 0 and n % trace_every == 0 and frame < cap
-            if rec:
-                v_old = v
-                a_old = a
+    for s in range(forced_sample_count):
+        sample_number += 1
+        if is_per_phase_parity:
+            parity_offset = (sample_number - 1) * substep_count - substep_index
+        for i in range(sample_start[s], sample_start[s + 1]):
+            unbalance_force = float(unbalance_force_by_substep[i])
+            record_frame = (
+                trace_every > 0
+                and substep_index % trace_every == 0
+                and frame_count < frame_capacity
+            )
+            if record_frame:
+                v_before = v
+                a_before = a
             if is_fluid_coupled:
-                d_f = float(
+                junction_force = float(
                     moc.step(
-                        (n + off) % 2 == 0,
+                        (substep_index + parity_offset) % 2 == 0,
                         a * dt,
                         column,
-                        d_f,
+                        junction_force,
                     )
                 )
-                f_applied = d_f + f
+                applied_force = junction_force + unbalance_force
             else:
-                f_applied = 0.0 + f
-            x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
-            if rec:
+                applied_force = 0.0 + unbalance_force
+            x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
+            if record_frame:
                 _trace_frame(
                     buffers,
-                    frame,
+                    frame_count,
                     _Frame(
-                        n,
-                        tot_ind - 1,
-                        PHASE_TRANSIT if n < delay_substeps else PHASE_FORCED,
+                        substep_index,
+                        sample_number - 1,
+                        PHASE_TRANSIT if substep_index < transit_substep_count else PHASE_FORCED,
                         x,
                         v,
                         a,
-                        flat_a[i],
-                        flat_b[i],
-                        f,
-                        mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                        abs(v_old) < friction_velocity_step,
-                        d_f if is_fluid_coupled else 0.0,
+                        elbow_a_force_by_substep[i],
+                        elbow_b_force_by_substep[i],
+                        unbalance_force,
+                        mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
+                        abs(v_before) < friction_velocity_step,
+                        junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
                 )
-                frame += 1
-            n += 1
+                frame_count += 1
+            substep_index += 1
             if abs(a) > a_max:
                 a_max = abs(a)
             if abs(v) > v_max:
                 v_max = abs(v)
             if abs(x) > x_max:
                 x_max = abs(x)
-            if abs(f) > f_max:
-                f_max = abs(f)
+            if abs(unbalance_force) > unbalance_force_max:
+                unbalance_force_max = abs(unbalance_force)
         if output_type > 0:
-            _record_sample(history, output_type, tot_ind - 1, x, v, a)
+            _record_sample(response_history, output_type, sample_number - 1, x, v, a)
 
     # ---------------------------------------------------------- free decay
-    forced_samples = tot_ind
-    x_zero = x
-    while _free_decay_product(x, x_zero) > FREE_DECAY_THRESHOLD:
-        tot_ind += 1
-        if legacy_parity:
-            off = (tot_ind - 1) * step_qty + 1 - n
-        for _k in range(step_qty):
+    forced_samples = sample_number
+    decay_start_displacement = x
+    while _free_decay_product(x, decay_start_displacement) > FREE_DECAY_THRESHOLD:
+        sample_number += 1
+        if is_per_phase_parity:
+            parity_offset = (sample_number - 1) * substep_count + 1 - substep_index
+        for _k in range(substep_count):
             # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
             # the forced samples and an equal allowance for free decay; later free decay is integrated
             # but not recorded.
-            rec = (
-                trace_every > 0 and n % trace_every == 0 and frame < cap and tot_ind <= out_max * 2
+            record_frame = (
+                trace_every > 0
+                and substep_index % trace_every == 0
+                and frame_count < frame_capacity
+                and sample_number <= nominal_forced_sample_count * 2
             )
-            if rec:
-                v_old = v
-                a_old = a
+            if record_frame:
+                v_before = v
+                a_before = a
             if is_fluid_coupled:
-                d_f = float(
+                junction_force = float(
                     moc.step(
-                        (n + off) % 2 == 0,
+                        (substep_index + parity_offset) % 2 == 0,
                         a * dt,
                         column,
-                        d_f,
+                        junction_force,
                     )
                 )
-                f_applied = d_f
+                applied_force = junction_force
             else:
-                f_applied = 0.0
-            x, v, a = step_scalars(x, v, a, f_applied, sdof_params, dt)
-            if rec:
+                applied_force = 0.0
+            x, v, a = step_scalars(x, v, a, applied_force, sdof_params, dt)
+            if record_frame:
                 _trace_frame(
                     buffers,
-                    frame,
+                    frame_count,
                     _Frame(
-                        n,
-                        tot_ind - 1,
+                        substep_index,
+                        sample_number - 1,
                         PHASE_FREE_DECAY,
                         x,
                         v,
@@ -998,26 +1007,38 @@ def _integrate_kernel(
                         0.0,
                         0.0,
                         0.0,
-                        mass * (v - (v_old + (a_old + a) * half_dt)) / dt,
-                        abs(v_old) < friction_velocity_step,
-                        d_f if is_fluid_coupled else 0.0,
+                        mass * (v - (v_before + (a_before + a) * half_dt)) / dt,
+                        abs(v_before) < friction_velocity_step,
+                        junction_force if is_fluid_coupled else 0.0,
                     ),
                     column,
                 )
-                frame += 1
-            n += 1
+                frame_count += 1
+            substep_index += 1
             if abs(a) > a_max:
                 a_max = abs(a)
             if abs(v) > v_max:
                 v_max = abs(v)
             if abs(x) > x_max:
                 x_max = abs(x)
-            if _free_decay_product(x, x_zero) <= FREE_DECAY_THRESHOLD:
-                x_zero = 0.0
+            if _free_decay_product(x, decay_start_displacement) <= FREE_DECAY_THRESHOLD:
+                decay_start_displacement = 0.0
         # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
         # the forced samples and an equal allowance for free decay; later free decay is integrated
         # but not recorded.
-        if output_type > 0 and tot_ind <= out_max * 2:
-            _record_sample(history, output_type, tot_ind - 1, x, v, a)
+        if output_type > 0 and sample_number <= nominal_forced_sample_count * 2:
+            _record_sample(response_history, output_type, sample_number - 1, x, v, a)
 
-    return _KernelResult(x_max, v_max, a_max, f_max, x, v, a, tot_ind, forced_samples, d_f, frame)
+    return _KernelResult(
+        x_max,
+        v_max,
+        a_max,
+        unbalance_force_max,
+        x,
+        v,
+        a,
+        sample_number,
+        forced_samples,
+        junction_force,
+        frame_count,
+    )
