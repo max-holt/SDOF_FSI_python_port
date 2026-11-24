@@ -246,10 +246,8 @@ def peak_response(
     nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
         transit_delay_samples
     )
-    substep_duration = 1 / (sample_freq * step_qty)
-
-    portal_frame_height = structure.solve_portal_height(
-        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+    substep_duration, portal_frame_height = solver_setup(
+        step_qty, sample_freq, physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
     sdof_params = structure.lumped_params(
         physical_length,
@@ -407,11 +405,10 @@ def peak_response_jc(
     nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
         transit_delay_samples
     )
-    substep_duration = 1 / (sample_freq * step_qty)
-
-    portal_frame_height = structure.solve_portal_height(
-        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+    setup = solver_setup(
+        step_qty, sample_freq, physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
+    substep_duration, portal_frame_height = setup
     # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
     sdof_params = structure.jc_params(
         physical_length,
@@ -429,7 +426,7 @@ def peak_response_jc(
     end_pressure_decay_factor = moc.end_pressure_decay_factor(
         celerity, substep_duration, physical_length
     )
-    grid = moc.grid_size(physical_length, portal_frame_height, celerity, substep_duration)
+    grid = column_grid(setup, physical_length, celerity)
     if moc.is_short_pipe(grid.column_cell_count, grid.end_to_elbow_cell_count):
         # insufficient length, use lumped mass (VBA 736-740)
         return peak_response(
@@ -502,6 +499,74 @@ def _trace_stride(trace_every) -> int:
     if trace_every < 0:
         raise ValueError(f"trace_every must be >= 0, got {trace_every}")
     return trace_every
+
+
+class SolverSetup(NamedTuple):
+    """The set-up both solvers derive from their inputs before the run: the sub-step and the
+    portal-frame height. Returned by ``solver_setup``; the tools and the loop geometry ask it
+    too, so the solver's set-up is written once.
+
+    Attributes
+    ----------
+    substep_duration : float
+        One sub-step, ``1 / (sample_freq * step_qty)``, s.
+    portal_frame_height : float
+        Leg height of the portal-frame proxy (``structure.solve_portal_height``), m.
+    """
+
+    substep_duration: float
+    portal_frame_height: float
+
+
+def solver_setup(
+    step_qty: int,
+    sample_freq: float,
+    physical_length: float,
+    flexural_rigidity_ei: float,
+    mass_per_unit_len: float,
+    nat_freq: float,
+) -> SolverSetup:
+    """The sub-step and the portal-frame height of a run, as the solver entry points form
+    them (VBA lines 377-387 and 714-724).
+
+    Parameters
+    ----------
+    step_qty : int
+        Sub-steps per sample.
+    sample_freq : float
+        Samples per second of the force history, Hz.
+    physical_length : float
+        Span between the elbows, m.
+    flexural_rigidity_ei : float
+        N·m².
+    mass_per_unit_len : float
+        kg/m.
+    nat_freq : float
+        Hz.
+    """
+    substep_duration = 1 / (sample_freq * step_qty)
+    portal_frame_height = structure.solve_portal_height(
+        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+    )
+    return SolverSetup(substep_duration, portal_frame_height)
+
+
+def column_grid(setup: SolverSetup, physical_length: float, celerity: float) -> moc.ColumnGrid:
+    """The MoC grid of the junction-coupling solver for ``setup`` (``moc.grid_size``); a short
+    pipe (``moc.is_short_pipe``) makes the solver fall back to the lumped one.
+
+    Parameters
+    ----------
+    setup : SolverSetup
+        From ``solver_setup``.
+    physical_length : float
+        m.
+    celerity : float
+        m/s.
+    """
+    return moc.grid_size(
+        physical_length, setup.portal_frame_height, celerity, setup.substep_duration
+    )
 
 
 class RunSettings(NamedTuple):
