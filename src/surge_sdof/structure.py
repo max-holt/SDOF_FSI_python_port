@@ -365,6 +365,7 @@ def jc_params(
 
 
 # VBA line 424 (restoring term) and 611 (static-equivalent force)
+@numba.njit(cache=True)
 def effective_displacement(
     x: float, support_gap: float, closed_gap_stiffness_ratio: float
 ) -> float:
@@ -392,7 +393,8 @@ def effective_displacement(
     -----
     The VBA helpers' ladders (``max`` lines 11-17, ``minUnsigned`` 19-33, ``sign``
     51-59) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
-    cases; ``step_scalars`` inlines the same code.
+    cases. Compiled (``numba.njit(cache=True)``, scalars only): ``step_scalars`` calls it
+    for the restoring term, ``response._integrate`` for the static-equivalent force.
     """
     x_magnitude = abs(x)
     # minUnsigned(gap, x)
@@ -469,25 +471,9 @@ def step_scalars(
 
     # aNew = (F - (minUnsigned(gap, x) + max(0, Abs(x) - gap) * sign(x) * ratio^2)
     #             * stiffness - v * damping) / mass
-    x_magnitude = abs(x)
-    if abs(support_gap) < x_magnitude:
-        x_within_gap = support_gap if x > 0 else -support_gap
-    elif support_gap == 0:
-        x_within_gap = x
-    else:
-        x_within_gap = x if support_gap > 0 else -x
-    x_excess_magnitude = x_magnitude - support_gap
-    if x_excess_magnitude < 0:
-        x_excess_magnitude = 0.0
-    if x > 0:
-        x_beyond_gap = x_excess_magnitude
-    elif x < 0:
-        x_beyond_gap = -x_excess_magnitude
-    else:
-        x_beyond_gap = x_excess_magnitude * 0.0
     a_new = (
         f_applied
-        - (x_within_gap + x_beyond_gap * closed_gap_stiffness_ratio) * stiffness
+        - effective_displacement(x, support_gap, closed_gap_stiffness_ratio) * stiffness
         - v * damping
     ) / mass
 
