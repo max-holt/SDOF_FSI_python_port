@@ -73,6 +73,10 @@ NEWTON_RELAXATION = 0.25
 # convergence check at exit.
 NEWTON_ITERATION_LIMIT = 100
 
+# Last index of the end-fixity refinement loop of ``solve_portal_height`` (VBA
+# ``For i = 0 To 10``, line 385): 11 passes after the seed solve.
+END_FIXITY_LAST_PASS = 10
+
 
 class SdofParams(NamedTuple):
     """Constants of the SDOF update, in the order ``step_scalars`` takes them.
@@ -181,7 +185,7 @@ def solve_portal_height(
     portal_frame_height = solve_quartic(
         -12 * flexural_rigidity / omega_squared, cubic_coefficient, quartic_coefficient
     )
-    for _i in range(0, 10 + 1):
+    for _i in range(0, END_FIXITY_LAST_PASS + 1):
         # Proposed derivation, for Ben to confirm: 0.5 + 1.5 * (h / (L + h))^2 is a factor on that
         # stiffness, running from 0.5 when the legs are short against the span (two legs acting as
         # cantilevers, 2 * 3EI/h^3) to 2 when they are long (two legs fixed at both ends,
