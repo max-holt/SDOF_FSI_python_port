@@ -77,6 +77,10 @@ PEAK_TO_DESIGN_PRESSURE_RATIO = 1.33
 """The sweep's peak pressure as a multiple of the design pressure, dimensionless:
 ``p_cap = amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * p_design``. Set by the lead
 author on 22 Oct 2026."""
+STEP_TO_PEAK_RATIO = 0.5
+"""The held step of the ``step_sine`` and ``step_noise`` sweep histories as a fraction of
+their peak, dimensionless (``canonical``: the step holds ``0.5 cap``; docs/data_format.md
+``p_step``). The sweep's convention; its basis is not recorded in the code or the documents."""
 
 PARAM_KEYS = (
     "kind",
@@ -613,7 +617,7 @@ def canonical(
     if kind == "step_sine":
         if f_osc is None:
             raise ValueError("step_sine needs f_osc")
-        p_step = 0.5 * peak_pressure_target
+        p_step = STEP_TO_PEAK_RATIO * peak_pressure_target
         unit_sine_history = step_sine(
             0.0, 1.0, f_osc, decay_cycles, decay_fraction, **shared_arguments
         )
@@ -623,7 +627,7 @@ def canonical(
         if seed is None or f_ref is None:
             raise ValueError("step_noise needs seed and f_ref")
         return step_noise(
-            0.5 * peak_pressure_target,
+            STEP_TO_PEAK_RATIO * peak_pressure_target,
             p_noise_rms,
             f_cut,
             seed,
