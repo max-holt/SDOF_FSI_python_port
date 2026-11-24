@@ -149,7 +149,7 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
 def test_lumped_grid_survives_pivot_seg_qty_4():
     # pivotSegQTY = 4 is refused by both profiles (fixed: the pivot > ext guard, F-4;
     # legacy: moving_fraction_b divides by zero, D-4); the display profile must not
-    frac_a, frac_b = geometry._moving_fractions_display(20, 4)
+    frac_a, frac_b = moc.display_moving_fractions(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
     assert np.all(frac_b[: moc.INACTIVE_END_CELL_COUNT] == 0) and frac_b[10] == 1.0
     with pytest.raises(ValueError):

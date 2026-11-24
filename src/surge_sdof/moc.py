@@ -68,6 +68,7 @@ __all__ = [
     "is_short_pipe",
     "end_pressure_decay_factor",
     "FRACTION_PROFILES",
+    "display_moving_fractions",
     "moving_fraction_a",
     "moving_fraction_b",
     "moving_fraction_a_fixed",
@@ -401,6 +402,42 @@ def moving_fractions(
     for n in range(0, column_cell_count):
         fractions_b[n] = profile_b(n, end_to_elbow_cell_count, column_cell_count)
     return fractions_a, fractions_b
+
+
+def display_moving_fractions(
+    column_cell_count: int, end_to_elbow_cell_count: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """The moving fractions the loop picture shows for a grid (``viz.geometry``); display
+    only, no solver uses them.
+
+    ``moving_fractions`` with the solver's default profile; for a grid that profile refuses
+    (``pivotSegQTY <= extQTY``: the portal-frame height rounds to no cell), the legacy
+    profiles, B with the A profile's ``n < extQTY`` test in place of D-4's ``n < 3`` (the
+    legacy B profile divides by zero there).
+
+    Parameters
+    ----------
+    column_cell_count, end_to_elbow_cell_count : int
+        From ``grid_size``.
+
+    Returns
+    -------
+    fractions_a, fractions_b : numpy.ndarray
+        As ``moving_fractions``.
+    """
+    if end_to_elbow_cell_count > INACTIVE_END_CELL_COUNT:
+        return moving_fractions(column_cell_count, end_to_elbow_cell_count)
+    moving_fraction_a_display = np.zeros(column_cell_count + 1)
+    moving_fraction_b_display = np.zeros(column_cell_count)
+    for n in range(1, column_cell_count):
+        moving_fraction_a_display[n] = moving_fraction_a(
+            n, end_to_elbow_cell_count, column_cell_count
+        )
+    for n in range(INACTIVE_END_CELL_COUNT, column_cell_count):
+        moving_fraction_b_display[n] = moving_fraction_b(
+            n, end_to_elbow_cell_count, column_cell_count
+        )
+    return moving_fraction_a_display, moving_fraction_b_display
 
 
 def column_at_rest(column_cell_count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:

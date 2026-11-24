@@ -336,7 +336,7 @@ names and locals are R.
 | `_record_sample` | `response._record` | Store the end-of-sample state in the response history | R |
 | `_walk_constants` | `loads._run` | Per-run constants of the walk | R |
 | `allocate_frames`, `frame_capacity`, `build_trace` | `trace.allocate`, `trace.capacity`, `trace.build` | | R |
-| `_moving_fractions_display` | `geometry._interp_fractions_display` | | R |
+| `moc.display_moving_fractions` (moved from `geometry._moving_fractions_display`, R.8 plan 5.7) | `geometry._interp_fractions_display` | | R |
 | `peak_pressure_target` | `histories.p_cap` | | P (tool-called, ruling 18) |
 | `step` (unchanged) | `moc.step` | Split into the two half-grid updates in plan 4.2, which names them | — |
 

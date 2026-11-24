@@ -242,7 +242,7 @@ def test_pivot_4_is_a_value_error_on_the_fixed_path_and_d4_on_the_legacy_path():
 
 
 def test_display_profile_survives_pivot_4_on_both_paths(monkeypatch):
-    frac_a, frac_b = geometry._moving_fractions_display(20, 4)
+    frac_a, frac_b = moc.display_moving_fractions(20, 4)
     assert frac_a.shape == (21,) and frac_b.shape == (20,)
     assert np.all(frac_b[:EXT] == 0) and frac_b[10] == 1.0
 

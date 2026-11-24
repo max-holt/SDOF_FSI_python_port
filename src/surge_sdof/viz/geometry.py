@@ -226,27 +226,6 @@ def loop_layout(
     )
 
 
-def _moving_fractions_display(column_cell_count: int, end_to_elbow_cell_count: int):
-    """``moc.moving_fractions`` with the solver's default profile, or, when
-    ``pivotSegQTY = 4`` is refused (legacy: ``moving_fraction_b`` divides by zero, D-4;
-    fixed: the port's ``pivot > ext`` guard), the legacy B profile with the ``n < extQTY``
-    test; display only."""
-    try:
-        return moc.moving_fractions(column_cell_count, end_to_elbow_cell_count)
-    except (ZeroDivisionError, ValueError):
-        moving_fraction_a = np.zeros(column_cell_count + 1)
-        moving_fraction_b = np.zeros(column_cell_count)
-        for n in range(1, column_cell_count):
-            moving_fraction_a[n] = moc.moving_fraction_a(
-                n, end_to_elbow_cell_count, column_cell_count
-            )
-        for n in range(moc.INACTIVE_END_CELL_COUNT, column_cell_count):
-            moving_fraction_b[n] = moc.moving_fraction_b(
-                n, end_to_elbow_cell_count, column_cell_count
-            )
-        return moving_fraction_a, moving_fraction_b
-
-
 def lumped_grid(trace: Trace) -> InterleavedGrid:
     """The MoC grid a lumped case *would* have, for the lumped layout: the junction-coupling
     grid of the trace's set-up (``response.column_grid``).
@@ -266,7 +245,7 @@ def lumped_grid(trace: Trace) -> InterleavedGrid:
     column_cell_count, end_to_elbow_cell_count = response.column_grid(
         setup, inputs["physical_length"], inputs["celerity"]
     )
-    moving_fraction_a, moving_fraction_b = _moving_fractions_display(
+    moving_fraction_a, moving_fraction_b = moc.display_moving_fractions(
         column_cell_count, end_to_elbow_cell_count
     )
     return interleaved_grid(
