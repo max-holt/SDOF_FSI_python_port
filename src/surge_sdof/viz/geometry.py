@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from surge_sdof import moc, structure
+from surge_sdof import moc, response
 from surge_sdof.trace import InterleavedGrid, Trace, interleaved_grid
 
 __all__ = [
@@ -50,7 +50,7 @@ class LoopLayout:
     cell_length : float
         ``2 * celerity * dt``, m (a cell; ``cell_position`` steps by half of it).
     portal_height : float
-        ``structure.solve_portal_height`` of the case, m (printed, not used for the layout).
+        ``Trace.portal_frame_height`` of the run, m (printed, not used for the layout).
     spacing : float
         Distance between consecutive cells along the centreline, m (``celerity * dt``).
     inlet_end, run_start, run_end, outlet_start : int
@@ -247,50 +247,41 @@ def _moving_fractions_display(column_cell_count: int, end_to_elbow_cell_count: i
         return moving_fraction_a, moving_fraction_b
 
 
-def lumped_grid(inputs: dict, substep_duration: float) -> tuple[InterleavedGrid, float]:
-    """The MoC grid a lumped case *would* have, for the lumped layout.
+def lumped_grid(trace: Trace) -> InterleavedGrid:
+    """The MoC grid a lumped case *would* have, for the lumped layout: the junction-coupling
+    grid of the trace's set-up (``response.column_grid``).
 
     Parameters
     ----------
-    inputs : dict
-        ``Trace.inputs`` (``physical_length``, ``flexural_rigidity_ei``,
-        ``mass_per_unit_len``, ``nat_freq``, ``celerity``).
-    substep_duration : float
-        ``Trace.dt``, s.
+    trace : Trace
+        A lumped trace (``Trace.inputs`` gives ``physical_length`` and ``celerity``).
 
     Returns
     -------
-    grid : trace.InterleavedGrid
+    trace.InterleavedGrid
         Interleaved as ``Trace``.
-    portal_height : float
-        m.
     """
-    portal_frame_height = structure.solve_portal_height(
-        inputs["physical_length"],
-        inputs["flexural_rigidity_ei"],
-        inputs["mass_per_unit_len"],
-        inputs["nat_freq"],
-    )
-    column_cell_count, end_to_elbow_cell_count = moc.grid_size(
-        inputs["physical_length"], portal_frame_height, inputs["celerity"], substep_duration
+    inputs = trace.inputs
+    setup = response.SolverSetup(trace.dt, trace.portal_frame_height)
+    column_cell_count, end_to_elbow_cell_count = response.column_grid(
+        setup, inputs["physical_length"], inputs["celerity"]
     )
     moving_fraction_a, moving_fraction_b = _moving_fractions_display(
         column_cell_count, end_to_elbow_cell_count
     )
-    grid = interleaved_grid(
+    return interleaved_grid(
         column_cell_count,
         end_to_elbow_cell_count,
         moving_fraction_a,
         moving_fraction_b,
         inputs["celerity"],
-        substep_duration,
+        trace.dt,
     )
-    return grid, portal_frame_height
 
 
 def layout_from_trace(trace: Trace) -> LoopLayout:
     """The ``LoopLayout`` of a trace: a JC trace's own grid, or ``lumped_grid`` for a lumped
-    one.
+    one; the portal-frame height is the trace's.
 
     Parameters
     ----------
@@ -300,22 +291,14 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
     -------
     LoopLayout
     """
-    inputs = trace.inputs
-    cell_length = 2.0 * float(inputs["celerity"]) * float(trace.dt)
-    if trace.p_cells is not None:
-        portal_frame_height = structure.solve_portal_height(
-            inputs["physical_length"],
-            inputs["flexural_rigidity_ei"],
-            inputs["mass_per_unit_len"],
-            inputs["nat_freq"],
-        )
-        grid = InterleavedGrid(
-            trace.cell_position,
-            trace.cell_kind,
-            trace.moving_fraction,
-            trace.pipe_seg_qty,
-            trace.pivot_seg_qty,
-        )
-        return loop_layout(grid, cell_length, portal_frame_height)
-    grid, portal_frame_height = lumped_grid(inputs, trace.dt)
-    return loop_layout(grid, cell_length, portal_frame_height)
+    cell_length = 2.0 * float(trace.inputs["celerity"]) * float(trace.dt)
+    if trace.p_cells is None:
+        return loop_layout(lumped_grid(trace), cell_length, trace.portal_frame_height)
+    grid = InterleavedGrid(
+        trace.cell_position,
+        trace.cell_kind,
+        trace.moving_fraction,
+        trace.pipe_seg_qty,
+        trace.pivot_seg_qty,
+    )
+    return loop_layout(grid, cell_length, trace.portal_frame_height)

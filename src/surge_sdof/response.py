@@ -284,6 +284,7 @@ def peak_response(
                 "output_type": output_type,
             },
             celerity,
+            portal_frame_height,
             loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
     settings = RunSettings(
@@ -481,6 +482,7 @@ def peak_response_jc(
                 "fraction_profile": fraction_profile,
             },
             celerity,
+            portal_frame_height,
             loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
         )
     settings = RunSettings(

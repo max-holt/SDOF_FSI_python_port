@@ -158,6 +158,8 @@ class Trace:
         Sub-steps per sample.
     out_max : int
         The VBA ``outMax``; free decay is traced while ``sample < out_max * 2``.
+    portal_frame_height : float
+        Leg height of the portal-frame proxy of the run (``response.solver_setup``), m.
     params : SdofParams
         ``(mass, stiffness, damping, friction_velocity_step, support_gap,
         closed_gap_stiffness_ratio)`` of the run (kg, N/m, N·s/m,
@@ -194,6 +196,7 @@ class Trace:
     dt: float
     step_qty: int
     out_max: int
+    portal_frame_height: float
     params: SdofParams
     inputs: dict
     t: np.ndarray
@@ -333,6 +336,7 @@ class TraceRequest(NamedTuple):
     solver: str
     inputs: dict
     celerity: float
+    portal_frame_height: float  # m, of the run's set-up (response.solver_setup)
     elbow_force_samples: object  # the loads.elbow_forces generator
 
 
@@ -575,6 +579,7 @@ def build_trace(
         "dt": float(substep_duration),
         "step_qty": int(substep_count),
         "out_max": int(nominal_forced_sample_count),
+        "portal_frame_height": float(request.portal_frame_height),
         "params": params,
         "inputs": inputs,
     }
