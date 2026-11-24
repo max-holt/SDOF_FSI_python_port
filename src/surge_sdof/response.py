@@ -281,7 +281,7 @@ def peak_response(
     )
     trace_request = None
     if trace_every:
-        trace_request = _TraceRequest(
+        trace_request = tracing.TraceRequest(
             trace_every,
             "peak_response",
             {
@@ -478,7 +478,7 @@ def peak_response_jc(
     )
     trace_request = None
     if trace_every:
-        trace_request = _TraceRequest(
+        trace_request = tracing.TraceRequest(
             trace_every,
             "peak_response_jc",
             {
@@ -611,17 +611,6 @@ class _KernelResult(NamedTuple):
     frame_count: int
 
 
-class _TraceRequest(NamedTuple):
-    """A traced run: the stride and what ``_integrate`` needs beyond the kernel arrays to
-    build a ``Trace``."""
-
-    stride: int  # trace_every > 0: record every stride-th sub-step
-    solver: str
-    inputs: dict
-    celerity: float
-    elbow_force_samples: object  # the loads.elbow_forces generator
-
-
 @numba.njit(cache=True)
 def _free_decay_product(x: float, x_zero: float) -> float:
     """``x * xZero`` of the free-decay test; VBA raises error 6 if the product
@@ -727,7 +716,7 @@ def _integrate(
     sdof_params: SdofParams,
     settings: RunSettings,
     junction_coupling: JunctionCoupling | None,
-    trace_request: _TraceRequest | None,
+    trace_request: tracing.TraceRequest | None,
 ) -> PeakResponse:
     """The VBA sample loop shared by both peak solvers: the transit and forced phases
     driven by ``unbalance_force_samples`` (one list of per-sub-step unbalance values per
@@ -750,7 +739,6 @@ def _integrate(
     the trace arrays are allocated (``trace.check_memory``, ``trace.allocate_frames``) and
     the kernel fills them; ``trace.build_trace`` makes the ``Trace``. Without one the kernel
     takes a stride of 0 and empty arrays."""
-    substep_duration = float(settings.substep_duration)
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     output_type = settings.output_type
@@ -839,17 +827,7 @@ def _integrate(
     trace = None
     if trace_request is not None:
         trace = tracing.build_trace(
-            trace_request.solver,
-            trace_request.inputs,
-            substep_duration,
-            substep_count,
-            nominal_forced_sample_count,
-            sdof_params,
-            int(result.frame_count),
-            buffers,
-            jc=junction_coupling,
-            celerity=trace_request.celerity,
-            inactive_end_cell_count=moc.INACTIVE_END_CELL_COUNT,
+            trace_request, settings, sdof_params, buffers, int(result.frame_count), column
         )
     return PeakResponse(
         max_static_equivalent_force=float(static_equivalent_force_max),

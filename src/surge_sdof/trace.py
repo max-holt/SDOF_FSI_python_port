@@ -52,12 +52,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
+from surge_sdof import moc
 from surge_sdof.loads import PHASE_FORCED, PHASE_TRANSIT
 from surge_sdof.structure import SdofParams
+
+if TYPE_CHECKING:
+    from surge_sdof.response import RunSettings
 
 __all__ = [
     "MAX_TRACE_VALUES",
@@ -67,6 +71,7 @@ __all__ = [
     "Trace",
     "frame_capacity",
     "check_memory",
+    "TraceRequest",
     "TraceBuffers",
     "allocate_frames",
     "interleave",
@@ -282,6 +287,18 @@ def check_memory(
     )
 
 
+class TraceRequest(NamedTuple):
+    """A traced run: the stride and what ``response._integrate`` needs beyond the kernel
+    arrays to build a ``Trace``. Built by the solver entry points when ``trace_every > 0``.
+    """
+
+    stride: int  # trace_every > 0: record every stride-th sub-step
+    solver: str
+    inputs: dict
+    celerity: float
+    elbow_force_samples: object  # the loads.elbow_forces generator
+
+
 class TraceBuffers(NamedTuple):
     """The frame buffers the compiled loop fills, and the stride it fills them at.
 
@@ -360,36 +377,38 @@ def interleave(a_nodes: np.ndarray, b_cells: np.ndarray) -> np.ndarray:
 
 
 def build_trace(
-    solver: str,
-    inputs: dict,
-    substep_duration: float,
-    substep_count: int,
-    nominal_forced_sample_count: int,
+    request: TraceRequest,
+    settings: RunSettings,
     params: SdofParams,
-    n_frames: int,
     buffers: TraceBuffers,
-    jc=None,
-    celerity: float = 0.0,
-    inactive_end_cell_count: int = 0,
+    n_frames: int,
+    column: moc.FluidColumn,
 ) -> Trace:
     """Assemble the ``Trace`` from the kernel's arrays, sliced to ``n_frames`` (copies, so
     the unused capacity is released).
 
     Parameters
     ----------
-    solver, inputs, substep_duration, substep_count, nominal_forced_sample_count, params
-        The one-off fields.
-    n_frames : int
-        Frames the kernel wrote.
+    request : TraceRequest
+        The solver name, its inputs and the celerity (m/s, for the cell positions).
+    settings : response.RunSettings
+        The sub-step, sub-steps per sample and ``outMax`` of the run.
+    params : SdofParams
+        The run's SDOF constants.
     buffers : TraceBuffers
         From ``allocate_frames``, filled by the kernel (its ``trace_every`` is the stride).
-    jc : coupling.JunctionCoupling or None
-        The junction of a JC run (its grid and moving fractions), None for lumped.
-    celerity : float
-        Pressure-wave speed, m/s (cell positions); unused for lumped.
-    inactive_end_cell_count : int
-        ``moc.INACTIVE_END_CELL_COUNT`` for a JC run.
+    n_frames : int
+        Frames the kernel wrote.
+    column : moc.FluidColumn
+        The run's column: its grid and moving fractions with fluid coupling; the empty
+        column of a lumped run adds no column fields.
     """
+    solver = request.solver
+    inputs = request.inputs
+    celerity = request.celerity
+    substep_duration = settings.substep_duration
+    substep_count = settings.substep_count
+    nominal_forced_sample_count = settings.nominal_forced_sample_count
     frame_state = buffers.frame_state[:n_frames]
     frame_index_columns = buffers.frame_index_columns[:n_frames]
     sub_step = frame_index_columns[:, COL_SUBSTEP_INDEX].copy()
@@ -415,19 +434,19 @@ def build_trace(
         "stick": frame_index_columns[:, COL_IS_STICKING] != 0,
         "d_f": frame_state[:, COL_JUNCTION_FORCE].copy(),
     }
-    if jc is not None:
-        column_cell_count = int(jc.column.column_cell_count)
+    if column.is_fluid_coupled:
+        column_cell_count = int(column.column_cell_count)
         grid_point_count = 2 * column_cell_count + 1
         fields.update(
             n_cells=grid_point_count,
-            pivot_seg_qty=int(jc.column.end_to_elbow_cell_count),
+            pivot_seg_qty=int(column.end_to_elbow_cell_count),
             pipe_seg_qty=column_cell_count,
-            ext_qty=int(inactive_end_cell_count),
+            ext_qty=int(moc.INACTIVE_END_CELL_COUNT),
             p_cells=buffers.frame_pressure[:n_frames].copy(),
             v_cells=buffers.frame_velocity[:n_frames].copy(),
             cell_position=np.arange(grid_point_count, dtype=np.float64)
             * (float(celerity) * float(substep_duration)),
             cell_kind=np.arange(grid_point_count) % 2,
-            moving_fraction=interleave(jc.column.moving_fraction_a, jc.column.moving_fraction_b),
+            moving_fraction=interleave(column.moving_fraction_a, column.moving_fraction_b),
         )
     return Trace(**fields)
