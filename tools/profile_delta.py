@@ -185,29 +185,31 @@ def run_sweep():
 
 
 LUMPED_COLUMNS = [
-    "f_eq_lumped",
-    "v_peak_lumped",
-    "momentum_lumped",
-    "ke_peak_lumped",
-    "x_peak_lumped",
-    "a_peak_lumped",
-    "f_peak_lumped",
-    "f_eq_over_LD2_lumped",
+    "max_static_equivalent_force_lumped",
+    "max_velocity_lumped",
+    "max_momentum_lumped",
+    "max_kinetic_energy_lumped",
+    "max_displacement_lumped",
+    "max_acceleration_lumped",
+    "max_unbalance_force_lumped",
+    "force_per_length_diameter_squared_lumped",
     "daf_lumped",
 ]
 JC_COLUMNS = [
-    "f_eq_jc",
-    "x_peak_jc",
-    "v_peak_jc",
-    "a_peak_jc",
-    "momentum_jc",
-    "ke_peak_jc",
-    "f_eq_over_LD2_jc",
+    "max_static_equivalent_force_jc",
+    "max_displacement_jc",
+    "max_velocity_jc",
+    "max_acceleration_jc",
+    "max_momentum_jc",
+    "max_kinetic_energy_jc",
+    "force_per_length_diameter_squared_jc",
     "daf_jc",
-    "ratio_f_eq",
-    "ratio_v_peak",
+    "max_static_equivalent_force_ratio",
+    "max_velocity_ratio",
 ]
-UNCHANGED_JC_COLUMNS = ["f_peak_jc"]  # the applied-force peak never depends on the fluid
+UNCHANGED_JC_COLUMNS = [
+    "max_unbalance_force_jc"
+]  # the applied-force peak never depends on the fluid
 
 
 def _read_csv(path):

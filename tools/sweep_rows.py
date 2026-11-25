@@ -39,20 +39,20 @@ from surge_sdof import export, histories, moc, response
 HISTORY_PARAM_COLUMNS = (
     # CSV column -> histories.PARAM_KEYS entry; SI values exactly as the generator received them
     ("history_type", "history_type"),
-    ("sample_freq", "sample_rate"),
+    ("sample_rate", "sample_rate"),
     ("lead_in_s", "lead_in_s"),
     ("transit_s", "transit_s"),
     ("tail_s", "tail_s"),
-    ("p_step", "step_pressure"),
-    ("p_osc", "oscillation_amplitude"),
-    ("f_osc_hz", "oscillation_frequency"),
-    ("p_noise_rms", "requested_noise_rms"),
-    ("f_cut_hz", "noise_cutoff_frequency"),
-    ("f_ref_hz", "envelope_reference_frequency"),
-    ("seed", "noise_seed"),
-    ("decay_cycles", "envelope_decay_cycles"),
-    ("decay_fraction", "envelope_decay_fraction"),
-    ("p_cap", "peak_pressure_target"),
+    ("step_pressure", "step_pressure"),
+    ("oscillation_amplitude", "oscillation_amplitude"),
+    ("oscillation_frequency", "oscillation_frequency"),
+    ("requested_noise_rms", "requested_noise_rms"),
+    ("noise_cutoff_frequency", "noise_cutoff_frequency"),
+    ("envelope_reference_frequency", "envelope_reference_frequency"),
+    ("noise_seed", "noise_seed"),
+    ("envelope_decay_cycles", "envelope_decay_cycles"),
+    ("envelope_decay_fraction", "envelope_decay_fraction"),
+    ("peak_pressure_target", "peak_pressure_target"),
 )
 
 COLUMNS = export.SWEEP_COLUMNS
@@ -166,39 +166,39 @@ def _case_columns(
         tier=provenance.tier,
         subset=provenance.subset,
         size_in=case.size_in,
-        od_mm=pipe_properties.outside_diameter_mm,
-        thk_mm=pipe_properties.wall_thickness_mm,
-        length_m=case.length_m,
-        nat_freq_hz=case.natural_frequency,
+        outside_diameter_mm=pipe_properties.outside_diameter_mm,
+        wall_thickness_mm=pipe_properties.wall_thickness_mm,
+        span_length=case.length_m,
+        natural_frequency=case.natural_frequency,
         amplitude_fraction=case.amplitude_fraction,
-        mu=case.friction_coefficient,
-        p_design_bar=pipe_properties.design_pressure / PA_PER_BAR,
-        p_cap_bar=histories.peak_pressure_target(
+        friction_coefficient=case.friction_coefficient,
+        design_pressure_bar=pipe_properties.design_pressure / PA_PER_BAR,
+        peak_pressure_target_bar=histories.peak_pressure_target(
             pipe_properties.design_pressure, case.amplitude_fraction
         )
         / PA_PER_BAR,
-        p_peak_bar=pressure_history.pressure_max / PA_PER_BAR,
-        p_mean_bar=pressure_history.pressure_mean / PA_PER_BAR,
-        p_rms_bar=pressure_history.pressure_rms / PA_PER_BAR,
-        noise_rms_bar=None
+        pressure_max_bar=pressure_history.pressure_max / PA_PER_BAR,
+        pressure_mean_bar=pressure_history.pressure_mean / PA_PER_BAR,
+        pressure_rms_bar=pressure_history.pressure_rms / PA_PER_BAR,
+        scaled_noise_rms_bar=None
         if pressure_history.scaled_noise_rms is None
         else pressure_history.scaled_noise_rms / PA_PER_BAR,
         decay_s=pressure_history.decay_s,
         duration_s=pressure_history.duration_s,
-        n_samples=pressure_history.sample_count,
+        sample_count=pressure_history.sample_count,
         histories_version=pressure_history.version,
-        fluid_area_m2=pipe_properties.flow_area,
-        mass_per_unit_len=pipe_properties.mass_per_length,
-        ei=pipe_properties.flexural_rigidity,
-        rho_c=FLUID_DENSITY * CELERITY,
-        portal_height_m=portal_frame_height,
-        mass_total_kg=total_mass,
-        pipe_seg_qty=column_cell_count,
-        pivot_seg_qty=end_to_elbow_cell_count,
-        jc_short_pipe=int(moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)),
-        history_peak=float(np.abs(force_history).max()),
-        history_mean=float(force_history.mean()),
-        history_rms=float(math.sqrt(float(np.mean(force_history * force_history)))),
+        flow_area=pipe_properties.flow_area,
+        mass_per_length=pipe_properties.mass_per_length,
+        flexural_rigidity=pipe_properties.flexural_rigidity,
+        characteristic_impedance=FLUID_DENSITY * CELERITY,
+        portal_frame_height=portal_frame_height,
+        total_mass=total_mass,
+        column_cell_count=column_cell_count,
+        end_to_elbow_cell_count=end_to_elbow_cell_count,
+        is_short_pipe=int(moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)),
+        force_history_max=float(np.abs(force_history).max()),
+        force_history_mean=float(force_history.mean()),
+        force_history_rms=float(math.sqrt(float(np.mean(force_history * force_history)))),
         cpu=provenance.cpu,
         git_sha=provenance.sha,
     )
@@ -216,12 +216,12 @@ def _solver_results(
     recorded in ``row["error"]`` and gives None, never skipped silently."""
     solver_arguments = solver_inputs(case, pipe_properties)
     errors = []
-    lumped_result, row["t_lumped_s"], err = _timed(
+    lumped_result, row["wall_time_lumped"], err = _timed(
         response.peak_response, force_history, **solver_arguments
     )
     if err:
         errors.append(f"lumped: {err}")
-    jc_result, row["t_jc_s"], err = _timed(
+    jc_result, row["wall_time_jc"], err = _timed(
         response.peak_response_jc,
         force_history,
         fluid=response.Fluid(FLUID_DENSITY, pipe_properties.flow_area),
@@ -242,28 +242,28 @@ def _result_columns(
 ) -> None:
     """The result columns of each solver that ran, and the JC / lumped ratios, into ``row``."""
     lumped_result, jc_result = results
-    total_mass = row["mass_total_kg"]
+    total_mass = row["total_mass"]
     outside_diameter_squared = (pipe_properties.outside_diameter_mm / MM_PER_M) ** 2
     peak_pressure_force = pressure_history.pressure_max * pipe_properties.flow_area
     for name, result in (("lumped", lumped_result), ("jc", jc_result)):
         if result is None:
             continue
-        row[f"f_eq_{name}"] = result.max_static_equivalent_force
-        row[f"v_peak_{name}"] = result.max_velocity
-        row[f"momentum_{name}"] = total_mass * result.max_velocity
-        row[f"ke_peak_{name}"] = 0.5 * total_mass * result.max_velocity**2
-        row[f"x_peak_{name}"] = result.max_displacement
-        row[f"a_peak_{name}"] = result.max_acceleration
-        row[f"f_peak_{name}"] = result.max_unbalance_force
-        row[f"f_eq_over_LD2_{name}"] = result.max_static_equivalent_force / (
+        row[f"max_static_equivalent_force_{name}"] = result.max_static_equivalent_force
+        row[f"max_velocity_{name}"] = result.max_velocity
+        row[f"max_momentum_{name}"] = total_mass * result.max_velocity
+        row[f"max_kinetic_energy_{name}"] = 0.5 * total_mass * result.max_velocity**2
+        row[f"max_displacement_{name}"] = result.max_displacement
+        row[f"max_acceleration_{name}"] = result.max_acceleration
+        row[f"max_unbalance_force_{name}"] = result.max_unbalance_force
+        row[f"force_per_length_diameter_squared_{name}"] = result.max_static_equivalent_force / (
             case.length_m * outside_diameter_squared
         )
         row[f"daf_{name}"] = result.max_static_equivalent_force / peak_pressure_force
     if lumped_result is not None and jc_result is not None:
-        row["ratio_f_eq"] = (
+        row["max_static_equivalent_force_ratio"] = (
             jc_result.max_static_equivalent_force / lumped_result.max_static_equivalent_force
         )
-        row["ratio_v_peak"] = jc_result.max_velocity / lumped_result.max_velocity
+        row["max_velocity_ratio"] = jc_result.max_velocity / lumped_result.max_velocity
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:

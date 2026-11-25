@@ -117,7 +117,7 @@ SWEEP_CSV = "sweep_tier1_subset1.csv"
 SWEEP_HISTORIES = "sweep_histories.txt"
 SWEEP_ARGV = ("run", "--tier", "1", "--subset", "0.01", "--jobs", "1")
 # Columns that record the run (timings, machine, checkout), not the case.
-RUN_COLUMNS = ("t_lumped_s", "t_jc_s", "cpu", "git_sha")
+RUN_COLUMNS = ("wall_time_lumped", "wall_time_jc", "cpu", "git_sha")
 
 # A plain step on a short pipe: 24 samples of 80 sub-steps.
 _STEP = (
@@ -226,8 +226,8 @@ def _key_of_row(row: dict) -> tuple:
     return _history_key(
         row["size_in"],
         row["history_type"],
-        float(row["f_osc_hz"]) if row["f_osc_hz"] else None,
-        int(row["seed"]) if row["seed"] else None,
+        float(row["oscillation_frequency"]) if row["oscillation_frequency"] else None,
+        int(row["noise_seed"]) if row["noise_seed"] else None,
         row["amplitude_fraction"],
     )
 
@@ -533,21 +533,28 @@ def test_the_cases_exercise_what_they_claim():
     header = stored[0]
     rows = [dict(zip(header, row, strict=True)) for row in stored[1:]]
     assert len(rows) == 16
-    assert all(row["error"] == "" and row["jc_short_pipe"] == "0" for row in rows)
-    assert all(row["f_eq_lumped"] != row["f_eq_jc"] for row in rows)
+    assert all(row["error"] == "" and row["is_short_pipe"] == "0" for row in rows)
+    assert all(
+        row["max_static_equivalent_force_lumped"] != row["max_static_equivalent_force_jc"]
+        for row in rows
+    )
     tier = sweep_jc.TIERS[1]
-    assert {float(row["length_m"]) for row in rows} == set(tier["lengths"])
-    assert {float(row["nat_freq_hz"]) for row in rows} == set(tier["nat_freqs"])
+    assert {float(row["span_length"]) for row in rows} == set(tier["lengths"])
+    assert {float(row["natural_frequency"]) for row in rows} == set(tier["nat_freqs"])
     assert {row["history_type"] for row in rows} == set(histories.HISTORY_TYPES)
 
     jc = export.read_json(SUPPORT_DIR / "trace_step_jc.json")
-    assert jc["meta"]["n_cells"] > 0 and any(v != 0.0 for v in jc["cells"]["p"]["data"])
+    assert jc["meta"]["grid_point_count"] > 0 and any(
+        v != 0.0 for v in jc["grid_points"]["pressure"]["data"]
+    )
     odd = export.read_json(SUPPORT_DIR / "trace_odd_step_jc.json")
-    assert odd["meta"]["n_cells"] > 0 and any(v != 0.0 for v in odd["cells"]["p"]["data"])
-    assert not float(odd["geometry"]["spacing_m"] * 8).is_integer()
+    assert odd["meta"]["grid_point_count"] > 0 and any(
+        v != 0.0 for v in odd["grid_points"]["pressure"]["data"]
+    )
+    assert not float(odd["geometry"]["grid_point_spacing"] * 8).is_integer()
     lumped = export.read_json(SUPPORT_DIR / "trace_step_lumped.json")
-    assert lumped["meta"]["n_cells"] == 0 and "cells" not in lumped
-    assert set(lumped["frames"]["stick"]) == {0, 1}
+    assert lumped["meta"]["grid_point_count"] == 0 and "grid_points" not in lumped
+    assert set(lumped["frames"]["is_sticking"]) == {0, 1}
     for doc in (jc, lumped):
         assert doc["meta"]["git_sha"] == FIXED_SHA
         assert doc["meta"]["created_utc"] == FIXED_CREATED

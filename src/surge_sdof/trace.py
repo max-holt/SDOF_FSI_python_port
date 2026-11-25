@@ -117,19 +117,19 @@ FRAME_COLUMN_TABLE = (
     # (trace-document column, Trace field, kernel array, kernel column), in the document's
     # order. ``time`` is derived from ``substep_index`` and the substep; ``is_sticking`` is
     # the int column != 0.
-    ("t", "time", None, None),
-    ("sub_step", "substep_index", _INDEX, COL_SUBSTEP_INDEX),
-    ("sample", "sample_index", _INDEX, COL_SAMPLE_INDEX),
-    ("phase", "load_phase", _INDEX, COL_LOAD_PHASE),
-    ("x", "displacement", _STATE, COL_X),
-    ("v", "velocity", _STATE, COL_V),
-    ("a", "acceleration", _STATE, COL_A),
-    ("f_a", "elbow_a_force", _STATE, COL_ELBOW_A_FORCE),
-    ("f_b", "elbow_b_force", _STATE, COL_ELBOW_B_FORCE),
-    ("f_unbalance", "unbalance_force", _STATE, COL_UNBALANCE_FORCE),
-    ("f_friction", "friction_force", _STATE, COL_FRICTION_FORCE),
-    ("stick", "is_sticking", _INDEX, COL_IS_STICKING),
-    ("d_f", "junction_force", _STATE, COL_JUNCTION_FORCE),
+    ("time", "time", None, None),
+    ("substep_index", "substep_index", _INDEX, COL_SUBSTEP_INDEX),
+    ("sample_index", "sample_index", _INDEX, COL_SAMPLE_INDEX),
+    ("load_phase", "load_phase", _INDEX, COL_LOAD_PHASE),
+    ("displacement", "displacement", _STATE, COL_X),
+    ("velocity", "velocity", _STATE, COL_V),
+    ("acceleration", "acceleration", _STATE, COL_A),
+    ("elbow_a_force", "elbow_a_force", _STATE, COL_ELBOW_A_FORCE),
+    ("elbow_b_force", "elbow_b_force", _STATE, COL_ELBOW_B_FORCE),
+    ("unbalance_force", "unbalance_force", _STATE, COL_UNBALANCE_FORCE),
+    ("friction_force", "friction_force", _STATE, COL_FRICTION_FORCE),
+    ("is_sticking", "is_sticking", _INDEX, COL_IS_STICKING),
+    ("junction_force", "junction_force", _STATE, COL_JUNCTION_FORCE),
 )
 FRAME_COLUMNS = tuple(column for column, _, _, _ in FRAME_COLUMN_TABLE)
 """The ``trace.frames`` columns of a trace document, in the document's order."""

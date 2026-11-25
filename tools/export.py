@@ -92,8 +92,8 @@ def main_trace(args) -> None:
     print(
         f"{name}: {meta['solver']}, trace_every {trace_every} ({tr.frame_count} traced frames + the "
         f"rest frame), dt = {tr.substep_duration:.4g} s ({trace_every * tr.substep_duration * 1e3:.3g} ms a frame), "
-        f"{meta['n_cells']} cells, t = 0 .. {tr.time[-1]:.4g} s"
-        + ("; trace capped by the history window" if meta["params"]["capped"] else "")
+        f"{meta['grid_point_count']} grid points, t = 0 .. {tr.time[-1]:.4g} s"
+        + ("; trace capped by the history window" if meta["params"]["is_capped"] else "")
     )
     on_disk = Path(args.out).stat().st_size
     print(

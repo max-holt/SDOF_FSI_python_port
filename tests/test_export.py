@@ -114,8 +114,8 @@ def test_module_constants_match_the_document():
     assert list(export.FRAME_COLUMNS) == doc_keys("trace.frames")
     assert list(export.SWEEP_COLUMNS) == doc_keys("sweep.columns")
     assert len(export.SWEEP_COLUMNS) == 72
-    assert "schema_version` | int | `1`" in DOC and export.SCHEMA_VERSION == 1
-    assert "schema_version` | int | `2`" in DOC and export.SWEEP_SCHEMA_VERSION == 2
+    assert "schema_version` | int | `2`" in DOC and export.SCHEMA_VERSION == 2
+    assert "schema_version` | int | `3`" in DOC and export.SWEEP_SCHEMA_VERSION == 3
 
 
 @pytest.mark.parametrize("case_id", ["example_jc", "example_lumped"])
@@ -123,8 +123,8 @@ def test_trace_schema_against_the_document(case_id):
     doc = trace_doc(case_id)
     jc = case_id == "example_jc"
     top = doc_keys("trace")
-    assert list(doc) == (top if jc else [k for k in top if k != "cells"])
-    assert doc["kind"] == "trace" and doc["schema_version"] == 1
+    assert list(doc) == (top if jc else [k for k in top if k != "grid_points"])
+    assert doc["kind"] == "trace" and doc["schema_version"] == 2
     meta = doc["meta"]
     assert_keys(meta, "trace.meta")
     assert_keys(meta["params"], "trace.meta.params")
@@ -135,36 +135,42 @@ def test_trace_schema_against_the_document(case_id):
     assert_keys(geom["segments"], "trace.geometry.segments")
     frames = doc["frames"]
     assert_keys(frames, "trace.frames")
-    n_frames = meta["n_frames"]
+    n_frames = meta["frame_count"]
     assert n_frames == example_result(case_id).trace.frame_count + 1
     for name, column in frames.items():
         assert len(column) == n_frames, name
-    n = len(geom["cell_position_m"])
-    for name in ("cell_kind", "moving_fraction", "x_nominal_m", "y_nominal_m"):
+    n = len(geom["grid_point_position"])
+    for name in ("grid_point_kind", "grid_point_moving_fraction", "x_at_rest", "y_at_rest"):
         assert len(geom[name]) == n, name
-    assert n == 2 * geom["pipe_seg_qty"] + 1
+    assert n == 2 * geom["column_cell_count"] + 1
     seg = geom["segments"]
-    assert seg["inlet_end"] < seg["run_start"] <= seg["run_end"] < seg["outlet_start"] < n
-    pos = geom["cell_position_m"]
-    assert geom["run_length_m"] == pos[seg["run_end"]] - pos[seg["run_start"]]
-    assert geom["leg_height_m"] == pos[seg["run_start"]] - pos[seg["inlet_end"]]
+    assert (
+        seg["inlet_elbow_index"]
+        < seg["run_start_index"]
+        <= seg["run_end_index"]
+        < seg["outlet_elbow_index"]
+        < n
+    )
+    pos = geom["grid_point_position"]
+    assert geom["run_length"] == pos[seg["run_end_index"]] - pos[seg["run_start_index"]]
+    assert geom["inlet_leg_height"] == pos[seg["run_start_index"]] - pos[seg["inlet_elbow_index"]]
     if jc:
-        assert meta["n_cells"] == n == 37
-        cells = doc["cells"]
-        assert_keys(cells, "trace.cells")
-        for name in ("p", "v"):
-            assert_array_block(cells[name], f"cells.{name}")
+        assert meta["grid_point_count"] == n == 37
+        cells = doc["grid_points"]
+        assert_keys(cells, "trace.grid_points")
+        for name in ("pressure", "velocity"):
+            assert_array_block(cells[name], f"grid_points.{name}")
             assert cells[name]["shape"] == [n_frames, n]
     else:
-        assert meta["n_cells"] == 0
+        assert meta["grid_point_count"] == 0
         assert n == 37  # the grid the Example case would have (same inputs as example_jc)
-        assert "cells" not in doc
+        assert "grid_points" not in doc
     # types: ints where the document says int, floats elsewhere, no bools in the columns
-    for name in ("sub_step", "sample", "phase", "stick"):
+    for name in ("substep_index", "sample_index", "load_phase", "is_sticking"):
         assert all(type(v) is int for v in frames[name]), name
-    for name in ("t", "x", "f_friction", "d_f"):
+    for name in ("time", "displacement", "friction_force", "junction_force"):
         assert all(type(v) is float for v in frames[name]), name
-    assert type(meta["params"]["capped"]) is int
+    assert type(meta["params"]["is_capped"]) is int
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", meta["created_utc"])
 
 
@@ -173,25 +179,38 @@ def test_frame_0_is_the_rest_frame_and_frame_1_the_first_traced(case_id):
     doc = trace_doc(case_id)
     tr = example_result(case_id).trace
     f = doc["frames"]
-    assert f["t"][0] == 0.0 and f["sub_step"][0] == -1 and f["sample"][0] == -1
-    assert f["phase"][0] == PHASE_TRANSIT  # the Example cases have a transit phase
-    for name in ("x", "v", "a", "f_a", "f_b", "f_unbalance", "f_friction", "stick", "d_f"):
+    assert f["time"][0] == 0.0 and f["substep_index"][0] == -1 and f["sample_index"][0] == -1
+    assert f["load_phase"][0] == PHASE_TRANSIT  # the Example cases have a transit phase
+    for name in (
+        "displacement",
+        "velocity",
+        "acceleration",
+        "elbow_a_force",
+        "elbow_b_force",
+        "unbalance_force",
+        "friction_force",
+        "is_sticking",
+        "junction_force",
+    ):
         assert f[name][0] == 0, name
     # t = (sub_step + 1) dt holds for every frame, the rest frame included
-    dt = doc["meta"]["params"]["dt"]
+    dt = doc["meta"]["params"]["substep_duration"]
     assert all(
         math.isclose(t, (s + 1) * dt, rel_tol=1e-12, abs_tol=0.0)
-        for t, s in zip(f["t"], f["sub_step"], strict=True)
+        for t, s in zip(f["time"], f["substep_index"], strict=True)
     )
-    assert f["t"][1] == tr.time[0] == tr.substep_duration and f["x"][1:] == tr.displacement.tolist()
-    assert f["stick"][1:] == tr.is_sticking.astype(int).tolist()
-    if "cells" in doc:
-        n = doc["meta"]["n_cells"]
+    assert (
+        f["time"][1] == tr.time[0] == tr.substep_duration
+        and f["displacement"][1:] == tr.displacement.tolist()
+    )
+    assert f["is_sticking"][1:] == tr.is_sticking.astype(int).tolist()
+    if "grid_points" in doc:
+        n = doc["meta"]["grid_point_count"]
         for name, arr in (
-            ("p", tr.column.grid_point_pressure),
-            ("v", tr.column.grid_point_velocity),
+            ("pressure", tr.column.grid_point_pressure),
+            ("velocity", tr.column.grid_point_velocity),
         ):
-            data = doc["cells"][name]["data"]
+            data = doc["grid_points"][name]["data"]
             assert data[:n] == [0.0] * n
             assert data[n : 2 * n] == arr[0].tolist()
             assert data[-n:] == arr[-1].tolist()
@@ -203,13 +222,17 @@ def test_meta_carries_the_run_as_resolved():
     p = doc["meta"]["params"]
     assert (
         p["mass"] == r.trace.sdof_params.mass
-        and p["fric_acc"] == r.trace.sdof_params.friction_velocity_step
+        and p["friction_velocity_step"] == r.trace.sdof_params.friction_velocity_step
     )
-    assert p["trace_every"] == 4 and p["step_qty"] == 80 and p["dt"] == r.trace.substep_duration
-    assert doc["meta"]["outputs"]["max_displacement"] == r.max_displacement
-    assert doc["meta"]["inputs"]["vav_denominator"] == "fixed"
     assert (
-        doc["meta"]["inputs"]["fraction_profile"]
+        p["trace_every"] == 4
+        and p["substep_count"] == 80
+        and p["substep_duration"] == r.trace.substep_duration
+    )
+    assert doc["meta"]["outputs"]["max_displacement"] == r.max_displacement
+    assert doc["meta"]["inputs"]["coupling"]["mean_velocity_divisor"] == "fixed"
+    assert (
+        doc["meta"]["inputs"]["coupling"]["fraction_profile"]
         == inspect.signature(response.peak_response_jc)
         .parameters["coupling"]
         .default.fraction_profile
@@ -217,7 +240,7 @@ def test_meta_carries_the_run_as_resolved():
     assert doc["meta"]["inputs"]["force_history"]["shape"] == [25, 1]
     assert doc["meta"]["solver"] == "peak_response_jc"
     assert trace_doc("example_lumped")["meta"]["solver"] == "peak_response"
-    assert "vav_denominator" not in trace_doc("example_lumped")["meta"]["inputs"]
+    assert "coupling" not in trace_doc("example_lumped")["meta"]["inputs"]
 
 
 def test_trace_dict_needs_a_trace():
@@ -264,24 +287,33 @@ def test_non_finite_values_are_refused(tmp_path):
         export.write_json(tmp_path / "nan.json", {"x": [float("nan")]})
     with pytest.raises(ValueError, match="non-finite"):
         export.to_sweep_dict(
-            [{"case_id": "a", "mu": float("nan")}], provenance=_NO_SHA, regen=_REGEN
+            [{"case_id": "a", "friction_coefficient": float("nan")}],
+            provenance=_NO_SHA,
+            regen=_REGEN,
         )
     with pytest.raises(ValueError, match="unknown sweep columns"):
         export.to_sweep_dict([{"case_id": "a", "bogus": 1.0}], provenance=_NO_SHA, regen=_REGEN)
     with pytest.raises(TypeError):
         export.to_sweep_dict([{"case_id": 7}], provenance=_NO_SHA, regen=_REGEN)
     with pytest.raises(ValueError, match="integer"):
-        export.to_sweep_dict([{"seed": 1.5}], provenance=_NO_SHA, regen=_REGEN)
+        export.to_sweep_dict([{"noise_seed": 1.5}], provenance=_NO_SHA, regen=_REGEN)
 
 
 def test_sweep_values_are_typed_and_null_where_unknown():
     doc = export.to_sweep_dict(
-        [{"case_id": "a", "seed": "7", "mu": "0.005", "error": None}, {"error": "boom", "mu": ""}],
+        [
+            {"case_id": "a", "noise_seed": "7", "friction_coefficient": "0.005", "error": None},
+            {"error": "boom", "friction_coefficient": ""},
+        ],
         provenance=export.SweepProvenance("x", git_sha=None, created_utc="2026-10-26T00:00:00Z"),
         regen=_REGEN,
     )
     c = doc["columns"]
-    assert c["seed"] == [7, None] and c["mu"] == [0.005, None] and c["error"] == [None, "boom"]
+    assert (
+        c["noise_seed"] == [7, None]
+        and c["friction_coefficient"] == [0.005, None]
+        and c["error"] == [None, "boom"]
+    )
     assert c["case_id"] == ["a", None] and doc["meta"]["n_rows"] == 2
     assert all(len(v) == 2 for v in c.values())
 
@@ -292,7 +324,7 @@ def test_sweep_values_are_typed_and_null_where_unknown():
 def test_sweep_schema_and_reference_block_from_the_golden_csv():
     doc = golden_sweep_doc()
     assert_keys(doc, "sweep")
-    assert doc["kind"] == "sweep" and doc["schema_version"] == 2
+    assert doc["kind"] == "sweep" and doc["schema_version"] == 3
     assert_keys(doc["meta"], "sweep.meta")
     assert_keys(doc["columns"], "sweep.columns")
     assert_keys(doc["regen"], "sweep.regen")
@@ -303,20 +335,27 @@ def test_sweep_schema_and_reference_block_from_the_golden_csv():
     csv_rows = {r["case_id"]: r for r in tg.load_cases()}
     assert c["case_id"] == list(csv_rows)
     assert set(c["history_type"]) == {"golden"} and set(c["size_in"]) == {10.0}
-    assert c["error"] == [None] * n and c["od_mm"] == [None] * n
+    assert c["error"] == [None] * n and c["outside_diameter_mm"] == [None] * n
     i96 = c["case_id"].index("r096_jc_L24_f3")
     r96 = csv_rows["r096_jc_L24_f3"]
-    assert c["f_eq_jc"][i96] == float(r96["max_static_equivalent_force"])
-    assert c["f_peak_jc"][i96] == float(r96["max_applied_force"])
-    assert c["f_eq_lumped"][i96] is None and c["ratio_f_eq"][i96] is None
-    assert c["length_m"][i96] == 24.0 and c["nat_freq_hz"][i96] == 3.0 and c["mu"][i96] == 1e-6
+    assert c["max_static_equivalent_force_jc"][i96] == float(r96["max_static_equivalent_force"])
+    assert c["max_unbalance_force_jc"][i96] == float(r96["max_applied_force"])
+    assert (
+        c["max_static_equivalent_force_lumped"][i96] is None
+        and c["max_static_equivalent_force_ratio"][i96] is None
+    )
+    assert (
+        c["span_length"][i96] == 24.0
+        and c["natural_frequency"][i96] == 3.0
+        and c["friction_coefficient"][i96] == 1e-6
+    )
     i20 = c["case_id"].index("r020_lumped_L3_f2")
-    assert c["f_eq_lumped"][i20] == float(
+    assert c["max_static_equivalent_force_lumped"][i20] == float(
         csv_rows["r020_lumped_L3_f2"]["max_static_equivalent_force"]
     )
-    assert c["f_eq_jc"][i20] is None
+    assert c["max_static_equivalent_force_jc"][i20] is None
     params = tg.load_params()
-    assert set(c["rho_c"]) == {params["fluid_densty"] * params["celerity"]}
+    assert set(c["characteristic_impedance"]) == {params["fluid_densty"] * params["celerity"]}
     # regen: the template formats with any row
     row = {name: c[name][i96] for name in export.SWEEP_COLUMNS}
     cmd = doc["regen"]["template"].format(**row)
@@ -346,24 +385,29 @@ def test_sweep_schema_and_reference_block_from_the_golden_csv():
     names = params["expected_outputs"]
     for entry in ref["jc_golden_rows"]:
         case = csv_rows[entry["case_id"]]
-        assert entry["output_names"] == names
+        # the fixtures name the unbalance force by its schema-1 output name
+        assert entry["output_names"] == [
+            {"max_applied_force": "max_unbalance_force"}.get(k, k) for k in names
+        ]
         assert entry["excel_values"] == [float(case[k]) for k in names]
         assert entry["rtol"] == tg.RTOL["jc"]
         assert entry["source"]["source_row"] == int(case["source_row"])
-        assert entry["inputs"]["physical_length"] == float(case["physical_length"])
-        assert entry["inputs"]["fluid_area"] == params["fluid_area"]
+        assert entry["inputs"]["span"]["span_length"] == float(case["physical_length"])
+        assert entry["inputs"]["fluid"]["flow_area"] == params["fluid_area"]
 
 
 def test_sweep_csv_passthrough_and_rejection(tmp_path):
     path = tmp_path / "sweep.csv"
-    path.write_text("case_id,size_in,mu,seed,error\nrun1,10,0.005,3,\nrun2,10,,,boom\n")
+    path.write_text(
+        "case_id,size_in,friction_coefficient,noise_seed,error\nrun1,10,0.005,3,\nrun2,10,,,boom\n"
+    )
     rows, layout = sweep_document.sweep_rows_from_csv(path)
     assert layout == "sweep" and len(rows) == 2
     doc = export.to_sweep_dict(
         rows, provenance=export.SweepProvenance(str(path), git_sha=None), regen=_REGEN
     )
-    assert doc["columns"]["seed"] == [3, None] and doc["columns"]["error"] == [None, "boom"]
-    assert doc["columns"]["f_eq_jc"] == [None, None]
+    assert doc["columns"]["noise_seed"] == [3, None] and doc["columns"]["error"] == [None, "boom"]
+    assert doc["columns"]["max_static_equivalent_force_jc"] == [None, None]
     bad = tmp_path / "bad.csv"
     bad.write_text("case_id,nope\na,1\n")
     with pytest.raises(SystemExit, match="unknown columns"):
@@ -380,7 +424,7 @@ def test_cli_trace_and_sweep(tmp_path, capsys):
     )
     doc = export.read_json(out)
     assert doc["kind"] == "trace" and doc["meta"]["case_id"] == "example_lumped"
-    assert doc["meta"]["params"]["trace_every"] == 8 and "cells" not in doc
+    assert doc["meta"]["params"]["trace_every"] == 8 and "grid_points" not in doc
     printed = capsys.readouterr().out
     assert "MB of JSON" in printed and "gzipped" in printed
     out2 = tmp_path / "step.json"
@@ -411,7 +455,7 @@ def test_cli_trace_and_sweep(tmp_path, capsys):
         ]
     )
     doc2 = export.read_json(out2)
-    assert doc2["meta"]["case_id"] == "tiny" and "cells" in doc2
+    assert doc2["meta"]["case_id"] == "tiny" and "grid_points" in doc2
     assert doc2["meta"]["params"]["trace_every"] == 1  # a short run: the 2000-frame stride is 1
     out3 = tmp_path / "sweep.json"
     export_cli.main(
@@ -453,15 +497,15 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
     doc = export.to_trace_dict(result, "r096_jc_L24_f3", git_sha=None)
     text = export.dumps(doc)
     size = len(text.encode("utf-8"))
-    n_frames = doc["meta"]["n_frames"]
+    n_frames = doc["meta"]["frame_count"]
     with capsys.disabled():
         print(
             f"\nrow 96 at the default stride {stride}: {n_frames} frames "
-            f"({stride * result.trace.substep_duration * 1e3:.1f} ms a frame), {doc['meta']['n_cells']} cells, "
+            f"({stride * result.trace.substep_duration * 1e3:.1f} ms a frame), {doc['meta']['grid_point_count']} cells, "
             f"{size / 1e6:.2f} MB of JSON"
         )
     assert size < 50_000_000
-    assert doc["meta"]["n_cells"] == 1333 and n_frames >= 800
+    assert doc["meta"]["grid_point_count"] == 1333 and n_frames >= 800
     # the defaults (F-1, F-2, F-4 + F-4b): the legacy / Excel value is 0.0036195012413468937;
     # F-4 (26 Oct profile) gave 0.0036157685826052957 (-1.03e-3 relative), F-4b (27 Oct
     # profile) -2.07e-3 (NOTES.md "Session F-4b — done")

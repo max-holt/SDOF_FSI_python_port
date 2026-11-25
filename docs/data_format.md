@@ -7,7 +7,12 @@ time window live, so nothing about the presentation is baked into the file. This
 contract; `tests/test_export.py` parses the key tables below (every `### <block>` heading and the
 `` `key` `` column of its table), so a key is part of the format exactly when it is listed here.
 
-Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 since Session 5b):
+Two kinds of file, each with `kind` and `schema_version` (`trace` 2, `sweep` 3, since the schema
+bump of the clean-code review, session R.9; the names follow `docs/nomenclature.md`). The
+viewer reads only these versions. Before the bump, `trace` 1 had the same blocks under VBA-era
+keys (`n_frames`, `cells.p`, `x_nominal_m`, flat `inputs`, ...) and `sweep` 2 the same 72
+columns under the old names (`length_m`, `mu`, `f_eq_jc`, ...); `sweep` 1 was the thirty-column
+W.1 layout. The old-to-new key table is `docs/review/public_interface.md` §3.3.
 
 * **`trace`** — one traced run (`PeakResponse.trace`, Session V.1): meta, the loop geometry the
   animation draws, the per-frame scalars and, for a junction-coupling run, the column arrays.
@@ -29,10 +34,11 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 * **Encoding and layout.** UTF-8, LF, compact separators (no indentation: a 2000-frame JC trace
   is millions of values), one trailing newline. A `.json.gz` file is the same bytes gzipped
   (the viewer inflates it; the exporter reads either back identically).
-* **Units** are SI (m, s, N, Pa, kg) unless the key carries a suffix (`_m`, `_s`, `_mm`, `_bar`,
-  `_hz`, `_in`). The frame convention is Session V.1's (`docs/architecture.md`, "Session V.1 —
-  the trace"): frame `i >= 1` of a trace file is traced frame `i - 1`, the end of sub-step
-  `sub_step`, `t = (sub_step + 1) * dt`; frame 0 is synthetic (below).
+* **Units** are SI (m, s, N, Pa, kg) unless the key carries a suffix for a non-SI unit (`_mm`,
+  `_bar`, `_in`); the five history duration terms keep `_s` (`lead_in_s`, `transit_s`, `tail_s`,
+  `decay_s`, `duration_s`). The frame convention is Session V.1's (`docs/architecture.md`, "Session V.1 —
+  the trace"): frame `i >= 1` of a trace file is traced frame `i - 1`, the end of substep
+  `substep_index`, `time = (substep_index + 1) * substep_duration`; frame 0 is synthetic (below).
 * `inputs` and `source` objects are **free-form**: their keys are whatever the solver received
   or the fixture recorded. Every other object has exactly the keys listed here.
 
@@ -43,23 +49,23 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 | key | type | meaning |
 |---|---|---|
 | `kind` | string | `"trace"` |
-| `schema_version` | int | `1` |
+| `schema_version` | int | `2` |
 | `meta` | object | `trace.meta` |
 | `geometry` | object | `trace.geometry`: the expansion-loop layout the animation draws |
 | `frames` | object | `trace.frames`: the per-frame scalar columns |
-| `cells` | object | `trace.cells`, **JC runs only**; the key is absent for a lumped run |
+| `grid_points` | object | `trace.grid_points`, **JC runs only**; the key is absent for a lumped run |
 
 ### trace.meta
 
 | key | type | meaning |
 |---|---|---|
 | `case_id` | string | The case as the CLI named it: a fixture id (`r096_jc_L24_f3`, `example_jc`) or the `--step` description |
-| `solver` | string | `Trace.solver`: `"peak_response"` (lumped) or `"peak_response_jc"`; a JC call that took the short-pipe fallback reports `"peak_response"` and has no `cells` |
-| `inputs` | object | The solver's keyword arguments exactly as received (`Trace.inputs`), free-form; `force_history` is an array block (the 2-D history the walk used, `(n_samples, n_columns)`); the JC flags `vav_denominator` / `parity` / `fraction_profile` are present for a JC run |
+| `solver` | string | `Trace.solver`: `"peak_response"` (lumped) or `"peak_response_jc"`; a JC call that took the short-pipe fallback reports `"peak_response"` and has no `grid_points` |
+| `inputs` | object | The solver's arguments as received, grouped as the call (`Trace.inputs`), free-form: `force_history` (an array block, the 2-D history the walk used, `(n_samples, n_columns)`), `sample_rate`, `span`, `restraint`, `integration`, and for a JC run `fluid` and `coupling` (`mean_velocity_divisor`, `parity`, `fraction_profile`) |
 | `params` | object | `trace.meta.params`: what the set-up resolved |
 | `outputs` | object | `trace.meta.outputs`: the `PeakResponse` maxima, for the viewer's self-check against the reference values |
-| `n_frames` | int | Frames in the file, the rest frame included (`Trace.n_frames + 1`) |
-| `n_cells` | int | `2N + 1` interleaved cells of a JC run; `0` for lumped (the geometry still has the grid the case would have, below) |
+| `frame_count` | int | Frames in the file, the rest frame included (`Trace.frame_count + 1`) |
+| `grid_point_count` | int | `2N + 1` interleaved grid points of a JC run; `0` for lumped (the geometry still has the grid the case would have, below) |
 | `git_sha` | string or null | `git rev-parse HEAD` of the exporting checkout, null outside a repository |
 | `created_utc` | string | ISO 8601 UTC, `YYYY-MM-DDTHH:MM:SSZ` |
 
@@ -70,14 +76,14 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 | `mass` | float | Modal mass, kg (`SdofParams.mass`) |
 | `stiffness` | float | Stiffness with the gaps open, N/m |
 | `damping` | float | Viscous damping coefficient, N·s/m |
-| `fric_acc` | float | Coulomb friction velocity increment per sub-step, m/s (`0.5 dynamicFric 9.81 dt`) |
-| `gap` | float | Support gap, m |
-| `ratio2` | float | `restrainFreqRatio²` |
-| `dt` | float | Sub-step, s (`1 / (sampleFreq stepQTY)`) |
-| `step_qty` | int | Sub-steps per sample |
-| `out_max` | int | The VBA `outMax`; free decay is traced while `sample < 2 out_max` |
+| `friction_velocity_step` | float | Coulomb friction velocity increment per sub-step, m/s (`0.5 dynamicFric 9.81 dt`) |
+| `support_gap` | float | Support gap, m |
+| `closed_gap_stiffness_ratio` | float | `restrainFreqRatio²` |
+| `substep_duration` | float | Sub-step, s (`1 / (sampleFreq stepQTY)`) |
+| `substep_count` | int | Sub-steps per sample |
+| `nominal_forced_sample_count` | int | The VBA `outMax`; free decay is traced while `sample < 2 out_max` |
 | `trace_every` | int | The trace stride in sub-steps: frame `i >= 1` is the end of sub-step `(i - 1) trace_every` |
-| `capped` | int (0/1) | 1 when the run decayed past the traced history window, so the trace ends before the run did (`export.is_capped`) |
+| `is_capped` | int (0/1) | 1 when the run decayed past the traced history window, so the trace ends before the run did (`export.is_capped`) |
 
 ### trace.meta.outputs
 
@@ -87,78 +93,79 @@ Two kinds of file, each with `kind` and `schema_version` (`trace` 1; `sweep` 2 s
 | `max_displacement` | float | m |
 | `max_velocity` | float | m/s |
 | `max_acceleration` | float | m/s² |
-| `max_applied_force` | float | N, the largest `abs(forceA - forceB)` |
-| `free_decay_samples` | int | Samples integrated in free decay |
+| `max_unbalance_force` | float | N, the largest `abs(forceA - forceB)` |
+| `free_decay_sample_count` | int | Samples integrated in free decay |
 
 ### trace.geometry
 
 The `LoopLayout` of `surge_sdof.viz.geometry.layout_from_trace` (the rules are in
 `docs/architecture.md`, "the animation", Geometry): a JC run's own grid; for a lumped run the grid
 the case would have (`moc.grid_size`, `moc.moving_fractions`). Arrays are length `n` = the number
-of cells of that grid (equal to `meta.n_cells` for a JC run).
+of grid points of that grid (equal to `meta.grid_point_count` for a JC run).
 
 | key | type | meaning |
 |---|---|---|
-| `cell_position_m` | float[n] | Position along the column from the first A node, m (`j c dt`; a cell is `2 c dt`) |
-| `cell_kind` | int[n] | `0` = A node, `1` = B cell (interleaved `A0 B0 A1 … AN`) |
-| `moving_fraction` | float[n] | The moving fraction the cell's velocity is corrected by (0 fixed … 1 moving with the mass) |
-| `ext_qty` | int | `extQTY`, the fixed end cells |
-| `pivot_seg_qty` | int | `pivotSegQTY` |
-| `pipe_seg_qty` | int | `N`; `n = 2N + 1` |
+| `grid_point_position` | float[n] | Position along the column from the first A node, m (`j c dt`; a cell is `2 c dt`) |
+| `grid_point_kind` | int[n] | `0` = A node, `1` = B cell (interleaved `A0 B0 A1 … AN`) |
+| `grid_point_moving_fraction` | float[n] | The moving fraction the cell's velocity is corrected by (0 fixed … 1 moving with the mass) |
+| `inactive_end_cell_count` | int | `extQTY`, the fixed end cells |
+| `end_to_elbow_cell_count` | int | `pivotSegQTY` |
+| `column_cell_count` | int | `N`; `n = 2N + 1` |
 | `segments` | object | `trace.geometry.segments`: the cell indices where the five segments meet |
-| `x_nominal_m` | float[n] | Circle centres at rest on the loop, m: the run along `y = 0` from `x = 0` to `x = run_length_m`, legs vertical, inlet / outlet horizontal |
-| `y_nominal_m` | float[n] | As above |
-| `run_length_m` | float | `cell_position_m[run_end] - cell_position_m[run_start]` |
-| `leg_height_m` | float | Height of the inlet pipe above the run (centreline length between the inlet elbow cells), m |
-| `leg_height_2_m` | float | The same for the outlet side (equal to `leg_height_m` with the default fraction profile; one cell shorter with `fraction_profile="legacy"`, whose B profile ramps one cell longer on the inlet side) |
-| `portal_height_m` | float | `structure.solve_portal_height` of the case, m (printed, not used for the layout) |
-| `spacing_m` | float | Distance between consecutive cells along the centreline, m (`c dt`) |
-| `cell_length_m` | float | `2 c dt`, m |
+| `x_at_rest` | float[n] | Circle centres at rest on the loop, m: the run along `y = 0` from `x = 0` to `x = run_length_m`, legs vertical, inlet / outlet horizontal |
+| `y_at_rest` | float[n] | As above |
+| `run_length` | float | `cell_position_m[run_end] - cell_position_m[run_start]` |
+| `inlet_leg_height` | float | Height of the inlet pipe above the run (centreline length between the inlet elbow cells), m |
+| `outlet_leg_height` | float | The same for the outlet side (equal to `inlet_leg_height` with the default fraction profile; one cell shorter with `fraction_profile="legacy"`, whose B profile ramps one cell longer on the inlet side) |
+| `portal_frame_height` | float | `structure.solve_portal_height` of the case, m (printed, not used for the layout) |
+| `grid_point_spacing` | float | Distance between consecutive cells along the centreline, m (`c dt`) |
+| `cell_length` | float | `2 c dt`, m |
 
 ### trace.geometry.segments
 
 | key | type | meaning |
 |---|---|---|
-| `inlet_end` | int | The last fraction-0 cell of the inlet (the inlet / leg elbow cell, at `(0, leg_height_m)`) |
-| `run_start` | int | The first fraction-1 cell (the leg / run elbow, at `(0, 0)`) |
-| `run_end` | int | The last fraction-1 cell (at `(run_length_m, 0)`) |
-| `outlet_start` | int | The first fraction-0 cell of the outlet (at `(run_length_m, leg_height_2_m)`) |
+| `inlet_elbow_index` | int | The last fraction-0 cell of the inlet (the inlet / leg elbow cell, at `(0, leg_height_m)`) |
+| `run_start_index` | int | The first fraction-1 cell (the leg / run elbow, at `(0, 0)`) |
+| `run_end_index` | int | The last fraction-1 cell (at `(run_length_m, 0)`) |
+| `outlet_elbow_index` | int | The first fraction-0 cell of the outlet (at `(run_length_m, leg_height_2_m)`) |
 
 ### trace.frames
 
-Thirteen flat columns, each of length `meta.n_frames`. **Frame 0 is the synthetic rest frame**
-(`t = 0`, the column at rest, no forces; the viewer never has to build it): `t = 0.0`,
-`sub_step = -1` and `sample = -1` (so `t = (sub_step + 1) dt` holds for every frame), `phase` =
+Thirteen flat columns, each of length `meta.frame_count`. **Frame 0 is the synthetic rest frame**
+(`time = 0`, the column at rest, no forces; the viewer never has to build it): `time = 0.0`,
+`substep_index = -1` and `sample_index = -1` (so `time = (substep_index + 1) substep_duration`
+holds for every frame), `load_phase` =
 transit unless the run has no transit sub-step (then the phase of the first traced frame), every
 other column `0`. Frame `i >= 1` is traced frame `i - 1`. The whole run is exported at the trace
 stride; a file is never windowed (the viewer windows).
 
 | key | type | meaning |
 |---|---|---|
-| `t` | float | Time at the end of the sub-step, s |
-| `sub_step` | int | The kernel's 0-based sub-step counter (`-1` for the rest frame) |
-| `sample` | int | 0-based sample index, `totInd - 1` (`-1` for the rest frame) |
-| `phase` | int | `0` transit, `1` forced, `2` free decay |
-| `x` | float | Displacement after the sub-step, m |
-| `v` | float | Velocity, m/s |
-| `a` | float | Acceleration, m/s² |
-| `f_a` | float | Force at elbow A applied in the sub-step, N (0 in free decay) |
-| `f_b` | float | Delayed force at elbow B, N |
-| `f_unbalance` | float | `f_a - f_b`, N |
-| `f_friction` | float | `mass dv_friction / dt`, N: the Coulomb force of the sub-step (holding force in stick) |
-| `stick` | int (0/1) | 1 when the sub-step took the stick branch (`abs(v_old) < fric_acc`) |
-| `d_f` | float | Junction force the sub-step used, N (0 for lumped) |
+| `time` | float | Time at the end of the sub-step, s |
+| `substep_index` | int | The kernel's 0-based sub-step counter (`-1` for the rest frame) |
+| `sample_index` | int | 0-based sample index, `totInd - 1` (`-1` for the rest frame) |
+| `load_phase` | int | `0` transit, `1` forced, `2` free decay |
+| `displacement` | float | Displacement after the sub-step, m |
+| `velocity` | float | Velocity, m/s |
+| `acceleration` | float | Acceleration, m/s² |
+| `elbow_a_force` | float | Force at elbow A applied in the sub-step, N (0 in free decay) |
+| `elbow_b_force` | float | Delayed force at elbow B, N |
+| `unbalance_force` | float | `f_a - f_b`, N |
+| `friction_force` | float | `mass dv_friction / dt`, N: the Coulomb force of the sub-step (holding force in stick) |
+| `is_sticking` | int (0/1) | 1 when the sub-step took the stick branch (`abs(v_old) < fric_acc`) |
+| `junction_force` | float | Junction force the sub-step used, N (0 for lumped) |
 
-### trace.cells
+### trace.grid_points
 
-Present for a JC run only. Each value is an array block of shape `[n_frames, n_cells]` (row 0
+Present for a JC run only. Each value is an array block of shape `[frame_count, grid_point_count]` (row 0
 the rest frame, zeros: `moc.column_at_rest`), the interleaved column `A0 B0 A1 … AN` after the
 sub-step, exactly as the model stores it.
 
 | key | type | meaning |
 |---|---|---|
-| `p` | array block | Pressures, Pa (`rhoC v`) |
-| `v` | array block | Velocities relative to the pipe, m/s (after the acceleration injection and the `vAv` subtraction) |
+| `pressure` | array block | Pressures, Pa (`rhoC v`) |
+| `velocity` | array block | Velocities relative to the pipe, m/s (after the acceleration injection and the `vAv` subtraction) |
 
 ### array block
 
@@ -174,7 +181,7 @@ sub-step, exactly as the model stores it.
 | key | type | meaning |
 |---|---|---|
 | `kind` | string | `"sweep"` |
-| `schema_version` | int | `2` (`export.SWEEP_SCHEMA_VERSION`; 1 was the thirty-column W.1 layout) |
+| `schema_version` | int | `3` (`export.SWEEP_SCHEMA_VERSION`; 2 had the same columns under the names before the R.9 bump, 1 was the thirty-column W.1 layout) |
 | `meta` | object | `sweep.meta` |
 | `columns` | object | `sweep.columns`: one flat array per column, all of length `meta.n_rows` |
 | `regen` | object | `sweep.regen`: how to reproduce any row's trace with `tools/export.py` |
@@ -196,10 +203,10 @@ sub-step, exactly as the model stores it.
 
 Seventy-two columns, fixed names, every column the same length: the columns of the Session 5b
 sweep CSV (`tools/sweep_jc.py run`, `sweep_jc.COLUMNS is export.SWEEP_COLUMNS`). Numeric columns
-are floats (or `null`); `tier`, `size_in`, `seed`, `n_samples`, `pipe_seg_qty`, `pivot_seg_qty`
-and `jc_short_pipe` are ints (or `null`); `case_id`, `subset`, `history_type`,
+are floats (or `null`); `tier`, `size_in`, `noise_seed`, `sample_count`, `column_cell_count`, `end_to_elbow_cell_count`
+and `is_short_pipe` are ints (or `null`); `case_id`, `subset`, `history_type`,
 `histories_version`, `cpu`, `git_sha` and `error` are strings (or `null`). The fifteen generator
-columns (`history_type` … `p_cap`, SI values exactly as the generator received them) rebuild the
+columns (`history_type` … `peak_pressure_target`, SI values exactly as the generator received them) rebuild the
 row's pressure history bitwise through `surge_sdof.histories.from_params`
 (`sweep_jc.history_from_row`; `tests/test_sweep_jc.py` pins the round trip). Schema 1 (Session
 W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak`, which is gone
@@ -211,78 +218,78 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 | `tier` | int | The sweep tier (1 or 2) |
 | `subset` | string | `subset<pct>` for a stratified subset run, empty for a full tier |
 | `size_in` | int | Nominal pipe size, in |
-| `od_mm` | float | Outside diameter, mm (`curve_10in!J7:M7`) |
-| `thk_mm` | float | Wall thickness, mm (`curve_10in!J8:M8`) |
-| `length_m` | float | `physicalLength`, m |
-| `nat_freq_hz` | float | `natFreq`, Hz (with the contained fluid, as the solvers model it) |
+| `outside_diameter_mm` | float | Outside diameter, mm (`curve_10in!J7:M7`) |
+| `wall_thickness_mm` | float | Wall thickness, mm (`curve_10in!J8:M8`) |
+| `span_length` | float | `physicalLength`, m |
+| `natural_frequency` | float | `natFreq`, Hz (with the contained fluid, as the solvers model it) |
 | `history_type` | string | Generator kind: `step`, `step_sine`, `step_noise` |
-| `f_osc_hz` | float | Sine frequency, Hz; empty otherwise |
-| `seed` | int | Noise RNG seed; empty otherwise |
+| `oscillation_frequency` | float | Sine frequency, Hz; empty otherwise |
+| `noise_seed` | int | Noise RNG seed; empty otherwise |
 | `amplitude_fraction` | float | Peak as a fraction of the cap `1.33 p_design` |
-| `mu` | float | `dynamicFric`, the Coulomb coefficient (the VBA uses `0.5 mu 9.81 dt` directly) |
-| `p_design_bar` | float | `2 t S / OD` with `S = 138` MPa, bar |
-| `p_cap_bar` | float | `amplitude_fraction × 1.33 × p_design`, bar |
-| `p_peak_bar` | float | `max(p)` of the history, bar (equals `p_cap_bar` to rounding) |
-| `p_mean_bar` | float | Mean of the pressure history over its whole length (lead-in included), bar |
-| `p_rms_bar` | float | RMS of the pressure history over its whole length, bar |
-| `noise_rms_bar` | float | `step_noise` only: RMS of the scaled noise component over the active window (after the lead-in), bar |
-| `sample_freq` | float | Generator: sample rate, Hz |
+| `friction_coefficient` | float | `dynamicFric`, the Coulomb coefficient (the VBA uses `0.5 mu 9.81 dt` directly) |
+| `design_pressure_bar` | float | `2 t S / OD` with `S = 138` MPa, bar |
+| `peak_pressure_target_bar` | float | `amplitude_fraction × 1.33 × p_design`, bar |
+| `pressure_max_bar` | float | `max(p)` of the history, bar (equals `peak_pressure_target_bar` to rounding) |
+| `pressure_mean_bar` | float | Mean of the pressure history over its whole length (lead-in included), bar |
+| `pressure_rms_bar` | float | RMS of the pressure history over its whole length, bar |
+| `scaled_noise_rms_bar` | float | `step_noise` only: RMS of the scaled noise component over the active window (after the lead-in), bar |
+| `sample_rate` | float | Generator: sample rate, Hz |
 | `lead_in_s` | float | Generator: zero lead-in, s |
 | `transit_s` | float | Generator: transit allowance in the duration, s (the tier's longest span, `48 / 1237`, rounded up to 0.04, so one history serves every length) |
 | `tail_s` | float | Generator: tail after the decay, s |
 | `decay_s` | float | `decay_cycles / f_osc` (sine), `decay_cycles / f_ref` (noise), 0 (step), s |
 | `duration_s` | float | `lead_in_s + transit_s + decay_s + tail_s`, s |
-| `n_samples` | int | `round(duration_s × sample_freq)` |
-| `p_step` | float | Generator: held step, Pa (the cap for `step`, half the cap otherwise) |
-| `p_osc` | float | Generator: sine amplitude, Pa (set so the first positive peak of the enveloped sine is the cap); empty otherwise |
-| `p_noise_rms` | float | Generator: requested white-noise RMS, Pa (inert: the noise is rescaled to the cap); empty otherwise |
-| `f_cut_hz` | float | Generator: noise low-pass cut-off, Hz (the Nyquist frequency when unfiltered); empty otherwise |
-| `f_ref_hz` | float | Generator: envelope reference frequency of the noise, Hz; empty otherwise |
-| `decay_cycles` | float | Generator: cycles after which the envelope is `1 − decay_fraction`; empty for `step` |
-| `decay_fraction` | float | Generator: the envelope's decay over `decay_cycles`; empty for `step` |
-| `p_cap` | float | Generator: the noise's peak target, Pa; empty otherwise (`p_cap_bar` carries the cap for every row) |
+| `sample_count` | int | `round(duration_s × sample_freq)` |
+| `step_pressure` | float | Generator: held step, Pa (the cap for `step`, half the cap otherwise) |
+| `oscillation_amplitude` | float | Generator: sine amplitude, Pa (set so the first positive peak of the enveloped sine is the cap); empty otherwise |
+| `requested_noise_rms` | float | Generator: requested white-noise RMS, Pa (inert: the noise is rescaled to the cap); empty otherwise |
+| `noise_cutoff_frequency` | float | Generator: noise low-pass cut-off, Hz (the Nyquist frequency when unfiltered); empty otherwise |
+| `envelope_reference_frequency` | float | Generator: envelope reference frequency of the noise, Hz; empty otherwise |
+| `envelope_decay_cycles` | float | Generator: cycles after which the envelope is `1 − decay_fraction`; empty for `step` |
+| `envelope_decay_fraction` | float | Generator: the envelope's decay over `envelope_decay_cycles`; empty for `step` |
+| `peak_pressure_target` | float | Generator: the noise's peak target, Pa; empty otherwise (`peak_pressure_target_bar` carries the cap for every row) |
 | `histories_version` | string | `surge_sdof.histories.HISTORIES_VERSION` |
-| `fluid_area_m2` | float | `π ((OD/2 − t)/1000)²`, m² (`curve_10in!H13`) |
-| `mass_per_unit_len` | float | Pipe plus contents, kg/m (`curve_10in!H11`, steel 7800, water 1000) |
-| `ei` | float | `E I`, N·m² (`curve_10in!J15`, `E = 195e9`) |
-| `rho_c` | float | `fluidDensity × celerity`, Pa·s/m |
-| `portal_height_m` | float | `structure.solve_portal_height` of the case, m |
-| `mass_total_kg` | float | `(L + 4h/3) × massPerUnitLen`: the mass the natural frequency is modelled on (pipe and contents, VBA 727), used for the momentum and kinetic energy of both solvers; the MoC column's fluid momentum is not added |
-| `pipe_seg_qty` | int | `moc.grid_size`: MoC cells in the whole column (the span, about `L / (2 c dt)` cells, plus `pivot_seg_qty + 1` cells at each end), not only between the elbows |
-| `pivot_seg_qty` | int | `moc.grid_size`: cells from each end to the pivot |
-| `jc_short_pipe` | int | 1 when `moc.is_short_pipe` holds and the JC call fell back to the lumped solver (none in Tier 1) |
-| `history_peak` | float | `max \|F\|` of the force history `p × A`, N |
-| `history_mean` | float | Mean of the force history, N |
-| `history_rms` | float | RMS of the force history, N |
-| `f_eq_lumped` | float | `max_static_equivalent_force`, lumped, N |
-| `f_eq_jc` | float | The same, JC |
-| `ratio_f_eq` | float | `f_eq_jc / f_eq_lumped`: the flexibility measure |
-| `v_peak_lumped` | float | `max_velocity`, lumped, m/s |
-| `v_peak_jc` | float | The same, JC |
-| `ratio_v_peak` | float | `v_peak_jc / v_peak_lumped`: the support-design measure (the lead author's peak local force at impact is derived from the velocity, Stage 6) |
-| `momentum_lumped` | float | `mass_total_kg × v_peak_lumped`, kg·m/s |
-| `momentum_jc` | float | The same, JC |
-| `ke_peak_lumped` | float | `0.5 × mass_total_kg × v_peak_lumped²`, J |
-| `ke_peak_jc` | float | The same, JC |
-| `x_peak_lumped` | float | `max_displacement`, lumped, m |
-| `x_peak_jc` | float | The same, JC |
-| `a_peak_lumped` | float | `max_acceleration`, lumped, m/s² |
-| `a_peak_jc` | float | The same, JC |
-| `f_peak_lumped` | float | `max_applied_force`: the VBA `FMax`, the peak applied unbalance, an input property; not ratioed |
-| `f_peak_jc` | float | The same, JC (equal to `f_peak_lumped` on one history) |
-| `f_eq_over_LD2_lumped` | float | `f_eq_lumped / (L d²)`, `d` = OD, N/m³ |
-| `f_eq_over_LD2_jc` | float | The same, JC |
-| `daf_lumped` | float | `f_eq_lumped / (p_peak A)`, the effective DAF |
+| `flow_area` | float | `π ((OD/2 − t)/1000)²`, m² (`curve_10in!H13`) |
+| `mass_per_length` | float | Pipe plus contents, kg/m (`curve_10in!H11`, steel 7800, water 1000) |
+| `flexural_rigidity` | float | `E I`, N·m² (`curve_10in!J15`, `E = 195e9`) |
+| `characteristic_impedance` | float | `fluidDensity × celerity`, Pa·s/m |
+| `portal_frame_height` | float | `structure.solve_portal_height` of the case, m |
+| `total_mass` | float | `(L + 4h/3) × massPerUnitLen`: the mass the natural frequency is modelled on (pipe and contents, VBA 727), used for the momentum and kinetic energy of both solvers; the MoC column's fluid momentum is not added |
+| `column_cell_count` | int | `moc.grid_size`: MoC cells in the whole column (the span, about `L / (2 c dt)` cells, plus `end_to_elbow_cell_count + 1` cells at each end), not only between the elbows |
+| `end_to_elbow_cell_count` | int | `moc.grid_size`: cells from each end to the pivot |
+| `is_short_pipe` | int | 1 when `moc.is_short_pipe` holds and the JC call fell back to the lumped solver (none in Tier 1) |
+| `force_history_max` | float | `max \|F\|` of the force history `p × A`, N |
+| `force_history_mean` | float | Mean of the force history, N |
+| `force_history_rms` | float | RMS of the force history, N |
+| `max_static_equivalent_force_lumped` | float | `max_static_equivalent_force`, lumped, N |
+| `max_static_equivalent_force_jc` | float | The same, JC |
+| `max_static_equivalent_force_ratio` | float | `max_static_equivalent_force_jc / max_static_equivalent_force_lumped`: the flexibility measure |
+| `max_velocity_lumped` | float | `max_velocity`, lumped, m/s |
+| `max_velocity_jc` | float | The same, JC |
+| `max_velocity_ratio` | float | `v_peak_jc / v_peak_lumped`: the support-design measure (the lead author's peak local force at impact is derived from the velocity, Stage 6) |
+| `max_momentum_lumped` | float | `mass_total_kg × v_peak_lumped`, kg·m/s |
+| `max_momentum_jc` | float | The same, JC |
+| `max_kinetic_energy_lumped` | float | `0.5 × mass_total_kg × v_peak_lumped²`, J |
+| `max_kinetic_energy_jc` | float | The same, JC |
+| `max_displacement_lumped` | float | `max_displacement`, lumped, m |
+| `max_displacement_jc` | float | The same, JC |
+| `max_acceleration_lumped` | float | `max_acceleration`, lumped, m/s² |
+| `max_acceleration_jc` | float | The same, JC |
+| `max_unbalance_force_lumped` | float | `max_unbalance_force`: the VBA `FMax`, the peak applied unbalance, an input property; not ratioed |
+| `max_unbalance_force_jc` | float | The same, JC (equal to `max_unbalance_force_lumped` on one history) |
+| `force_per_length_diameter_squared_lumped` | float | `max_static_equivalent_force_lumped / (L d²)`, `d` = OD, N/m³ |
+| `force_per_length_diameter_squared_jc` | float | The same, JC |
+| `daf_lumped` | float | `max_static_equivalent_force_lumped / (pressure_max A)`, the effective DAF |
 | `daf_jc` | float | The same, JC |
-| `t_lumped_s` | float | Wall-clock seconds of the lumped call (history generation excluded) |
-| `t_jc_s` | float | Wall-clock seconds of the JC call |
+| `wall_time_lumped` | float | Wall-clock seconds of the lumped call (history generation excluded) |
+| `wall_time_jc` | float | Wall-clock seconds of the JC call |
 | `cpu` | string | CPU model the row was timed on |
 | `git_sha` | string | Short sha of the checkout (`-dirty` when `src`, `tests` or `tools` had uncommitted changes) |
 | `error` | string | Empty for a good row; `lumped: …` and / or `jc: …` with the exception for a failed run |
 
 A `curve_10in` golden row (`tests/fixtures/curve_10in/cases.csv`, converted by `tools/export.py
-sweep --from-csv`) fills `case_id`, `size_in = 10`, `length_m`, `nat_freq_hz`, `history_type =
-"golden"`, `mu`, `rho_c`, and `f_eq_*` / `f_peak_*` for its own solver only (the other solver's
+sweep --from-csv`) fills `case_id`, `size_in = 10`, `span_length`, `natural_frequency`, `history_type =
+"golden"`, `friction_coefficient`, `characteristic_impedance`, and `max_static_equivalent_force_*` / `max_unbalance_force_*` for its own solver only (the other solver's
 columns and `ratio_*` are null: the 75 lumped and 3 JC rows are different cases). Everything the
 sheet does not record is null.
 
@@ -327,14 +334,14 @@ columns empty, never a skipped row. It is the record of the junction-coupling as
 `sweep` document (`meta.tier`, `cpu`, `histories_version` and `git_sha` taken from the rows
 unless given), e.g. `docs/viz/data/tier1_sweep.json` from the Tier 1 CSV.
 `docs/viz/data/reference_sweep.json` is the conversion of the golden `cases.csv` (78 rows, the
-reference block's three JC golden rows among them), re-exported at schema 2 in Session H.2.
+reference block's three JC golden rows among them), re-exported at schema 2 in Session H.2 and at schema 3 in the R.9 schema bump.
 
-The viewer's sweep mode (Session W.3, `docs/viewer/README.md`) reads schema 2 only. It plots the
-columns against `nat_freq_hz`, filters on `history_type`, `f_osc_hz`, `seed`, `mu` and
+The viewer's sweep mode (Session W.3, `docs/viewer/README.md`) reads schema 3 only. It plots the
+columns against `natural_frequency`, filters on `history_type`, `oscillation_frequency`, `noise_seed`, `friction_coefficient` and
 `amplitude_fraction`, formats `regen.template` with a row's columns as `str.format` would
 (`{name}`; a null is the empty string) and, on open, checks every `reference` entry whose
-`case_id` is among the rows: the entry's `output_names` map to the columns `f_eq`, `x_peak`,
-`v_peak`, `a_peak`, `f_peak` of its solver and each non-null one must satisfy `|row − excel| ≤
+`case_id` is among the rows: the entry's `output_names` (the five `PeakResponse` maxima) name the column stems of its
+solver (`max_static_equivalent_force_<solver>`, ...) and each non-null one must satisfy `|row − excel| ≤
 rtol |excel|`.
 
 ## Size expectations
@@ -342,7 +349,7 @@ rtol |excel|`.
 JSON at full `repr` costs about 20 bytes a float (`-1525123.4567891234,`) and 2–10 bytes an
 integer. A trace file is therefore roughly
 
-    bytes ≈ 20 × n_frames × (13 + 2 × n_cells) + inputs (force history: 20 × n_samples)
+    bytes ≈ 20 × frame_count × (13 + 2 × grid_point_count) + inputs (force history: 20 × n_samples)
 
 * Example-sheet cases (37 cells, ~500 frames): about 1 MB for JC, 0.15 MB for lumped.
 * Row 96 of `curve_10in` (1333 cells): 53 KB a frame, so the 2000 frames the default stride

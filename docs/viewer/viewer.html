@@ -3781,15 +3781,15 @@ THE SOFTWARE. */
   </div>
   <div id="filters">
     <label class="tab-opt tab-curves on">y <select id="y1">
-      <option value="f_eq">f_eq raw (N)</option>
+      <option value="max_static_equivalent_force">max_static_equivalent_force raw (N)</option>
       <option value="daf">daf = F_eq / (p_peak A)</option>
-      <option value="f_eq_over_LD2">f_eq / (L d&sup2;) (N/m&sup3;)</option></select></label>
+      <option value="force_per_length_diameter_squared">force_per_length_diameter_squared = F_eq / (L d&sup2;) (N/m&sup3;)</option></select></label>
     <label class="tab-opt tab-effect">ratio <select id="ratio">
-      <option value="ratio_f_eq">ratio_f_eq = f_eq_jc / f_eq_lumped</option>
-      <option value="ratio_v_peak">ratio_v_peak = v_peak_jc / v_peak_lumped</option></select></label>
+      <option value="max_static_equivalent_force_ratio">max_static_equivalent_force_ratio = max_static_equivalent_force_jc / max_static_equivalent_force_lumped</option>
+      <option value="max_velocity_ratio">max_velocity_ratio = max_velocity_jc / max_velocity_lumped</option></select></label>
     <label class="tab-opt tab-effect">animate over <select id="anim">
       <option value="amplitude_fraction">amplitude_fraction</option>
-      <option value="mu">mu</option></select></label>
+      <option value="friction_coefficient">friction_coefficient</option></select></label>
     <span id="filter-selects"></span>
     <span class="hint" id="sweep-hint"></span>
   </div>
@@ -3829,8 +3829,8 @@ THE SOFTWARE. */
   var ANIMATED = [CELLS, CURSOR, STATUS, CENTRELINE, FRICTION, UNBALANCE];
   var SPEEDS = [0.25, 0.5, 1, 2, 4];
   var STORE_KEY = 'surge_sdof.viewer.v1';
-  var SCHEMA_VERSION = 1, KINDS = ['trace', 'sweep'];
-  var SWEEP_SCHEMA_VERSION = 2;   // the Session 5b layout (docs/data_format.md); schema 1 is not read
+  var SCHEMA_VERSION = 2, KINDS = ['trace', 'sweep'];
+  var SWEEP_SCHEMA_VERSION = 3;   // the schema-bump layout (docs/data_format.md); schemas 1 and 2 are not read
 
   var $ = function (id) { return document.getElementById(id); };
   var gd = $('plot');
@@ -3925,29 +3925,29 @@ THE SOFTWARE. */
       throw new Error('Unsupported file: kind ' + JSON.stringify(kind === undefined ? null : kind) +
         ', schema_version ' + JSON.stringify(sv === undefined ? null : sv) +
         '.\nThis viewer reads kind "trace" at schema_version ' + SCHEMA_VERSION + ' and kind "sweep" at schema_version ' +
-        SWEEP_SCHEMA_VERSION + ' (docs/data_format.md); re-export the file with the matching tools/export.py.');
+        SWEEP_SCHEMA_VERSION + ' (docs/data_format.md);\nre-export the file with tools/export.py from a checkout at or after the schema bump.');
     }
     if (kind === 'sweep') validateSweep(obj);
     if (kind === 'trace') {
       var need = ['meta', 'geometry', 'frames'];
       for (var i = 0; i < need.length; i++) if (!obj[need[i]]) throw new Error('trace file without "' + need[i] + '"');
-      var n = obj.meta.n_frames;
-      var cols = ['t', 'sub_step', 'sample', 'phase', 'x', 'v', 'a', 'f_a', 'f_b', 'f_unbalance',
-                  'f_friction', 'stick', 'd_f'];
+      var n = obj.meta.frame_count;
+      var cols = ['time', 'substep_index', 'sample_index', 'load_phase', 'displacement', 'velocity', 'acceleration',
+                  'elbow_a_force', 'elbow_b_force', 'unbalance_force', 'friction_force', 'is_sticking', 'junction_force'];
       for (var j = 0; j < cols.length; j++) {
         var c = obj.frames[cols[j]];
         if (!Array.isArray(c) || c.length !== n)
           throw new Error('frames.' + cols[j] + ' is missing or not ' + n + ' long');
       }
       var g = obj.geometry;
-      if (!Array.isArray(g.x_nominal_m) || g.x_nominal_m.length !== g.moving_fraction.length)
+      if (!Array.isArray(g.x_at_rest) || g.x_at_rest.length !== g.grid_point_moving_fraction.length)
         throw new Error('geometry arrays missing or of unequal length');
-      if (obj.cells) {
-        ['p', 'v'].forEach(function (k) {
-          var b = obj.cells[k];
-          if (!b || !b.shape || b.shape[0] !== n || b.shape[1] !== obj.meta.n_cells ||
-              b.data.length !== n * obj.meta.n_cells)
-            throw new Error('cells.' + k + ' is not an [n_frames, n_cells] block');
+      if (obj.grid_points) {
+        ['pressure', 'velocity'].forEach(function (k) {
+          var b = obj.grid_points[k];
+          if (!b || !b.shape || b.shape[0] !== n || b.shape[1] !== obj.meta.grid_point_count ||
+              b.data.length !== n * obj.meta.grid_point_count)
+            throw new Error('grid_points.' + k + ' is not an [frame_count, grid_point_count] block');
         });
       }
     }
@@ -3973,23 +3973,23 @@ THE SOFTWARE. */
     closeTrace();
     closeSweep();
     var f = obj.frames, g = obj.geometry, meta = obj.meta;
-    var n = meta.n_frames, jc = !!obj.cells;
-    var nc = g.x_nominal_m.length;
+    var n = meta.frame_count, jc = !!obj.grid_points;
+    var nc = g.x_at_rest.length;
     D = {
       name: name, meta: meta, g: g, n: n, nc: nc, jc: jc,
-      t: Float64Array.from(f.t), x: Float64Array.from(f.x), phase: f.phase,
-      fu: Float64Array.from(f.f_unbalance), ff: Float64Array.from(f.f_friction),
-      xNom: Float64Array.from(g.x_nominal_m), yNom: Float64Array.from(g.y_nominal_m),
-      frac: Float64Array.from(g.moving_fraction),
-      p: jc ? Float64Array.from(obj.cells.p.data) : null,
-      v: jc ? Float64Array.from(obj.cells.v.data) : null
+      t: Float64Array.from(f.time), x: Float64Array.from(f.displacement), phase: f.load_phase,
+      fu: Float64Array.from(f.unbalance_force), ff: Float64Array.from(f.friction_force),
+      xNom: Float64Array.from(g.x_at_rest), yNom: Float64Array.from(g.y_at_rest),
+      frac: Float64Array.from(g.grid_point_moving_fraction),
+      p: jc ? Float64Array.from(obj.grid_points.pressure.data) : null,
+      v: jc ? Float64Array.from(obj.grid_points.velocity.data) : null
     };
-    if (jc) { obj.cells.p.data = null; obj.cells.v.data = null; }   // let the JSON arrays go
+    if (jc) { obj.grid_points.pressure.data = null; obj.grid_points.velocity.data = null; }   // let the JSON arrays go
 
     // --- scalings over the whole run (docs/architecture.md, "The picture")
     var iPeak = argmaxAbs(D.x);
     var xPeak = D.x[iPeak], tPeak = D.t[iPeak];
-    var run = g.run_length_m;
+    var run = g.run_length;
     S = {
       iPeak: iPeak, xPeak: xPeak, tPeak: tPeak, run: run,
       exagAuto: xPeak !== 0 ? PEAK_FRACTION * run / Math.abs(xPeak) : 1.0,
@@ -4008,11 +4008,11 @@ THE SOFTWARE. */
     var xMin = Infinity, xMax = -Infinity;
     for (var k = 0; k < nc; k++) { if (D.xNom[k] < xMin) xMin = D.xNom[k]; if (D.xNom[k] > xMax) xMax = D.xNom[k]; }
     S.xLo = xMin - 0.12 * run; S.xHi = xMax + 0.12 * run;
-    S.yTop = Math.max(g.leg_height_m, g.leg_height_2_m);
+    S.yTop = Math.max(g.inlet_leg_height, g.outlet_leg_height);
     var yMargin = 0.08 * Math.max(S.yTop, run);
     S.yLo = -yMargin; S.yHi = S.yTop + yMargin;
     var ppm = pxPerM(S.xHi - S.xLo, S.yHi - S.yLo);
-    var sizeCap = Math.max(SIZE_CAP_FLOOR_PX, SIZE_CAP_SPACING * g.spacing_m * ppm);
+    var sizeCap = Math.max(SIZE_CAP_FLOOR_PX, SIZE_CAP_SPACING * g.grid_point_spacing * ppm);
     S.nominal = Math.min(Math.min(Math.max(1800 / nc, 5), 12), sizeCap);
     S.fuLim = 1.06 * (maxAbs(D.fu) || 1.0);
     S.ffLim = 1.06 * (maxAbs(D.ff) || 1.0);
@@ -4042,11 +4042,11 @@ THE SOFTWARE. */
     var g = D.g, seg = g.segments, out = [];
     for (var i = 0; i < D.nc; i++) {
       var s = 'leg';
-      if (i <= seg.inlet_end) s = 'inlet';
-      else if (i >= seg.run_start && i <= seg.run_end) s = 'run';
-      else if (i >= seg.outlet_start) s = 'outlet';
-      out.push('cell ' + i + ' (' + (g.cell_kind[i] === 0 ? 'A node' : 'B cell') + ', ' + s + ') at ' +
-        fmtG(g.cell_position_m[i], 4) + ' m, fraction ' + fmtG(D.frac[i], 3));
+      if (i <= seg.inlet_elbow_index) s = 'inlet';
+      else if (i >= seg.run_start_index && i <= seg.run_end_index) s = 'run';
+      else if (i >= seg.outlet_elbow_index) s = 'outlet';
+      out.push('cell ' + i + ' (' + (g.grid_point_kind[i] === 0 ? 'A node' : 'B cell') + ', ' + s + ') at ' +
+        fmtG(g.grid_point_position[i], 4) + ' m, fraction ' + fmtG(D.frac[i], 3));
     }
     return out;
   }
@@ -4132,7 +4132,7 @@ THE SOFTWARE. */
         x: 0.47, y: 1.0, xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', showarrow: false, font: {size: 16}},
       {text: 'Applied unbalance F<sub>A</sub>(t) - F<sub>B</sub>(t - L/c) (left) and friction force (right)',
         x: 0.47, y: dom2[1], xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', showarrow: false, font: {size: 16}},
-      {text: 'pipe height ' + fmtG(g.leg_height_m, 3) + ' m (h = ' + fmtG(g.portal_height_m, 3) + ' m)',
+      {text: 'pipe height ' + fmtG(g.inlet_leg_height, 3) + ' m (h = ' + fmtG(g.portal_frame_height, 3) + ' m)',
         x: S.xLo, y: S.yTop, xref: 'x', yref: 'y', xanchor: 'left', yanchor: 'bottom', showarrow: false, font: small}
     ];
     var shapes = [];
@@ -4283,16 +4283,16 @@ THE SOFTWARE. */
     var m = D.meta, p = m.params;
     var rows = [
       ['case', m.case_id], ['solver', m.solver],
-      ['dt', fmtG(p.dt, 6) + ' s (step_qty ' + p.step_qty + ')'],
-      ['trace stride', 'trace_every = ' + p.trace_every + ' sub-steps: ' + m.n_frames + ' frames (rest frame included), ' +
-        fmtG(p.dt * p.trace_every, 4) + ' s a frame, t = 0 .. ' + fmtG(D.t[D.n - 1], 5) + ' s'],
-      ['cells', m.n_cells + (D.jc ? ' (JC arrays)' : ' (lumped: grid of the case, constant size and colour)')],
-      ['capped', p.capped ? 'YES: the run decayed past the traced history window, the trace ends before the run did' : 'no'],
+      ['dt', fmtG(p.substep_duration, 6) + ' s (substep_count ' + p.substep_count + ')'],
+      ['trace stride', 'trace_every = ' + p.trace_every + ' sub-steps: ' + m.frame_count + ' frames (rest frame included), ' +
+        fmtG(p.substep_duration * p.trace_every, 4) + ' s a frame, t = 0 .. ' + fmtG(D.t[D.n - 1], 5) + ' s'],
+      ['cells', m.grid_point_count + (D.jc ? ' (JC arrays)' : ' (lumped: grid of the case, constant size and colour)')],
+      ['capped', p.is_capped ? 'YES: the run decayed past the traced history window, the trace ends before the run did' : 'no'],
       ['git sha', m.git_sha || 'null'], ['created', m.created_utc],
       ['file', D.name]
     ];
     setMeta(rows, scalingText());
-    $('capped-row') && ($('capped-row').className = p.capped ? 'capped' : '');
+    $('capped-row') && ($('capped-row').className = p.is_capped ? 'capped' : '');
   }
   function setMeta(rows, scaling) {
     var dl = $('meta-list');
@@ -4412,7 +4412,7 @@ THE SOFTWARE. */
   }
 
   // ================================================================ sweep mode (Session W.3)
-  // A `sweep` document (docs/data_format.md, schema 2): 72 flat columns, a regen template and
+  // A `sweep` document (docs/data_format.md, schema 3): 72 flat columns, a regen template and
   // the reference block. Three tabs draw the columns against the natural frequency; five
   // dropdowns filter the rows; the JC-effect tab animates over amplitude or friction through
   // the page's play controls (the same inline-frame Plotly.animate mechanism as trace mode);
@@ -4420,10 +4420,11 @@ THE SOFTWARE. */
   // the file's template. On open the reference entries are checked against the rows of the
   // same case_id with the golden tests' rule |row - excel| <= rtol |excel| (tests/test_golden.py).
   var SWEEP_FRAME_MS = 1000;    // 1x = one animation value a second
-  var FILTER_COLS = ['history_type', 'f_osc_hz', 'seed', 'mu', 'amplitude_fraction'];
-  var SWEEP_REQUIRED = ['case_id', 'size_in', 'length_m', 'nat_freq_hz', 'history_type', 'f_osc_hz', 'seed',
-    'amplitude_fraction', 'mu', 'f_eq_lumped', 'f_eq_jc', 'ratio_f_eq', 'ratio_v_peak',
-    'f_eq_over_LD2_lumped', 'f_eq_over_LD2_jc', 'daf_lumped', 'daf_jc'];
+  var FILTER_COLS = ['history_type', 'oscillation_frequency', 'noise_seed', 'friction_coefficient', 'amplitude_fraction'];
+  var SWEEP_REQUIRED = ['case_id', 'size_in', 'span_length', 'natural_frequency', 'history_type', 'oscillation_frequency',
+    'noise_seed', 'amplitude_fraction', 'friction_coefficient', 'max_static_equivalent_force_lumped',
+    'max_static_equivalent_force_jc', 'max_static_equivalent_force_ratio', 'max_velocity_ratio',
+    'force_per_length_diameter_squared_lumped', 'force_per_length_diameter_squared_jc', 'daf_lumped', 'daf_jc'];
   // tools/sweep_jc.py: LENGTH_COLOURS, LENGTH_MARKERS, SIZE_MARKERS, HISTORY_LABELS
   var LENGTH_COLOURS = {3: '#2a78d6', 6: '#eb6834', 12: '#1baf7a', 24: '#eda100', 48: '#e87ba4'};
   var EXTRA_COLOURS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#7a5bd6', '#52514e'];
@@ -4436,11 +4437,12 @@ THE SOFTWARE. */
   var DASHES = ['solid', 'dot', 'dash', 'longdash', 'dashdot', 'longdashdot'];
   var JC_OPACITY = 0.55;
   var Y1 = {   // the curve-families y choices: column stem, axis title
-    f_eq: ['f_eq', 'F_eq, N'], daf: ['daf', 'F_eq / (p_peak A)'], f_eq_over_LD2: ['f_eq_over_LD2', 'F_eq / (L d²), N/m³']
+    max_static_equivalent_force: ['max_static_equivalent_force', 'F_eq, N'], daf: ['daf', 'F_eq / (p_peak A)'],
+    force_per_length_diameter_squared: ['force_per_length_diameter_squared', 'F_eq / (L d²), N/m³']
   };
   var OUTPUT_COLUMNS = {   // reference output_names -> sweep column stem
-    max_static_equivalent_force: 'f_eq', max_displacement: 'x_peak', max_velocity: 'v_peak',
-    max_acceleration: 'a_peak', max_applied_force: 'f_peak'
+    max_static_equivalent_force: 'max_static_equivalent_force', max_displacement: 'max_displacement',
+    max_velocity: 'max_velocity', max_acceleration: 'max_acceleration', max_unbalance_force: 'max_unbalance_force'
   };
   var gd2 = $('splot');
 
@@ -4580,7 +4582,7 @@ THE SOFTWARE. */
       if (col === 'history_type') {
         var first = HISTORY_ORDER.filter(function (h) { return vals.indexOf(h) >= 0; })[0];
         def = valueKey(first !== undefined ? first : vals[0]);
-      } else if ((col === 'mu' || col === 'amplitude_fraction') && vals.length > 1 && vals.length <= 6) {
+      } else if ((col === 'friction_coefficient' || col === 'amplitude_fraction') && vals.length > 1 && vals.length <= 6) {
         var nums = vals.filter(function (v) { return typeof v === 'number'; });
         if (nums.length) def = valueKey(nums[nums.length - 1]);
       }
@@ -4630,10 +4632,10 @@ THE SOFTWARE. */
       var v = SW.cols[col][i];
       if (v === null || v === undefined) return;
       if (col === 'history_type') parts.push(HISTORY_LABELS[v] || String(v));
-      else if (col === 'f_osc_hz') parts.push('f_osc ' + v + ' Hz');
-      else if (col === 'seed') parts.push('seed ' + v);
+      else if (col === 'oscillation_frequency') parts.push('f_osc ' + v + ' Hz');
+      else if (col === 'noise_seed') parts.push('seed ' + v);
       else if (col === 'amplitude_fraction') parts.push('a ' + v);
-      else if (col === 'mu') parts.push('mu ' + v);
+      else if (col === 'friction_coefficient') parts.push('mu ' + v);
       else parts.push(col + ' ' + v);
     });
     return parts.join(' · ');
@@ -4665,10 +4667,10 @@ THE SOFTWARE. */
   }
   function pointText(i, yName, yVal) {
     var c = SW.cols;
-    return escapeHtml(c.case_id[i]) + '<br>' + c.size_in[i] + ' in, L = ' + c.length_m[i] + ' m, f_n = ' + c.nat_freq_hz[i] + ' Hz' +
+    return escapeHtml(c.case_id[i]) + '<br>' + c.size_in[i] + ' in, L = ' + c.span_length[i] + ' m, f_n = ' + c.natural_frequency[i] + ' Hz' +
       '<br>' + (HISTORY_LABELS[c.history_type[i]] || c.history_type[i]) +
-      (c.f_osc_hz[i] !== null ? ', f_osc ' + c.f_osc_hz[i] + ' Hz' : '') + (c.seed[i] !== null ? ', seed ' + c.seed[i] : '') +
-      (c.amplitude_fraction[i] !== null ? ', a ' + c.amplitude_fraction[i] : '') + (c.mu[i] !== null ? ', mu ' + c.mu[i] : '') +
+      (c.oscillation_frequency[i] !== null ? ', f_osc ' + c.oscillation_frequency[i] + ' Hz' : '') + (c.noise_seed[i] !== null ? ', seed ' + c.noise_seed[i] : '') +
+      (c.amplitude_fraction[i] !== null ? ', a ' + c.amplitude_fraction[i] : '') + (c.friction_coefficient[i] !== null ? ', mu ' + c.friction_coefficient[i] : '') +
       '<br>' + yName + ' = ' + fmtG(yVal, 6);
   }
   function baseLayout(height, panels, xTitle) {
@@ -4696,7 +4698,7 @@ THE SOFTWARE. */
     rows.forEach(function (i) { var k = keyFn(i); if (!map[k]) { map[k] = []; order.push(k); } map[k].push(i); });
     return {map: map, keys: order};
   }
-  function sortByX(rows) { return rows.slice().sort(function (a, b) { return SW.cols.nat_freq_hz[a] - SW.cols.nat_freq_hz[b]; }); }
+  function sortByX(rows) { return rows.slice().sort(function (a, b) { return SW.cols.natural_frequency[a] - SW.cols.natural_frequency[b]; }); }
 
   // one lines+markers trace per (series, solver) over `rows`; null when the column is all null
   function seriesTrace(rows, stem, solver, name, colour, symbol, dash, panel, legendSeen) {
@@ -4705,7 +4707,7 @@ THE SOFTWARE. */
     sortByX(rows).forEach(function (i) {
       var v = col[i];
       if (v === null || v === undefined) return;
-      x.push(SW.cols.nat_freq_hz[i]); y.push(v); text.push(pointText(i, stem + '_' + solver, v)); cd.push(i);
+      x.push(SW.cols.natural_frequency[i]); y.push(v); text.push(pointText(i, stem + '_' + solver, v)); cd.push(i);
     });
     if (!x.length) return null;
     var full = name + ' ' + (solver === 'jc' ? 'JC' : 'lumped');
@@ -4721,7 +4723,7 @@ THE SOFTWARE. */
   // ---------------------------------------------------------------- tab 1: curve families
   function figCurves(rows) {
     var stem = Y1[SW.y1][0], yTitle = Y1[SW.y1][1];
-    var sizes = distinct('size_in', rows), lengths = distinct('length_m', rows), keys = varyingKeys(rows);
+    var sizes = distinct('size_in', rows), lengths = distinct('span_length', rows), keys = varyingKeys(rows);
     var panels = panelGrid(1, Math.max(1, sizes.length));
     panels.forEach(function (p, k) {
       p.title = sizes.length ? sizes[k] + ' in' : ''; p.yTitle = k === 0 ? yTitle : ''; if (k > 0) p.matches = 'y';
@@ -4729,7 +4731,7 @@ THE SOFTWARE. */
     var data = [], legendSeen = {};
     sizes.forEach(function (sz, k) {
       var inPanel = rows.filter(function (i) { return SW.cols.size_in[i] === sz; });
-      var byLen = groupBy(inPanel, function (i) { return valueKey(SW.cols.length_m[i]); });
+      var byLen = groupBy(inPanel, function (i) { return valueKey(SW.cols.span_length[i]); });
       lengths.forEach(function (L) {
         var r = byLen.map[valueKey(L)];
         if (!r) return;
@@ -4755,14 +4757,14 @@ THE SOFTWARE. */
     var col = SW.cols[SW.ratio], c = SW.cols;
     var hist = HISTORY_ORDER.filter(function (h) { return rows.some(function (i) { return c.history_type[i] === h; }); });
     distinct('history_type', rows).forEach(function (h) { if (h !== null && hist.indexOf(h) < 0) hist.push(h); });
-    var lengths = distinct('length_m', rows).filter(function (v) { return typeof v === 'number'; });
+    var lengths = distinct('span_length', rows).filter(function (v) { return typeof v === 'number'; });
     var Lmin = lengths.length ? lengths[0] : 0, Lmax = lengths.length ? lengths[lengths.length - 1] : 0;
     function sizePx(L) { return Lmax > Lmin ? 7 + 15 * (L - Lmin) / (Lmax - Lmin) : 11; }
     var values = distinct(SW.anim, rows);
     A.values = values; A.n = values.length;
     // the ranges over every frame, so the axes hold while the animation runs
     var xs = [], ys = [];
-    rows.forEach(function (i) { if (col[i] !== null) { xs.push(c.nat_freq_hz[i]); ys.push(col[i]); } });
+    rows.forEach(function (i) { if (col[i] !== null) { xs.push(c.natural_frequency[i]); ys.push(col[i]); } });
     var xr = xs.length ? [Math.min.apply(null, xs), Math.max.apply(null, xs)] : [0, 1];
     var yr = ys.length ? [Math.min(Math.min.apply(null, ys), 0.75), Math.max(Math.max.apply(null, ys), 1.1)] : [0, 1.2];
     var xpad = 0.06 * (xr[1] - xr[0] || 1), ypad = 0.06 * (yr[1] - yr[0] || 1);
@@ -4773,7 +4775,7 @@ THE SOFTWARE. */
         var x = [], y = [], size = [], text = [], cd = [];
         rows.forEach(function (i) {
           if (c.history_type[i] !== h || valueKey(c[SW.anim][i]) !== valueKey(v) || col[i] === null) return;
-          x.push(c.nat_freq_hz[i]); y.push(col[i]); size.push(sizePx(c.length_m[i])); text.push(pointText(i, SW.ratio, col[i])); cd.push(i);
+          x.push(c.natural_frequency[i]); y.push(col[i]); size.push(sizePx(c.span_length[i])); text.push(pointText(i, SW.ratio, col[i])); cd.push(i);
         });
         return {x: x, y: y, marker: {size: size}, text: text, customdata: cd};
       });
@@ -4849,8 +4851,8 @@ THE SOFTWARE. */
     var c = SW.cols;
     var hist = HISTORY_ORDER.filter(function (h) { return rows.some(function (i) { return c.history_type[i] === h; }); });
     distinct('history_type', rows).forEach(function (h) { if (h !== null && hist.indexOf(h) < 0) hist.push(h); });
-    var sizes = distinct('size_in', rows), lengths = distinct('length_m', rows), keys = varyingKeys(rows).filter(function (k) { return k !== 'history_type'; });
-    var stems = [['f_eq_over_LD2', 'F_eq / (L d²), N/m³'], ['daf', 'F_eq / (p_peak A)']];
+    var sizes = distinct('size_in', rows), lengths = distinct('span_length', rows), keys = varyingKeys(rows).filter(function (k) { return k !== 'history_type'; });
+    var stems = [['force_per_length_diameter_squared', 'F_eq / (L d²), N/m³'], ['daf', 'F_eq / (p_peak A)']];
     var nCols = Math.max(1, hist.length);
     var panels = panelGrid(2, nCols);
     panels.forEach(function (p) {
@@ -4863,7 +4865,7 @@ THE SOFTWARE. */
       var inHist = rows.filter(function (i) { return c.history_type[i] === h; });
       stems.forEach(function (st, r) {
         var panel = panels[r * nCols + hc];
-        var bySL = groupBy(inHist, function (i) { return valueKey(c.size_in[i]) + '|' + valueKey(c.length_m[i]); });
+        var bySL = groupBy(inHist, function (i) { return valueKey(c.size_in[i]) + '|' + valueKey(c.span_length[i]); });
         sizes.forEach(function (sz) {
           lengths.forEach(function (L) {
             var g = bySL.map[valueKey(sz) + '|' + valueKey(L)];

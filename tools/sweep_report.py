@@ -33,22 +33,22 @@ def _load(path: Path) -> list[dict]:
     for r in rows:
         for k in (
             "size_in",
-            "length_m",
-            "nat_freq_hz",
-            "f_osc_hz",
+            "span_length",
+            "natural_frequency",
+            "oscillation_frequency",
             "amplitude_fraction",
-            "mu",
-            "ratio_f_eq",
-            "ratio_v_peak",
+            "friction_coefficient",
+            "max_static_equivalent_force_ratio",
+            "max_velocity_ratio",
             "daf_lumped",
             "daf_jc",
-            "f_eq_over_LD2_lumped",
-            "f_eq_over_LD2_jc",
-            "t_lumped_s",
-            "t_jc_s",
+            "force_per_length_diameter_squared_lumped",
+            "force_per_length_diameter_squared_jc",
+            "wall_time_lumped",
+            "wall_time_jc",
         ):
             r[k] = _f(r[k])
-        r["seed"] = int(r["seed"]) if r["seed"] else None
+        r["noise_seed"] = int(r["noise_seed"]) if r["noise_seed"] else None
         r["size_in"] = int(r["size_in"])
     return rows
 
@@ -57,7 +57,10 @@ def _history_variants(rows):
     """(history_type, f_osc) panels: the noise seeds are folded into one variant."""
     seen = []
     for r in rows:
-        key = (r["history_type"], r["f_osc_hz"] if r["history_type"] == "step_sine" else None)
+        key = (
+            r["history_type"],
+            r["oscillation_frequency"] if r["history_type"] == "step_sine" else None,
+        )
         if key not in seen:
             seen.append(key)
     order = {"step": 0, "step_sine": 1, "step_noise": 2}
@@ -76,7 +79,9 @@ def _select(rows, **match):
         for k, v in match.items():
             if k == "variant":
                 kind, f_osc = v
-                ok = r["history_type"] == kind and (kind != "step_sine" or r["f_osc_hz"] == f_osc)
+                ok = r["history_type"] == kind and (
+                    kind != "step_sine" or r["oscillation_frequency"] == f_osc
+                )
             elif r[k] != v:
                 ok = False
             if not ok:
@@ -94,7 +99,7 @@ def _series(rows, column, envelope="max"):
     for r in rows:
         if r[column] is None:
             continue
-        by_f.setdefault(r["nat_freq_hz"], []).append(r[column])
+        by_f.setdefault(r["natural_frequency"], []).append(r[column])
     freqs = sorted(by_f)
     red = max if envelope == "max" else min
     return freqs, [red(by_f[f]) for f in freqs]
@@ -136,7 +141,7 @@ def plot_ratio(rows, column, ylabel, out_png: Path, title: str, mu_on: float):
     fig, axes = plt.subplots(
         nrow, ncol, figsize=(3.2 * ncol, 2.6 * nrow), squeeze=False, sharey=True
     )
-    all_freqs = sorted({r["nat_freq_hz"] for r in rows})
+    all_freqs = sorted({r["natural_frequency"] for r in rows})
     for i, (size, amp) in enumerate((s, a) for s in sizes for a in amps):
         for j, variant in enumerate(variants):
             ax = axes[i][j]
@@ -150,8 +155,8 @@ def plot_ratio(rows, column, ylabel, out_png: Path, title: str, mu_on: float):
                     size_in=size,
                     amplitude_fraction=amp,
                     variant=variant,
-                    length_m=L,
-                    mu=mu_on,
+                    span_length=L,
+                    friction_coefficient=mu_on,
                 )
                 freqs, vals = _series(sel, column)
                 if not freqs:
@@ -213,7 +218,7 @@ def plot_daf(rows, out_png: Path, mu_on: float):
         squeeze=False,
         sharey=True,
     )
-    all_freqs = sorted({r["nat_freq_hz"] for r in rows})
+    all_freqs = sorted({r["natural_frequency"] for r in rows})
     for i, size in enumerate(sizes):
         for j, variant in enumerate(variants):
             ax = axes[i][j]
@@ -226,8 +231,8 @@ def plot_daf(rows, out_png: Path, mu_on: float):
                         size_in=size,
                         amplitude_fraction=amp,
                         variant=variant,
-                        length_m=L,
-                        mu=mu_on,
+                        span_length=L,
+                        friction_coefficient=mu_on,
                     )
                     for solver, fill in (("lumped", "none"), ("jc", LENGTH_COLOURS[L])):
                         freqs, vals = _series(sel, f"daf_{solver}")
@@ -295,7 +300,7 @@ def plot_collapse(rows, out_png: Path, mu_on: float, amp: float):
     fig, axes = plt.subplots(
         2, len(variants), figsize=(3.2 * len(variants), 5.6), squeeze=False, sharey=True
     )
-    all_freqs = sorted({r["nat_freq_hz"] for r in rows})
+    all_freqs = sorted({r["natural_frequency"] for r in rows})
     for k, solver in enumerate(("lumped", "jc")):
         for j, variant in enumerate(variants):
             ax = axes[k][j]
@@ -308,10 +313,10 @@ def plot_collapse(rows, out_png: Path, mu_on: float, amp: float):
                         size_in=size,
                         amplitude_fraction=amp,
                         variant=variant,
-                        length_m=L,
-                        mu=mu_on,
+                        span_length=L,
+                        friction_coefficient=mu_on,
                     )
-                    freqs, vals = _series(sel, f"f_eq_over_LD2_{solver}")
+                    freqs, vals = _series(sel, f"force_per_length_diameter_squared_{solver}")
                     if not freqs:
                         continue
                     ax.plot(
@@ -375,8 +380,12 @@ def ratio_table(rows, column, mu_on: float) -> list[str]:
     sizes and amplitudes pooled."""
     lines = []
     for variant in _history_variants(rows):
-        sel = [r for r in _select(rows, variant=variant, mu=mu_on) if r[column] is not None]
-        lengths = sorted({r["length_m"] for r in sel})
+        sel = [
+            r
+            for r in _select(rows, variant=variant, friction_coefficient=mu_on)
+            if r[column] is not None
+        ]
+        lengths = sorted({r["span_length"] for r in sel})
         lines.append(
             f"**{_variant_label(variant)}** — `{column}`, mu = {mu_on:g}; cell = negligible (|r − 1| ≤ 5 %) / essential (r < 0.8) / other, of n cases; min r"
         )
@@ -387,7 +396,9 @@ def ratio_table(rows, column, mu_on: float) -> list[str]:
             cells = []
             for L in lengths:
                 vals = [
-                    r[column] for r in sel if r["length_m"] == L and _band(r["nat_freq_hz"]) == band
+                    r[column]
+                    for r in sel
+                    if r["span_length"] == L and _band(r["natural_frequency"]) == band
                 ]
                 if not vals:
                     cells.append("–")
@@ -421,15 +432,19 @@ def amplitude_table(rows, mu_on: float) -> list[str]:
             cells = []
             for _lo, _hi, band in FREQ_BANDS:
                 pairs = []
-                low = _select(rows, variant=variant, mu=mu_on, amplitude_fraction=lo_amp)
+                low = _select(
+                    rows, variant=variant, friction_coefficient=mu_on, amplitude_fraction=lo_amp
+                )
                 high = {
-                    (r["size_in"], r["length_m"], r["nat_freq_hz"], r["seed"]): r
-                    for r in _select(rows, variant=variant, mu=mu_on, amplitude_fraction=hi_amp)
+                    (r["size_in"], r["span_length"], r["natural_frequency"], r["noise_seed"]): r
+                    for r in _select(
+                        rows, variant=variant, friction_coefficient=mu_on, amplitude_fraction=hi_amp
+                    )
                 }
                 for r in low:
-                    key = (r["size_in"], r["length_m"], r["nat_freq_hz"], r["seed"])
+                    key = (r["size_in"], r["span_length"], r["natural_frequency"], r["noise_seed"])
                     other = high.get(key)
-                    if other is None or _band(r["nat_freq_hz"]) != band:
+                    if other is None or _band(r["natural_frequency"]) != band:
                         continue
                     a, b = r[f"daf_{solver}"], other[f"daf_{solver}"]
                     if a is not None and b is not None and b:
@@ -459,12 +474,16 @@ def collapse_spread(rows, mu_on: float, amp: float) -> list[str]:
         for solver in ("lumped", "jc"):
             sel = [
                 r
-                for r in _select(rows, variant=variant, mu=mu_on, amplitude_fraction=amp)
-                if r[f"f_eq_over_LD2_{solver}"] is not None
+                for r in _select(
+                    rows, variant=variant, friction_coefficient=mu_on, amplitude_fraction=amp
+                )
+                if r[f"force_per_length_diameter_squared_{solver}"] is not None
             ]
             by_f = {}
             for r in sel:
-                by_f.setdefault(r["nat_freq_hz"], []).append(r[f"f_eq_over_LD2_{solver}"])
+                by_f.setdefault(r["natural_frequency"], []).append(
+                    r[f"force_per_length_diameter_squared_{solver}"]
+                )
             spreads = [max(v) / min(v) for v in by_f.values() if len(v) > 1 and min(v) > 0]
             cells.append(
                 f"{float(np.median(spreads)):.2f} [{max(spreads):.2f}]" if spreads else "–"
@@ -481,8 +500,8 @@ def write_doc(rows, csv_path: Path, pngs: dict, doc_path: Path, mu_on: float, am
     subset = rows[0]["subset"]
     sha = rows[0]["git_sha"]
     cpu = rows[0]["cpu"]
-    t_l = [r["t_lumped_s"] for r in rows if r["t_lumped_s"] is not None]
-    t_j = [r["t_jc_s"] for r in rows if r["t_jc_s"] is not None]
+    t_l = [r["wall_time_lumped"] for r in rows if r["wall_time_lumped"] is not None]
+    t_j = [r["wall_time_jc"] for r in rows if r["wall_time_jc"] is not None]
     rel = lambda p: os.path.relpath(p, doc_path.parent)  # noqa: E731
     lines = [
         "# Junction-coupling sweep (Session 5b)",
@@ -505,9 +524,9 @@ def write_doc(rows, csv_path: Path, pngs: dict, doc_path: Path, mu_on: float, am
         f"One line per span length, one panel per (size, history type, amplitude), friction on (mu = {mu_on:g}). "
         "The grey band is ±5 % of 1; the dashed line is 0.8.",
         "",
-        f"![ratio_f_eq]({rel(pngs['ratio_f_eq'])})",
+        f"![ratio_f_eq]({rel(pngs['max_static_equivalent_force_ratio'])})",
         "",
-        f"![ratio_v_peak]({rel(pngs['ratio_v_peak'])})",
+        f"![ratio_v_peak]({rel(pngs['max_velocity_ratio'])})",
         "",
         "## 2. Effective DAF F_eq / (p_peak A), lumped and JC",
         "",
@@ -527,8 +546,8 @@ def write_doc(rows, csv_path: Path, pngs: dict, doc_path: Path, mu_on: float, am
         "",
         "Counts of cases per frequency band and span length (sizes and amplitudes pooled; noise seeds counted separately).",
         "",
-        *ratio_table(rows, "ratio_f_eq", mu_on),
-        *ratio_table(rows, "ratio_v_peak", mu_on),
+        *ratio_table(rows, "max_static_equivalent_force_ratio", mu_on),
+        *ratio_table(rows, "max_velocity_ratio", mu_on),
         *amplitude_table(rows, mu_on),
     ]
     if n_err:

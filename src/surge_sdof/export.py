@@ -66,10 +66,11 @@ __all__ = [
     "read_csv",
 ]
 
-SCHEMA_VERSION = 1
-"""``schema_version`` of a ``trace`` document."""
-SWEEP_SCHEMA_VERSION = 2
-"""``schema_version`` of a ``sweep`` document (2 since Session 5b: the sweep CSV columns)."""
+SCHEMA_VERSION = 2
+"""``schema_version`` of a ``trace`` document (2 since the schema bump of the review, R.9)."""
+SWEEP_SCHEMA_VERSION = 3
+"""``schema_version`` of a ``sweep`` document (2 since Session 5b: the sweep CSV columns; 3
+since the schema bump of the review, R.9: the column names)."""
 KIND_TRACE = "trace"
 KIND_SWEEP = "sweep"
 
@@ -83,61 +84,61 @@ _SWEEP_COLUMN_TABLE = (
     ("tier", int),
     ("subset", str),
     ("size_in", int),
-    ("od_mm", float),
-    ("thk_mm", float),
-    ("length_m", float),
-    ("nat_freq_hz", float),
+    ("outside_diameter_mm", float),
+    ("wall_thickness_mm", float),
+    ("span_length", float),
+    ("natural_frequency", float),
     ("history_type", str),
-    ("f_osc_hz", float),
-    ("seed", int),
+    ("oscillation_frequency", float),
+    ("noise_seed", int),
     ("amplitude_fraction", float),
-    ("mu", float),
-    ("p_design_bar", float),
-    ("p_cap_bar", float),
-    ("p_peak_bar", float),
-    ("p_mean_bar", float),
-    ("p_rms_bar", float),
-    ("noise_rms_bar", float),
-    ("sample_freq", float),
+    ("friction_coefficient", float),
+    ("design_pressure_bar", float),
+    ("peak_pressure_target_bar", float),
+    ("pressure_max_bar", float),
+    ("pressure_mean_bar", float),
+    ("pressure_rms_bar", float),
+    ("scaled_noise_rms_bar", float),
+    ("sample_rate", float),
     ("lead_in_s", float),
     ("transit_s", float),
     ("tail_s", float),
     ("decay_s", float),
     ("duration_s", float),
-    ("n_samples", int),
-    ("p_step", float),
-    ("p_osc", float),
-    ("p_noise_rms", float),
-    ("f_cut_hz", float),
-    ("f_ref_hz", float),
-    ("decay_cycles", float),
-    ("decay_fraction", float),
-    ("p_cap", float),
+    ("sample_count", int),
+    ("step_pressure", float),
+    ("oscillation_amplitude", float),
+    ("requested_noise_rms", float),
+    ("noise_cutoff_frequency", float),
+    ("envelope_reference_frequency", float),
+    ("envelope_decay_cycles", float),
+    ("envelope_decay_fraction", float),
+    ("peak_pressure_target", float),
     ("histories_version", str),
-    ("fluid_area_m2", float),
-    ("mass_per_unit_len", float),
-    ("ei", float),
-    ("rho_c", float),
-    ("portal_height_m", float),
-    ("mass_total_kg", float),
-    ("pipe_seg_qty", int),
-    ("pivot_seg_qty", int),
-    ("jc_short_pipe", int),
-    ("history_peak", float),
-    ("history_mean", float),
-    ("history_rms", float),
-    ("f_eq_{solver}", float),
-    ("ratio_f_eq", float),
-    ("v_peak_{solver}", float),
-    ("ratio_v_peak", float),
-    ("momentum_{solver}", float),
-    ("ke_peak_{solver}", float),
-    ("x_peak_{solver}", float),
-    ("a_peak_{solver}", float),
-    ("f_peak_{solver}", float),
-    ("f_eq_over_LD2_{solver}", float),
+    ("flow_area", float),
+    ("mass_per_length", float),
+    ("flexural_rigidity", float),
+    ("characteristic_impedance", float),
+    ("portal_frame_height", float),
+    ("total_mass", float),
+    ("column_cell_count", int),
+    ("end_to_elbow_cell_count", int),
+    ("is_short_pipe", int),
+    ("force_history_max", float),
+    ("force_history_mean", float),
+    ("force_history_rms", float),
+    ("max_static_equivalent_force_{solver}", float),
+    ("max_static_equivalent_force_ratio", float),
+    ("max_velocity_{solver}", float),
+    ("max_velocity_ratio", float),
+    ("max_momentum_{solver}", float),
+    ("max_kinetic_energy_{solver}", float),
+    ("max_displacement_{solver}", float),
+    ("max_acceleration_{solver}", float),
+    ("max_unbalance_force_{solver}", float),
+    ("force_per_length_diameter_squared_{solver}", float),
     ("daf_{solver}", float),
-    ("t_{solver}_s", float),
+    ("wall_time_{solver}", float),
     ("cpu", str),
     ("git_sha", str),
     ("error", str),
@@ -149,7 +150,7 @@ _SWEEP_COLUMN_TYPES = {
 }
 SWEEP_COLUMNS = tuple(_SWEEP_COLUMN_TYPES)
 """``sweep.columns`` names, in the document's order: the Session 5b sweep CSV columns
-(``tools/sweep_jc.py``), sweep ``schema_version`` 2 (the W.1 schema 1 had thirty)."""
+(``tools/sweep_jc.py``), sweep ``schema_version`` 3 (the W.1 schema 1 had thirty)."""
 SWEEP_STRING_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is str)
 SWEEP_INT_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is int)
 
@@ -248,26 +249,26 @@ def _column(a: np.ndarray, name: str) -> list:
 
 def _geometry(layout: LoopLayout) -> dict:
     return {
-        "cell_position_m": layout.grid_point_position.astype(np.float64).tolist(),
-        "cell_kind": np.asarray(layout.grid_point_kind).astype(np.int64).tolist(),
-        "moving_fraction": layout.grid_point_moving_fraction.astype(np.float64).tolist(),
-        "ext_qty": int(layout.inactive_end_cell_count),
-        "pivot_seg_qty": int(layout.end_to_elbow_cell_count),
-        "pipe_seg_qty": int(layout.column_cell_count),
+        "grid_point_position": layout.grid_point_position.astype(np.float64).tolist(),
+        "grid_point_kind": np.asarray(layout.grid_point_kind).astype(np.int64).tolist(),
+        "grid_point_moving_fraction": layout.grid_point_moving_fraction.astype(np.float64).tolist(),
+        "inactive_end_cell_count": int(layout.inactive_end_cell_count),
+        "end_to_elbow_cell_count": int(layout.end_to_elbow_cell_count),
+        "column_cell_count": int(layout.column_cell_count),
         "segments": {
-            "inlet_end": int(layout.inlet_elbow_index),
-            "run_start": int(layout.run_start_index),
-            "run_end": int(layout.run_end_index),
-            "outlet_start": int(layout.outlet_elbow_index),
+            "inlet_elbow_index": int(layout.inlet_elbow_index),
+            "run_start_index": int(layout.run_start_index),
+            "run_end_index": int(layout.run_end_index),
+            "outlet_elbow_index": int(layout.outlet_elbow_index),
         },
-        "x_nominal_m": layout.x_at_rest.astype(np.float64).tolist(),
-        "y_nominal_m": layout.y_at_rest.astype(np.float64).tolist(),
-        "run_length_m": float(layout.run_length),
-        "leg_height_m": float(layout.inlet_leg_height),
-        "leg_height_2_m": float(layout.outlet_leg_height),
-        "portal_height_m": float(layout.portal_frame_height),
-        "spacing_m": float(layout.grid_point_spacing),
-        "cell_length_m": float(layout.cell_length),
+        "x_at_rest": layout.x_at_rest.astype(np.float64).tolist(),
+        "y_at_rest": layout.y_at_rest.astype(np.float64).tolist(),
+        "run_length": float(layout.run_length),
+        "inlet_leg_height": float(layout.inlet_leg_height),
+        "outlet_leg_height": float(layout.outlet_leg_height),
+        "portal_frame_height": float(layout.portal_frame_height),
+        "grid_point_spacing": float(layout.grid_point_spacing),
+        "cell_length": float(layout.cell_length),
     }
 
 
@@ -298,14 +299,14 @@ def is_capped(result: PeakResponse) -> bool:
 
 
 def _frames(trace: Trace) -> dict:
-    """The thirteen columns with the synthetic rest frame first (``t = 0``, ``sub_step =
-    sample = -1``, the rest phase, zeros)."""
+    """The thirteen columns with the synthetic rest frame first (``time = 0``,
+    ``substep_index = sample_index = -1``, the rest phase, zeros)."""
     rest_frame = {
-        "t": 0.0,
-        "sub_step": -1,
-        "sample": -1,
-        "phase": _synthetic_phase(trace),
-        "stick": 0,
+        "time": 0.0,
+        "substep_index": -1,
+        "sample_index": -1,
+        "load_phase": _synthetic_phase(trace),
+        "is_sticking": 0,
     }
     out = {}
     for name, field_name in zip(FRAME_COLUMNS, FRAME_FIELDS, strict=True):
@@ -315,17 +316,17 @@ def _frames(trace: Trace) -> dict:
     return out
 
 
-def _cells(trace: Trace) -> dict:
+def _grid_points(trace: Trace) -> dict:
     grid_point_count = int(trace.column.grid_point_pressure.shape[1])
     rest_frame = np.zeros((1, grid_point_count))
     blocks = {}
     for name, arr in (
-        ("p", trace.column.grid_point_pressure),
-        ("v", trace.column.grid_point_velocity),
+        ("pressure", trace.column.grid_point_pressure),
+        ("velocity", trace.column.grid_point_velocity),
     ):
         frame_values = np.concatenate([rest_frame, arr], axis=0)
         if not np.all(np.isfinite(frame_values)):
-            raise ValueError(f"cells.{name}: non-finite value (the format has no NaN)")
+            raise ValueError(f"grid_points.{name}: non-finite value (the format has no NaN)")
         blocks[name] = array_block(frame_values)
     return blocks
 
@@ -339,14 +340,18 @@ def _meta_params(result: PeakResponse) -> dict:
         "mass": _finite(float(sdof_params.mass), "params.mass"),
         "stiffness": _finite(float(sdof_params.stiffness), "params.stiffness"),
         "damping": _finite(float(sdof_params.damping), "params.damping"),
-        "fric_acc": _finite(float(sdof_params.friction_velocity_step), "params.fric_acc"),
-        "gap": _finite(float(sdof_params.support_gap), "params.gap"),
-        "ratio2": _finite(float(sdof_params.closed_gap_stiffness_ratio), "params.ratio2"),
-        "dt": _finite(float(trace.substep_duration), "params.dt"),
-        "step_qty": int(trace.substep_count),
-        "out_max": int(trace.nominal_forced_sample_count),
+        "friction_velocity_step": _finite(
+            float(sdof_params.friction_velocity_step), "params.friction_velocity_step"
+        ),
+        "support_gap": _finite(float(sdof_params.support_gap), "params.support_gap"),
+        "closed_gap_stiffness_ratio": _finite(
+            float(sdof_params.closed_gap_stiffness_ratio), "params.closed_gap_stiffness_ratio"
+        ),
+        "substep_duration": _finite(float(trace.substep_duration), "params.substep_duration"),
+        "substep_count": int(trace.substep_count),
+        "nominal_forced_sample_count": int(trace.nominal_forced_sample_count),
         "trace_every": int(trace.trace_every),
-        "capped": int(bool(is_capped(result))),
+        "is_capped": int(bool(is_capped(result))),
     }
 
 
@@ -359,42 +364,9 @@ def _meta_outputs(result: PeakResponse) -> dict:
         "max_displacement": _finite(float(result.max_displacement), "outputs"),
         "max_velocity": _finite(float(result.max_velocity), "outputs"),
         "max_acceleration": _finite(float(result.max_acceleration), "outputs"),
-        "max_applied_force": _finite(float(result.max_unbalance_force), "outputs"),
-        "free_decay_samples": int(result.free_decay_sample_count),
+        "max_unbalance_force": _finite(float(result.max_unbalance_force), "outputs"),
+        "free_decay_sample_count": int(result.free_decay_sample_count),
     }
-
-
-def _schema_1_inputs(inputs: dict) -> dict:
-    """The solver's grouped ``Trace.inputs`` in the flat form and the order trace schema 1
-    stores them: the keyword arguments of the entry points before the public API session,
-    ``output_type`` 0 (every exported trace was run with it). Temporary: the schema bump
-    (plan 6.5) exports the grouped form and removes this."""
-    span, restraint, integration = inputs["span"], inputs["restraint"], inputs["integration"]
-    flat = {
-        "force_history": inputs["force_history"],
-        "step_qty": integration["substep_count"],
-        "sample_freq": inputs["sample_rate"],
-        "physical_length": span["span_length"],
-        "flexural_rigidity_ei": span["flexural_rigidity"],
-        "celerity": span["celerity"],
-        "mass_per_unit_len": span["mass_per_length"],
-    }
-    if "fluid" in inputs:
-        flat["fluid_densty"] = inputs["fluid"]["fluid_density"]
-        flat["fluid_area"] = inputs["fluid"]["flow_area"]
-    flat.update(
-        damping_percent=restraint["damping_percent"],
-        dynamic_fric=restraint["friction_coefficient"],
-        nat_freq=restraint["natural_frequency"],
-        restrain_freq_ratio=restraint["closed_gap_frequency_ratio"],
-        gap=restraint["support_gap"],
-        output_type=0,
-    )
-    if "coupling" in inputs:
-        flat["vav_denominator"] = inputs["coupling"]["mean_velocity_divisor"]
-        flat["parity"] = inputs["coupling"]["parity"]
-        flat["fraction_profile"] = inputs["coupling"]["fraction_profile"]
-    return flat
 
 
 def to_trace_dict(
@@ -439,11 +411,11 @@ def to_trace_dict(
         "meta": {
             "case_id": str(case_id),
             "solver": str(trace.solver),
-            "inputs": _jsonable(_schema_1_inputs(trace.inputs), "inputs"),
+            "inputs": _jsonable(trace.inputs, "inputs"),
             "params": _meta_params(result),
             "outputs": _meta_outputs(result),
-            "n_frames": int(trace.frame_count) + 1,
-            "n_cells": int(trace.column.grid_point_count) if is_junction_coupled else 0,
+            "frame_count": int(trace.frame_count) + 1,
+            "grid_point_count": int(trace.column.grid_point_count) if is_junction_coupled else 0,
             "git_sha": git_sha_value,
             "created_utc": created_utc_value,
         },
@@ -451,7 +423,7 @@ def to_trace_dict(
         "frames": _frames(trace),
     }
     if is_junction_coupled:
-        doc["cells"] = _cells(trace)
+        doc["grid_points"] = _grid_points(trace)
     return doc
 
 

@@ -58,9 +58,19 @@ CHROMIUM = sorted(glob.glob(f"{BROWSERS}/chromium-*/chrome-linux/chrome"))
 TRACE_FILES = ["example_jc_step.json", "example_lumped_step.json", "golden_r096_jc.json.gz"]
 SWEEP_FILES = ["reference_sweep.json", "tier1_sweep.json"]
 SWEEP_TABS = ["curves", "effect", "collapse"]
-FILTER_COLS = ["history_type", "f_osc_hz", "seed", "mu", "amplitude_fraction"]
+FILTER_COLS = [
+    "history_type",
+    "oscillation_frequency",
+    "noise_seed",
+    "friction_coefficient",
+    "amplitude_fraction",
+]
 HISTORY_ORDER = ["step", "step_sine", "step_noise", "golden"]
-Y1_STEMS = {"f_eq": "f_eq", "daf": "daf", "f_eq_over_LD2": "f_eq_over_LD2"}
+Y1_STEMS = {
+    "max_static_equivalent_force": "max_static_equivalent_force",
+    "daf": "daf",
+    "force_per_length_diameter_squared": "force_per_length_diameter_squared",
+}
 SWEEP_FRAME_MS = 1000
 # the two JC trace files, screenshotted at their peak
 SCREENSHOT_FILES = ["example_jc_step.json", "golden_r096_jc.json.gz"]
@@ -284,7 +294,7 @@ def default_filters(doc: dict) -> dict:
         if col == "history_type":
             first = [h for h in HISTORY_ORDER if h in vals]
             out[col] = js_key(first[0] if first else vals[0])
-        elif col in ("mu", "amplitude_fraction") and 2 <= len(vals) <= 6:
+        elif col in ("friction_coefficient", "amplitude_fraction") and 2 <= len(vals) <= 6:
             nums = [v for v in vals if isinstance(v, (int, float))]
             out[col] = js_key(nums[-1]) if nums else "all"
         else:
@@ -308,7 +318,12 @@ def filtered_rows(doc: dict, filters: dict, open_cols=()) -> list[int]:
 
 
 def expected_counts(
-    doc: dict, tab: str, filters: dict, y1="f_eq", ratio="ratio_f_eq", anim="amplitude_fraction"
+    doc: dict,
+    tab: str,
+    filters: dict,
+    y1="max_static_equivalent_force",
+    ratio="max_static_equivalent_force_ratio",
+    anim="amplitude_fraction",
 ):
     """The (traces, points) the viewer draws for a tab: the curve tabs give one lines+markers
     trace per (panel, series, open varying key, solver) that has a non-null value; the
@@ -326,11 +341,11 @@ def expected_counts(
     varying = [c for c in FILTER_COLS if filters[c] == "all" and len(distinct(cols, c, rows)) > 1]
     if tab == "collapse":
         varying = [c for c in varying if c != "history_type"]
-        stems = ["f_eq_over_LD2", "daf"]
-        panel_key = lambda i: (cols["history_type"][i], cols["size_in"][i], cols["length_m"][i])  # noqa: E731
+        stems = ["force_per_length_diameter_squared", "daf"]
+        panel_key = lambda i: (cols["history_type"][i], cols["size_in"][i], cols["span_length"][i])  # noqa: E731
     else:
         stems = [Y1_STEMS[y1]]
-        panel_key = lambda i: (cols["size_in"][i], cols["length_m"][i])  # noqa: E731
+        panel_key = lambda i: (cols["size_in"][i], cols["span_length"][i])  # noqa: E731
     traces, points = 0, 0
     for stem in stems:
         for solver in ("lumped", "jc"):
@@ -421,8 +436,8 @@ def test_loads_each_data_file(browser, name):
     assert snap["axes"][FRICTION] == "x2y3" and snap["axes"][UNBALANCE] == "x2y2"
     assert snap["axes"][CELLS] == "xy" and snap["axes"][CURSOR] == "x2y2"
     assert {"subplot xy", "subplot x2y2", "subplot x2y3"} <= set(snap["subplots"])
-    n = doc["meta"]["n_frames"]
-    assert snap["n_points"][CELLS] == len(doc["geometry"]["x_nominal_m"])
+    n = doc["meta"]["frame_count"]
+    assert snap["n_points"][CELLS] == len(doc["geometry"]["x_at_rest"])
     assert snap["n_points"][FRICTION] == snap["n_points"][UNBALANCE] == n
     # the header
     meta = doc["meta"]
@@ -434,18 +449,18 @@ def test_loads_each_data_file(browser, name):
     ):
         assert needle in snap["meta"], needle
     # the scalings, computed over the whole run (docs/architecture.md, "The picture")
-    x = doc["frames"]["x"]
+    x = doc["frames"]["displacement"]
     i_peak = max(range(n), key=lambda i: abs(x[i]))
-    run = doc["geometry"]["run_length_m"]
+    run = doc["geometry"]["run_length"]
     sc = snap["scaling"]
-    assert sc["iPeak"] == i_peak and sc["tPeak"] == doc["frames"]["t"][i_peak]
+    assert sc["iPeak"] == i_peak and sc["tPeak"] == doc["frames"]["time"][i_peak]
     assert sc["exag"] == pytest.approx(0.1 * run / abs(x[i_peak]), rel=1e-12)
     st = snap["state"]
     assert (st["iStart"], st["iEnd"]) == (0, n - 1)  # whole run by default
     assert st["stride"] == max(1, -(-(n - 1) // 398))  # the automatic stride (400 frames)
-    if "cells" in doc:
-        p = doc["cells"]["p"]["data"]
-        v = doc["cells"]["v"]["data"]
+    if "grid_points" in doc:
+        p = doc["grid_points"]["pressure"]["data"]
+        v = doc["grid_points"]["velocity"]["data"]
         p_scale, p_rise = max(abs(q) for q in p), max(p)
         assert sc["pScale"] == pytest.approx(p_scale, rel=1e-12)
         assert sc["kP"] == pytest.approx(p_scale / p_rise, rel=1e-12)
@@ -460,11 +475,11 @@ def test_loads_each_data_file(browser, name):
     [
         ("example_lumped_step.json", {"schema_version": 99}),
         ("example_lumped_step.json", {"kind": "surge"}),
-        ("reference_sweep.json", {"schema_version": 1}),  # the thirty-column W.1 layout
+        ("reference_sweep.json", {"schema_version": 2}),  # the pre-bump layout
     ],
 )
 def test_rejects_unknown_schema_or_kind(browser, tmp_path, base, bad):
-    """A file with an unknown ``schema_version`` or ``kind`` (a sweep at the W.1 schema 1
+    """A file with an unknown ``schema_version`` or ``kind`` (a sweep at the pre-bump schema 2
     included) is refused with a message that names what was found and what the viewer reads;
     nothing is plotted."""
     doc = read_data(base)
@@ -482,7 +497,7 @@ def test_rejects_unknown_schema_or_kind(browser, tmp_path, base, bad):
     ((key, value),) = bad.items()
     assert f"{key} {json.dumps(value)}" in snap["message"]
     assert (
-        'reads kind "trace" at schema_version 1 and kind "sweep" at schema_version 2'
+        'reads kind "trace" at schema_version 2 and kind "sweep" at schema_version 3'
         in (snap["message"])
     )
 
@@ -523,7 +538,7 @@ def test_window_keeps_frames_inside(browser):
     Panel 2 (which keeps the whole run), and every frame shown while playing lies inside."""
     page, requests, errors = open_viewer(browser)
     snap = load(page, DATA / "example_jc_step.json")
-    t = read_data("example_jc_step.json")["frames"]["t"]
+    t = read_data("example_jc_step.json")["frames"]["time"]
     t0, t1 = 0.5, 1.0
     set_value(page, "#t0", str(t0))
     set_value(page, "#t1", str(t1))
@@ -696,7 +711,10 @@ def test_sweep_badge_red_on_tampered_reference(browser, tmp_path):
     print(f"tampered: {snap['badge']!r} / {snap['badge_detail']!r}")
     assert snap["badge_class"] == "badge red"
     assert "NOT reproduced: 1 of 6 values outside tolerance" in snap["badge"]
-    assert f"{entry['case_id']} f_eq_jc (rel 1.0e-6 > rtol)" in snap["badge_detail"]
+    assert (
+        f"{entry['case_id']} max_static_equivalent_force_jc (rel 1.0e-6 > rtol)"
+        in snap["badge_detail"]
+    )
     assert "reference NOT reproduced" in snap["meta"]
 
 
@@ -706,8 +724,8 @@ def test_sweep_tabs_render(browser, name):
     imply (``expected_counts`` replicates the grouping: curve families one trace per size panel,
     length and solver; collapse the same per history panel for the two normalisations; JC
     effect one trace per history type), with no page error. For the reference file only the
-    raw ``f_eq`` tab has values (its normalised and ratio columns are null) and the other tabs
-    say so."""
+    raw ``max_static_equivalent_force`` tab has values (its normalised and ratio columns are
+    null) and the other tabs say so."""
     page, requests, errors = open_viewer(browser)
     load_sweep(page, DATA / name)
     doc = read_data(name)
@@ -788,15 +806,15 @@ def test_sweep_filters_change_trace_counts(browser):
     click_tab(page, "curves")
     f["history_type"] = "step_sine"
     k_sine = check("curves", select_filter(page, "history_type", "step_sine"))
-    f["f_osc_hz"] = "4"
-    k_sine4 = check("curves", select_filter(page, "f_osc_hz", "4"))
+    f["oscillation_frequency"] = "4"
+    k_sine4 = check("curves", select_filter(page, "oscillation_frequency", "4"))
     assert k_sine == 3 * k_sine4 == 60  # the three sine frequencies were separate families
     page.select_option("#y1", "daf")
     k_daf = check("curves", sweep_snapshot(page), y1="daf")
     assert k_daf == k_sine4
-    f["f_osc_hz"] = "16"
+    f["oscillation_frequency"] = "16"
     f["history_type"] = "step"
-    select_filter(page, "f_osc_hz", "16")
+    select_filter(page, "oscillation_frequency", "16")
     empty = select_filter(page, "history_type", "step")  # no step row has a sine frequency
     check("curves", empty, y1="daf")
     page.close()
@@ -809,8 +827,8 @@ def test_sweep_filters_change_trace_counts(browser):
 def test_sweep_effect_animation(browser):
     """The JC-effect tab animates over the amplitude fractions through the page's play button:
     two frames (0.25, 1), the slider spans them, play advances to the last one within its
-    1 s period and shows the rows of that amplitude; switching the animated variable to ``mu``
-    re-frames over the frictions and opens the ``mu`` filter while locking it."""
+    1 s period and shows the rows of that amplitude; switching the animated variable to
+    ``friction_coefficient`` re-frames over the frictions and opens its filter while locking it."""
     page, requests, errors = open_viewer(browser)
     load_sweep(page, DATA / "tier1_sweep.json")
     doc = read_data("tier1_sweep.json")
@@ -821,7 +839,7 @@ def test_sweep_effect_animation(browser):
     page.wait_for_timeout(SWEEP_FRAME_MS + 600)
     snap1 = sweep_snapshot(page)
     pts1 = page.evaluate("() => document.getElementById('splot').data[0].customdata.length")
-    page.select_option("#anim", "mu")
+    page.select_option("#anim", "friction_coefficient")
     snap_mu = sweep_snapshot(page)
     page.close()
     assert_no_network(requests, errors)
@@ -832,21 +850,23 @@ def test_sweep_effect_animation(browser):
     assert "amplitude_fraction = 0.25" in snap0["readout"]
     assert (
         snap0["selects"]["amplitude_fraction"]["disabled"]
-        and not snap0["selects"]["mu"]["disabled"]
+        and not snap0["selects"]["friction_coefficient"]["disabled"]
     )
     assert snap1["anim"]["cur"] == 1 and "amplitude_fraction = 1" in snap1["readout"]
     f = default_filters(doc)
     f["amplitude_fraction"] = "1"
-    rows_a1 = [i for i in filtered_rows(doc, f) if cols["ratio_f_eq"][i] is not None]
+    rows_a1 = [
+        i for i in filtered_rows(doc, f) if cols["max_static_equivalent_force_ratio"][i] is not None
+    ]
     assert pts1 == len(rows_a1) == 80
     assert snap_mu["anim"]["values"] == [0.0001, 0.3] and snap_mu["anim"]["cur"] == 0
-    assert "mu = 0.0001" in snap_mu["readout"]
+    assert "friction_coefficient = 0.0001" in snap_mu["readout"]
     assert (
-        snap_mu["selects"]["mu"]["disabled"]
+        snap_mu["selects"]["friction_coefficient"]["disabled"]
         and not snap_mu["selects"]["amplitude_fraction"]["disabled"]
     )
     assert (snap_mu["n_data"], snap_mu["n_points"]) == expected_counts(
-        doc, "effect", default_filters(doc), anim="mu"
+        doc, "effect", default_filters(doc), anim="friction_coefficient"
     )
 
 

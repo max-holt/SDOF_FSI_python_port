@@ -137,8 +137,8 @@ def run(args) -> Path:
     wall = time.perf_counter() - t_start
     write_csv(out, rows)
     errors = [r for r in rows if r["error"]]
-    t_l = sum(r["t_lumped_s"] or 0 for r in rows)
-    t_j = sum(r["t_jc_s"] or 0 for r in rows)
+    t_l = sum(r["wall_time_lumped"] or 0 for r in rows)
+    t_j = sum(r["wall_time_jc"] or 0 for r in rows)
     print(
         f"wrote {out} ({len(rows)} rows, {len(errors)} with errors); wall {wall:.0f} s; "
         f"solver CPU: lumped {t_l:.0f} s, jc {t_j:.0f} s "
@@ -157,30 +157,30 @@ def plot(args) -> None:
     rows = _load(csv_path)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    mus = sorted({r["mu"] for r in rows})
+    mus = sorted({r["friction_coefficient"] for r in rows})
     mu_on = args.mu if args.mu is not None else max(mus)
     amps = sorted({r["amplitude_fraction"] for r in rows})
     amp = args.amplitude if args.amplitude is not None else max(amps)
     stem = csv_path.stem
     pngs = {
-        "ratio_f_eq": out_dir / f"{stem}_ratio_f_eq.png",
-        "ratio_v_peak": out_dir / f"{stem}_ratio_v_peak.png",
+        "max_static_equivalent_force_ratio": out_dir / f"{stem}_ratio_f_eq.png",
+        "max_velocity_ratio": out_dir / f"{stem}_ratio_v_peak.png",
         "daf": out_dir / f"{stem}_daf.png",
         "collapse": out_dir / f"{stem}_collapse.png",
     }
     plot_ratio(
         rows,
-        "ratio_f_eq",
+        "max_static_equivalent_force_ratio",
         "F_eq JC / lumped",
-        pngs["ratio_f_eq"],
+        pngs["max_static_equivalent_force_ratio"],
         "JC / lumped equivalent static force",
         mu_on,
     )
     plot_ratio(
         rows,
-        "ratio_v_peak",
+        "max_velocity_ratio",
         "v_peak JC / lumped",
-        pngs["ratio_v_peak"],
+        pngs["max_velocity_ratio"],
         "JC / lumped peak velocity",
         mu_on,
     )

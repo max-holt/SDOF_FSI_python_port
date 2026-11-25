@@ -62,15 +62,22 @@ def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path)
     row = sweep_rows.run_case(case, sweep_rows.RunProvenance(1, "test", "cpu", "sha"))
     assert set(row) == set(sweep_rows.COLUMNS)
     assert row["error"] is None
-    assert row["jc_short_pipe"] == 0
-    assert row["ratio_f_eq"] == row["f_eq_jc"] / row["f_eq_lumped"]
-    assert row["ratio_v_peak"] == row["v_peak_jc"] / row["v_peak_lumped"]
-    assert row["f_peak_lumped"] == row["f_peak_jc"]  # the VBA FMax: an input property
-    assert row["p_peak_bar"] == pytest.approx(row["p_cap_bar"], rel=1e-12)
-    assert row["daf_lumped"] == pytest.approx(
-        row["f_eq_lumped"] / (row["p_peak_bar"] * 1e5 * row["fluid_area_m2"]), rel=1e-12
+    assert row["is_short_pipe"] == 0
+    assert (
+        row["max_static_equivalent_force_ratio"]
+        == row["max_static_equivalent_force_jc"] / row["max_static_equivalent_force_lumped"]
     )
-    assert row["momentum_jc"] == row["mass_total_kg"] * row["v_peak_jc"]
+    assert row["max_velocity_ratio"] == row["max_velocity_jc"] / row["max_velocity_lumped"]
+    assert (
+        row["max_unbalance_force_lumped"] == row["max_unbalance_force_jc"]
+    )  # the VBA FMax: an input property
+    assert row["pressure_max_bar"] == pytest.approx(row["peak_pressure_target_bar"], rel=1e-12)
+    assert row["daf_lumped"] == pytest.approx(
+        row["max_static_equivalent_force_lumped"]
+        / (row["pressure_max_bar"] * 1e5 * row["flow_area"]),
+        rel=1e-12,
+    )
+    assert row["max_momentum_jc"] == row["total_mass"] * row["max_velocity_jc"]
     # CSV round trip: the history is rebuilt bitwise from the row's generator columns
     path = tmp_path / "one.csv"
     sweep_rows.write_csv(path, [row])
@@ -78,7 +85,7 @@ def test_run_case_fills_the_row_and_the_history_rebuilds_from_it(kind, tmp_path)
     h = sweep_rows.history_from_row(back)
     direct = sweep_rows.case_history(case, sweep_grid.pipe(case.size_in).design_pressure)
     assert np.array_equal(h.pressure, direct.pressure)
-    assert float(back["history_peak"]) == float(
+    assert float(back["force_history_max"]) == float(
         np.abs(direct.force(sweep_grid.pipe(10).flow_area)).max()
     )
 
