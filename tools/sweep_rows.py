@@ -250,7 +250,7 @@ def _result_columns(
         row[f"ke_peak_{name}"] = 0.5 * total_mass * result.max_velocity**2
         row[f"x_peak_{name}"] = result.max_displacement
         row[f"a_peak_{name}"] = result.max_acceleration
-        row[f"f_peak_{name}"] = result.max_applied_force
+        row[f"f_peak_{name}"] = result.max_unbalance_force
         row[f"f_eq_over_LD2_{name}"] = result.max_static_equivalent_force / (
             case.length_m * outside_diameter_squared
         )

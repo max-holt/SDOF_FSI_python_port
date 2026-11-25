@@ -46,7 +46,7 @@ SUMMARY_FIELDS = (
     "max_displacement",
     "max_velocity",
     "max_acceleration",
-    "max_applied_force",
+    "max_unbalance_force",
 )
 
 
@@ -445,14 +445,14 @@ def test_peak_response_matches_legacy_on_the_sweep(idx):
     results = _check_peak_response(case.force, case.kw, (0, case.history_type))
     free = {s.tot_ind for s in trace.substeps if s.free_decay}
     for res in results.values():
-        assert res.free_decay_samples == len(free)
+        assert res.free_decay_sample_count == len(free)
         assert all(type(getattr(res, f)) is float for f in SUMMARY_FIELDS)
 
 
 def test_sweep_enters_free_decay_and_engages_the_gap():
     cases = sweep_cases()
     results = [response.peak_response(c.force, **fc.solver_inputs(c.kw)) for c in cases]
-    assert sum(r.free_decay_samples > 0 for r in results) >= 1
+    assert sum(r.free_decay_sample_count > 0 for r in results) >= 1
     assert sum(r.max_displacement > c.kw["gap"] for r, c in zip(results, cases, strict=True)) >= 1
     # and the gap matters: the clamped case differs from the gap-free run
     assert any(r.max_displacement != c.x_max_free for r, c in zip(results, cases, strict=True))
@@ -872,7 +872,7 @@ def test_peak_response_jc_matches_legacy_on_the_small_cases(idx):
     trace = jc_small_trace(idx)
     results = _check_peak_response_jc(force, kw, (0, 1, 2, 3))
     free = {s.tot_ind for s in trace.substeps if s.free_decay}
-    assert all(r.free_decay_samples == len(free) for r in results.values())
+    assert all(r.free_decay_sample_count == len(free) for r in results.values())
 
 
 def test_peak_response_jc_matches_excel_on_the_example_case():
@@ -881,7 +881,7 @@ def test_peak_response_jc_matches_excel_on_the_example_case():
     np.testing.assert_allclose(
         res.summary(), np.asarray(case["expected"], float), rtol=tg.EXAMPLE_RTOL, atol=0
     )
-    assert res.free_decay_samples > 0  # the Example JC case ends with |x| > 0.1
+    assert res.free_decay_sample_count > 0  # the Example JC case ends with |x| > 0.1
 
 
 def test_peak_response_jc_short_pipe_falls_back_to_the_lumped_solver():
@@ -894,7 +894,7 @@ def test_peak_response_jc_short_pipe_falls_back_to_the_lumped_solver():
             force, **fc.solver_inputs(lumped_kw, output_type=output_type)
         )
         assert np.array_equal(res.summary(), lumped.summary())
-        assert res.free_decay_samples == lumped.free_decay_samples
+        assert res.free_decay_sample_count == lumped.free_decay_sample_count
         if output_type == 0:
             assert fc.history_of(res, output_type) is None
             assert fc.history_of(lumped, output_type) is None
@@ -966,7 +966,7 @@ def test_peak_response_jc_matches_excel_on_the_golden_curve(case):
         expected,
         tg.RTOL["jc"],
     )
-    assert res.free_decay_samples == 0
+    assert res.free_decay_sample_count == 0
 
 
 # ------------------------------------------------------------------ JC random sweep
@@ -1103,7 +1103,7 @@ def test_jc_sweep_covers_the_oracle_blind_spots():
     assert max(c.pipe_seg_qty for c in moc_cases) <= 60  # small grids keep the suite fast
     results = [jc_sweep_results(i)[0] for i in range(N_CASES)]
     assert all(np.all(np.isfinite(r.summary())) for r in results)
-    phase3 = [c for c, r in zip(cases, results, strict=True) if r.free_decay_samples > 0]
+    phase3 = [c for c, r in zip(cases, results, strict=True) if r.free_decay_sample_count > 0]
     assert any(not c.fallback for c in phase3), "no MoC sweep case enters phase 3"
     assert any(
         r.max_displacement > c.kw["gap"] and not c.fallback
@@ -1236,7 +1236,7 @@ def test_running_parity_is_continuous_across_phase_boundaries(monkeypatch):
     )
     assert len(running) == len(legacy_evens)
     assert running == [i % 2 == 0 for i in range(len(running))]
-    assert res_legacy.free_decay_samples > 0 and res_fixed.free_decay_samples > 0
+    assert res_legacy.free_decay_sample_count > 0 and res_fixed.free_decay_sample_count > 0
     assert not np.array_equal(fc.history_of(res_legacy, 1), fc.history_of(res_fixed, 1))
 
 
@@ -1285,7 +1285,7 @@ def test_fixed_flags_change_only_where_expected(idx):
     no_effect = case.fallback or case.kw["fluid_area"] == 0.0
     if no_effect:
         assert np.array_equal(f1, base) and np.array_equal(f2, base) and np.array_equal(both, base)
-    if case.parity_continuous and res_legacy.free_decay_samples == 0:
+    if case.parity_continuous and res_legacy.free_decay_sample_count == 0:
         assert np.array_equal(f2, base)
     elif not no_effect and not case.parity_continuous:
         assert not np.array_equal(f2, base)

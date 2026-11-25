@@ -482,7 +482,7 @@ def test_is_capped():
     r = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=20))
     assert np.any(r.trace.phase == PHASE_FREE_DECAY)
     assert export.is_capped(r) is (
-        int(r.trace.sample[r.trace.phase == PHASE_FREE_DECAY].min()) + r.free_decay_samples
+        int(r.trace.sample[r.trace.phase == PHASE_FREE_DECAY].min()) + r.free_decay_sample_count
         > 2 * r.trace.out_max
     )
 

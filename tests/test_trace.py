@@ -101,7 +101,7 @@ def _lumped_kw(kw):
 
 def _same_result(a: response.PeakResponse, b: response.PeakResponse, output_type: int):
     assert np.array_equal(a.summary(), b.summary())
-    assert a.free_decay_samples == b.free_decay_samples
+    assert a.free_decay_sample_count == b.free_decay_sample_count
     if fc.history_of(a, output_type) is None:
         assert fc.history_of(b, output_type) is None
     else:
@@ -132,7 +132,7 @@ def _check_frames(res: response.PeakResponse, force, kw, stride):
     step_qty = kw["step_qty"]
     assert tr.out_max == out_max and tr.step_qty == step_qty
     assert tr.dt == 1 / (kw["sample_freq"] * step_qty)
-    traced_decay = min(res.free_decay_samples, out_max * 2 - forced_samples)
+    traced_decay = min(res.free_decay_sample_count, out_max * 2 - forced_samples)
     total = forced_substeps + traced_decay * step_qty
     n_frames = -(-total // stride)
     assert tr.n_frames == n_frames
@@ -261,7 +261,7 @@ def test_free_decay_is_traced_only_inside_the_history_window(solver, stride):
     _same_result(base, res, 1)
     tr = _check_frames(res, CAPPED_FORCE, kw, stride)
     _flat, offsets, _delay, out_max = _schedule(CAPPED_FORCE, kw)
-    assert res.free_decay_samples > out_max * 2 - (len(offsets) - 1)  # the cap is hit
+    assert res.free_decay_sample_count > out_max * 2 - (len(offsets) - 1)  # the cap is hit
     assert tr.sample[-1] == out_max * 2 - 1
     assert np.sum(tr.phase == tracing.PHASE_FREE_DECAY) > 0
     # the frames at sample ends agree with the history (the truncated delay sample

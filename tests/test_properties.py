@@ -115,7 +115,7 @@ def same_result(a: response.PeakResponse, b: response.PeakResponse, output_type:
     history_a, history_b = fc.history_of(a, output_type), fc.history_of(b, output_type)
     return (
         np.array_equal(a.summary(), b.summary())
-        and a.free_decay_samples == b.free_decay_samples
+        and a.free_decay_sample_count == b.free_decay_sample_count
         and ((history_a is None and history_b is None) or np.array_equal(history_a, history_b))
     )
 
@@ -151,7 +151,7 @@ def test_huge_gap_equals_zero_gap_with_unit_ratio(case, output_type, fluid_area)
     assert same_result(ratio, huge, output_type)
     # non-trivial unless the transit delay rounds to zero sub-steps, when forceA == forceB
     # at every sub-step and the VBA response is identically zero
-    if huge.max_applied_force > 0:
+    if huge.max_unbalance_force > 0:
         assert huge.max_displacement > 0
     else:
         event("transit delay below half a sub-step: zero unbalance force")
@@ -177,17 +177,17 @@ def test_power_of_two_load_scaling_is_bitwise(case, factor, fluid_area):
     base = solver(force, **fc.solver_inputs(kw, gap=1e9, output_type=1))
     scaled = solver(force * factor, **fc.solver_inputs(kw, gap=1e9, output_type=1))
     forced = len(force)
-    common = forced + min(base.free_decay_samples, scaled.free_decay_samples)
+    common = forced + min(base.free_decay_sample_count, scaled.free_decay_sample_count)
     common = min(common, len(base.displacement_history))
     assert np.array_equal(
         scaled.displacement_history[:common], base.displacement_history[:common] * factor
     )
-    if base.free_decay_samples == scaled.free_decay_samples:
+    if base.free_decay_sample_count == scaled.free_decay_sample_count:
         assert np.array_equal(scaled.summary(), base.summary() * factor)
     else:
         event("phase-3 length differs with the amplitude (D-21 absolute threshold)")
         # the applied-force maximum does not depend on the free decay
-        assert scaled.max_applied_force == base.max_applied_force * factor
+        assert scaled.max_unbalance_force == base.max_unbalance_force * factor
 
 
 @SETTINGS
@@ -205,7 +205,7 @@ def test_arbitrary_load_scaling_is_linear_over_the_forced_phase(case, factor):
         atol=0,
     )
     np.testing.assert_allclose(
-        scaled.max_applied_force, base.max_applied_force * factor, rtol=1e-12, atol=0
+        scaled.max_unbalance_force, base.max_unbalance_force * factor, rtol=1e-12, atol=0
     )
 
 
@@ -237,8 +237,8 @@ def test_maxima_are_finite_and_non_negative(case, ratio, gap_fraction, output_ty
     summary = res.summary()
     assert np.all(np.isfinite(summary))
     assert np.all(summary >= 0)
-    assert res.max_applied_force == free.max_applied_force  # independent of the restraint
-    assert res.free_decay_samples >= 0
+    assert res.max_unbalance_force == free.max_unbalance_force  # independent of the restraint
+    assert res.free_decay_sample_count >= 0
     history = fc.history_of(res, output_type)
     if output_type == 0:
         assert history is None
@@ -293,7 +293,7 @@ def test_jc_without_fluid_area_equals_lumped(case, ratio, gap_fraction, output_t
         **fc.solver_inputs(kw_jc, restrain_freq_ratio=ratio, gap=gap, output_type=output_type),
     )
     np.testing.assert_allclose(jc.summary(), lumped.summary(), rtol=JC_EQUALS_LUMPED_RTOL, atol=0)
-    assert jc.free_decay_samples == lumped.free_decay_samples
+    assert jc.free_decay_sample_count == lumped.free_decay_sample_count
     if output_type > 0:
         np.testing.assert_allclose(
             fc.history_of(jc, output_type),

@@ -261,7 +261,7 @@ class PeakResponse:
         Largest ``|v|``, m/s.
     max_acceleration : float
         Largest ``|a|``, m/s².
-    max_applied_force : float
+    max_unbalance_force : float
         Largest ``|forceA - forceB|`` of the forced phases, N (VBA ``FMax``).
     displacement_history, velocity_history, acceleration_history : numpy.ndarray
         float64, the displacement (m), velocity (m/s) and acceleration (m/s²) at the end of
@@ -269,7 +269,7 @@ class PeakResponse:
         nominal_forced_sample_count`` samples; free decay past them is integrated but not
         recorded, unfilled trailing elements are 0. The VBA pad element 0 (D-16) is not
         present.
-    free_decay_samples : int
+    free_decay_sample_count : int
         Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``, D-21).
     trace : trace.Trace or None
         The substep trace when ``Integration.trace_every > 0``; None otherwise.
@@ -279,12 +279,12 @@ class PeakResponse:
     max_displacement: float
     max_velocity: float
     max_acceleration: float
-    max_applied_force: float
+    max_unbalance_force: float
     # arrays take no part in ==, as in histories.History
     displacement_history: np.ndarray = dataclasses.field(repr=False, compare=False)
     velocity_history: np.ndarray = dataclasses.field(repr=False, compare=False)
     acceleration_history: np.ndarray = dataclasses.field(repr=False, compare=False)
-    free_decay_samples: int
+    free_decay_sample_count: int
     trace: Trace | None = None
 
     def summary(self) -> np.ndarray:
@@ -295,7 +295,7 @@ class PeakResponse:
                 self.max_displacement,
                 self.max_velocity,
                 self.max_acceleration,
-                self.max_applied_force,
+                self.max_unbalance_force,
             ]
         )
 
@@ -1046,11 +1046,11 @@ def _peak_response(
         max_displacement=float(result.x_max),
         max_velocity=float(result.v_max),
         max_acceleration=float(result.a_max),
-        max_applied_force=float(result.unbalance_force_max),
+        max_unbalance_force=float(result.unbalance_force_max),
         displacement_history=histories.displacement,
         velocity_history=histories.velocity,
         acceleration_history=histories.acceleration,
-        free_decay_samples=int(result.sample_number - result.forced_sample_count),
+        free_decay_sample_count=int(result.sample_number - result.forced_sample_count),
         trace=trace,
     )
 

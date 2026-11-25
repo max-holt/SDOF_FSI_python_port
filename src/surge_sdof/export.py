@@ -284,7 +284,7 @@ def is_capped(result: PeakResponse) -> bool:
     if not in_free_decay.any():
         return False
     forced_sample_count = int(trace.sample[in_free_decay].min())
-    return forced_sample_count + int(result.free_decay_samples) > 2 * int(trace.out_max)
+    return forced_sample_count + int(result.free_decay_sample_count) > 2 * int(trace.out_max)
 
 
 def _frames(trace: Trace) -> dict:
@@ -346,8 +346,8 @@ def _meta_outputs(result: PeakResponse) -> dict:
         "max_displacement": _finite(float(result.max_displacement), "outputs"),
         "max_velocity": _finite(float(result.max_velocity), "outputs"),
         "max_acceleration": _finite(float(result.max_acceleration), "outputs"),
-        "max_applied_force": _finite(float(result.max_applied_force), "outputs"),
-        "free_decay_samples": int(result.free_decay_samples),
+        "max_applied_force": _finite(float(result.max_unbalance_force), "outputs"),
+        "free_decay_samples": int(result.free_decay_sample_count),
     }
 
 

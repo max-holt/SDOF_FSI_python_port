@@ -56,8 +56,8 @@ _PEAK_FIELDS = {
     "max_displacement": "max_displacement",
     "max_velocity": "max_velocity",
     "max_acceleration": "max_acceleration",
-    "max_applied_force": "max_applied_force",
-    "free_decay_samples": "free_decay_samples",
+    "max_applied_force": "max_unbalance_force",
+    "free_decay_samples": "free_decay_sample_count",
 }
 """``history``, the last peak key, is the history the case's ``output_type`` names
 (``fixture_cases.history_of``): the result carries all three since session R.9."""
