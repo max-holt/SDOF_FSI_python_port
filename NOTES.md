@@ -6,6 +6,69 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.9, continued (2026-11-25): **stopped at a green commit** (ruling 75, the context)
+after 6.6 for `response` and `trace`. Done, one change per commit, each gated (lint and the
+compiled fast suite 955 + 24 before the commit, pure Python 953 + 26 on a worktree of it before
+the next, 177-183 s a run; snapshot and support exact in both modes):
+`1fd5850` 6.3c `LoopLayout` renames; `4b9d30b` 6.4a `histories` signatures, `History` fields
+and `PARAM_KEYS`; `6abedd6` 6.4b `to_trace_dict(git_sha, created_utc)`,
+`to_sweep_dict(provenance: SweepProvenance, regen, reference)`, S-33 (`regen` required);
+`8a754fc` `RunSettings` -> `KernelSettings`; `9d2d2c3` **6.5, the schema bump** (trace 2,
+sweep 3, `_schema_1_inputs` removed); `35dc3bb`, `e2b29e7` 6.6 module docstrings of
+`response` and `trace` (docstring-only, checked by AST comparison).
+
+The schema bump (ruling 84). Re-exported with the commands of README "Data files for the JS
+viewer", every value equal to the old file under the §3.3 key table (scratchpad check; only
+provenance re-stamped, `meta.git_sha` 8a754fc, the parent, for the three traces and the
+reference sweep; tier1 keeps the CSV's 83d23ef): `docs/viz/data/example_jc_step.json`,
+`example_lumped_step.json`, `golden_r096_jc.json.gz`, `reference_sweep.json`,
+`tier1_sweep.json`. Header line renamed by a one-off script (55 of 72 names), the data rows
+byte-identical (sha256 of the rows compared): `docs/sweep/tier1_83d23ef_f4b.csv`,
+`tier1_8590c3f.csv`, `tier1_subset10_ef89cbf.csv`, `tier2_3664dc7_f4b.csv`,
+`tests/review_support/sweep_tier1_subset1.csv`. `tests/review_support/`: the nine exported
+documents rewritten through `test_review_support.export_bytes` (not `--write`, which would
+rerun the sweep and restamp the CSV's timing and sha cells; rule 6 wants the header only);
+history documents untouched. Viewer browser tests: 26 passed on `9d2d2c3`
+(`PLAYWRIGHT_BROWSERS_PATH` as below). `tools/sweep_jc.py plot` on the renamed tier-1 CSV
+gives the four committed PNGs byte for byte.
+
+Test assertions restated (for the owner): the schema-version checks in `test_export.py`
+now 2 / 3 (the bump itself); the reference entries' `output_names` compared through the one
+rename (`max_applied_force` -> `max_unbalance_force`; the fixtures keep the old name); in
+`test_viewer.py` the animated-column readout expects `friction_coefficient = 0.0001` (the
+viewer prints the column name; was `mu = 0.0001`) and the refused sweep file is schema 2
+(was 1). Everything else is renamed keys only. The reference entries' `inputs` are grouped
+as `Trace.inputs` without a `coupling` group (the fixtures name no flags); the grouped form
+adds `integration.trace_every` and, for the Example cases, the `restraint` defaults (gap 0,
+ratio 1) the fixture kwargs omit.
+
+Not changed, for the owner: the `histories` error messages still name `f_osc`, `seed`,
+`f_ref`, `p_cap`, `kind` (`test_histories` matches on them); `sweep_rows.HISTORY_PARAM_COLUMNS`
+is now an identity map (the columns equal `PARAM_KEYS`), left for a later simplification;
+`docs/jc_sweep*.md` (generated reports) still quote the old column names.
+
+A/B against the commit before (`tools/review_ab.py`): 6.4a `sweep_noise` 1.031; `KernelSettings`
+0.954-1.018 on the eleven cases; 6.5 0.967-1.027 (traced and sweep cases). Cumulative
+`187b166` -> `1b56a60`, 5 rounds: 0.926-1.032 except `jc_r96_n2000_default` 1.054, which did
+not repeat (9 rounds: 1.009; legacy 0.991).
+
+Session gates: `-m slow` 150 passed; the three JC golden cases (`-m jc_slow`, 6 tests) passed
+in 60 min (the first combined run hit the 1 h background limit at 154 of 156, all passing);
+`tools/bench.py --skip-full-python` row `1b56a60`: every digest equal to the literal port.
+
+Measured nesting depth (ruff PLR1702, preview, `max-nested-blocks = 3`): in the solver core
+and supporting modules only `loads.unbalance_force` and `loads.elbow_forces` reach 4; every
+other function is at most 3. Tools: `sweep_report` up to 6 (three functions at 5 / 6),
+`bench`, `review_ab`, `sweep_jc` at 4.
+
+**Next** (`docs/review/plan.md`, progress R.9 continued): 6.6 docstrings for `moc`,
+`structure`, `coupling`, `loads`, `export`, `histories`, `viz/geometry` and the gated tools
+(one module per commit, style §7); 6.7 annotations; 6.8 lint limits in `pyproject.toml` with
+a one-line reason on each function that misses (the two `loads` functions above for nesting);
+then remove the `review_ab.py` call-form switch.
+
+Earlier in this session:
+
 Session R.9 (public API, plan group 6 with 3.7 and 3.10, 2026-11-25) **stopped at a green
 commit** (ruling 75: the context ran long), after plan 6.3b. Rulings 67-84 in the charter;
 `docs/review/public_interface.md` approved (option A with the answers of rulings 76-84) and its
