@@ -92,6 +92,16 @@ the other modules (`moc`, `structure`, `coupling`, `loads`, `export`, `histories
 `viz/geometry`, the gated tools), 6.7 (annotations), 6.8 (lint limits; measured nesting
 in `NOTES.md`), and the removal of the `review_ab.py` call-form switch.
 
+**Progress (session R.10, 25 Nov 2026).** Rulings 85-88. Group 6 done, one change per commit,
+each gated: the `histories` error messages (ruling 85); 6.6 for `moc`, `structure`,
+`coupling`, `loads`, `export`, `histories`, `viz/geometry`, the ten gated tools, and the
+function docstrings of `response` and `trace` (C-41 names their internals; R.9 had done their
+module docstrings only), each docstring-only and AST-equal to its parent; 6.7 in four core
+modules and one commit for the gated tools (AST-equal once annotations and `TYPE_CHECKING`
+imports are set aside); 6.8 (the limits in `pyproject.toml`, targeted `noqa` with reasons);
+the `review_ab.py` call-form switch removed. Left: group 7 (7.1, 7.2), and the owner's answer
+on `tools/sweep_jc.cpu_model` (nesting 4, `noqa` without a ruling; `NOTES.md`).
+
 
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought

@@ -6,6 +6,65 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.10 (2026-11-25): **plan group 6 done** (the rest of it: the `histories` error
+messages, 6.6, 6.7, 6.8, the `review_ab.py` switch). Rulings 85-88 in the charter (`0efced1`).
+Every commit gated: lint and the compiled fast suite (955 + 24) before it, the pure-Python
+suite (953 + 26) on a worktree of it before the next commit; snapshot and support exact in
+both modes throughout. Pushed only when green.
+
+Commits: `b0c5941` the `histories` error messages in the new parameter names, `test_histories`
+matching the new text (ruling 85). 6.6, docstring-only, one module each, each AST-equal to
+its parent apart from docstrings (bare string statements stripped): `f41594e` moc,
+`f33687a` structure, `7fac0b4` coupling, `f3857d4` loads, `d1c548a` export (the module
+docstring's sweep schema corrected to 3), `674d1df` histories, `eaffa8e` viz/geometry,
+`b4c8d3f` .. `063d4c7` the ten gated tools (cases, export, fixture_cases, sweep_document,
+sweep_grid, sweep_rows, sweep_jc, build_viewer, review_snapshot, review_support), and
+`dc7516a` response, `2d41eda` trace: their function docstrings, which R.9 had not done
+(only the module docstrings); C-41 names the `response` internals, and the plan wins over
+the brief's module list (ruling 66). 6.7: `f27d800` loads, `0a8e4c7` response, `b532831`
+export, `1f85ca3` histories, `c769f00` the gated tools; AST-equal once annotations and the
+`TYPE_CHECKING` imports are set aside (every new typing import sits under `TYPE_CHECKING`, so
+nothing changes at run time); every signature in the core, the supporting modules and the
+gated tools is annotated. `2aedc7a` 6.8. `6266966` `review_ab.py` calls
+`fixture_cases.solver_inputs` directly (times revisions from R.9 on).
+
+6.8, the lint configuration (`pyproject.toml`): `select` adds `C901`, `PLR0913`, `PLR0915`,
+`PLR1702`; `mccabe.max-complexity = 10`, `pylint.max-args = 6`, `max-statements = 50`,
+`max-nested-blocks = 3`; `preview = true` with `explicit-preview-rules = true` (PLR1702 is a
+preview rule in ruff 0.17; checked: no other rule changes under preview). Exempt by
+`per-file-ignores`: `legacy_port.py`, `vba_compat.py`, `tests/**`, and the tools no test runs
+(`bench`, `extract_fixtures`, `golden_report`, `profile_delta`, `review_ab`,
+`review_baseline`, `sweep_report`; ruling 87). Targeted `noqa`: `response.peak_response_jc`
+(PLR0913, 7), `response._integrate_kernel` (PLR0915, 55 as ruff counts; style §11 says 56,
+now noted), `loads.unbalance_force` / `elbow_forces` (PLR1702, C-07, ruling 86),
+`histories.step_sine` (9), `step_noise` (12), `canonical` (14) (PLR0913: the generator
+columns one-for-one, approved in `public_interface.md` §3.4; their style §11 line added in
+this commit), and `tools/sweep_jc.cpu_model` (PLR1702).
+
+**For the owner:** `tools/sweep_jc.cpu_model` nests 4 deep (try / with / for / if over
+`/proc/cpuinfo`). `sweep_jc` is gated (the support check runs it), so ruling 87 does not
+cover it; it carries a `noqa` saying "no ruling yet". Either a style §11 line, or a small
+restructuring to depth 3 (read the model lines first, then pick), or leave it with S-23
+(the copy in the ungated `bench.py`).
+
+Not done, by ruling: the ungated tools get no docstrings or annotations (rename-only, ruling
+24); S-50 / S-51 are marked done for the rest.
+
+Session gates: `-m slow` 150 passed (434 s); `tools/bench.py --skip-full-python` row
+`6266966`: every digest equal to the literal port. Cumulative A/B `f0ef1f6` -> `6266966`,
+5 rounds: 0.984-1.027 on ten cases, `lumped_r20_traced` 1.050, which did not repeat (9
+rounds: 0.975; `lumped_r20` 1.003). The JC golden cases (`-m jc_slow`) were not run: nothing
+in this session changes code that runs.
+
+Findings marked done: C-40, C-41 (6.6), C-42 (6.7), S-50, S-51 (gated scope); style 3 is
+enforced by `pyproject.toml`.
+
+**Next:** group 7 (7.1 `is_capped` from the kernel's count, 7.2 `size_in` from the caller;
+each a recorded behaviour change with a DEVIATIONS row and a pinning test), and the
+`cpu_model` answer.
+
+Previous: session R.9, continued (below).
+
 Session R.9, continued (2026-11-25): **stopped at a green commit** (ruling 75, the context)
 after 6.6 for `response` and `trace`. Done, one change per commit, each gated (lint and the
 compiled fast suite 955 + 24 before the commit, pure Python 953 + 26 on a worktree of it before
