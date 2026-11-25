@@ -34,7 +34,6 @@ from surge_sdof.trace import (
     FRAME_COLUMNS,
     FRAME_FIELDS,
     INT_FRAME_COLUMNS,
-    PHASE_FREE_DECAY,
     PHASE_TRANSIT,
 )
 from surge_sdof.viz.geometry import layout_from_trace
@@ -334,16 +333,18 @@ def is_capped(result: PeakResponse) -> bool:
     Returns
     -------
     bool
-        True when the forced samples and the free-decay samples together exceed twice the
-        nominal forced sample count (``trace.py``: free decay is traced while the sample
-        is below that).
+        True when the forced samples (``Trace.forced_sample_count``, the kernel's count) and
+        the free-decay samples together exceed twice the nominal forced sample count
+        (``trace.py``: free decay is traced while the sample is below that).
+
+    Notes
+    -----
+    Until session R.11 the forced sample count was inferred from the smallest traced
+    free-decay sample, which differs when the stride skips the first free-decay sample or
+    no free-decay substep is traced (DEVIATIONS D-26, review finding S-11).
     """
     trace = result.trace
-    in_free_decay = trace.load_phase == PHASE_FREE_DECAY
-    if not in_free_decay.any():
-        return False
-    forced_sample_count = int(trace.sample_index[in_free_decay].min())
-    return forced_sample_count + int(result.free_decay_sample_count) > 2 * int(
+    return int(trace.forced_sample_count) + int(result.free_decay_sample_count) > 2 * int(
         trace.nominal_forced_sample_count
     )
 

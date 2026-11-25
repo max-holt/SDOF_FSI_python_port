@@ -544,6 +544,49 @@ def test_is_capped():
     )
 
 
+_SHORT_STEP = (
+    "trace --step --amplitude 1600 --area 0.05 --length 6 --sample-freq 10 --mu 0 --damping 0 "
+    "--duration 0.5 --out unused.json"
+)
+
+
+@pytest.mark.parametrize("solver", ["lumped", "jc"])
+@pytest.mark.parametrize(
+    ("nat_freq", "trace_every", "free_decay_samples", "first_traced_decay_sample", "capped"),
+    [
+        # every sample traced: the inference and the kernel's count agree
+        (0.5, 40, 5, 7, False),
+        (0.3, 40, 12, 7, True),
+        # D-26 (a): the stride skips the first free-decay sample; 7 + 5 = 2 * 6 is not
+        # capped (the inference read 8 + 5 > 12 and said capped)
+        (0.5, 80, 5, 8, False),
+        # D-26 (b): no free-decay substep traced; 7 + 12 > 12 is capped (the inference,
+        # with no free-decay frame, said not capped)
+        (0.3, 800, 12, None, True),
+    ],
+)
+def test_d26_is_capped_from_the_kernels_forced_sample_count(
+    solver, nat_freq, trace_every, free_decay_samples, first_traced_decay_sample, capped
+):
+    """``is_capped`` (and ``meta.params.is_capped``) from ``Trace.forced_sample_count``, the
+    kernel's count, not from the smallest traced free-decay sample (DEVIATIONS D-26)."""
+    args = export_cli.parse_args(
+        [*_SHORT_STEP.split(), "--solver", solver, "--nat-freq", str(nat_freq)]
+    )
+    force, kw, solver_name, name = cases.case_from_args(args)
+    result = cases.run(force, kw, solver_name, trace_every)
+    trace = result.trace
+    assert trace.substep_count == 40 and trace.nominal_forced_sample_count == 6
+    assert trace.forced_sample_count == 7
+    assert result.free_decay_sample_count == free_decay_samples
+    in_free_decay = trace.load_phase == PHASE_FREE_DECAY
+    first = int(trace.sample_index[in_free_decay].min()) if in_free_decay.any() else None
+    assert first == first_traced_decay_sample
+    assert export.is_capped(result) is capped
+    doc = export.to_trace_dict(result, name, git_sha=None, created_utc=None)
+    assert doc["meta"]["params"]["is_capped"] == int(capped)
+
+
 # ------------------------------------------------------------------ staleness of the committed data files
 
 DATA_DIR = REPO / "docs" / "viz" / "data"

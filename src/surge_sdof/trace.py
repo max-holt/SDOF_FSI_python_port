@@ -70,7 +70,7 @@ from surge_sdof.loads import PHASE_FORCED, PHASE_TRANSIT
 from surge_sdof.structure import SdofParams
 
 if TYPE_CHECKING:
-    from surge_sdof.response import KernelSettings
+    from surge_sdof.response import KernelSettings, _KernelResult
 
 __all__ = [
     "MAX_TRACE_VALUES",
@@ -211,6 +211,9 @@ class Trace:
     nominal_forced_sample_count : int
         The VBA ``outMax``; free decay is traced while ``sample_index < 2 *
         nominal_forced_sample_count``.
+    forced_sample_count : int
+        Samples of the transit and forced phases, as the kernel counted them; the run's
+        first free-decay sample is ``sample_index == forced_sample_count``.
     portal_frame_height : float
         Leg height of the portal-frame proxy of the run (``response.solver_setup``), m.
     sdof_params : SdofParams
@@ -243,6 +246,7 @@ class Trace:
     substep_duration: float
     substep_count: int
     nominal_forced_sample_count: int
+    forced_sample_count: int
     portal_frame_height: float
     sdof_params: SdofParams
     inputs: dict
@@ -595,11 +599,11 @@ def build_trace(
     settings: KernelSettings,
     params: SdofParams,
     buffers: TraceBuffers,
-    n_frames: int,
+    kernel_result: _KernelResult,
     column: moc.FluidColumn,
 ) -> Trace:
-    """Assemble the ``Trace`` from the kernel's arrays, sliced to ``n_frames`` (copies, so
-    the unused capacity is released).
+    """Assemble the ``Trace`` from the kernel's arrays, sliced to the frames written (copies,
+    so the unused capacity is released).
 
     Parameters
     ----------
@@ -611,8 +615,9 @@ def build_trace(
         The run's SDOF constants.
     buffers : TraceBuffers
         From ``allocate_frames``, filled by the kernel (its ``trace_every`` is the stride).
-    n_frames : int
-        Frames the kernel wrote.
+    kernel_result : response._KernelResult
+        The kernel's result: ``frame_count`` (frames written) and ``forced_sample_count``
+        are read.
     column : moc.FluidColumn
         The run's column: its grid and moving fractions with fluid coupling; the empty
         column of a lumped run adds no column fields.
@@ -627,6 +632,7 @@ def build_trace(
     substep_duration = settings.substep_duration
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
+    n_frames = int(kernel_result.frame_count)
     kernel_arrays = {
         _STATE: buffers.frame_state[:n_frames],
         _INDEX: buffers.frame_index_columns[:n_frames],
@@ -637,6 +643,7 @@ def build_trace(
         "substep_duration": float(substep_duration),
         "substep_count": int(substep_count),
         "nominal_forced_sample_count": int(nominal_forced_sample_count),
+        "forced_sample_count": int(kernel_result.forced_sample_count),
         "portal_frame_height": float(request.portal_frame_height),
         "sdof_params": params,
         "inputs": inputs,

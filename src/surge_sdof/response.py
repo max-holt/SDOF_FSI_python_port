@@ -1076,9 +1076,7 @@ def _integrate(
 
     trace = None
     if trace_request is not None:
-        trace = tracing.build_trace(
-            trace_request, settings, sdof_params, buffers, int(result.frame_count), column
-        )
+        trace = tracing.build_trace(trace_request, settings, sdof_params, buffers, result, column)
     return _peak_response(result, sdof_params, histories, trace)
 
 
