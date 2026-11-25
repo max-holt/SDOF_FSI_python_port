@@ -17,7 +17,7 @@ refactor introduced (the code it names did not exist at `177c8b1` in that form).
 
 **Close-out pass (after R.12).** The rec column now gives the outcome: "done (close-out
 pass)" for what that pass fixed, "now; not done in the close-out pass" for the documentation
-fixes outside its list, and **deferred to Stage 6** for every remaining structural or naming
+fixes outside its list (all six since marked "done (close-out follow-up)"), and **deferred to Stage 6** for every remaining structural or naming
 finding.
 
 ## Solver core
@@ -42,14 +42,14 @@ finding.
 | R10 | Readability | confirmed | "forced phases" / "forced substep" mean transit + forced (288, 732, 761, 1213); prose only, the count names are ruled | **deferred to Stage 6** |
 | R11–R14 | Readability | confirmed | `first_substep_number` two meanings; `_record_frame` parameter `loads` shadows the module; free-decay reference displacement under three names; `_sample_grid` returns no grid | **deferred to Stage 6** |
 | R15 | Readability | confirmed / unclear | stage, session and NOTES.md labels in docstrings (response, moc, structure, coupling, loads, trace) | labels removed from the live modules (done (close-out pass); owner; `docs/style.md` §7) |
-| R16 | Readability | confirmed | comments say `out_max` (1118, 1324); moc.py:645 places the `rho_c = 0` check in the entry point (it is in `coupling.fluid_column`) | now; not done in the close-out pass |
-| R24 | Readability | confirmed | that the column gets the previous substep's acceleration (`state.a * dt`, 1287, 1338) is said only in coupling.py's docstring | now; not done in the close-out pass (comment) |
+| R16 | Readability | confirmed | comments say `out_max` (1118, 1324); moc.py:645 places the `rho_c = 0` check in the entry point (it is in `coupling.fluid_column`) | done (close-out follow-up) |
+| R24 | Readability | confirmed | that the column gets the previous substep's acceleration (`state.a * dt`, 1287, 1338) is said only in coupling.py's docstring | done (close-out follow-up) (comment) |
 | R17–R23 | Nit | confirmed | bare 0/1 parity start, positional `False`, `_record_frame` §4 departure not in §11, import order, units of `_KernelResult.x/v/a`, "Phase 3 … R", dtype of `_largest_magnitude` | leave (R19: recorded in §11, done (close-out pass)) |
 | M2 | Readability | confirmed | `FluidColumn` built positionally from 13 values in another order than `FluidConstants` | **deferred to Stage 6** |
 | M3 | Readability | confirmed, intro (R.9) | `mean_velocity_divisor` names a string choice, an int and a function; the internal parameter is still `vav_denominator`; moc.py:28 names `CouplingModel.vav_denominator` (gone); value sets exist (`PARITIES`, …) but literals are re-checked | moc.py:28: done (close-out pass); rest **deferred to Stage 6** |
 | M4–M7 | Readability | confirmed | "pivot" for the elbow and for the count; VBA names as primary definitions (`pipeSegQTY`, `extQTY`, `totInd`, `fluidDensty`); error messages in VBA names (tests match `"pivot > ext"`); A nodes "cell-centred" | **deferred to Stage 6** |
 | M8–M10 | Nit | confirmed | `empty_column` placeholders, `is_short_pipe` arguments, 0.5 / 1.5 offsets | leave |
-| S2, S3, S6 | Readability | confirmed | structure docstring names only `GetPeakResponse`; `f_applied` vs `applied_force` (ruling 37); stick branch unexplained | S2: done (close-out pass); S6: now; not done in the close-out pass; S3: **deferred to Stage 6** |
+| S2, S3, S6 | Readability | confirmed | structure docstring names only `GetPeakResponse`; `f_applied` vs `applied_force` (ruling 37); stick branch unexplained | S2: done (close-out pass); S6: done (close-out follow-up); S3: **deferred to Stage 6** |
 | S4, S5 | Nit | confirmed | "sub-step", `w2` | leave |
 | C2 | Nit | confirmed | "Acoustic impedance" | leave |
 | L4 | Design | **refuted** | phase codes in two modules: the split is documented (free decay defined with its consumer) | leave |
@@ -61,7 +61,7 @@ finding.
 | id | sev | verdict | finding (corrected) | rec |
 |---|---|---|---|---|
 | T2 | Design | confirmed, intro (R.8/R.9) | the column grid in three forms (`InterleavedGrid`, `ColumnTrace`, `LoopLayout`) packed and unpacked, with different field names | **deferred to Stage 6** (snapshot adapter map edited, not regenerated) |
-| T3 | Design | confirmed, intro (R.4/R.5) | `TraceRequest` carries the kernel's elbow-force generator (annotated `object`) and `build_trace`'s inputs; its docstring says all of it is for building the trace | docstring, annotation, unit: now; not done in the close-out pass; split: **deferred to Stage 6** |
+| T3 | Design | confirmed, intro (R.4/R.5) | `TraceRequest` carries the kernel's elbow-force generator (annotated `object`) and `build_trace`'s inputs; its docstring says all of it is for building the trace | docstring, annotation, unit: done (close-out follow-up) (units in the docstring); split: **deferred to Stage 6** |
 | G1 | Design | confirmed | lumped geometry rebuilt from `Trace.inputs["span"]` and response internals; celerity held twice | **deferred to Stage 6** (a `Trace` field: public-API territory) |
 | E3 | Design | confirmed | sweep CSV column types restated in `sweep_rows.history_from_row` and the ungated `sweep_report._load` | **deferred to Stage 6** (gated part) |
 | W1 | Design | confirmed | `sweep_rows` re-derives the modal mass `(L + h·4/3)·m`; same operands and order as `structure.lumped_params` | **deferred to Stage 6** |
@@ -75,11 +75,11 @@ finding.
 | G3 | Readability | confirmed | `LoopLayout.elbow_grid_point_pairs` read only by tests, but in the approved public interface | leave: owner |
 | E1, E2 | Readability | confirmed | twelve `_finite` calls; three spellings of the array NaN check | **deferred to Stage 6** |
 | E4 | Readability | confirmed | data_format.md meaning column cites pre-bump keys (`cell_position_m`, `leg_height_m`, `mass_total_kg`, `ratio_*`, `out_max`, …) | done (close-out pass) (text only, no export rewrite) |
-| E5–E8, E11 | Readability | confirmed | data_format.md: keys defined only by VBA name (81, 92, 112); "cell" / "pivot"; "sub-step"; architecture.md pointers; `display_moving_fractions` | E11: now; not done in the close-out pass; rest **deferred to Stage 6** |
+| E5–E8, E11 | Readability | confirmed | data_format.md: keys defined only by VBA name (81, 92, 112); "cell" / "pivot"; "sub-step"; architecture.md pointers; `display_moving_fractions` | E11: done (close-out follow-up); rest **deferred to Stage 6** |
 | E9, E10, E15 | Readability | confirmed | `n_rows` (kept on purpose at the R.9 bump), `force_history_max` is a magnitude, `grid_point_count` 0 for lumped | leave (next schema bump) |
 | H1–H3 | Readability | confirmed | generator prologue (step / step_sine only), dispatch and defaults repeated (defaults are the clean part), RMS three times | **deferred to Stage 6** |
 | H4 | Readability | confirmed | §11 reason for `histories.canonical` fits `step_sine` / `step_noise`, not `canonical` (not `PARAM_KEYS`, never called by `from_params`); same text in its `noqa` | §11 and `noqa` restated: done (close-out pass) |
-| H5–H7, H10 | Readability | confirmed | retired names in constant docstrings (`p_step`), `_KIND_SPECIFIC_PARAMS`, unit-less defaults | H5: now; not done in the close-out pass; rest **deferred to Stage 6** |
+| H5–H7, H10 | Readability | confirmed | retired names in constant docstrings (`p_step`), `_KIND_SPECIFIC_PARAMS`, unit-less defaults | H5: done (close-out follow-up); rest **deferred to Stage 6** |
 | W3, W4, W7–W10, W12, W13 | Readability | confirmed | identity map `HISTORY_PARAM_COLUMNS`; `sweep_jc.run` five jobs; `estimated_cells`; old `Case` / `TIERS` names; `p_design`, `p`; unit-less sweep constants; VBA names in `--help` | **deferred to Stage 6** |
 | W11 | Readability | confirmed | exported `regen.note` text carries session labels and names moved functions; data_format.md:205 cites `sweep_jc.COLUMNS` | leave (export rewrite); data_format line: done (close-out pass) |
 | W6 | Readability | **refuted** | (the layout string is printed and asserted by tests) | leave |

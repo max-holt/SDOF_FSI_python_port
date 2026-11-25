@@ -183,5 +183,8 @@ test-both` green on each (966 + 24 / 964 + 26).
   row of `findings_r12.md` are marked **deferred to Stage 6**; the r12 rec column gives each
   "now" item's outcome. Not done here (outside the list): R16, R24, S6, the T3 docstring and
   annotation, E11, H5.
+* **Follow-up:** those six done, one commit each (comments, docstrings, data_format.md and the
+  `TraceRequest.elbow_force_samples` annotation; Python AST-equal without docstrings except that
+  annotation and its `TYPE_CHECKING` import; lint and `make test-both` green on each).
 
 Not merged, not tagged.

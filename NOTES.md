@@ -32,8 +32,10 @@ relative to the literal port). This is accepted: the pure-Python mode is for ver
 only, and the compiled path, the one that is used, is 3-22 % faster. The cause was not
 investigated.
 
-Not done (outside this pass's list; `findings_r12.md` "now; not done"): R16, R24, S6, the
-T3 docstring and annotation, E11, H5. Session labels remain in `tools/` and `tests/`; the
+Follow-up (same day): the six left over (R16, R24, S6, the T3 docstring and annotation, E11,
+H5) done, one commit each; every Python commit AST-equal without docstrings except T3's
+annotation of `TraceRequest.elbow_force_samples` and its `TYPE_CHECKING` import; lint and
+`make test-both` (966 + 24 / 964 + 26) on each; `-m slow` at the end (150 passed). Session labels remain in `tools/` and `tests/`; the
 style §7 rule names the live modules.
 
 **Next:** the owner's decision on the merge. Not merged, not tagged.
