@@ -1282,6 +1282,8 @@ def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; doc
                 trace_every, substep_index, frame_count, frame_capacity, True
             )
             before = state
+            # The column is advanced with the previous substep's acceleration (state.a, before
+            # _structure_substep), as the VBA's MoC block uses a * dt before aNew (lines 826-843).
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
@@ -1333,6 +1335,8 @@ def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; doc
                 trace_every, substep_index, frame_count, frame_capacity, is_in_record_window
             )
             before = state
+            # The column is advanced with the previous substep's acceleration (state.a, before
+            # _structure_substep), as the VBA's MoC block uses a * dt before aNew (lines 826-843).
             if is_fluid_coupled:
                 junction_force = float(
                     moc.step(
