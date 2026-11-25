@@ -6,7 +6,18 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
-Session R.8 (supporting modules and tools, plan group 5 with 3.11, 2026-11-24/25) **done**.
+Session R.9 (public API, plan group 6 with 3.7 and 3.10, 2026-11-25) **stopped for the
+owner after step 1**, as the brief asks. Rulings 67-75 recorded (`84ac732`); `tools/review_ab.py`
+has a sweep case, `sweep_noise` (`5d86458`, ruling 70). The proposal and the old-to-new key
+table are in `docs/review/public_interface.md`; nothing in `src/` has changed. Its questions
+Q-PI-1 to Q-PI-7 (section 5) wait for the owner. The viewer's browser tests run here (26
+passed) with `PLAYWRIGHT_BROWSERS_PATH` pointed at a scratch directory whose
+`chromium-1243/chrome-linux/chrome` links to `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`
+(the test globs `chrome-linux`, the installed build is `chrome-linux64`; playwright 1.56 wants
+1194 by default). Gates at the start and before each commit: lint, 949 + 24 compiled, 947 + 26
+pure Python. **Next:** the owner's answers, then `public_interface.md` section 4 in order.
+
+Previous: session R.8 (supporting modules and tools, plan group 5 with 3.11, 2026-11-24/25) **done**.
 Rulings 62-66 in the charter (`f74bc81`): the kernel's 56 statements a `docs/style.md` §11
 exception; C-07 open by decision; the R.7 bench-row subjects left as they are (sentence below
 corrected); gates and the A/B as before; the plan wins.

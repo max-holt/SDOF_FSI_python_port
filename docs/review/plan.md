@@ -68,6 +68,11 @@ gated user is `sweep_jc.py`; S-23 open, see `findings.md`). 5.15 was made with g
 nothing further. Next: `docs/review/public_interface.md` and stop for the owner (before
 group 6).
 
+**Progress (session R.9, 25 Nov 2026).** Rulings 67-75. The public interface is proposed in
+`docs/review/public_interface.md` (input groups, the entry points, `output_type`, the flags,
+`Trace` / `LoopLayout` / `History`, `histories` and `export` signatures, the old-to-new key
+table of the schema bump, the commit order); stopped there for the owner before 6.1.
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;
