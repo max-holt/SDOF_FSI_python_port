@@ -446,7 +446,7 @@ def _sine_shape(
     return unit_sine
 
 
-def step_sine(
+def step_sine(  # noqa: PLR0913 (the sweep's generator columns one-for-one; docs/style.md §11)
     step_pressure: float,
     oscillation_amplitude: float,
     oscillation_frequency: float,
@@ -548,7 +548,7 @@ def _scaled_to_peak(
     return noise * ((peak_pressure_target - step_pressure) / noise_max)
 
 
-def step_noise(
+def step_noise(  # noqa: PLR0913 (the sweep's generator columns one-for-one; docs/style.md §11)
     step_pressure: float,
     requested_noise_rms: float,
     noise_cutoff_frequency: float | None = None,
@@ -668,7 +668,7 @@ def step_noise(
 # ------------------------------------------------------------------ the sweep's scaling
 
 
-def canonical(
+def canonical(  # noqa: PLR0913 (the sweep's generator columns one-for-one; docs/style.md §11)
     history_type: str,
     design_pressure: float,
     amplitude_fraction: float,

@@ -86,7 +86,7 @@ def git_sha_tag() -> str:
 def cpu_model() -> str:
     """The CPU's model name (``/proc/cpuinfo``, else what ``platform`` reports, else
     ``"unknown"``)."""
-    try:
+    try:  # noqa: PLR1702 (try / with / for / if of one /proc read; no ruling yet, NOTES.md)
         with open("/proc/cpuinfo") as fh:
             for line in fh:
                 if line.lower().startswith("model name"):

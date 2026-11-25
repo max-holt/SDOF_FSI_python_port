@@ -413,7 +413,7 @@ def peak_response(
     )
 
 
-def peak_response_jc(
+def peak_response_jc(  # noqa: PLR0913 (7: sample rate beside the history; docs/style.md §11)
     force_history: ArrayLike,
     sample_rate: float,
     *,
@@ -1196,7 +1196,7 @@ def _peak_response(
 
 
 @numba.njit(cache=True)
-def _integrate_kernel(
+def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; docs/style.md §11)
     schedule: _ForceSchedule,
     sdof_params: SdofParams,
     settings: KernelSettings,

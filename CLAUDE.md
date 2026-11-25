@@ -24,7 +24,7 @@ Invoke pytest as `.venv/bin/python -m pytest …` (the `pytest` on PATH is an is
 - Lumped golden gate (end of every session on this branch): `.venv/bin/python -m pytest -q -m slow`
 - Snapshot test alone: `make clean-cache && .venv/bin/python -m pytest -q tests/test_review_snapshot.py`, then again with `NUMBA_DISABLE_JIT=1`; `tools/review_snapshot.py` lists the documents that differ.
 - Supporting-code checks alone: `.venv/bin/python -m pytest -q tests/test_review_support.py`; `tools/review_support.py` lists the files that differ.
-- Review metrics: `.venv/bin/python tools/review_baseline.py` (ruff and radon, thresholds on the command line; `pyproject.toml` lint settings are not changed yet).
+- Review metrics: `.venv/bin/python tools/review_baseline.py` (ruff and radon, thresholds on the command line). The function limits of `docs/style.md` §3 are in `pyproject.toml` since session R.10 (plan 6.8): a miss carries a targeted `noqa` with its reason and a style §11 entry.
 - Golden suite only: `.venv/bin/python -m pytest -q tests/test_golden.py -m "slow or jc_slow"`
 - Lint: `make lint` (`ruff check` + `ruff format --check` through the venv; a bare `ruff` on PATH can differ from the venv's, and `ruff format .` rewrites files: format with `.venv/bin/python -m ruff format .` only when you mean to)
 - Pure-Python mode (no JIT): `NUMBA_DISABLE_JIT=1 .venv/bin/python -m pytest -q`

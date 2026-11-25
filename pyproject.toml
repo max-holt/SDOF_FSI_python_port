@@ -53,12 +53,39 @@ extend-exclude = ["legacy"]
 [tool.ruff.lint]
 # SIM and C4 were added in Stage 4.4 (the Stage 1 "no simplification" exclusion is over).
 # The two frozen Stage 1 modules keep the literal transcription and are exempt from them.
-select = ["E", "F", "W", "I", "B", "UP", "NPY", "SIM", "C4"]
+# The function limits of docs/style.md section 3 (review plan 6.8): arguments (keyword-only
+# ones count), complexity as ruff counts it, statements, nesting depth. A function that
+# misses one carries a targeted noqa with its reason (a docs/style.md section 11 exception).
+select = [
+    "E", "F", "W", "I", "B", "UP", "NPY", "SIM", "C4",
+    "C901", "PLR0913", "PLR0915", "PLR1702",
+]
 ignore = ["E501"]
+# PLR1702 (nesting depth) is a preview rule in ruff 0.17; preview applies to it alone.
+preview = true
+explicit-preview-rules = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-statements = 50
+max-nested-blocks = 3
 
 [tool.ruff.lint.per-file-ignores]
-"src/surge_sdof/legacy_port.py" = ["SIM", "C4"]
-"src/surge_sdof/vba_compat.py" = ["SIM", "C4"]
+"src/surge_sdof/legacy_port.py" = ["SIM", "C4", "C901", "PLR0913", "PLR0915", "PLR1702"]
+"src/surge_sdof/vba_compat.py" = ["SIM", "C4", "C901", "PLR0913", "PLR0915", "PLR1702"]
+# The style guide covers the review's scope: the tests and the tools no test runs are outside
+# the function limits (charter ruling 87; the ungated tools are rename-only, ruling 24).
+"tests/**" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/bench.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/extract_fixtures.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/golden_report.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/profile_delta.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/review_ab.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/review_baseline.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
+"tools/sweep_report.py" = ["C901", "PLR0913", "PLR0915", "PLR1702"]
 
 [tool.ruff.format]
 quote-style = "double"
