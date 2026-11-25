@@ -81,7 +81,7 @@ W.1 layout. The old-to-new key table is `docs/review/public_interface.md` §3.3.
 | `closed_gap_stiffness_ratio` | float | `restrainFreqRatio²` |
 | `substep_duration` | float | Sub-step, s (`1 / (sampleFreq stepQTY)`) |
 | `substep_count` | int | Sub-steps per sample |
-| `nominal_forced_sample_count` | int | The VBA `outMax`; free decay is traced while `sample < 2 out_max` |
+| `nominal_forced_sample_count` | int | The VBA `outMax`; free decay is traced while `sample < 2 nominal_forced_sample_count` |
 | `trace_every` | int | The trace stride in sub-steps: frame `i >= 1` is the end of sub-step `(i - 1) trace_every` |
 | `is_capped` | int (0/1) | 1 when the run decayed past the traced history window, so the trace ends before the run did (`export.is_capped`) |
 
@@ -112,9 +112,9 @@ of grid points of that grid (equal to `meta.grid_point_count` for a JC run).
 | `end_to_elbow_cell_count` | int | `pivotSegQTY` |
 | `column_cell_count` | int | `N`; `n = 2N + 1` |
 | `segments` | object | `trace.geometry.segments`: the cell indices where the five segments meet |
-| `x_at_rest` | float[n] | Circle centres at rest on the loop, m: the run along `y = 0` from `x = 0` to `x = run_length_m`, legs vertical, inlet / outlet horizontal |
+| `x_at_rest` | float[n] | Circle centres at rest on the loop, m: the run along `y = 0` from `x = 0` to `x = run_length`, legs vertical, inlet / outlet horizontal |
 | `y_at_rest` | float[n] | As above |
-| `run_length` | float | `cell_position_m[run_end] - cell_position_m[run_start]` |
+| `run_length` | float | `grid_point_position[segments.run_end_index] - grid_point_position[segments.run_start_index]` |
 | `inlet_leg_height` | float | Height of the inlet pipe above the run (centreline length between the inlet elbow cells), m |
 | `outlet_leg_height` | float | The same for the outlet side (equal to `inlet_leg_height` with the default fraction profile; one cell shorter with `fraction_profile="legacy"`, whose B profile ramps one cell longer on the inlet side) |
 | `portal_frame_height` | float | `structure.solve_portal_height` of the case, m (printed, not used for the layout) |
@@ -125,10 +125,10 @@ of grid points of that grid (equal to `meta.grid_point_count` for a JC run).
 
 | key | type | meaning |
 |---|---|---|
-| `inlet_elbow_index` | int | The last fraction-0 cell of the inlet (the inlet / leg elbow cell, at `(0, leg_height_m)`) |
+| `inlet_elbow_index` | int | The last fraction-0 cell of the inlet (the inlet / leg elbow cell, at `(0, inlet_leg_height)`) |
 | `run_start_index` | int | The first fraction-1 cell (the leg / run elbow, at `(0, 0)`) |
-| `run_end_index` | int | The last fraction-1 cell (at `(run_length_m, 0)`) |
-| `outlet_elbow_index` | int | The first fraction-0 cell of the outlet (at `(run_length_m, leg_height_2_m)`) |
+| `run_end_index` | int | The last fraction-1 cell (at `(run_length, 0)`) |
+| `outlet_elbow_index` | int | The first fraction-0 cell of the outlet (at `(run_length, outlet_leg_height)`) |
 
 ### trace.frames
 
@@ -202,7 +202,7 @@ sub-step, exactly as the model stores it.
 ### sweep.columns
 
 Seventy-two columns, fixed names, every column the same length: the columns of the Session 5b
-sweep CSV (`tools/sweep_jc.py run`, `sweep_jc.COLUMNS is export.SWEEP_COLUMNS`). Numeric columns
+sweep CSV (`tools/sweep_jc.py run`, `sweep_rows.COLUMNS is export.SWEEP_COLUMNS`). Numeric columns
 are floats (or `null`); `tier`, `size_in`, `noise_seed`, `sample_count`, `column_cell_count`, `end_to_elbow_cell_count`
 and `is_short_pipe` are ints (or `null`); `case_id`, `subset`, `history_type`,
 `histories_version`, `cpu`, `git_sha` and `error` are strings (or `null`). The fifteen generator
@@ -225,10 +225,10 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 | `history_type` | string | Generator kind: `step`, `step_sine`, `step_noise` |
 | `oscillation_frequency` | float | Sine frequency, Hz; empty otherwise |
 | `noise_seed` | int | Noise RNG seed; empty otherwise |
-| `amplitude_fraction` | float | Peak as a fraction of the cap `1.33 p_design` |
+| `amplitude_fraction` | float | Peak as a fraction of the cap `1.33 design_pressure_bar` |
 | `friction_coefficient` | float | `dynamicFric`, the Coulomb coefficient (the VBA uses `0.5 mu 9.81 dt` directly) |
 | `design_pressure_bar` | float | `2 t S / OD` with `S = 138` MPa, bar |
-| `peak_pressure_target_bar` | float | `amplitude_fraction × 1.33 × p_design`, bar |
+| `peak_pressure_target_bar` | float | `amplitude_fraction × 1.33 × design_pressure_bar`, bar |
 | `pressure_max_bar` | float | `max(p)` of the history, bar (equals `peak_pressure_target_bar` to rounding) |
 | `pressure_mean_bar` | float | Mean of the pressure history over its whole length (lead-in included), bar |
 | `pressure_rms_bar` | float | RMS of the pressure history over its whole length, bar |
@@ -266,10 +266,10 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 | `max_static_equivalent_force_ratio` | float | `max_static_equivalent_force_jc / max_static_equivalent_force_lumped`: the flexibility measure |
 | `max_velocity_lumped` | float | `max_velocity`, lumped, m/s |
 | `max_velocity_jc` | float | The same, JC |
-| `max_velocity_ratio` | float | `v_peak_jc / v_peak_lumped`: the support-design measure (the lead author's peak local force at impact is derived from the velocity, Stage 6) |
-| `max_momentum_lumped` | float | `mass_total_kg × v_peak_lumped`, kg·m/s |
+| `max_velocity_ratio` | float | `max_velocity_jc / max_velocity_lumped`: the support-design measure (the lead author's peak local force at impact is derived from the velocity, Stage 6) |
+| `max_momentum_lumped` | float | `total_mass × max_velocity_lumped`, kg·m/s |
 | `max_momentum_jc` | float | The same, JC |
-| `max_kinetic_energy_lumped` | float | `0.5 × mass_total_kg × v_peak_lumped²`, J |
+| `max_kinetic_energy_lumped` | float | `0.5 × total_mass × max_velocity_lumped²`, J |
 | `max_kinetic_energy_jc` | float | The same, JC |
 | `max_displacement_lumped` | float | `max_displacement`, lumped, m |
 | `max_displacement_jc` | float | The same, JC |
@@ -279,7 +279,7 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 | `max_unbalance_force_jc` | float | The same, JC (equal to `max_unbalance_force_lumped` on one history) |
 | `force_per_length_diameter_squared_lumped` | float | `max_static_equivalent_force_lumped / (L d²)`, `d` = OD, N/m³ |
 | `force_per_length_diameter_squared_jc` | float | The same, JC |
-| `daf_lumped` | float | `max_static_equivalent_force_lumped / (pressure_max A)`, the effective DAF |
+| `daf_lumped` | float | `max_static_equivalent_force_lumped / (max(p) × flow_area)`, `p` the pressure history in Pa: the effective DAF |
 | `daf_jc` | float | The same, JC |
 | `wall_time_lumped` | float | Wall-clock seconds of the lumped call (history generation excluded) |
 | `wall_time_jc` | float | Wall-clock seconds of the JC call |
@@ -290,7 +290,7 @@ W.1) had thirty columns with the same names where both exist, plus `ratio_f_peak
 A `curve_10in` golden row (`tests/fixtures/curve_10in/cases.csv`, converted by `tools/export.py
 sweep --from-csv`) fills `case_id`, `size_in = 10`, `span_length`, `natural_frequency`, `history_type =
 "golden"`, `friction_coefficient`, `characteristic_impedance`, and `max_static_equivalent_force_*` / `max_unbalance_force_*` for its own solver only (the other solver's
-columns and `ratio_*` are null: the 75 lumped and 3 JC rows are different cases). Everything the
+columns and the `*_ratio` columns are null: the 75 lumped and 3 JC rows are different cases). Everything the
 sheet does not record is null.
 
 ### sweep.regen
