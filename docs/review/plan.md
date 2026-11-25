@@ -55,6 +55,19 @@ absorbed (the maxima live in `_structure_substep`); 4.1 and 4.5 done. **Held for
 complete except 4.13 (removed in R.1b). Next: group 5 (supporting modules and tools, with
 3.11 moved there by ruling 48).
 
+**Progress (session R.8, 24-25 Nov 2026).** Rulings 62-66 (the kernel's 56 statements a
+style §11 exception; C-07 open by decision; gates and the A/B as before; the plan wins).
+Group 5 done, one plan item per commit (5.6, 5.11 and 5.12 in two or three), each gated and,
+where the solvers run through it, A/B timed: 5.1 (`tools/fixture_cases.py`), 5.3 (the frame
+table), 5.4 (the sweep table and `export.read_csv`), 5.5 (`interleaved_grid`), 3.11
+(`response.solver_setup` / `column_grid`), 5.6 (the tools ask the query; the height on
+`Trace`), 5.7 (`moc.display_moving_fractions`), 5.8, 5.9, 5.10, 5.11 (`StepSpec`,
+`tools/sweep_document.py`, `ReferenceCase`), 5.12 (`run_case` in parts with `RunProvenance`;
+`sweep_grid.py`, `sweep_rows.py`, `sweep_report.py`), 5.13, 5.14. **Not made:** 5.2 (its only
+gated user is `sweep_jc.py`; S-23 open, see `findings.md`). 5.15 was made with group 1 (R.3);
+nothing further. Next: `docs/review/public_interface.md` and stop for the owner (before
+group 6).
+
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
 across from R.2: its order changes (the ruling-2 removals as group 0, before the renames;

@@ -450,8 +450,18 @@ code cannot drift apart silently. Design points:
   at 832 frames (24 ms a frame), 46.9 MB of JSON, 20.6 MB gzipped. `docs/data_format.md` names
   the binary variant (same header + float64 blobs) as the upgrade path.
 * **Case loading.** `tools/cases.py` holds the `--golden` / `--step` case loading of
-  `tools/export.py` (once shared with the retired `tools/animate.py`), plus the fixture readers
-  for the sweep reference block and the `cases.csv` → sweep-row mapping.
+  `tools/export.py` (once shared with the retired `tools/animate.py`; the step as a
+  `StepSpec` record). The content of the `sweep` document beyond its values (the
+  `cases.csv` → sweep-row mapping, the regen templates, the reference block) is
+  `tools/sweep_document.py` (review session R.8). Both read the fixtures through
+  `tools/fixture_cases.py`, the one non-test module of fixture loaders, tolerances and flag
+  sets, which `tests/test_golden.py` re-exports; pytest finds `tools/` through
+  `pythonpath = ["tools"]`.
+* **The solver's set-up, asked once.** `response.solver_setup` (the sub-step and the
+  portal-frame height) and `response.column_grid` (the MoC grid of a set-up) are the
+  expressions the entry points use; `tools/export.py`, the sweep's `run_case` and the loop
+  geometry ask them instead of retyping the set-up, and a trace carries its
+  `portal_frame_height` (review session R.8, plan 3.11 and 5.6).
 
 ## Session W.2 — the viewer
 
