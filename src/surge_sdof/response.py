@@ -1,16 +1,31 @@
 """Public API: peak response of the SDOF pipe proxy to a force history.
 
+The two entry points take the force history and its sample rate, then keyword-only input
+objects (public API session, R.9; ``docs/review/public_interface.md``)::
+
+    peak_response(force_history, sample_rate, *, span, restraint, integration)
+    peak_response_jc(force_history, sample_rate, *, span, restraint, fluid, integration,
+                     coupling=CouplingModel())
+
+``PipeSpan`` (span length, flexural rigidity, mass per length, celerity), ``Restraint``
+(natural frequency, damping, friction, support gap, closed-gap frequency ratio), ``Fluid``
+(fluid density, flow area) and ``Integration`` (substeps per sample, trace stride) are frozen
+dataclasses in SI units (damping in %). Both return a ``PeakResponse``: the five maxima, the
+free-decay sample count, the displacement, velocity and acceleration at the end of every
+sample, and the ``Trace`` when one was asked for.
+
 ``peak_response`` reproduces ``GetPeakResponse`` (``legacy/vba/Existing Code.bas``
 line 309) from the Stage 4 modules: ``structure`` (portal-frame proxy, SDOF kernel),
 ``loads`` (unbalance force schedule), with no fluid coupling. Set-up is done here per
-solver; the sample loop, max trackers, result history, free-decay phase and
-output-type switch live in one shared ``_integrate``. ``peak_response_jc`` reproduces
+solver; the sample loop, max trackers, the three response histories and the free-decay
+phase live in one shared ``_integrate``. ``peak_response_jc`` reproduces
 ``GetPeakResponseJC`` (line 622): its own fluid-corrected set-up (``structure.jc_params``,
 ``moc.grid_size``, the short-pipe fallback to ``peak_response``) and the fluid column
 ``coupling.fluid_column`` builds, passed to the same loop; the two set-ups are not merged.
 
-Approved fixes F-1 and F-2 (NOTES.md) are keyword flags of ``peak_response_jc``:
-``vav_denominator`` ("legacy": ``vAv`` divided by ``2N - 1``, D-17; "fixed": by the
+The junction-coupling model choices are one ``CouplingModel``, validated on construction
+(D-25); ``VBA_COUPLING`` reproduces the workbook. Approved fixes F-1 and F-2 (NOTES.md):
+``mean_velocity_divisor`` ("legacy": ``vAv`` divided by ``2N - 1``, D-17; "fixed": by the
 ``2N + 1`` terms summed) and ``parity`` ("per_phase": the VBA index
 ``k + (totInd - 1) * stepQTY`` with each phase's own ``k`` range, D-19; "running": one
 running sub-step counter for the whole run, so the even/odd alternation never
@@ -30,7 +45,7 @@ arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba c
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
 
-Session V.1 (trace): both solvers take ``trace_every: int = 0``. With ``k > 0`` every
+Session V.1 (trace): ``Integration.trace_every`` (default 0). With ``k > 0`` every
 ``k``-th sub-step is recorded into preallocated arrays the kernel takes (``trace.allocate_frames``)
 and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kernel takes
 empty arrays and the recording branch is never entered. The recording reads the state and
@@ -41,8 +56,9 @@ per-sub-step elbow forces and the transit / forced boundary for the trace.
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
 
-* Returns a ``PeakResponse`` dataclass. ``history`` is 0-based (element ``t - 1`` is
-  the state at the end of sample ``t``); the VBA pad element 0 (D-16) is gone.
+* Returns a ``PeakResponse`` dataclass. The three histories are 0-based (element ``t - 1``
+  is the state at the end of sample ``t``); the VBA pad element 0 (D-16) is gone, and all
+  three are recorded where the VBA's ``outputType`` returned one.
 * The state is Python floats (see ``structure``). Overflow therefore no longer raises
   ``FloatingPointError`` mid-run as the numpy state did (D-14); nan/inf are absorbing in
   the update, so the final state is checked once and ``FloatingPointError`` raised then
