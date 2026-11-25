@@ -4,13 +4,13 @@
 viewer draws and the data files describe (``docs/data_format.md``, ``trace.geometry``):
 inlet pipe, leg down, run, return leg up, outlet pipe, the cells mapped by their moving
 fraction (``_segments``: the fraction-1 block is the run, the last fraction-0 cell before it
-and the first after it the upper elbows), uniform spacing by ``cell_position`` along the
-centreline, sharp elbows (the model has no bends). A JC trace brings its own grid; a lumped
-trace gets the grid the case would have (``lumped_grid``: ``moc.grid_size`` /
-``moc.moving_fractions`` with the solver's default profile, F-4; a ``pivotSegQTY = 4`` grid,
-refused by both profiles, gets the legacy B profile with the ``n < extQTY`` test, display
-only). The rules are described in ``docs/architecture.md`` ("The picture", Geometry) and
-pinned by ``tests/test_geometry.py``.
+and the first after it the upper elbows), uniform spacing by ``grid_point_position`` along
+the centreline, sharp elbows (the model has no bends). A JC trace brings its own grid; a
+lumped trace gets the grid the case would have (``lumped_grid``: ``moc.grid_size`` /
+``moc.moving_fractions`` with the solver's default profile, F-4; a grid with
+``end_to_elbow_cell_count = 4``, refused by both profiles, gets
+``moc.display_moving_fractions``, display only). The rules are described in
+``docs/architecture.md`` ("The picture", Geometry) and pinned by ``tests/test_geometry.py``.
 
 Used by ``surge_sdof.export`` (the ``geometry`` block of a trace file); numpy only, no plotly.
 """
@@ -44,8 +44,8 @@ class LoopLayout:
     Attributes
     ----------
     grid_point_position, grid_point_kind, grid_point_moving_fraction : numpy.ndarray
-        As ``trace.ColumnTrace`` (m along the column; 0 = A node / 1 = B cell; the moving
-        fraction).
+        Shape ``(2N + 1,)``, as ``trace.ColumnTrace`` (m along the column; 0 = A node /
+        1 = B cell; the moving fraction, dimensionless).
     end_to_elbow_cell_count, column_cell_count, inactive_end_cell_count : int
         The grid (``moc.grid_size``, ``moc.INACTIVE_END_CELL_COUNT``).
     cell_length : float
@@ -61,8 +61,8 @@ class LoopLayout:
     elbow_grid_point_pairs : tuple of (int, int)
         The two grid points either side of each of the four elbows, in centreline order.
     x_at_rest, y_at_rest : numpy.ndarray
-        Circle centres at rest, m: the run along ``y = 0`` from ``x = 0``
-        (``run_start_index``) to ``x = run_length`` (``run_end_index``); leg 1 up ``x = 0``
+        float64, shape ``(2N + 1,)``: grid-point centres at rest, m: the run along ``y = 0``
+        from ``x = 0`` (``run_start_index``) to ``x = run_length`` (``run_end_index``); leg 1 up ``x = 0``
         to the inlet elbow point at ``(0, inlet_leg_height)``, the inlet extending left from
         it at ``y = inlet_leg_height``; leg 2 up ``x = run_length`` to the outlet elbow point
         at ``(run_length, outlet_leg_height)``, the outlet extending right from it. Sharp
@@ -96,6 +96,7 @@ class LoopLayout:
 
     @property
     def grid_point_count(self) -> int:
+        """The number of grid points, ``2N + 1``."""
         return int(self.grid_point_position.shape[0])
 
 
@@ -103,10 +104,11 @@ class LoopLayout:
 
 
 def _segments(grid_point_moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
-    """``(inlet_elbow_index, run_start_index, run_end_index, outlet_elbow_index)`` from the fraction profile: the
-    fraction-1 block is the run; the last fraction-0 cell before it and the first after it
-    are the upper elbows. With the F-4 profile both legs hold ``2 pivot - 10`` interleaved
-    cells and every inlet / outlet cell has fraction 0; with the legacy profile the inlet
+    """The grid-point indices of the four elbows, from the moving-fraction profile
+    (shape ``(2N + 1,)``): ``(inlet_elbow_index, run_start_index, run_end_index,
+    outlet_elbow_index)``. The fraction-1 block is the run; the last fraction-0 cell before
+    it and the first after it are the upper elbows. With the F-4 profile both legs hold
+    ``2 pivot - 10`` interleaved cells and every inlet / outlet cell has fraction 0; with the legacy profile the inlet
     leg is one cell longer and D-4's ``n < 3`` cell (B(3), fraction ``1 / (pivot - 4)^2``)
     is a moving cell on the horizontal inlet (B(4) = 0 is the last zero before the run)."""
     fully_moving = np.flatnonzero(grid_point_moving_fraction == 1.0)
@@ -147,7 +149,7 @@ def loop_layout(
     cell_length : float
         ``2 * celerity * dt``, m.
     portal_frame_height : float
-        m.
+        Leg height of the portal-frame proxy, m (carried, not used for the layout).
 
     Returns
     -------
@@ -265,6 +267,7 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
     Parameters
     ----------
     trace : Trace
+        A traced run of either solver.
 
     Returns
     -------
