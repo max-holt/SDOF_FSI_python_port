@@ -29,8 +29,10 @@ The junction-coupling model choices are one ``CouplingModel``, validated on cons
 ``2N + 1`` terms summed) and ``parity`` ("per_phase": the VBA index
 ``k + (totInd - 1) * stepQTY`` with each phase's own ``k`` range, D-19; "running": one
 running substep counter for the whole run, so the even/odd alternation never
-double-steps a half-grid at a phase boundary). The parity flag is applied by
-``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
+double-steps a half-grid at a phase boundary). The parity flag reaches the compiled loop
+as ``KernelSettings.is_per_phase_parity``; the loop adds ``_parity_offset`` (0 for the
+running counter, fixed per sample for the VBA index) to its running ``substep_index`` and
+passes whether the sum is even to ``moc.step`` as ``is_even_substep``.
 ``fraction_profile`` ("legacy": the VBA ``interpFractionA/B``, D-4; "fixed": the lead
 author's corrected profiles, approved fix F-4) is passed to the coupling, which tabulates
 the profile once (``moc.moving_fractions``).
@@ -431,8 +433,8 @@ def peak_response_jc(  # noqa: PLR0913 (7: sample rate beside the history; docs/
     force_history, sample_rate, span, restraint, integration
         As ``peak_response``; ``span.mass_per_length`` (kg/m) includes the fluid and
         ``restraint.natural_frequency`` (Hz) is modelled with the fluid mass included. A
-        junction-coupling trace also carries the column (``Trace.p_cells``,
-        ``Trace.v_cells``) and the grid geometry.
+        junction-coupling trace also carries the column and its grid (``Trace.column``, a
+        ``trace.ColumnTrace``: ``grid_point_pressure``, ``grid_point_velocity``).
     fluid : Fluid
         Fluid density (kg/m³) and flow area (m²). The core fluid is removed from the rigid
         mass and the column inside the span feeds the junction force (N) back.
@@ -581,8 +583,8 @@ def _trace_request(
 
     Parameters
     ----------
-    solver : {"lumped", "jc"}
-        The solver's name in the trace.
+    solver : {"peak_response", "peak_response_jc"}
+        The solver's name in the trace (the entry point's name).
     inputs : dict
         The echo of the entry point's inputs; its 2-D force history (N) and sample rate
         (Hz) are what the elbow forces are walked from.
@@ -1055,10 +1057,10 @@ def _integrate(
     Notes
     -----
     The VBA sample loop (``GetPeakResponse`` / ``GetPeakResponseJC``). The MoC parity index
-    is the running substep counter ``n`` (0 at the first substep), or with
+    is the running substep counter ``substep_index`` (0 at the first substep), or with
     ``settings.is_per_phase_parity`` the VBA per-phase index ``k + (totInd - 1) * stepQTY``
-    (phase 3: ``k = 1 .. stepQTY``), written as ``n + off`` with ``off`` fixed per sample
-    (D-19, approved fix F-2). The kernel is the Stage 5 compiled loop."""
+    (phase 3: ``k = 1 .. stepQTY``), written as ``substep_index + parity_offset`` with
+    ``parity_offset`` (``_parity_offset``) fixed per sample (D-19, approved fix F-2). The kernel is the Stage 5 compiled loop."""
     schedule, histories, buffers = _kernel_inputs(
         unbalance_force_samples, settings, column, trace_request
     )
