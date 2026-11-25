@@ -56,6 +56,183 @@ percent), `GRAVITY` (9.81 m/s²), `FRICTION_DEAD_ZONE` (the `sign(v, 0.000001)` 
 used where the literal stood. Pure-number coefficients of formulas (`4 / 3`, `12`, the
 friction `0.5`) stay inline with derivation comments (`docs/style.md` §6).
 
+## Diagrams
+
+Two pictures of `response.py` as it stands. Solid arrows are every run;
+dotted arrows only a traced run (`trace_every > 0`). Each arrow is labelled with the names
+it carries; the table under the diagrams gives their VBA names.
+
+### Data flow of one run
+
+`peak_response_jc` as drawn; `peak_response` is the same without `Fluid` and
+`CouplingModel`: its `SdofParams` come from `structure.lumped_params`, its column is
+`moc.empty_column()` and its `is_per_phase_parity` is False. A span too short for the MoC
+grid (`moc.is_short_pipe` on `column_grid`'s `ColumnGrid`) makes `peak_response_jc` return
+`peak_response` before any `FluidColumn` is built.
+
+```mermaid
+flowchart TD
+    subgraph inputs["Inputs"]
+        FH["force_history, sample_rate"]
+        SPAN["PipeSpan"]
+        REST["Restraint"]
+        FLUID["Fluid"]
+        INTEG["Integration"]
+        CPL["CouplingModel"]
+    end
+
+    subgraph setup["Set-up"]
+        SG["_sample_grid"]
+        SS["solver_setup → SolverSetup"]
+    end
+
+    FH -->|"force_history, sample_rate"| SG
+    SPAN -->|"span_length, celerity"| SG
+    FH -->|"sample_rate"| SS
+    SPAN -->|"span_length, flexural_rigidity, mass_per_length"| SS
+    REST -->|"natural_frequency"| SS
+    INTEG -->|"substep_count"| SS
+
+    LOADS["load schedule<br/>loads.unbalance_force, flattened by<br/>_kernel_inputs into _ForceSchedule"]
+    SDOF["SdofParams<br/>structure.jc_params"]
+    COL["FluidColumn<br/>coupling.fluid_column"]
+    KS["KernelSettings"]
+    TRQ["TraceRequest<br/>_trace_request"]
+
+    SG -->|"force_history_2d"| LOADS
+    FH -->|"sample_rate"| LOADS
+    SPAN -->|"span_length, celerity"| LOADS
+    INTEG -->|"substep_count"| LOADS
+
+    SS -->|"portal_frame_height, substep_duration"| SDOF
+    SPAN -->|"span_length, mass_per_length"| SDOF
+    REST -->|"natural_frequency, damping_percent, friction_coefficient, support_gap, closed_gap_frequency_ratio"| SDOF
+    FLUID -->|"fluid_density, flow_area"| SDOF
+
+    SS -->|"portal_frame_height, substep_duration"| COL
+    SPAN -->|"span_length, celerity"| COL
+    FLUID -->|"fluid_density, flow_area"| COL
+    CPL -->|"mean_velocity_divisor, fraction_profile"| COL
+
+    SS -->|"substep_duration"| KS
+    SG -->|"nominal_forced_sample_count"| KS
+    INTEG -->|"substep_count"| KS
+    CPL -->|"parity → is_per_phase_parity"| KS
+
+    INTEG -.->|"trace_every"| TRQ
+    SS -.->|"portal_frame_height"| TRQ
+    TRQ -.->|"elbow_a_force_by_substep, elbow_b_force_by_substep"| LOADS
+
+    K["_integrate_kernel"]
+    LOADS -->|"unbalance_force_by_substep, sample_start"| K
+    SDOF -->|"sdof_params"| K
+    COL -->|"column"| K
+    KS -->|"settings"| K
+    TRQ -.->|"TraceBuffers"| K
+
+    PR["PeakResponse"]
+    TR["Trace<br/>trace.build_trace"]
+    K -->|"x_max, v_max, a_max, unbalance_force_max, response histories, sample_number, forced_sample_count"| PR
+    SDOF -->|"stiffness, support_gap, closed_gap_stiffness_ratio"| PR
+    K -.->|"TraceBuffers, frame_count"| TR
+    TRQ -.->|"solver, inputs, celerity, portal_frame_height"| TR
+    TR -.->|"PeakResponse.trace"| PR
+```
+
+`_sample_grid` gives one sample count, `nominal_forced_sample_count` (the history's samples
+plus the rounded `transit_delay_samples`); `substep_count` is an input. On the way to
+`coupling.fluid_column`, `peak_response_jc` turns `portal_frame_height` and
+`substep_duration` into a `ColumnGrid` (`column_grid`: `column_cell_count`,
+`end_to_elbow_cell_count`) and passes `characteristic_impedance = fluid_density *
+celerity`, `flow_area` and `moc.end_pressure_decay_factor` as `FluidConstants`. `PeakResponse` is built by `_peak_response`, after the D-23
+finiteness check; `free_decay_sample_count` is `sample_number - forced_sample_count` and the
+static-equivalent force is `abs(effective_displacement(x_max)) * stiffness`.
+
+### One substep
+
+The transit and forced phases as drawn; free decay differs where the boxes say, and ends
+each substep with `_decay_reference`. `_record_sample` runs once per sample, after its last
+substep.
+
+```mermaid
+flowchart TD
+    U["unbalance_force_by_substep[i]<br/>(transit and forced phases; none in free decay)"]
+    DUE["_is_frame_due<br/>before = state"]
+    C{"column.is_fluid_coupled"}
+    M["moc.step"]
+    AF["applied force<br/>coupled: junction_force + unbalance_force<br/>lumped: 0.0 + unbalance_force<br/>free decay: junction_force, or 0.0"]
+    S["_structure_substep"]
+    R{"record_frame"}
+    F["_record_frame"]
+    E(["next substep"])
+
+    U -->|"unbalance_force"| DUE
+    DUE -->|"record_frame, before"| C
+    C -->|"yes: is_even_substep = (substep_index + parity_offset) % 2 == 0, structure_velocity_step = state.a * dt (the previous substep's a), junction_force"| M
+    M -->|"junction_force"| AF
+    C -->|"no"| AF
+    AF -->|"applied_force"| S
+    S -->|"state: x, v, a, x_max, v_max, a_max, substep_index + 1"| R
+    R -->|"yes: substep_index, sample_index, load_phase, elbow_a_force, elbow_b_force, unbalance_force, junction_force; before, state"| F
+    F -->|"frame_count"| E
+    R -->|"no"| E
+```
+
+`_is_frame_due(trace_every, substep_index, frame_count, frame_capacity,
+is_in_record_window)` decides before the step whether the substep is a frame; the frame
+is written after it. `_record_frame` adds `friction_force` and `is_sticking` from
+`structure.substep_friction` (the velocity and acceleration of `before` and `state`) and,
+coupled, the column.
+
+### Names in the diagrams and their VBA names
+
+From `docs/nomenclature.md`; "—" where the VBA has no name.
+
+| code | VBA |
+|---|---|
+| `force_history` | `forceHistory` |
+| `sample_rate` | `sampleFreq` |
+| `span_length` | `physicalLength` |
+| `flexural_rigidity` | `flexuralRigidityEI` |
+| `mass_per_length` | `massPerUnitLen` |
+| `celerity` | `celerity` |
+| `natural_frequency` | `natFreq` |
+| `damping_percent` | `dampingPercent` |
+| `friction_coefficient` | `dynamicFric` |
+| `support_gap` | `gap` |
+| `closed_gap_frequency_ratio` | `restrainFreqRatio` |
+| `closed_gap_stiffness_ratio` | `restrainFreqRatio ^ 2` |
+| `fluid_density` | `fluidDensty` |
+| `flow_area` | `fluidArea` |
+| `substep_count` | `stepQTY` |
+| `substep_duration` (`dt` in kernels) | `dt` |
+| `portal_frame_height` | `portalFrameHeight` |
+| `transit_delay_samples` | `unballanceStepQTY` |
+| `nominal_forced_sample_count` | `outMax` |
+| `mass`, `stiffness`, `damping` | `mass`, `stiffness`, `damping` |
+| `friction_velocity_step` | `fricAcc` |
+| `column_cell_count` | `pipeSegQTY` |
+| `end_to_elbow_cell_count` | `pivotSegQTY` |
+| `characteristic_impedance` | `rhoC` |
+| `end_pressure_decay_factor` | `dacayFactor` |
+| `mean_velocity_divisor` | `(2 * pipeSegQTY - 1)` |
+| `fraction_profile`, `is_per_phase_parity`, `parity_offset`, `trace_every`, `record_frame`, `frame_count` | — |
+| `elbow_a_force`, `elbow_b_force` | `forceA`, `forceB` |
+| `unbalance_force` | `forceA - forceB` |
+| `unbalance_force_by_substep`, `sample_start` | — |
+| `junction_force` | `dF` |
+| `structure_velocity_step` | `a * dt` (in `dv`) |
+| `substep_index` | `k + (totInd - 1) * stepQTY` |
+| `is_even_substep` | `modDbl(k + (totInd - 1) * stepQTY, 2) = 0` |
+| `applied_force` | `forceA - forceB + dF` (inline) |
+| `x`, `v`, `a` | `x`, `v`, `a` |
+| `x_max`, `v_max`, `a_max` | `xMax`, `vMax`, `aMax` |
+| `unbalance_force_max` | `FMax` |
+| `sample_number` | `totInd` |
+| `sample_index` | `totInd - 1` |
+| `forced_sample_count` | `totInd` after phase 2 |
+| response histories (`response_history`) | `resultArray` |
+
 ## Data flow for one sub-step
 
 **Lumped path** (`peak_response`). Set-up once per run: `loads.as_history_2d` shapes the
