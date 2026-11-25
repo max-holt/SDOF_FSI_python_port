@@ -83,13 +83,107 @@ from surge_sdof.trace import (
 )
 from surge_sdof.vba_compat import clng
 
-__all__ = ["VBA_COUPLING", "CouplingModel", "PeakResponse", "peak_response", "peak_response_jc"]
+__all__ = [
+    "VBA_COUPLING",
+    "CouplingModel",
+    "Fluid",
+    "Integration",
+    "PeakResponse",
+    "PipeSpan",
+    "Restraint",
+    "peak_response",
+    "peak_response_jc",
+]
 
 # Free decay runs while ``x * xZero`` exceeds this, m² (VBA ``Do While x * xZero > 0.01``,
 # lines 569 and 1109; ``xZero`` is ``x`` at the end of the forced phase, then 0 once the
 # product falls to it, lines 593 and 1188). VBA quirk D-21 preserved: an absolute
 # threshold, ``|x| > 0.1`` m at entry.
 FREE_DECAY_THRESHOLD = 0.01
+
+
+@dataclass(frozen=True)
+class PipeSpan:
+    """The span between the two elbows and the pipe it is made of.
+
+    Attributes
+    ----------
+    span_length : float
+        Length between the elbows, m.
+    flexural_rigidity : float
+        ``E * I`` of the pipe, N·m².
+    mass_per_length : float
+        Mass per unit length, pipe and contents, kg/m.
+    celerity : float
+        Pressure-wave speed in the pipe, m/s; also the speed at which the force travels
+        from elbow A to elbow B.
+    """
+
+    span_length: float
+    flexural_rigidity: float
+    mass_per_length: float
+    celerity: float
+
+
+@dataclass(frozen=True)
+class Restraint:
+    """How the span is held: the dynamics of the SDOF proxy and its supports.
+
+    Attributes
+    ----------
+    natural_frequency : float
+        Natural frequency with the support gaps open, Hz (junction coupling: modelled
+        with the fluid included).
+    damping_percent : float
+        Viscous damping as a percentage of critical, %.
+    friction_coefficient : float
+        Coulomb friction coefficient at the supports, dimensionless.
+    support_gap : float, optional
+        Gap at the supports, at the centre of mass, before the closed-gap stiffness acts,
+        m (default 0).
+    closed_gap_frequency_ratio : float, optional
+        Natural frequency with the gaps closed over that with them open, dimensionless
+        (default 1).
+    """
+
+    natural_frequency: float
+    damping_percent: float
+    friction_coefficient: float
+    support_gap: float = 0
+    closed_gap_frequency_ratio: float = 1
+
+
+@dataclass(frozen=True)
+class Fluid:
+    """The fluid in the pipe, as the junction coupling sees it.
+
+    Attributes
+    ----------
+    fluid_density : float
+        Density, kg/m³.
+    flow_area : float
+        Internal cross-sectional area of the pipe (the pressure area), m².
+    """
+
+    fluid_density: float
+    flow_area: float
+
+
+@dataclass(frozen=True)
+class Integration:
+    """How a force history is integrated, and what is recorded.
+
+    Attributes
+    ----------
+    substep_count : int
+        Substeps per sample of the history; one substep is
+        ``1 / (sample_rate * substep_count)`` s.
+    trace_every : int, optional
+        Substeps between recorded trace frames; 0 (default) records no trace.
+    """
+
+    substep_count: int
+    trace_every: int = 0
 
 
 PARITIES = ("running", "per_phase")
