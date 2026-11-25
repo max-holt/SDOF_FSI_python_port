@@ -64,6 +64,8 @@ from surge_sdof import histories  # noqa: E402
 
 
 def git(*args) -> str:
+    """The output of ``git *args`` in the repository, stripped; empty when git fails or
+    is not there."""
     try:
         return subprocess.run(
             ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
@@ -73,6 +75,8 @@ def git(*args) -> str:
 
 
 def git_sha_tag() -> str:
+    """The short sha a CSV is named and stamped with: ``-dirty`` appended when ``src``,
+    ``tests`` or ``tools`` has uncommitted changes, ``nogit`` without a repository."""
     sha = git("rev-parse", "--short", "HEAD") or "nogit"
     if git("status", "--porcelain", "--", "src", "tests", "tools"):
         sha += "-dirty"
@@ -80,6 +84,8 @@ def git_sha_tag() -> str:
 
 
 def cpu_model() -> str:
+    """The CPU's model name (``/proc/cpuinfo``, else what ``platform`` reports, else
+    ``"unknown"``)."""
     try:
         with open("/proc/cpuinfo") as fh:
             for line in fh:
@@ -91,11 +97,25 @@ def cpu_model() -> str:
 
 
 def _worker(args):
+    """``run_case`` on one ``(case, provenance)`` pair: the process pool's task."""
     case, provenance = args
     return run_case(case, provenance)
 
 
 def run(args) -> Path:
+    """The ``run`` command: every case of the tier (or the chosen part of it) through
+    both solvers in a process pool, the CSV written into ``--out``.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed ``run`` options.
+
+    Returns
+    -------
+    Path
+        The CSV written, named by tier, subset, limit, sha and tag.
+    """
     check_pipe_table(verbose=False)
     tier = args.tier
     cases = tier_cases(tier)
@@ -150,6 +170,8 @@ def run(args) -> Path:
 
 
 def plot(args) -> None:
+    """The ``plot`` command: the four PNGs and the report of a sweep CSV
+    (``sweep_report``), at one friction level and, for the collapse panel, one amplitude."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -194,6 +216,7 @@ def plot(args) -> None:
 
 
 def parse_args(argv=None):
+    """The parsed command line (``argv`` None reads ``sys.argv``)."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -247,6 +270,7 @@ def parse_args(argv=None):
 
 
 def main(argv=None):
+    """Run the ``check``, ``run`` or ``plot`` command of the command line."""
     args = parse_args(argv)
     if args.command == "check":
         check_pipe_table()
