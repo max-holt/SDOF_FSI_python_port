@@ -509,3 +509,18 @@ The rest of plan group 6: the `histories` error messages, docstrings (6.6), anno
     schema-version checks, the reference entries' `output_names` through the one rename, the
     viewer's `friction_coefficient` readout and refused-schema check; `NOTES.md`, R.9
     continued).
+
+## Rulings (owner, session R.11, 25 Nov 2026)
+
+The approved behaviour fixes of plan group 7, and one tidy-up.
+
+89. **`tools/sweep_jc.cpu_model`** is restructured to nesting depth 3 (the matching lines are
+    read first, then one is picked) and its `noqa` removed. Its output must be unchanged.
+90. **Accepted as written:** the `docs/style.md` §11 line for `histories.canonical`,
+    `step_sine` and `step_noise`, and the 55-statement count of `response._integrate_kernel`
+    (as ruff counts it; §11 says 56).
+91. **Group 7** is made one change per commit (7.1 `is_capped` from the kernel's count, 7.2
+    `size_in` from the caller), each a behaviour change with a `DEVIATIONS.md` row, a test
+    that pins it and, in the report, exactly which inputs give a different output with the old
+    and new values. If either changes a stored snapshot, support file or committed data file,
+    the session stops and shows the difference to the owner before rewriting it.
