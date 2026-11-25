@@ -44,7 +44,8 @@ def plotly_bundle_path() -> Path:
 
 
 def plotly_version(bundle: bytes) -> str:
-    """The ``plotly.js vX.Y.Z`` header of a bundle (``ValueError`` when absent)."""
+    """The version in the ``plotly.js vX.Y.Z`` header of a bundle's bytes (``ValueError``
+    when absent)."""
     m = re.search(rb"plotly\.js v([\d.]+)", bundle[:400])
     if not m:
         raise ValueError("the plotly bundle has no 'plotly.js vX.Y.Z' header")
@@ -52,7 +53,8 @@ def plotly_version(bundle: bytes) -> str:
 
 
 def pako_version(bundle: bytes) -> str:
-    """``PAKO_VERSION`` when ``bundle`` is the pinned file (``ValueError`` otherwise)."""
+    """``PAKO_VERSION`` when the bundle's bytes are the pinned file (``ValueError``
+    otherwise)."""
     digest = hashlib.sha256(bundle).hexdigest()
     if digest != PAKO_SHA256:
         raise ValueError(f"pako bundle sha256 {digest} is not the pinned {PAKO_SHA256}")
@@ -60,6 +62,8 @@ def pako_version(bundle: bytes) -> str:
 
 
 def _script(comment: str, body: bytes) -> bytes:
+    """A ``<script>`` block holding a library's bytes under a comment (``ValueError`` when
+    the library contains ``</script``)."""
     if b"</script" in body.lower():
         raise ValueError("a library contains '</script' and cannot be inlined")
     return b"<script>\n/* " + comment.encode() + b" */\n" + body.rstrip(b"\n") + b"\n</script>"
@@ -73,11 +77,31 @@ def build(
     licence: str | None = None,
     plotly_package_version: str | None = None,
 ) -> bytes:
-    """The page bytes: ``src`` with the two markers replaced (each must occur exactly once).
+    """The viewer page: the source page with the two libraries inlined.
 
-    ``licence`` (default: the vendored ``PAKO_LICENSE`` file) is the pako licence text placed
-    in the page; ``plotly_package_version`` (default: the installed plotly package's) is
-    named in the plotly comment.
+    Parameters
+    ----------
+    src : bytes
+        ``viewer.src.html``; each of the two markers must occur in it exactly once.
+    plotly_js, pako_js : bytes
+        The two library bundles.
+    plotly_origin : str
+        Where the plotly bundle came from, as named in its comment.
+    licence : str or None, optional
+        The pako licence text placed in the page; None reads the vendored ``PAKO_LICENSE``.
+    plotly_package_version : str or None, optional
+        Named in the plotly comment; None is the installed plotly package's.
+
+    Returns
+    -------
+    bytes
+        The page.
+
+    Raises
+    ------
+    ValueError
+        A marker missing or repeated, an unpinned pako bundle, a plotly bundle without its
+        header, or a library containing ``</script``.
     """
     if plotly_package_version is None:
         import plotly
@@ -112,6 +136,8 @@ def build(
 
 
 def main(argv=None) -> int:
+    """Build the page from the command line's paths, write it and print a JSON summary;
+    the exit status."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--src", type=Path, default=SRC)
     ap.add_argument("--out", type=Path, default=OUT)
