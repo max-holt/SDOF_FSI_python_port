@@ -28,7 +28,7 @@ The junction-coupling model choices are one ``CouplingModel``, validated on cons
 ``mean_velocity_divisor`` ("legacy": ``vAv`` divided by ``2N - 1``, D-17; "fixed": by the
 ``2N + 1`` terms summed) and ``parity`` ("per_phase": the VBA index
 ``k + (totInd - 1) * stepQTY`` with each phase's own ``k`` range, D-19; "running": one
-running sub-step counter for the whole run, so the even/odd alternation never
+running substep counter for the whole run, so the even/odd alternation never
 double-steps a half-grid at a phase boundary). The parity flag is applied by
 ``_integrate``, which passes the chosen index as ``step_index`` to the coupling.
 ``fraction_profile`` ("legacy": the VBA ``interpFractionA/B``, D-4; "fixed": the lead
@@ -46,12 +46,12 @@ into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbala
 and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
 
 Session V.1 (trace): ``Integration.trace_every`` (default 0). With ``k > 0`` every
-``k``-th sub-step is recorded into preallocated arrays the kernel takes (``trace.allocate_frames``)
+``k``-th substep is recorded into preallocated arrays the kernel takes (``trace.allocate_frames``)
 and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kernel takes
 empty arrays and the recording branch is never entered. The recording reads the state and
 writes to the trace arrays only, so the ``PeakResponse`` values of a traced run are bitwise
 those of the untraced run (``tests/test_trace.py``). ``loads.elbow_forces`` supplies the
-per-sub-step elbow forces and the transit / forced boundary for the trace.
+per-substep elbow forces and the transit / forced boundary for the trace.
 
 Differences from ``legacy_port.get_peak_response`` (all proved value-identical by
 ``tests/test_differential.py``, bitwise on the sweep and the golden inputs):
@@ -239,6 +239,7 @@ class CouplingModel:
     fraction_profile: str = "fixed"
 
     def __post_init__(self) -> None:
+        """Validate the three fields (``ValueError`` names the field and its values)."""
         if self.mean_velocity_divisor not in MEAN_VELOCITY_DIVISORS:
             raise ValueError(
                 f"mean_velocity_divisor must be 'legacy' or 'fixed', "
@@ -535,9 +536,28 @@ def _coerced_span(span: PipeSpan) -> PipeSpan:
 
 
 def _sample_grid(force_history, sample_rate: float, span: PipeSpan) -> tuple[np.ndarray, int]:
-    """The history as the 2-D array the walk reads (``loads.as_history_2d``) and the nominal
-    forced sample count: its samples plus the transit delay rounded as the VBA rounds it
-    (``outMax``, VBA lines 377 and 714)."""
+    """The force history as the walk reads it and the nominal forced sample count.
+
+    Parameters
+    ----------
+    force_history : array_like
+        Force history, N, 1-D or 2-D.
+    sample_rate : float
+        Its sample rate, Hz.
+    span : PipeSpan
+        Span length (m) and celerity (m/s) are read.
+
+    Returns
+    -------
+    history_2d : numpy.ndarray
+        float64, 2-D (``loads.as_history_2d``), N.
+    nominal_forced_sample_count : int
+        The history's samples plus the transit delay rounded as the VBA rounds it.
+
+    Notes
+    -----
+    VBA ``outMax``, lines 377 and 714.
+    """
     force_history_2d = loads.as_history_2d(force_history)
     transit_delay_samples = loads.transit_delay(span.span_length, span.celerity, sample_rate)
     nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
@@ -549,10 +569,29 @@ def _sample_grid(force_history, sample_rate: float, span: PipeSpan) -> tuple[np.
 def _trace_request(
     solver: str, inputs: dict, span: PipeSpan, integration: Integration, setup: SolverSetup
 ) -> tracing.TraceRequest | None:
-    """What ``_integrate`` needs to build a ``Trace`` when ``integration.trace_every > 0``,
-    else None: the stride, the solver name, the ``inputs`` echo (whose 2-D force history and
-    sample rate (Hz) the elbow forces are walked from), the celerity (m/s), the portal-frame
-    height (m) and the per-sample elbow forces of ``loads.elbow_forces``."""
+    """What ``_integrate`` needs to build a ``Trace``.
+
+    Parameters
+    ----------
+    solver : {"lumped", "jc"}
+        The solver's name in the trace.
+    inputs : dict
+        The echo of the entry point's inputs; its 2-D force history (N) and sample rate
+        (Hz) are what the elbow forces are walked from.
+    span : PipeSpan
+        Span length (m) and celerity (m/s) are read.
+    integration : Integration
+        The substep count and the trace stride are read.
+    setup : SolverSetup
+        The portal-frame height (m) is read.
+
+    Returns
+    -------
+    trace.TraceRequest or None
+        None when ``integration.trace_every`` is 0; otherwise the stride, the solver name,
+        the inputs, the celerity, the portal-frame height and the per-sample elbow forces
+        of ``loads.elbow_forces`` (a lazy generator).
+    """
     if not integration.trace_every:
         return None
     return tracing.TraceRequest(
@@ -578,7 +617,8 @@ def _checked_integration(integration: Integration) -> Integration:
 
 
 def _trace_stride(trace_every) -> int:
-    """``trace_every`` as a non-negative int (``operator.index``: no silent truncation)."""
+    """``trace_every`` as a non-negative int (``operator.index``: no silent truncation;
+    ``ValueError`` when negative)."""
     trace_every = operator.index(trace_every)
     if trace_every < 0:
         raise ValueError(f"trace_every must be >= 0, got {trace_every}")
@@ -586,7 +626,7 @@ def _trace_stride(trace_every) -> int:
 
 
 class SolverSetup(NamedTuple):
-    """The set-up both solvers derive from their inputs before the run: the sub-step and the
+    """The set-up both solvers derive from their inputs before the run: the substep and the
     portal-frame height. Returned by ``solver_setup``; the tools and the loop geometry ask it
     too, so the solver's set-up is written once.
 
@@ -659,13 +699,13 @@ class KernelSettings(NamedTuple):
     substep_duration : float
         One substep, ``1 / (sample_rate * substep_count)``, s.
     substep_count : int
-        Sub-steps per sample (VBA ``stepQTY``).
+        Substeps per sample (VBA ``stepQTY``).
     nominal_forced_sample_count : int
         History samples plus the rounded transit delay (VBA ``outMax``); the response
         histories and the trace keep twice this many samples.
     is_per_phase_parity : bool
         The VBA per-phase MoC parity index (``parity="per_phase"``, D-19) in place of the
-        running sub-step counter; always False for the lumped solver.
+        running substep counter; always False for the lumped solver.
     """
 
     substep_duration: float
@@ -675,22 +715,23 @@ class KernelSettings(NamedTuple):
 
 
 class _ForceSchedule(NamedTuple):
-    """The forces of the transit and forced phases, one value per sub-step, as the kernel
+    """The forces of the transit and forced phases, one value per substep, as the kernel
     reads them. Built by ``_integrate`` from the ``loads`` generators.
 
     Attributes
     ----------
     unbalance_force_by_substep : numpy.ndarray
-        float64, ``forceA - forceB`` per forced sub-step, N; sample ``s`` is
+        float64, shape ``(substeps,)``: the unbalance force per forced substep, N; sample
+        ``s`` is
         ``unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` (the truncated
         last transit sample keeps its length).
     sample_start : numpy.ndarray
-        int64, samples + 1: where each sample's sub-steps start.
+        int64, shape ``(samples + 1,)``: where each sample's substeps start.
     elbow_a_force_by_substep, elbow_b_force_by_substep : numpy.ndarray
         float64, the elbow forces laid out the same way, N (traced runs only; empty
         otherwise).
     transit_substep_count : int
-        Sub-steps of the transit phase (0 when not tracing): the boundary between the
+        Substeps of the transit phase (0 when not tracing): the boundary between the
         transit and forced phases the trace records.
     """
 
@@ -709,7 +750,7 @@ class _KernelResult(NamedTuple):
     x_max, v_max, a_max : float
         Largest ``abs(x)``, ``abs(v)``, ``abs(a)`` of the run: m, m/s, m/s².
     unbalance_force_max : float
-        Largest ``abs(forceA - forceB)`` of the forced phases, N (VBA ``FMax``).
+        Largest ``abs()`` of the unbalance force over the forced phases, N (VBA ``FMax``).
     x, v, a : float
         State at the end of the run.
     sample_number : int
@@ -734,8 +775,14 @@ class _KernelResult(NamedTuple):
 
 @numba.njit(cache=True)
 def _free_decay_product(x: float, x_zero: float) -> float:
-    """``x * xZero`` of the free-decay test; VBA raises error 6 if the product
-    overflows (the numpy state of the legacy port did the same), so this does too."""
+    """The product of the displacement and the free-decay reference displacement (m²), the
+    free-decay test; ``FloatingPointError`` when it overflows.
+
+    Notes
+    -----
+    VBA ``x * xZero``; VBA raises error 6 if the product overflows (the numpy state of the
+    legacy port did the same), so this does too (D-23).
+    """
     free_decay_product = x * x_zero
     if free_decay_product == math.inf:
         raise FloatingPointError("x * xZero overflowed (VBA error 6)")  # D-23
@@ -750,7 +797,7 @@ def _is_frame_due(
     frame_capacity: int,
     is_in_record_window: bool,
 ) -> bool:
-    """Whether sub-step ``substep_index`` is recorded as a trace frame: tracing is on, the
+    """Whether substep ``substep_index`` is recorded as a trace frame: tracing is on, the
     index is a multiple of the stride, the frame capacity lasts and the sample lies in the
     recorded window (always, in the transit and forced phases). Scalars only."""
     return (
@@ -770,7 +817,7 @@ def _parity_offset(
     first_substep_number: int,
 ) -> int:
     """What the kernel adds to the running ``substep_index`` to get the MoC parity index,
-    fixed for one sample, at the sample's first sub-step.
+    fixed for one sample, at the sample's first substep.
 
     0 for the running counter (F-2). With the VBA per-phase index (D-19) the parity index
     is ``k + (totInd - 1) * stepQTY`` with the VBA's ``k`` starting at
@@ -796,10 +843,15 @@ def _largest_magnitude(values: np.ndarray) -> float:
 
 @numba.njit(cache=True)
 def _decay_reference(x: float, x_zero: float) -> float:
-    """``xZero`` after a free-decay sub-step: unchanged while ``x * xZero`` still exceeds
-    ``FREE_DECAY_THRESHOLD``, 0.0 once it does not (VBA lines 593, 1188), which ends free
-    decay at the end of the sample. The product is checked for overflow
-    (``_free_decay_product``, D-23)."""
+    """The free-decay reference displacement (m) after a free-decay substep: unchanged
+    while ``x * x_zero`` still exceeds ``FREE_DECAY_THRESHOLD``, 0.0 once it does not, which
+    ends free decay at the end of the sample. The product is checked for overflow
+    (``_free_decay_product``, D-23).
+
+    Notes
+    -----
+    VBA ``xZero``, lines 593 and 1188.
+    """
     if _free_decay_product(x, x_zero) <= FREE_DECAY_THRESHOLD:
         return 0.0
     return x_zero
@@ -826,18 +878,19 @@ class ResponseHistories(NamedTuple):
 
 @numba.njit(cache=True)
 def _record_sample(histories: ResponseHistories, index: int, x: float, v: float, a: float) -> None:
-    """Store the end-of-sample state at ``index`` of the three ``histories`` (what the VBA
-    ``Select Case outputType`` stores after each sample, for every output type at once)."""
+    """Store the end-of-sample state, ``x`` (m), ``v`` (m/s), ``a`` (m/s²), at ``index``
+    of the three ``histories`` (what the VBA ``Select Case outputType`` stores after each
+    sample, for every output type at once)."""
     histories.displacement[index] = x
     histories.velocity[index] = v
     histories.acceleration[index] = a
 
 
 class _RunState(NamedTuple):
-    """What one SDOF sub-step changes: the state, the running maxima and the sub-step count.
+    """What one SDOF substep changes: the state, the running maxima and the substep count.
 
     Passed into ``_structure_substep`` and returned by it (``docs/style.md`` §4: scalars
-    that evolve are passed in and returned; a per-sub-step function takes scalars only).
+    that evolve are passed in and returned; a per-substep function takes scalars only).
     """
 
     x: float  # m
@@ -846,15 +899,15 @@ class _RunState(NamedTuple):
     x_max: float  # largest |x| so far, m
     v_max: float  # largest |v| so far, m/s
     a_max: float  # largest |a| so far, m/s²
-    substep_index: int  # running 0-based sub-step counter: the next sub-step's index
+    substep_index: int  # running 0-based substep counter: the next substep's index
 
 
 @numba.njit(cache=True)
 def _structure_substep(
     state: _RunState, applied_force: float, sdof_params: SdofParams, dt: float
 ) -> _RunState:
-    """Step the structure one sub-step under ``applied_force`` (N), update the running
-    maxima of ``|a|``, ``|v|``, ``|x|`` and count the sub-step.
+    """Step the structure one substep under ``applied_force`` (N), update the running
+    maxima of ``|a|``, ``|v|``, ``|x|`` and count the substep.
 
     ``step_scalars`` advances ``x``, ``v``, ``a`` over ``dt`` (s); the maxima are raised in
     the order ``a``, ``v``, ``x``. Scalars in, scalars out (``docs/style.md`` §4).
@@ -873,10 +926,10 @@ def _structure_substep(
 
 
 class _FrameLoads(NamedTuple):
-    """What the loop knows about the sub-step it records: its index, sample, load phase
+    """What the loop knows about the substep it records: its index, sample, load phase
     and forces (N)."""
 
-    substep_index: int  # running 0-based sub-step counter
+    substep_index: int  # running 0-based substep counter
     sample_index: int  # 0-based sample index
     load_phase: int  # PHASE_TRANSIT, PHASE_FORCED or PHASE_FREE_DECAY
     elbow_a_force: float
@@ -886,7 +939,7 @@ class _FrameLoads(NamedTuple):
 
 
 class _FrameInputs(NamedTuple):
-    """What every recorded frame reads besides the sub-step; built once per kernel call."""
+    """What every recorded frame reads besides the substep; built once per kernel call."""
 
     sdof_params: SdofParams
     substep_duration: float  # s
@@ -902,10 +955,35 @@ def _record_frame(
     after: _RunState,
     inputs: _FrameInputs,
 ) -> int:
-    """Record one sub-step as trace frame ``frame_index`` and return the frame count after
-    it: the row (``loads``, the state ``after``, the friction force and stick flag of
-    ``structure.substep_friction`` from ``before`` and ``after``, by ``trace.write_frame_row``)
-    and, with fluid coupling, the column (``trace.write_frame_column``). Called on recorded sub-steps only; reads the solver state only."""
+    """Record one substep as a trace frame.
+
+    Called on recorded substeps only; reads the solver state only.
+
+    Parameters
+    ----------
+    buffers : trace.TraceBuffers
+        Written in place.
+    frame_index : int
+        The frame to write.
+    loads : _FrameLoads
+        The substep's index, sample, load phase and elbow forces (N).
+    before, after : _RunState
+        The state before and after the substep (m, m/s, m/s²).
+    inputs : _FrameInputs
+        What every frame reads besides the substep.
+
+    Returns
+    -------
+    int
+        The frame count after this frame.
+
+    Notes
+    -----
+    The row (``loads``, the state ``after``, the friction force and stick flag of
+    ``structure.substep_friction`` from ``before`` and ``after``) is written by
+    ``trace.write_frame_row``; with fluid coupling, the column by
+    ``trace.write_frame_column``.
+    """
     friction_force, is_sticking = structure.substep_friction(
         inputs.sdof_params, before.v, before.a, after.v, after.a, inputs.substep_duration
     )
@@ -939,21 +1017,40 @@ def _integrate(
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
 ) -> PeakResponse:
-    """The VBA sample loop shared by both peak solvers: the transit and forced phases
-    driven by ``unbalance_force_samples`` (one list of per-sub-step unbalance values per
-    sample), then free decay while ``x * xZero > 0.01``; max trackers; result history per
-    sample.
+    """Integrate the SDOF proxy through the transit and forced phases and free decay: the
+    sample loop shared by both peak solvers.
 
-    Python orchestrator of ``_integrate_kernel`` (Stage 5), in three steps: prepare the
-    kernel's inputs (``_kernel_inputs``), run the kernel on them with ``sdof_params`` and
-    the fluid ``column`` (``moc.empty_column()``, no fluid coupling, or
-    ``coupling.fluid_column``'s, whose arrays are updated in place), and build the
+    The transit and forced phases are driven by ``unbalance_force_samples``, then free
+    decay runs while ``x * x_zero > FREE_DECAY_THRESHOLD``; the maxima and the per-sample
+    histories are kept. The Python orchestrator of ``_integrate_kernel``, in three steps:
+    prepare the kernel's inputs (``_kernel_inputs``), run the kernel, and build the
     ``PeakResponse`` (``_peak_response``; the trace by ``trace.build_trace``).
 
-    ``step_index`` the kernel uses for the MoC parity is the running sub-step counter
-    ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
-    per-phase index ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written
-    as ``n + off`` with ``off`` fixed per sample (D-19, approved fix F-2)."""
+    Parameters
+    ----------
+    unbalance_force_samples : iterable of list of float
+        ``loads.unbalance_force``: one list of per-substep unbalance forces (N) per sample.
+    sdof_params : structure.SdofParams
+        The proxy's constants.
+    settings : KernelSettings
+        Substep (s), substeps per sample, nominal forced sample count, parity source.
+    column : moc.FluidColumn
+        ``moc.empty_column()`` (no fluid coupling) or ``coupling.fluid_column``'s, whose
+        arrays are updated in place.
+    trace_request : trace.TraceRequest or None
+        What a trace needs, or None for an untraced run.
+
+    Returns
+    -------
+    PeakResponse
+
+    Notes
+    -----
+    The VBA sample loop (``GetPeakResponse`` / ``GetPeakResponseJC``). The MoC parity index
+    is the running substep counter ``n`` (0 at the first substep), or with
+    ``settings.is_per_phase_parity`` the VBA per-phase index ``k + (totInd - 1) * stepQTY``
+    (phase 3: ``k = 1 .. stepQTY``), written as ``n + off`` with ``off`` fixed per sample
+    (D-19, approved fix F-2). The kernel is the Stage 5 compiled loop."""
     schedule, histories, buffers = _kernel_inputs(
         unbalance_force_samples, settings, column, trace_request
     )
@@ -983,12 +1080,30 @@ def _kernel_inputs(
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
 ) -> tuple[_ForceSchedule, ResponseHistories, tracing.TraceBuffers]:
-    """The kernel's inputs: the ``_ForceSchedule`` (``unbalance_force_samples`` flattened
-    by ``loads.flatten_unbalance_force``, and with a ``trace_request`` the elbow forces of
-    ``trace_request.elbow_force_samples`` by ``loads.flatten_elbow_forces``, whose sample
-    starts must agree), the zeroed ``ResponseHistories`` (``nominal_forced_sample_count * 2``
-    samples each, whatever the output type) and the trace buffers (Session V.1: sized by ``trace.check_memory`` and allocated by
-    ``trace.allocate_frames``; without a request a stride of 0 and empty buffers)."""
+    """The kernel's inputs: the force schedule, the zeroed histories and the trace buffers.
+
+    Parameters
+    ----------
+    unbalance_force_samples : iterable of list of float
+        As ``_integrate``; consumed here.
+    settings : KernelSettings
+        The nominal forced sample count and the substep count are read.
+    column : moc.FluidColumn
+        Its cell count sizes the trace's column buffers.
+    trace_request : trace.TraceRequest or None
+        With a request, its elbow forces are flattened and the buffers sized.
+
+    Returns
+    -------
+    schedule : _ForceSchedule
+        ``unbalance_force_samples`` flattened by ``loads.flatten_unbalance_force`` and,
+        with a ``trace_request``, the elbow forces of ``trace_request.elbow_force_samples``
+        by ``loads.flatten_elbow_forces``, whose sample starts must agree.
+    histories : ResponseHistories
+        Zeroed, ``nominal_forced_sample_count * 2`` samples each.
+    buffers : trace.TraceBuffers
+        Sized by ``trace.check_memory`` and allocated by ``trace.allocate_frames``; without
+        a request, a stride of 0 and empty buffers."""
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
     unbalance_force_by_substep, sample_start = loads.flatten_unbalance_force(
@@ -1047,8 +1162,8 @@ def _peak_response(
     trace: Trace | None,
 ) -> PeakResponse:
     """The ``PeakResponse`` of a finished run: the kernel's maxima as Python floats, the
-    static-equivalent force from the largest displacement, the three histories, the
-    free-decay sample count and the ``trace``."""
+    static-equivalent force (N) from the largest displacement, the three histories, the
+    free-decay sample count and the ``trace`` (None for an untraced run)."""
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
     static_equivalent_force_max = (
         abs(
@@ -1081,24 +1196,50 @@ def _integrate_kernel(
     column: moc.FluidColumn,
     buffers: tracing.TraceBuffers,
 ) -> _KernelResult:
-    """The sample loop of ``_integrate`` (the Stage 5 kernel): for each sample, for each
-    sub-step, advance; then free decay until the decay product test fails.
+    """The compiled sample loop of ``_integrate``: for each sample, for each substep,
+    advance the column and the structure; then free decay until the decay product test
+    fails.
 
     ``schedule.unbalance_force_by_substep[sample_start[s]:sample_start[s + 1]]`` holds
-    sample ``s``'s per-sub-step unbalance values. Each sub-step: with
+    sample ``s``'s per-substep unbalance values. Each substep: with
     ``column.is_fluid_coupled`` the MoC column is advanced (``moc.step`` on the half-grid
-    selected by the parity of ``substep_index + parity_offset``) and returns ``dF``, from
-    0.0; the loop forms the applied force (forced phases ``dF + f`` or ``0.0 + f``, free
-    decay ``dF`` or ``0.0``); ``_structure_substep`` steps the structure, raises the maxima
-    and counts the sub-step. Returns a ``_KernelResult``; the three ``histories`` are filled
+    selected by the parity of ``substep_index + parity_offset``) and returns the junction
+    force, from 0.0; the loop forms the applied force (forced phases ``junction_force +
+    unbalance_force`` or ``0.0 + unbalance_force``, free decay ``junction_force`` or
+    ``0.0``); ``_structure_substep`` steps the structure, raises the maxima and counts the
+    substep. Returns a ``_KernelResult``; the three ``histories`` are filled
     in place.
 
-    Trace (Session V.1): a sub-step ``_is_frame_due`` says is due (stride, capacity, and in
+    Trace: a substep ``_is_frame_due`` says is due (stride, capacity, and in
     free decay ``sample_number <= nominal_forced_sample_count * 2``) is written by
     ``_record_frame`` after the SDOF update, with the elbow forces of the schedule in the
     forced phases (``transit_substep_count`` is the transit -> forced boundary) and the
     friction force and stick flag of ``structure.substep_friction``. With ``trace_every ==
     0`` no frame is due and the buffers are empty.
+
+    Parameters
+    ----------
+    schedule : _ForceSchedule
+        The per-substep forces of the transit and forced phases, N.
+    sdof_params : structure.SdofParams
+        The proxy's constants.
+    settings : KernelSettings
+        Substep (s), substeps per sample, nominal forced sample count, parity source.
+    histories : ResponseHistories
+        Filled in place.
+    column : moc.FluidColumn
+        Advanced in place when fluid coupling is on.
+    buffers : trace.TraceBuffers
+        Written in place on recorded substeps.
+
+    Returns
+    -------
+    _KernelResult
+
+    Notes
+    -----
+    The Stage 5 kernel (``numba.njit(cache=True)``); the trace frames were added in
+    session V.1. The junction force is VBA ``dF``.
     """
     unbalance_force_by_substep = schedule.unbalance_force_by_substep
     sample_start = schedule.sample_start
@@ -1111,7 +1252,7 @@ def _integrate_kernel(
     is_per_phase_parity = settings.is_per_phase_parity
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
-    state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first sub-step
+    state = _RunState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)  # at rest, before the first substep
     frame_inputs = _FrameInputs(sdof_params, dt, column)
     sample_number = 0
     forced_sample_count = sample_start.shape[0] - 1
