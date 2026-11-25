@@ -462,3 +462,30 @@ The public API session (plan group 6, with 3.7 and 3.10).
     `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`; 26 passed.)
 75. **Long session.** If the context runs long, the session stops at a green commit and says
     where.
+
+## Rulings (owner, on the public interface, session R.9, 25 Nov 2026)
+
+`docs/review/public_interface.md` is approved, option A (grouped inputs), with these answers.
+
+76. **Sample rate beside the history** (Q-PI-1): `peak_response(force_history, sample_rate,
+    *, span, restraint, integration)`. It describes the data, not how the data is
+    integrated; a caller who changes the integration settings cannot mis-state the
+    history's rate. `Integration` holds `substep_count` and `trace_every`. The
+    junction-coupling entry has 7 parameters: a `docs/style.md` §11 exception.
+77. **`output_type` removed** (Q-PI-2); the three histories are always recorded.
+78. **Names kept** (Q-PI-3): `peak_response`, `peak_response_jc` and the trace's `solver`
+    values.
+79. **The five duration terms keep `_s`** (Q-PI-4), a `docs/style.md` exception: the bare
+    words would be ambiguous with the sample counts.
+80. **`daf_lumped`, `daf_jc` kept** (Q-PI-5): DAF is the standard term in piping design and
+    in the paper, an accepted abbreviation in `docs/nomenclature.md`. The other pair is
+    `force_per_length_diameter_squared_*`.
+81. **S-31 and S-47 left out of the bump** (Q-PI-6).
+82. **Old signatures removed, no wrappers** (Q-PI-7).
+83. **Step 4 split.** First a commit that always records the three histories while the old
+    signature still takes `output_type` and returns the matching one as `history` (the
+    kernel change, A/B timed on its own); then the commit that introduces the new entry
+    points, moves the callers and removes `output_type`.
+84. **Before the schema bump** the report lists every committed data file re-exported and
+    every file whose header is renamed, and confirms the viewer's browser tests ran and
+    passed on that commit.

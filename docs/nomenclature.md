@@ -320,8 +320,8 @@ names and locals are R.
 | `solver_arguments` | — | The solver keyword arguments | — | — | `kw` (`run_case`, `cases.py`) | R |
 | `diameter_mm`, `amplitude_bar`, `lead_in_s`, `duration_s`, `fluid_density` (argparse `dest`) | — | Step-case options; the flag strings stay | mm, bar, s, s, kg/m³ | — | `size`, `amplitude`, `lead_in`, `duration`, `density` | R |
 | `hold_sample_count` | — | Samples the step is held | — | — | `n_hold` | R |
-| undecided (ruling 38; "DAF" is the paper's term) | DAF | `F_eq / peak_pressure_force` | — | — | column `daf_*` | P |
-| undecided (ruling 38) | — | `F_eq / (L D²)` | N/m³ | — | column `f_eq_over_LD2_*` | P |
+| `daf` (accepted abbreviation, ruling 80: the standard term in piping design and in the paper) | DAF | Dynamic amplification factor, `F_eq / peak_pressure_force` | — | — | column `daf_*` | — (kept) |
+| `force_per_length_diameter_squared` (ruling 80) | — | `F_eq / (L D²)` | N/m³ | — | column `f_eq_over_LD2_*` | P |
 
 ## 10. Function names
 

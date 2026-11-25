@@ -1,5 +1,13 @@
 # Public interface — proposal (session R.9)
 
+**Approved by the owner (session R.9, 25 Nov 2026), option A, with the answers of charter
+rulings 76-84:** the sample rate is the second positional argument and `Integration` holds
+`substep_count` and `trace_every` (Q-PI-1; the JC entry has 7 parameters, a `docs/style.md`
+§11 exception); `output_type` removed (Q-PI-2); names kept (Q-PI-3); the duration terms keep
+`_s` (Q-PI-4, a style exception); `daf_lumped` / `daf_jc` kept, the other pair
+`force_per_length_diameter_squared_*` (Q-PI-5); S-31 and S-47 out of the bump (Q-PI-6); no
+wrappers (Q-PI-7); step 4 split (ruling 83). Where the text below differs, these answers win.
+
 Plan group 6, with 3.7 and 3.10 (rulings 47, 71). Written for the owner before anything
 changes (ruling 73). Nothing here is applied yet. Section 1 is the solver entry points (step 1
 of the brief), section 2 the other user-facing entry points (plan 6.3, 6.4), section 3 the
@@ -61,7 +69,6 @@ class Fluid:  # the contained fluid (junction coupling only)
 
 @dataclass(frozen=True)
 class Integration:  # how the history is integrated, and what is recorded
-    sample_rate: float  # Hz, of the force history
     substep_count: int  # substeps per sample (dt = 1 / (sample_rate * substep_count))
     trace_every: int = 0  # substeps between trace frames; 0 = no trace
 ```
@@ -83,11 +90,11 @@ VBA_COUPLING = CouplingModel("legacy", "per_phase", "legacy")  # the Excel accep
 The entry points:
 
 ```python
-peak_response(force_history, *, span: PipeSpan, restraint: Restraint,
-              integration: Integration) -> PeakResponse                       # 4 parameters
-peak_response_jc(force_history, *, span: PipeSpan, restraint: Restraint, fluid: Fluid,
-                 integration: Integration,
-                 coupling: CouplingModel = CouplingModel()) -> PeakResponse   # 6 parameters
+peak_response(force_history, sample_rate, *, span: PipeSpan, restraint: Restraint,
+              integration: Integration) -> PeakResponse                       # 5 parameters
+peak_response_jc(force_history, sample_rate, *, span: PipeSpan, restraint: Restraint,
+                 fluid: Fluid, integration: Integration,
+                 coupling: CouplingModel = CouplingModel()) -> PeakResponse   # 7 (§11)
 ```
 
 Both meet the limit of 6, so neither needs a recorded exception. Why these groups:
@@ -222,7 +229,7 @@ functions still need the span / restraint split inside. Not recommended.
   `max_applied_force` → `max_unbalance_force` (nomenclature; the frozen fixtures keep their
   column name) and `free_decay_samples` → `free_decay_sample_count`.
 * The trace `inputs` echo: the new entry records its arguments grouped as they were passed,
-  `{"force_history", "span": {...}, "restraint": {...}, "integration": {...}}` plus `"fluid"`
+  `{"force_history", "sample_rate", "span": {...}, "restraint": {...}, "integration": {...}}` plus `"fluid"`
   and `"coupling"` for JC, with the same values and types as today (section 3.2).
 
 ## 2. The other user-facing entry points (plan 6.3, 6.4)
@@ -382,7 +389,8 @@ it (`_mm`, `_bar`, `_in`); the old keys that carried an SI suffix (`_m`, `_m2`, 
 | old | new |
 |---|---|
 | `force_history` | `force_history` |
-| `step_qty`, `sample_freq`, `trace_every` | `integration.substep_count`, `integration.sample_rate`, `integration.trace_every` |
+| `sample_freq` | `sample_rate` |
+| `step_qty`, `trace_every` | `integration.substep_count`, `integration.trace_every` |
 | `physical_length`, `flexural_rigidity_ei`, `mass_per_unit_len`, `celerity` | `span.span_length`, `span.flexural_rigidity`, `span.mass_per_length`, `span.celerity` |
 | `nat_freq`, `damping_percent`, `dynamic_fric`, `gap`, `restrain_freq_ratio` | `restraint.natural_frequency`, `restraint.damping_percent`, `restraint.friction_coefficient`, `restraint.support_gap`, `restraint.closed_gap_frequency_ratio` |
 | `fluid_densty`, `fluid_area` | `fluid.fluid_density`, `fluid.flow_area` |
@@ -471,8 +479,8 @@ it (`_mm`, `_bar`, `_in`); the old keys that carried an SI suffix (`_m`, `_m2`, 
 | `x_peak_lumped`, `x_peak_jc` | `max_displacement_lumped`, `_jc` |
 | `a_peak_lumped`, `a_peak_jc` | `max_acceleration_lumped`, `_jc` |
 | `f_peak_lumped`, `f_peak_jc` | `max_unbalance_force_lumped`, `_jc` |
-| `f_eq_over_LD2_lumped`, `_jc` | `force_per_length_diameter_squared_lumped`, `_jc` (ruling 38: owner to settle, Q-PI-5) |
-| `daf_lumped`, `daf_jc` | `dynamic_amplification_factor_lumped`, `_jc` (ruling 38: owner to settle, Q-PI-5) |
+| `f_eq_over_LD2_lumped`, `_jc` | `force_per_length_diameter_squared_lumped`, `_jc` (ruling 80) |
+| `daf_lumped`, `daf_jc` | unchanged (ruling 80: DAF an accepted abbreviation) |
 | `t_lumped_s`, `t_jc_s` | `wall_time_lumped`, `wall_time_jc` |
 
 The `regen.template` placeholders follow the columns. In the reference entries,
