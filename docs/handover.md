@@ -15,7 +15,8 @@ history of how it was built is in git; `NOTES.md` keeps a short summary.
   junction-coupling curve rows, 3 Example-sheet calls) that both layers reproduce at the
   tolerance recorded in `tests/test_golden.py` (5e-12 curve, 1e-12 Example).
 * **Bitwise**: equal as IEEE doubles, every bit, not within a tolerance.
-* **Numba / JIT / cache**: numba compiles the three inner loops to machine code on their first
+* **Numba / JIT / cache**: numba compiles the substep kernels (`response._integrate_kernel` and the per-substep
+  functions it calls) to machine code on their first
   call (just in time) and keeps the result on disk under `src/surge_sdof/__pycache__`;
   `NUMBA_DISABLE_JIT=1` runs the same source as plain Python.
 * **Hypothesis properties**: `tests/test_properties.py`, invariants checked on inputs the
@@ -69,7 +70,8 @@ only the frozen `legacy_port.get_pressure_response` keeps it.
     `max_acceleration` (m/s²), `max_unbalance_force` (N, the largest `|forceA − forceB|`): the
     five maxima of the VBA `resultArray(0 To 4)` (`summary()` returns them in that order);
   * `displacement_history` (m), `velocity_history` (m/s), `acceleration_history` (m/s²): the
-    state at the end of each sample, 0-based, length `2 * outMax` (unfilled trailing elements
+    state at the end of each sample, 0-based, length `2 * nominal_forced_sample_count` (the history samples plus the rounded transit
+    delay; unfilled trailing elements
     0); the VBA returned one of them per call, by `outputType`;
   * `free_decay_sample_count` (the samples integrated in the free-decay phase) and `trace`
     (the substep trace when `trace_every > 0`, below, else `None`).
@@ -91,6 +93,38 @@ only the frozen `legacy_port.get_pressure_response` keeps it.
   With the defaults the junction-coupling results differ from Excel by about 2e-3 on the golden
   cases (up to 4.5e-2 on the coarsest sweep case), almost entirely from the profile correction;
   the measured deltas are in DEVIATIONS D-4 and `docs/jc_sweep.md`.
+
+## How the code is laid out (after the clean-code review)
+
+The solver was refactored for readability between 16 and 25 Nov 2026 (review sessions R.0 to
+R.11, `docs/review/`) with every result kept bit-identical; `docs/review/report.md` is the
+close-out. Read `docs/style.md` (the rules the code now follows) and `docs/nomenclature.md`
+(each code name, its unit and its VBA name) before changing it. One substep, from the entry
+point to the state update:
+
+1. `response.peak_response` / `peak_response_jc` check the inputs, ask `solver_setup`
+   (substep duration, portal-frame height) and `column_grid` (`moc.ColumnGrid`), build
+   `structure.SdofParams` (`lumped_params` / `jc_params`) and, for junction coupling, the
+   fluid column (`coupling.fluid_column`, a `moc.FluidColumn`; `moc.empty_column` for the
+   lumped run).
+2. `loads.unbalance_force` walks the force history through the transit, forced and free-decay
+   phases and yields the per-substep unbalance force (elbow A minus elbow B after the transit
+   delay); `loads.elbow_forces` is the same walk for the trace.
+3. `response._integrate` prepares the flat arrays (`_kernel_inputs`), runs the compiled
+   `_integrate_kernel` and builds the `PeakResponse` (and, when traced, `trace.build_trace`).
+4. Per substep the kernel advances the MoC column on one staggered half-grid (`moc.step`,
+   A nodes or B cells by the substep parity; it returns the junction force), forms the applied
+   force, and calls `_structure_substep`, which steps the SDOF (`structure.step_scalars`:
+   trapezoid update, gap stiffness through `effective_displacement`, Coulomb friction) and
+   raises the maxima. A traced substep is written by `trace.write_frame_row` /
+   `write_frame_column` through `_record_frame`.
+
+`histories` builds the sweep's pressure histories, `export` writes the two JSON documents and
+`viz/geometry` lays the column out for the viewer. The tools under `tools/` are the command
+lines (`export.py`, `sweep_jc.py` with `sweep_grid` / `sweep_rows` / `sweep_report`, `bench.py`)
+and the review's harnesses (`review_snapshot.py`, `review_support.py`, `review_ab.py`,
+`review_baseline.py`). `docs/architecture.md` predates the review in parts; where it and the
+code differ, the code and its docstrings are current.
 
 `Integration(trace_every=k > 0)` on either peak solver also records every `k`-th substep
 (state, elbow forces, friction force, and in `Trace.column` the MoC column) as
@@ -221,7 +255,8 @@ fixture must come from a workbook with the fixed `floor`.
 ## Where Python differs from the VBA
 
 `DEVIATIONS.md` lists every place the port departs from, or deliberately preserves a quirk of,
-the VBA: 23 rows, each with the VBA and Python locations, both behaviours, the status
+the VBA: 27 rows (D-25 to D-27 from the review: flag validation at the entry, `is_capped`
+from the kernel's count, `size_in` from the caller), each with the VBA and Python locations, both behaviours, the status
 (preserved or fixed), the reason and the pinning test. Read it before relying on an edge case.
 `docs/port_review.md` is the close-out review of the literal port.
 
