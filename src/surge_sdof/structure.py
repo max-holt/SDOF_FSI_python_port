@@ -464,6 +464,10 @@ def step_scalars(
     * The scheme is explicit in the acceleration (not average-acceleration Newmark):
       with zero damping the amplitude grows about 2.5 % per cycle at ``omega dt`` of
       0.016 (NOTES.md "Findings worth knowing").
+    * Stick (``|v| < friction_velocity_step``, the friction velocity removable in one
+      substep): friction removes the whole old velocity, less than one step, and ``v``
+      becomes the trapezoidal change alone (``substep_friction`` derives the force). Slip:
+      ``v`` plus the change, less ``friction_velocity_step`` in the direction of ``v``.
     * VBA quirk D-20 preserved: the slip branch uses ``sign(v, 0.000001)``, so for
       ``fricAcc <= |v| < 1e-6`` no friction is applied in that substep.
     * ``(a + aNew) * dt / 2`` is computed as ``(a + aNew) * half_dt``; scaling by a
@@ -487,6 +491,8 @@ def step_scalars(
 
     trapezoid_velocity_change = (a + a_new) * half_dt
     if abs(v) < friction_velocity_step:
+        # Stick: friction can remove all of the old velocity in one substep, so the mass
+        # restarts from rest and keeps only this substep's change (VBA vNew = (a + aNew) * dt / 2).
         v_new = trapezoid_velocity_change
     else:
         # vNew = v + (a + aNew) * dt / 2 - sign(v, 0.000001) * fricAcc
