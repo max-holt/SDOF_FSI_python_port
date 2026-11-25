@@ -8,7 +8,9 @@ length in lines (radon's ``lineno`` .. ``endline``, signature and docstring incl
 the lines left after the docstring beside it).
 
 Ruff only reports a function that exceeds a threshold, so every threshold is set to 0 on
-the command line; ``pyproject.toml`` is not touched. The commands are printed with
+the command line; ``pyproject.toml`` is not touched. ``--ignore-noqa`` makes ruff report the
+functions that carry a targeted ``noqa`` too, so the recorded exceptions of
+``docs/style.md`` §11 show their real figures rather than 0. The commands are printed with
 ``--commands`` and recorded in ``docs/review/baseline.md``.
 
     .venv/bin/python tools/review_baseline.py > tables.md
@@ -48,6 +50,7 @@ RUFF = [
     "--preview",
     "--isolated",
     "--no-cache",
+    "--ignore-noqa",
     "--output-format",
     "json",
     "--select",
