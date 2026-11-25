@@ -547,7 +547,8 @@ def test_is_capped():
     )
     assert export.is_capped(res) is False
     assert not np.any(res.trace.load_phase == PHASE_FREE_DECAY)
-    # a run that decays past the window: the Example JC case with a long decay
+    # a run that reaches free decay inside the window (one free-decay sample, not capped): the
+    # Example JC case, checked against the window arithmetic
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
     kw = dict(case["kwargs"], dynamic_fric=0.0, damping_percent=0.0)
