@@ -1,56 +1,59 @@
 """The solver trace for visualisation (Session V.1): ``Trace`` and its helpers.
 
-``peak_response(..., trace_every=k)`` and ``peak_response_jc(..., trace_every=k)`` record
-every ``k``-th sub-step into preallocated arrays inside ``response._integrate_kernel`` and
-return the result as ``PeakResponse.trace``. With ``trace_every = 0`` (the default) the
+``peak_response`` and ``peak_response_jc`` with ``Integration(substep_count, trace_every=k)``
+record every ``k``-th substep into preallocated arrays inside ``response._integrate_kernel``
+and return the result as ``PeakResponse.trace``. With ``trace_every = 0`` (the default) the
 kernel takes empty arrays and never enters the recording branch; the state arithmetic is
 the same in both cases, so a traced run returns the same ``PeakResponse`` values bitwise
 (``tests/test_trace.py``).
 
 The kernel writes each frame through the two compiled writers here (``write_frame_row``,
 the scalars of a ``FrameRow``; ``write_frame_column``, the interleaved column), called by
-``response._record_frame`` on recorded sub-steps only (review session R.7, plan 4.8).
+``response._record_frame`` on recorded substeps only (review session R.7, plan 4.8).
+``FRAME_COLUMN_TABLE`` names the frame columns of the ``trace`` document, the ``Trace``
+fields and the kernel columns in one place.
 
 Frame convention
 ----------------
-Frame ``i`` is the **end of sub-step** ``i * trace_every``, where ``sub_step`` is the
+Frame ``i`` is the **end of substep** ``i * trace_every``, where ``substep_index`` is the
 running 0-based counter ``n`` of the kernel (the index whose parity drives the MoC
-half-grids). ``t = (sub_step + 1) * dt`` is the time at the end of that sub-step; ``x``,
-``v``, ``a`` are the state after it; ``f_a``, ``f_b`` and ``f_unbalance`` the forces applied
-during it (zero in free decay); ``d_f`` the junction force the sub-step used (``moc.step``
-runs before the SDOF update; ``0.0`` for the lumped solver); ``p_cells`` / ``v_cells`` the
-column after it. ``sample`` is the 0-based sample index (``totInd - 1``, the index into
-``PeakResponse.history``); ``phase`` is 0 in the transit phase, 1 in the forced phase
-and 2 in free decay. Frame 0 is the end of sub-step 0: a column at rest with
-``a = 0`` is still bitwise the initial column there.
+half-grids). ``time = (substep_index + 1) * substep_duration`` is the time at the end of
+that substep; ``displacement``, ``velocity``, ``acceleration`` are the state after it;
+``elbow_a_force``, ``elbow_b_force`` and ``unbalance_force`` the forces applied during it
+(zero in free decay); ``junction_force`` the junction force the substep used (``moc.step``
+runs before the SDOF update; ``0.0`` for the lumped solver); ``column.grid_point_pressure``
+/ ``grid_point_velocity`` the column after it. ``sample_index`` is the 0-based sample
+(``totInd - 1``, the index into the ``PeakResponse`` histories); ``load_phase`` is 0 in the
+transit phase, 1 in the forced phase and 2 in free decay. Frame 0 is the end of substep 0:
+a column at rest with ``a = 0`` is still bitwise the initial column there.
 
-Free decay is traced for as long as the history records it (``totInd <= outMax * 2``, the
-``_record_sample`` guard of the kernel); later free-decay sub-steps are integrated but not
-traced, as the history drops them. The arrays are allocated once for that window
+Free decay is traced for as long as the histories record it (``totInd <= outMax * 2``, the
+``_record_sample`` guard of the kernel); later free-decay substeps are integrated but not
+traced, as the histories drop them. The arrays are allocated once for that window
 (``frame_capacity``) and sliced to the frames written.
 
-``f_friction = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old +
-a_new) * (dt / 2))`` is the velocity the Coulomb branch of ``structure.step_scalars`` added
-or removed in the sub-step, recomputed in the recording branch from the same doubles the
+``friction_force = mass * dv_friction / dt`` where ``dv_friction = v_new - (v_old + (a_old
++ a_new) * (dt / 2))`` is the velocity the Coulomb branch of ``structure.step_scalars`` added
+or removed in the substep, recomputed in the recording branch from the same doubles the
 kernel formed (``structure.substep_friction``, ``half_dt = dt / 2``): in slip it is
-``-+fric_acc`` (``0.0`` exactly with ``dynamicFric = 0``; the D-20 dead zone gives ``0.0``
-too), in stick (``|v_old| < fric_acc``) it is ``trapezoid_velocity_change - (v_old +
-trapezoid_velocity_change)``, the momentum the stick removed, so ``f_friction`` there is the
-holding force. ``stick`` is that test.
+``-+friction_velocity_step`` (``0.0`` exactly with no friction; the D-20 dead zone gives
+``0.0`` too), in stick (``|v_old| < friction_velocity_step``) it is
+``trapezoid_velocity_change - (v_old + trapezoid_velocity_change)``, the momentum the stick
+removed, so ``friction_force`` there is the holding force. ``is_sticking`` is that test.
 
-JC column layout
-----------------
+JC column layout (``ColumnTrace``)
+----------------------------------
 The staggered grid is stored **interleaved**: ``A0 B0 A1 B1 ... A(N-1) B(N-1) A(N)``,
-``n_cells = 2N + 1`` (``cell_kind`` 0 = A node, 1 = B cell). ``cell_position`` is
-``j * celerity * dt`` m from the first A node (a cell is ``2 c dt`` long; the column runs
-``ext_qty`` end cells, the leg up to the pivot, the span between the pivots, the other leg
-and ``ext_qty`` end cells, see ``moc.grid_size``). ``moving_fraction`` is the column's
-``moving_fraction_a`` / ``moving_fraction_b`` interleaved the same way, the values
-``moc.step`` multiplies ``a dt`` by (``moving_fraction_a[0]`` and ``moving_fraction_a[N]``
-are the unused zeros of ``moc.moving_fractions``).
-``p_cells`` and ``v_cells`` are copies of the four arrays exactly as the model stores them:
-pressures in Pa, velocities in m/s relative to the pipe, after the acceleration injection
-and the ``vAv`` subtraction of the sub-step.
+``grid_point_count = 2N + 1`` (``grid_point_kind`` 0 = A node, 1 = B cell).
+``grid_point_position`` is ``j * celerity * dt`` m from the first A node (a cell is ``2 c dt``
+long; the column runs ``inactive_end_cell_count`` end cells, the leg up to the pivot, the
+span between the pivots, the other leg and the inactive end cells, see ``moc.grid_size``).
+``grid_point_moving_fraction`` is the column's ``moving_fraction_a`` / ``moving_fraction_b``
+interleaved the same way, the values ``moc.step`` multiplies ``a dt`` by
+(``moving_fraction_a[0]`` and ``moving_fraction_a[N]`` are the unused zeros of
+``moc.moving_fractions``). ``grid_point_pressure`` and ``grid_point_velocity`` are copies of
+the four arrays exactly as the model stores them: pressures in Pa, velocities in m/s relative
+to the pipe, after the acceleration injection and the ``vAv`` subtraction of the substep.
 """
 
 from __future__ import annotations
