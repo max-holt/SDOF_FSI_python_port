@@ -205,9 +205,11 @@ def decay_rate(
     envelope_decay_cycles = float(envelope_decay_cycles)
     envelope_decay_fraction = float(envelope_decay_fraction)
     if not 0.0 <= envelope_decay_fraction < 1.0:
-        raise ValueError(f"decay_fraction must be in [0, 1), got {envelope_decay_fraction!r}")
+        raise ValueError(
+            f"envelope_decay_fraction must be in [0, 1), got {envelope_decay_fraction!r}"
+        )
     if frequency <= 0.0 or envelope_decay_cycles <= 0.0:
-        raise ValueError("f and decay_cycles must be positive")
+        raise ValueError("frequency and envelope_decay_cycles must be positive")
     return -math.log(1.0 - envelope_decay_fraction) * frequency / envelope_decay_cycles
 
 
@@ -240,7 +242,7 @@ def _duration(lead_in_s: float, transit_s: float, decay_s: float, tail_s: float)
 def _axis(duration_s: float, sample_rate: float, lead_in_s: float):
     """``(time, n_lead)``: the sample times and the number of lead-in (zero) samples."""
     if sample_rate <= 0.0:
-        raise ValueError(f"sample_freq must be positive, got {sample_rate!r}")
+        raise ValueError(f"sample_rate must be positive, got {sample_rate!r}")
     sample_count = int(round(duration_s * sample_rate))
     lead_in_sample_count = int(round(lead_in_s * sample_rate))
     if lead_in_sample_count >= sample_count:
@@ -533,7 +535,10 @@ def step_noise(
     )
     lead_in_s, transit_s, tail_s = float(lead_in_s), float(transit_s), float(tail_s)
     if peak_pressure_target <= step_pressure:
-        raise ValueError(f"p_cap ({peak_pressure_target!r}) must exceed p_step ({step_pressure!r})")
+        raise ValueError(
+            f"peak_pressure_target ({peak_pressure_target!r}) must exceed step_pressure "
+            f"({step_pressure!r})"
+        )
     decay_s = envelope_decay_cycles / envelope_reference_frequency
     duration_s = _duration(lead_in_s, transit_s, decay_s, tail_s)
     time, lead_in_sample_count = _axis(duration_s, sample_rate, lead_in_s)
@@ -637,7 +642,7 @@ noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_dec
         return step(target_pressure, **shared_arguments)
     if history_type == "step_sine":
         if oscillation_frequency is None:
-            raise ValueError("step_sine needs f_osc")
+            raise ValueError("step_sine needs oscillation_frequency")
         step_pressure = STEP_TO_PEAK_RATIO * target_pressure
         unit_sine_history = step_sine(
             0.0,
@@ -658,7 +663,7 @@ noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_dec
         )
     if history_type == "step_noise":
         if noise_seed is None or envelope_reference_frequency is None:
-            raise ValueError("step_noise needs seed and f_ref")
+            raise ValueError("step_noise needs noise_seed and envelope_reference_frequency")
         return step_noise(
             STEP_TO_PEAK_RATIO * target_pressure,
             requested_noise_rms,
@@ -670,7 +675,7 @@ noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_dec
             peak_pressure_target=target_pressure,
             **shared_arguments,
         )
-    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {history_type!r}")
+    raise ValueError(f"history_type must be one of {HISTORY_TYPES}, got {history_type!r}")
 
 
 def from_params(params: dict) -> History:
@@ -724,4 +729,4 @@ def from_params(params: dict) -> History:
             peak_pressure_target=parameter_values["peak_pressure_target"],
             **shared_arguments,
         )
-    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {history_type!r}")
+    raise ValueError(f"history_type must be one of {HISTORY_TYPES}, got {history_type!r}")

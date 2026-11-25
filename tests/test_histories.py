@@ -160,13 +160,13 @@ def test_stats_and_force():
 
 
 def test_rejections():
-    with pytest.raises(ValueError, match="kind"):
+    with pytest.raises(ValueError, match="history_type"):
         H.canonical("ramp", P_DESIGN, 1.0)
-    with pytest.raises(ValueError, match="f_osc"):
+    with pytest.raises(ValueError, match="oscillation_frequency"):
         H.canonical("step_sine", P_DESIGN, 1.0)
-    with pytest.raises(ValueError, match="seed"):
+    with pytest.raises(ValueError, match="noise_seed"):
         H.canonical("step_noise", P_DESIGN, 1.0)
-    with pytest.raises(ValueError, match="p_cap"):
+    with pytest.raises(ValueError, match="peak_pressure_target"):
         H.step_noise(1.0, 1.0, envelope_reference_frequency=4.0, peak_pressure_target=1.0)
     with pytest.raises(ValueError, match="unknown history parameters"):
         H.from_params({"history_type": "step", "step_pressure": 1.0, "bogus": 1})
