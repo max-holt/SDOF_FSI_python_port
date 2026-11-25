@@ -38,21 +38,21 @@ from surge_sdof import export, histories, moc, response
 
 HISTORY_PARAM_COLUMNS = (
     # CSV column -> histories.PARAM_KEYS entry; SI values exactly as the generator received them
-    ("history_type", "kind"),
-    ("sample_freq", "sample_freq"),
+    ("history_type", "history_type"),
+    ("sample_freq", "sample_rate"),
     ("lead_in_s", "lead_in_s"),
     ("transit_s", "transit_s"),
     ("tail_s", "tail_s"),
-    ("p_step", "p_step"),
-    ("p_osc", "p_osc"),
-    ("f_osc_hz", "f_osc"),
-    ("p_noise_rms", "p_noise_rms"),
-    ("f_cut_hz", "f_cut"),
-    ("f_ref_hz", "f_ref"),
-    ("seed", "seed"),
-    ("decay_cycles", "decay_cycles"),
-    ("decay_fraction", "decay_fraction"),
-    ("p_cap", "p_cap"),
+    ("p_step", "step_pressure"),
+    ("p_osc", "oscillation_amplitude"),
+    ("f_osc_hz", "oscillation_frequency"),
+    ("p_noise_rms", "requested_noise_rms"),
+    ("f_cut_hz", "noise_cutoff_frequency"),
+    ("f_ref_hz", "envelope_reference_frequency"),
+    ("seed", "noise_seed"),
+    ("decay_cycles", "envelope_decay_cycles"),
+    ("decay_fraction", "envelope_decay_fraction"),
+    ("p_cap", "peak_pressure_target"),
 )
 
 COLUMNS = export.SWEEP_COLUMNS
@@ -64,10 +64,12 @@ def case_history(case: Case, p_design: float) -> histories.History:
         case.history_type,
         p_design,
         case.amplitude_fraction,
-        f_osc=case.f_osc_hz,
-        seed=case.seed,
-        f_ref=NOISE_REFERENCE_FREQUENCY if case.history_type == "step_noise" else None,
-        sample_freq=SAMPLE_RATE,
+        oscillation_frequency=case.f_osc_hz,
+        noise_seed=case.seed,
+        envelope_reference_frequency=NOISE_REFERENCE_FREQUENCY
+        if case.history_type == "step_noise"
+        else None,
+        sample_rate=SAMPLE_RATE,
         transit_s=TRANSIT_ALLOWANCE_S,
     )
 
@@ -79,9 +81,9 @@ def history_from_row(row: dict) -> histories.History:
         value = row[column]
         if value in ("", None):
             params[key] = None
-        elif key == "kind":
+        elif key == "history_type":
             params[key] = value
-        elif key == "seed":
+        elif key == "noise_seed":
             params[key] = int(value)
         else:
             params[key] = float(value)
@@ -171,17 +173,19 @@ def _case_columns(
         amplitude_fraction=case.amplitude_fraction,
         mu=case.friction_coefficient,
         p_design_bar=pipe_properties.design_pressure / PA_PER_BAR,
-        p_cap_bar=histories.p_cap(pipe_properties.design_pressure, case.amplitude_fraction)
+        p_cap_bar=histories.peak_pressure_target(
+            pipe_properties.design_pressure, case.amplitude_fraction
+        )
         / PA_PER_BAR,
-        p_peak_bar=pressure_history.peak / PA_PER_BAR,
-        p_mean_bar=pressure_history.mean / PA_PER_BAR,
-        p_rms_bar=pressure_history.rms / PA_PER_BAR,
+        p_peak_bar=pressure_history.pressure_max / PA_PER_BAR,
+        p_mean_bar=pressure_history.pressure_mean / PA_PER_BAR,
+        p_rms_bar=pressure_history.pressure_rms / PA_PER_BAR,
         noise_rms_bar=None
-        if pressure_history.noise_rms is None
-        else pressure_history.noise_rms / PA_PER_BAR,
+        if pressure_history.scaled_noise_rms is None
+        else pressure_history.scaled_noise_rms / PA_PER_BAR,
         decay_s=pressure_history.decay_s,
         duration_s=pressure_history.duration_s,
-        n_samples=pressure_history.n_samples,
+        n_samples=pressure_history.sample_count,
         histories_version=pressure_history.version,
         fluid_area_m2=pipe_properties.flow_area,
         mass_per_unit_len=pipe_properties.mass_per_length,
@@ -240,7 +244,7 @@ def _result_columns(
     lumped_result, jc_result = results
     total_mass = row["mass_total_kg"]
     outside_diameter_squared = (pipe_properties.outside_diameter_mm / MM_PER_M) ** 2
-    peak_pressure_force = pressure_history.peak * pipe_properties.flow_area
+    peak_pressure_force = pressure_history.pressure_max * pipe_properties.flow_area
     for name, result in (("lumped", lumped_result), ("jc", jc_result)):
         if result is None:
             continue

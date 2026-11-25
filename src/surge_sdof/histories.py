@@ -22,11 +22,7 @@ the sweep CSV reproduces its history bitwise through ``from_params``. The solver
   envelope_reference_frequency``, then peak-scaled so that ``max(pressure) ==
   peak_pressure_target``. The requested RMS drops out of the result (the scaling is a
   ratio); the RMS of the scaled noise over the active window is recorded as
-  ``History.noise_rms``.
-
-``History`` keeps the short field names (``p_step``, ``f_osc``, ``p_cap``, ...: the
-``PARAM_KEYS``, which are also sweep columns) until the public API session; ``canonical`` and
-``from_params`` keep their keywords until then too.
+  ``History.scaled_noise_rms``.
 
 Common scaling (``canonical``): the owner's convention for the sweep. Every history peaks at
 ``p_cap = amplitude_fraction * 1.33 * p_design``: the step is a plain step to the cap; for
@@ -55,7 +51,7 @@ __all__ = [
     "DEFAULT_TAIL_S",
     "PEAK_TO_DESIGN_PRESSURE_RATIO",
     "History",
-    "p_cap",
+    "peak_pressure_target",
     "decay_rate",
     "envelope",
     "step",
@@ -90,21 +86,21 @@ DEFAULT_ENVELOPE_DECAY_FRACTION = 0.8
 reaches ``1 - 0.8 = 0.2`` of its start. The sweep's convention."""
 
 PARAM_KEYS = (
-    "kind",
-    "sample_freq",
+    "history_type",
+    "sample_rate",
     "lead_in_s",
     "transit_s",
     "tail_s",
-    "p_step",
-    "p_osc",
-    "f_osc",
-    "p_noise_rms",
-    "f_cut",
-    "f_ref",
-    "seed",
-    "decay_cycles",
-    "decay_fraction",
-    "p_cap",
+    "step_pressure",
+    "oscillation_amplitude",
+    "oscillation_frequency",
+    "requested_noise_rms",
+    "noise_cutoff_frequency",
+    "envelope_reference_frequency",
+    "noise_seed",
+    "envelope_decay_cycles",
+    "envelope_decay_fraction",
+    "peak_pressure_target",
 )
 """The keys of ``History.params()``; ``from_params`` takes exactly these."""
 
@@ -115,64 +111,65 @@ class History:
 
     Attributes
     ----------
-    kind : str
+    history_type : str
         ``"step"``, ``"step_sine"`` or ``"step_noise"``.
     time : numpy.ndarray
-        Sample times, s, ``arange(n) / sample_freq``.
+        Sample times, s, ``arange(n) / sample_rate``.
     pressure : numpy.ndarray
         Pressure, Pa, the same length.
-    sample_freq, lead_in_s, transit_s, tail_s : float
-        The sampling rate (Hz) and the three duration terms (s) the generator received.
-    p_step : float
+    sample_rate, lead_in_s, transit_s, tail_s : float
+        The sample rate (Hz) and the three duration terms (s) the generator received.
+    step_pressure : float
         Held step pressure, Pa.
-    p_osc, f_osc : float or None
+    oscillation_amplitude, oscillation_frequency : float or None
         Sine amplitude (Pa) and frequency (Hz); ``step_sine`` only.
-    p_noise_rms, f_cut, f_ref, seed, p_cap : float / int / None
+    requested_noise_rms, noise_cutoff_frequency, envelope_reference_frequency, noise_seed, \
+peak_pressure_target : float / int / None
         ``step_noise`` only: the requested white-noise RMS (Pa, inert after the peak
         scaling), the low-pass cut-off (Hz, resolved), the envelope's reference frequency
         (Hz), the RNG seed and the peak target (Pa).
-    decay_cycles, decay_fraction : float or None
+    envelope_decay_cycles, envelope_decay_fraction : float or None
         Envelope parameters (``step_sine`` and ``step_noise``).
     decay_s : float
         The decay term of the duration, s (0 for ``step``).
     duration_s : float
         ``lead_in_s + transit_s + decay_s + tail_s``, s.
-    n_samples : int
-        ``round(duration_s * sample_freq)``.
-    peak, p_min, mean, rms : float
+    sample_count : int
+        ``round(duration_s * sample_rate)``.
+    pressure_max, pressure_min, pressure_mean, pressure_rms : float
         ``max``, ``min``, mean and RMS of ``pressure`` over the whole history, Pa.
-    noise_rms : float or None
+    scaled_noise_rms : float or None
         RMS of the scaled noise component over the active window (after the lead-in), Pa;
         ``step_noise`` only.
     version : str
         ``HISTORIES_VERSION``.
     """
 
-    kind: str
+    history_type: str
     time: np.ndarray = field(repr=False, compare=False)
     pressure: np.ndarray = field(repr=False, compare=False)
-    sample_freq: float
+    sample_rate: float
     lead_in_s: float
     transit_s: float
     tail_s: float
-    p_step: float
-    p_osc: float | None
-    f_osc: float | None
-    p_noise_rms: float | None
-    f_cut: float | None
-    f_ref: float | None
-    seed: int | None
-    decay_cycles: float | None
-    decay_fraction: float | None
-    p_cap: float | None
+    step_pressure: float
+    oscillation_amplitude: float | None
+    oscillation_frequency: float | None
+    requested_noise_rms: float | None
+    noise_cutoff_frequency: float | None
+    envelope_reference_frequency: float | None
+    noise_seed: int | None
+    envelope_decay_cycles: float | None
+    envelope_decay_fraction: float | None
+    peak_pressure_target: float | None
     decay_s: float
     duration_s: float
-    n_samples: int
-    peak: float
-    p_min: float
-    mean: float
-    rms: float
-    noise_rms: float | None
+    sample_count: int
+    pressure_max: float
+    pressure_min: float
+    pressure_mean: float
+    pressure_rms: float
+    scaled_noise_rms: float | None
     version: str = HISTORIES_VERSION
 
     def params(self) -> dict:
@@ -180,17 +177,17 @@ class History:
         the same arrays bitwise."""
         return {key: getattr(self, key) for key in PARAM_KEYS}
 
-    def force(self, fluid_area: float) -> np.ndarray:
-        """The force history the solvers take: ``pressure * fluid_area``, N."""
-        return self.pressure * float(fluid_area)
+    def force(self, flow_area: float) -> np.ndarray:
+        """The force history the solvers take: ``pressure * flow_area``, N."""
+        return self.pressure * float(flow_area)
 
 
 # ------------------------------------------------------------------ building blocks
 
 
-def p_cap(p_design: float, amplitude_fraction: float = 1.0) -> float:
-    """``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * p_design``, Pa."""
-    return float(amplitude_fraction) * PEAK_TO_DESIGN_PRESSURE_RATIO * float(p_design)
+def peak_pressure_target(design_pressure: float, amplitude_fraction: float = 1.0) -> float:
+    """``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * design_pressure``, Pa."""
+    return float(amplitude_fraction) * PEAK_TO_DESIGN_PRESSURE_RATIO * float(design_pressure)
 
 
 def decay_rate(
@@ -261,38 +258,38 @@ def _stats(pressure: np.ndarray) -> tuple[float, float, float, float]:
 
 
 _KIND_SPECIFIC_PARAMS = (
-    "p_osc",
-    "f_osc",
-    "p_noise_rms",
-    "f_cut",
-    "f_ref",
-    "seed",
-    "decay_cycles",
-    "decay_fraction",
-    "p_cap",
+    "oscillation_amplitude",
+    "oscillation_frequency",
+    "requested_noise_rms",
+    "noise_cutoff_frequency",
+    "envelope_reference_frequency",
+    "noise_seed",
+    "envelope_decay_cycles",
+    "envelope_decay_fraction",
+    "peak_pressure_target",
 )
 """The ``History`` parameters only some generators set; ``_history`` defaults them to None."""
 
 
 def _history(
-    history_type, time, pressure, decay_s, duration_s, noise_rms=None, **params
+    history_type, time, pressure, decay_s, duration_s, scaled_noise_rms=None, **params
 ) -> History:
     """The ``History`` of a generated pressure: its statistics, and ``params`` with every
     kind-specific parameter the generator does not set as None."""
     params = {**dict.fromkeys(_KIND_SPECIFIC_PARAMS), **params}
-    peak, p_min, mean, rms = _stats(pressure)
+    pressure_max, pressure_min, pressure_mean, pressure_rms = _stats(pressure)
     return History(
-        kind=history_type,
+        history_type=history_type,
         time=time,
         pressure=pressure,
         decay_s=float(decay_s),
         duration_s=float(duration_s),
-        n_samples=int(time.shape[0]),
-        peak=peak,
-        p_min=p_min,
-        mean=mean,
-        rms=rms,
-        noise_rms=noise_rms,
+        sample_count=int(time.shape[0]),
+        pressure_max=pressure_max,
+        pressure_min=pressure_min,
+        pressure_mean=pressure_mean,
+        pressure_rms=pressure_rms,
+        scaled_noise_rms=scaled_noise_rms,
         **params,
     )
 
@@ -337,11 +334,11 @@ def step(
         pressure,
         0.0,
         duration_s,
-        sample_freq=sample_rate,
+        sample_rate=sample_rate,
         lead_in_s=lead_in_s,
         transit_s=transit_s,
         tail_s=tail_s,
-        p_step=step_pressure,
+        step_pressure=step_pressure,
     )
 
 
@@ -425,15 +422,15 @@ def step_sine(
         pressure,
         decay_s,
         duration_s,
-        sample_freq=sample_rate,
+        sample_rate=sample_rate,
         lead_in_s=lead_in_s,
         transit_s=transit_s,
         tail_s=tail_s,
-        p_step=step_pressure,
-        p_osc=oscillation_amplitude,
-        f_osc=oscillation_frequency,
-        decay_cycles=envelope_decay_cycles,
-        decay_fraction=envelope_decay_fraction,
+        step_pressure=step_pressure,
+        oscillation_amplitude=oscillation_amplitude,
+        oscillation_frequency=oscillation_frequency,
+        envelope_decay_cycles=envelope_decay_cycles,
+        envelope_decay_fraction=envelope_decay_fraction,
     )
 
 
@@ -488,7 +485,7 @@ def step_noise(
     ``(p_cap - p_step) / max(noise)`` so that ``max(pressure) == p_cap``. Because the last
     step is a ratio, ``requested_noise_rms`` has no effect on the result; it is kept as the
     generator's input and the resulting RMS of the noise over the active window is
-    ``History.noise_rms``.
+    ``History.scaled_noise_rms``.
 
     Parameters
     ----------
@@ -553,26 +550,26 @@ def step_noise(
     scaled_noise = _scaled_to_peak(noise, step_pressure, peak_pressure_target)
     pressure = np.zeros_like(time)
     pressure[lead_in_sample_count:] = step_pressure + scaled_noise
-    noise_rms = float(math.sqrt(float(np.mean(scaled_noise * scaled_noise))))
+    scaled_noise_rms = float(math.sqrt(float(np.mean(scaled_noise * scaled_noise))))
     return _history(
         "step_noise",
         time,
         pressure,
         decay_s,
         duration_s,
-        noise_rms=noise_rms,
-        sample_freq=sample_rate,
+        scaled_noise_rms=scaled_noise_rms,
+        sample_rate=sample_rate,
         lead_in_s=lead_in_s,
         transit_s=transit_s,
         tail_s=tail_s,
-        p_step=step_pressure,
-        p_noise_rms=requested_noise_rms,
-        f_cut=noise_cutoff_frequency,
-        f_ref=envelope_reference_frequency,
-        seed=noise_seed,
-        decay_cycles=envelope_decay_cycles,
-        decay_fraction=envelope_decay_fraction,
-        p_cap=peak_pressure_target,
+        step_pressure=step_pressure,
+        requested_noise_rms=requested_noise_rms,
+        noise_cutoff_frequency=noise_cutoff_frequency,
+        envelope_reference_frequency=envelope_reference_frequency,
+        noise_seed=noise_seed,
+        envelope_decay_cycles=envelope_decay_cycles,
+        envelope_decay_fraction=envelope_decay_fraction,
+        peak_pressure_target=peak_pressure_target,
     )
 
 
@@ -580,42 +577,44 @@ def step_noise(
 
 
 def canonical(
-    kind: str,
-    p_design: float,
+    history_type: str,
+    design_pressure: float,
     amplitude_fraction: float,
     *,
-    f_osc: float | None = None,
-    seed: int | None = None,
-    f_ref: float | None = None,
-    f_cut: float | None = None,
-    p_noise_rms: float = 1.0,
-    decay_cycles: float = DEFAULT_ENVELOPE_DECAY_CYCLES,
-    decay_fraction: float = DEFAULT_ENVELOPE_DECAY_FRACTION,
-    sample_freq: float = DEFAULT_SAMPLE_RATE,
+    oscillation_frequency: float | None = None,
+    noise_seed: int | None = None,
+    envelope_reference_frequency: float | None = None,
+    noise_cutoff_frequency: float | None = None,
+    requested_noise_rms: float = 1.0,
+    envelope_decay_cycles: float = DEFAULT_ENVELOPE_DECAY_CYCLES,
+    envelope_decay_fraction: float = DEFAULT_ENVELOPE_DECAY_FRACTION,
+    sample_rate: float = DEFAULT_SAMPLE_RATE,
     lead_in_s: float = DEFAULT_LEAD_IN_S,
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
 ) -> History:
-    """A history of ``kind`` under the sweep's common scaling: peak ``amplitude_fraction *
-    1.33 * p_design``.
+    """A history of ``history_type`` under the sweep's common scaling: peak
+    ``amplitude_fraction * 1.33 * design_pressure``.
 
-    ``"step"`` is a plain step to the cap. ``"step_sine"`` (needs ``f_osc``) holds
-    ``0.5 cap`` and sets ``p_osc`` so that the first positive peak of the enveloped sine
-    hits the cap. ``"step_noise"`` (needs ``seed`` and ``f_ref``) holds ``0.5 cap`` and
-    scales the noise so that the overall peak hits the cap. The returned ``History.params()``
-    rebuilds the same arrays through ``from_params``.
+    ``"step"`` is a plain step to the target. ``"step_sine"`` (needs
+    ``oscillation_frequency``) holds ``0.5`` of the target and sets the oscillation amplitude
+    so that the first positive peak of the enveloped sine hits the target. ``"step_noise"``
+    (needs ``noise_seed`` and ``envelope_reference_frequency``) holds ``0.5`` of the target
+    and scales the noise so that the overall peak hits the target. The returned
+    ``History.params()`` rebuilds the same arrays through ``from_params``.
 
     Parameters
     ----------
-    kind : str
+    history_type : str
         One of ``HISTORY_TYPES``.
-    p_design : float
+    design_pressure : float
         Design pressure, Pa.
     amplitude_fraction : float
-        Peak as a fraction of ``1.33 * p_design``.
-    f_osc, seed, f_ref, f_cut, p_noise_rms, decay_cycles, decay_fraction
+        Peak as a fraction of ``1.33 * design_pressure``.
+    oscillation_frequency, noise_seed, envelope_reference_frequency, \
+noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_decay_fraction
         Passed to the generator (see each one).
-    sample_freq, lead_in_s, transit_s, tail_s : float, optional
+    sample_rate, lead_in_s, transit_s, tail_s : float, optional
         As the generators.
 
     Returns
@@ -625,41 +624,53 @@ def canonical(
     Raises
     ------
     ValueError
-        Unknown ``kind`` or a missing frequency / seed.
+        Unknown ``history_type`` or a missing frequency / seed.
     """
-    peak_pressure_target = p_cap(p_design, amplitude_fraction)
+    target_pressure = peak_pressure_target(design_pressure, amplitude_fraction)
     shared_arguments = {
-        "sample_rate": sample_freq,
+        "sample_rate": sample_rate,
         "lead_in_s": lead_in_s,
         "transit_s": transit_s,
         "tail_s": tail_s,
     }
-    if kind == "step":
-        return step(peak_pressure_target, **shared_arguments)
-    if kind == "step_sine":
-        if f_osc is None:
+    if history_type == "step":
+        return step(target_pressure, **shared_arguments)
+    if history_type == "step_sine":
+        if oscillation_frequency is None:
             raise ValueError("step_sine needs f_osc")
-        p_step = STEP_TO_PEAK_RATIO * peak_pressure_target
+        step_pressure = STEP_TO_PEAK_RATIO * target_pressure
         unit_sine_history = step_sine(
-            0.0, 1.0, f_osc, decay_cycles, decay_fraction, **shared_arguments
-        )
-        p_osc = (peak_pressure_target - p_step) / unit_sine_history.peak
-        return step_sine(p_step, p_osc, f_osc, decay_cycles, decay_fraction, **shared_arguments)
-    if kind == "step_noise":
-        if seed is None or f_ref is None:
-            raise ValueError("step_noise needs seed and f_ref")
-        return step_noise(
-            STEP_TO_PEAK_RATIO * peak_pressure_target,
-            p_noise_rms,
-            f_cut,
-            seed,
-            decay_cycles,
-            decay_fraction,
-            envelope_reference_frequency=f_ref,
-            peak_pressure_target=peak_pressure_target,
+            0.0,
+            1.0,
+            oscillation_frequency,
+            envelope_decay_cycles,
+            envelope_decay_fraction,
             **shared_arguments,
         )
-    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
+        oscillation_amplitude = (target_pressure - step_pressure) / unit_sine_history.pressure_max
+        return step_sine(
+            step_pressure,
+            oscillation_amplitude,
+            oscillation_frequency,
+            envelope_decay_cycles,
+            envelope_decay_fraction,
+            **shared_arguments,
+        )
+    if history_type == "step_noise":
+        if noise_seed is None or envelope_reference_frequency is None:
+            raise ValueError("step_noise needs seed and f_ref")
+        return step_noise(
+            STEP_TO_PEAK_RATIO * target_pressure,
+            requested_noise_rms,
+            noise_cutoff_frequency,
+            noise_seed,
+            envelope_decay_cycles,
+            envelope_decay_fraction,
+            envelope_reference_frequency=envelope_reference_frequency,
+            peak_pressure_target=target_pressure,
+            **shared_arguments,
+        )
+    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {history_type!r}")
 
 
 def from_params(params: dict) -> History:
@@ -677,8 +688,8 @@ def from_params(params: dict) -> History:
     parameter_values = {key: params.get(key) for key in PARAM_KEYS}
     shared_arguments = {
         "sample_rate": DEFAULT_SAMPLE_RATE
-        if parameter_values["sample_freq"] is None
-        else parameter_values["sample_freq"],
+        if parameter_values["sample_rate"] is None
+        else parameter_values["sample_rate"],
         "lead_in_s": DEFAULT_LEAD_IN_S
         if parameter_values["lead_in_s"] is None
         else parameter_values["lead_in_s"],
@@ -689,28 +700,28 @@ def from_params(params: dict) -> History:
         if parameter_values["tail_s"] is None
         else parameter_values["tail_s"],
     }
-    kind = parameter_values["kind"]
-    if kind == "step":
-        return step(parameter_values["p_step"], **shared_arguments)
-    if kind == "step_sine":
+    history_type = parameter_values["history_type"]
+    if history_type == "step":
+        return step(parameter_values["step_pressure"], **shared_arguments)
+    if history_type == "step_sine":
         return step_sine(
-            parameter_values["p_step"],
-            parameter_values["p_osc"],
-            parameter_values["f_osc"],
-            parameter_values["decay_cycles"],
-            parameter_values["decay_fraction"],
+            parameter_values["step_pressure"],
+            parameter_values["oscillation_amplitude"],
+            parameter_values["oscillation_frequency"],
+            parameter_values["envelope_decay_cycles"],
+            parameter_values["envelope_decay_fraction"],
             **shared_arguments,
         )
-    if kind == "step_noise":
+    if history_type == "step_noise":
         return step_noise(
-            parameter_values["p_step"],
-            parameter_values["p_noise_rms"],
-            parameter_values["f_cut"],
-            parameter_values["seed"],
-            parameter_values["decay_cycles"],
-            parameter_values["decay_fraction"],
-            envelope_reference_frequency=parameter_values["f_ref"],
-            peak_pressure_target=parameter_values["p_cap"],
+            parameter_values["step_pressure"],
+            parameter_values["requested_noise_rms"],
+            parameter_values["noise_cutoff_frequency"],
+            parameter_values["noise_seed"],
+            parameter_values["envelope_decay_cycles"],
+            parameter_values["envelope_decay_fraction"],
+            envelope_reference_frequency=parameter_values["envelope_reference_frequency"],
+            peak_pressure_target=parameter_values["peak_pressure_target"],
             **shared_arguments,
         )
-    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {kind!r}")
+    raise ValueError(f"kind must be one of {HISTORY_TYPES}, got {history_type!r}")

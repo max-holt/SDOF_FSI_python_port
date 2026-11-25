@@ -154,20 +154,40 @@ CASES = json.loads((Path(__file__).parent / "review_support_cases.json").read_te
 # Stored document -> [generator, positional arguments, keyword arguments]. The first four
 # are histories of the sweep (``sweep_rows.case_history``); the rest leave every default.
 HISTORY_CALLS = CASES["history_calls"]
-# Snapshot key -> attribute of today's ``History``.
-_HISTORY_FIELDS = {key: key for key in histories.PARAM_KEYS} | {
+# Snapshot key (the ``History`` field and ``PARAM_KEYS`` names before the public API
+# session) -> attribute of today's ``History``.
+_STORED_PARAM_KEYS = {
+    "kind": "history_type",
+    "sample_freq": "sample_rate",
+    "lead_in_s": "lead_in_s",
+    "transit_s": "transit_s",
+    "tail_s": "tail_s",
+    "p_step": "step_pressure",
+    "p_osc": "oscillation_amplitude",
+    "f_osc": "oscillation_frequency",
+    "p_noise_rms": "requested_noise_rms",
+    "f_cut": "noise_cutoff_frequency",
+    "f_ref": "envelope_reference_frequency",
+    "seed": "noise_seed",
+    "decay_cycles": "envelope_decay_cycles",
+    "decay_fraction": "envelope_decay_fraction",
+    "p_cap": "peak_pressure_target",
+}
+_HISTORY_FIELDS = _STORED_PARAM_KEYS | {
     "decay_s": "decay_s",
     "duration_s": "duration_s",
-    "n_samples": "n_samples",
-    "peak": "peak",
-    "p_min": "p_min",
-    "mean": "mean",
-    "rms": "rms",
-    "noise_rms": "noise_rms",
+    "n_samples": "sample_count",
+    "peak": "pressure_max",
+    "p_min": "pressure_min",
+    "mean": "pressure_mean",
+    "rms": "pressure_rms",
+    "noise_rms": "scaled_noise_rms",
     "version": "version",
     "time": "time",
     "pressure": "pressure",
 }
+# Attribute of today's ``History`` -> its snapshot key.
+_STORED_HISTORY_KEYS = {attr: key for key, attr in _HISTORY_FIELDS.items()}
 
 
 @contextlib.contextmanager
@@ -239,7 +259,7 @@ def render_sweep_histories(by_key: dict) -> str:
         lines.append(f"## {_label(key)}")
         for field in dataclasses.fields(history):
             if field.name != "time":
-                lines.extend(_lines(field.name, getattr(history, field.name)))
+                lines.extend(_lines(_STORED_HISTORY_KEYS[field.name], getattr(history, field.name)))
     return "\n".join(lines) + "\n"
 
 
@@ -274,7 +294,9 @@ def stored_sweep_histories() -> dict:
     for key, fields in out.items():
         # ``time`` is rebuilt as the generators build it; nothing in a sweep row reads it
         fields["time"] = np.arange(fields["n_samples"]) / fields["sample_freq"]
-        histories_[key] = histories.History(**fields)
+        histories_[key] = histories.History(
+            **{_HISTORY_FIELDS[name]: value for name, value in fields.items()}
+        )
     return histories_
 
 
@@ -327,20 +349,17 @@ def export_bytes(name: str, out_dir: Path) -> bytes:
 
 
 # Keyword of a stored generator call -> today's keyword of the generators ``step``,
-# ``step_sine``, ``step_noise`` (renamed in R.3; ``canonical`` and ``from_params`` keep theirs
-# until the public API session).
-_GENERATOR_KEYWORDS = {
-    "sample_freq": "sample_rate",
-    "f_ref": "envelope_reference_frequency",
-    "p_cap": "peak_pressure_target",
-}
+# ``step_sine``, ``step_noise`` (renamed in R.3) and ``canonical`` (renamed in R.9); the keys
+# of a stored ``from_params`` dict -> today's ``PARAM_KEYS`` (R.9).
+_GENERATOR_KEYWORDS = _STORED_PARAM_KEYS
 
 
 def _generate(name: str) -> histories.History:
     """Call the generator of document ``name`` with today's keywords."""
     generator, args, kwargs = HISTORY_CALLS[name]
-    if generator not in ("canonical", "from_params"):
-        kwargs = {_GENERATOR_KEYWORDS.get(key, key): value for key, value in kwargs.items()}
+    kwargs = {_GENERATOR_KEYWORDS.get(key, key): value for key, value in kwargs.items()}
+    if generator == "from_params":
+        args = [{_STORED_PARAM_KEYS[key]: value for key, value in args[0].items()}]
     return getattr(histories, generator)(*args, **kwargs)
 
 
@@ -359,10 +378,11 @@ def rebuilt_pressure(name: str) -> np.ndarray:
 
 
 def building_block_values() -> dict:
-    """``p_cap``, ``decay_rate`` and ``envelope`` on fixed arguments."""
+    """``peak_pressure_target`` (stored as ``p_cap``), ``decay_rate`` and ``envelope`` on
+    fixed arguments."""
     tau = np.arange(CASES["envelope_tau"]["count"]) / CASES["envelope_tau"]["sample_freq"]
     values = {
-        f"p_cap({p_design!r}, {fraction!r})": histories.p_cap(p_design, fraction)
+        f"p_cap({p_design!r}, {fraction!r})": histories.peak_pressure_target(p_design, fraction)
         for p_design, fraction in CASES["p_cap"]
     }
     for f, cycles, fraction in CASES["envelope"]:
