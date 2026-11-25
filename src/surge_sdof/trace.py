@@ -67,7 +67,7 @@ from surge_sdof.loads import PHASE_FORCED, PHASE_TRANSIT
 from surge_sdof.structure import SdofParams
 
 if TYPE_CHECKING:
-    from surge_sdof.response import RunSettings
+    from surge_sdof.response import KernelSettings
 
 __all__ = [
     "MAX_TRACE_VALUES",
@@ -574,7 +574,7 @@ def interleaved_grid(
 
 def build_trace(
     request: TraceRequest,
-    settings: RunSettings,
+    settings: KernelSettings,
     params: SdofParams,
     buffers: TraceBuffers,
     n_frames: int,
@@ -587,7 +587,7 @@ def build_trace(
     ----------
     request : TraceRequest
         The solver name, its inputs and the celerity (m/s, for the cell positions).
-    settings : response.RunSettings
+    settings : response.KernelSettings
         The sub-step, sub-steps per sample and ``outMax`` of the run.
     params : SdofParams
         The run's SDOF constants.

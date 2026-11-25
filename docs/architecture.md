@@ -191,7 +191,7 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
 * Private, not an interface (parameter objects since review session R.5,
   `docs/review/parameter_objects.md`): `response._integrate(unbalance_force_samples,
   sdof_params, settings, column, trace_request)` (the Python orchestrator;
-  `settings` is a `response.RunSettings(substep_duration, substep_count,
+  `settings` is a `response.KernelSettings(substep_duration, substep_count,
   nominal_forced_sample_count, is_per_phase_parity)` built by the entry
   points, `trace_request` a `trace.TraceRequest` or `None`),
   `response._integrate_kernel(schedule, sdof_params, settings, histories, column,
@@ -268,7 +268,7 @@ the Stage 4 code; what changed is the calling convention:
   sample starts (sample `s` is `unbalance_force_by_substep[sample_start[s]:sample_start[s +
   1]]`, so the truncated last delay-phase sample keeps its length), held with the elbow
   forces of a traced run in a `_ForceSchedule`; `SdofParams` and the entry points'
-  `RunSettings` pass whole; the coupling's `FluidColumn` passes whole, or for no coupling
+  `KernelSettings` pass whole; the coupling's `FluidColumn` passes whole, or for no coupling
   `moc.empty_column()`, the same type with empty arrays and placeholder values the kernel
   never reads, so the kernel compiles once for both solvers; the trace buffers pass as one
   `TraceBuffers`. Each compiled function unpacks a tuple into locals once at its top; the

@@ -382,7 +382,7 @@ def peak_response(
         integration,
         setup,
     )
-    settings = RunSettings(
+    settings = KernelSettings(
         setup.substep_duration, integration.substep_count, nominal_forced_sample_count, False
     )
     return _integrate(
@@ -499,7 +499,7 @@ def peak_response_jc(
         integration,
         setup,
     )
-    settings = RunSettings(
+    settings = KernelSettings(
         setup.substep_duration,
         integration.substep_count,
         nominal_forced_sample_count,
@@ -634,8 +634,9 @@ def column_grid(setup: SolverSetup, span: PipeSpan) -> moc.ColumnGrid:
     )
 
 
-class RunSettings(NamedTuple):
-    """The settings of one run of the sample loop, built by the solver entry points.
+class KernelSettings(NamedTuple):
+    """The settings the compiled sample loop reads, built by the solver entry points (not the
+    user-facing ``Integration``).
 
     Attributes
     ----------
@@ -918,7 +919,7 @@ def _record_frame(
 def _integrate(
     unbalance_force_samples,
     sdof_params: SdofParams,
-    settings: RunSettings,
+    settings: KernelSettings,
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
 ) -> PeakResponse:
@@ -962,7 +963,7 @@ def _integrate(
 
 def _kernel_inputs(
     unbalance_force_samples,
-    settings: RunSettings,
+    settings: KernelSettings,
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
 ) -> tuple[_ForceSchedule, ResponseHistories, tracing.TraceBuffers]:
@@ -1059,7 +1060,7 @@ def _peak_response(
 def _integrate_kernel(
     schedule: _ForceSchedule,
     sdof_params: SdofParams,
-    settings: RunSettings,
+    settings: KernelSettings,
     histories: ResponseHistories,
     column: moc.FluidColumn,
     buffers: tracing.TraceBuffers,
