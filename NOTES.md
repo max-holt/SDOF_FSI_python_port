@@ -6,6 +6,55 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.8 (supporting modules and tools, plan group 5 with 3.11, 2026-11-24/25) **done**.
+Rulings 62-66 in the charter (`f74bc81`): the kernel's 56 statements a `docs/style.md` §11
+exception; C-07 open by decision; the R.7 bench-row subjects left as they are (sentence below
+corrected); gates and the A/B as before; the plan wins.
+
+Done, one plan item per commit, each gated (lint and 949 + 24 compiled before the commit,
+947 + 26 pure Python before the next; snapshot and support exact in both modes): 5.1
+`3efb921` (`tools/fixture_cases.py`: loaders, tolerances, cache dir, flag sets;
+`test_golden` re-exports; pytest `pythonpath = ["tools"]`), 5.3 `59fd3cf`
+(`trace.FRAME_COLUMN_TABLE`), 5.4 `d5cc631` (`export._SWEEP_COLUMN_TABLE`, `export.read_csv`),
+5.5 `f50fb9b` (`trace.interleaved_grid`; `loop_layout` 8 -> 3 args), 3.11 `ff06097`
+(`response.solver_setup` / `column_grid`), 5.6 `b46c513` + `d21bf1d` (tools ask the query;
+`Trace.portal_frame_height`), 5.7 `7c24b47` (`moc.display_moving_fractions`), 5.8 `de177d8`,
+5.9 `0478dc1`, 5.10 `5400421`, 5.11 `18a4d36` / `6454074` / `92a1da4` (`StepSpec`,
+`tools/sweep_document.py`, `ReferenceCase`), 5.12 `d14af6e` / `aafe0b2` (`run_case` in parts
+with `RunProvenance`; `sweep_grid.py`, `sweep_rows.py`, `sweep_report.py` behind
+`sweep_jc.py`; the report and its four PNGs byte-identical before and after), 5.13 `7d9c8df`,
+5.14 `78c0449` (the viewer page byte-identical to the committed one). **Not made:** 5.2 (the
+only gated user of `git` / `cpu_model` / the table is `sweep_jc.py`; S-23 open). 5.15 was made
+with group 1. A/B per commit on the cases the change runs through: 5.3 0.987 / 1.008, 5.5
+1.002, 3.11 0.962-1.030 (`lumped_r20_traced` 1.062 in the first run, 0.999 on a 9-round
+repeat), 5.6b 0.988 / 1.024. `review_ab.py` has no sweep case: the sweep commits move
+Python bookkeeping around unchanged solver calls. Pure-Python fast suite 156-172 s per commit
+(170 s at the session start).
+
+Session gates: `-m slow` 150 passed; `tools/review_snapshot.py` 27 of 27, `tools/review_support.py`
+21 of 21 (histories exact, kernel X86_V4); bench row `662ea10` (digests equal; the 12 results
+equal the row of `6fa4507`); cumulative A/B `137bdb5` -> `662ea10`, 7 rounds: 0.958-1.021 on
+the ten cases. Every `docs/handover.md` command of a changed tool ran as written (not the
+full Tier 1 / Tier 2 runs: hours); none moved.
+
+Metrics (`tools/review_baseline.py`), session start -> end. Supporting modules: 47 -> 55
+functions; over 6 args 5 -> 4, complexity over 10 1 -> 0, longer than 40 lines 8 -> 7.
+`export._sweep_value` complexity 14 -> 8 (statements 23 -> 12); `export.to_trace_dict` code
+lines 54 -> 33; `geometry.loop_layout` args 8 -> 3; `layout_from_trace` code lines 37 -> 12;
+`histories.step_noise` 74 -> 69 code lines, `step_sine` 55 -> 50, `step` 35 -> 26.
+Tools: 134 -> 141 functions, the over-target counts unchanged (1 / 2 / 1 / 8 / 19: the
+ungated tools); `sweep_jc.run_case` 5 args, complexity 7, 101 code lines -> `run_case` 2 args,
+complexity 1, 8 lines (its largest part, `_case_columns`, 68 lines, is the row literal).
+
+For the owner: (1) the shared fixture module lives in `tools/` with pytest's `pythonpath`,
+not in the package (a library module would have to know the repository's `tests/fixtures`
+path); (2) the sweep's parts are now in `sys.modules` when a test loads `sweep_jc` (the
+`_load_tool` loaders kept the tools out to keep hypothesis's examples stable; the suite passes
+in both modes); (3) `tests/test_review_support.py`'s adapter patches
+`sweep_rows.case_history` now (adapter section only, charter rule 6).
+
+Next: write `docs/review/public_interface.md` and stop for the owner (before group 6).
+
 Session R.7 (the rest of plan group 4, 2026-11-24) **done**. Rulings 58-61 in the charter.
 4.2 to 4.4 dropped: `moc.step` keeps its even / odd flag, a recorded exception in
 `docs/style.md` §11; C-04 and C-05 closed. `tools/review_ab.py` committed: the interleaved
