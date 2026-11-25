@@ -96,8 +96,8 @@ differences named):
 6. Free decay only: `_decay_reference(x, xZero)` sets `xZero = 0.0` once `x * xZero` falls
    to `FREE_DECAY_THRESHOLD`.
 
-At the end of each sample `_record_sample` stores `x`, `v` or `a` in the 0-based history
-for `output_type` 1-3 (nothing for 0). The largest `|f|` is taken once per run over the
+At the end of each sample `_record_sample` stores `x`, `v` and `a` in the three 0-based
+histories (`ResponseHistories`; one of them per `outputType` in the VBA). The largest `|f|` is taken once per run over the
 schedule (`_largest_magnitude`). When the schedule is exhausted (phase 1 delay and phase 2
 ramp both done) free decay runs `stepQTY` sub-steps per sample while `x * xZero >
 FREE_DECAY_THRESHOLD` (0.01 m², D-21). The MoC parity offset of each sample comes from
@@ -157,31 +157,44 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   junction_force` (Stage 4.2; the column grouped in review session R.5): one MoC sub-step in
   place on the column's four arrays; `is_even_substep` is the half-grid to update,
   `structure_velocity_step` the structure acceleration times `dt`.
-* `structure.jc_params(physical_length, portal_frame_height, mass_per_unit_len,
-  fluid_densty, fluid_area, damping_percent, dynamic_fric, nat_freq, dt, gap,
-  restrain_freq_ratio) -> SdofParams` (Stage 4.2).
-* `response.peak_response_jc(..., *, vav_denominator, parity) -> PeakResponse` (Stage 4.2).
-* `response.peak_response(..., trace_every=0)` and `response.peak_response_jc(...,
-  trace_every=0, *, ...)` (Session V.1): `trace_every` is a non-negative int (`operator
-  .index`); `k > 0` records every `k`-th sub-step as `PeakResponse.trace`, a `trace.Trace`
-  (see "Session V.1 — the trace"); 0 leaves `trace` None. The `PeakResponse` values are the
-  same bitwise either way.
+* The entry points (review session R.9, `docs/review/public_interface.md`):
+  `response.peak_response(force_history, sample_rate, *, span, restraint, integration)` and
+  `response.peak_response_jc(force_history, sample_rate, *, span, restraint, fluid,
+  integration, coupling=FIXED_COUPLING) -> PeakResponse`. The inputs are frozen dataclasses of
+  `response`: `PipeSpan(span_length, flexural_rigidity, mass_per_length, celerity)`,
+  `Restraint(natural_frequency, damping_percent, friction_coefficient, support_gap=0,
+  closed_gap_frequency_ratio=1)`, `Fluid(fluid_density, flow_area)`, `Integration(substep_count,
+  trace_every=0)` and `CouplingModel(mean_velocity_divisor, parity, fraction_profile)`,
+  validated on construction (D-25); `FIXED_COUPLING` and `VBA_COUPLING` are the two flag sets.
+  The entries convert the same fields with `float` / `int` as before (`_coerced_span`,
+  `_checked_integration`; `trace_every` a non-negative int by `operator.index`) and share
+  `_sample_grid` and `_trace_request` (plan 3.10). `trace_every = k > 0` records every `k`-th
+  substep as `PeakResponse.trace`, a `trace.Trace` (see "Session V.1 — the trace"); the other
+  results are the same bitwise either way. `Trace.inputs` is the call grouped as passed;
+  `export` writes it in the flat schema-1 form until the schema bump (`_schema_1_inputs`).
+* `structure.lumped_params(span, restraint, portal_frame_height, substep_duration)` and
+  `structure.jc_params(span, restraint, fluid, portal_frame_height, substep_duration) ->
+  SdofParams` (plan 3.7); `response.solver_setup(sample_rate, span, restraint, integration)
+  -> SolverSetup` and `response.column_grid(setup, span) -> moc.ColumnGrid`, which the tools
+  ask too.
 * `loads.elbow_forces(history, sample_freq, physical_length, celerity, step_qty)` (Session
   V.1) is a generator like `unbalance_force`: one `(phase, forceA list, forceB list)` per
   sample, `phase` 0 for the delay samples and 1 for the ramp samples, `forceA[k] -
   forceB[k]` bitwise the `unbalance_force` value.
 * `response.PeakResponse` fields: `max_static_equivalent_force`, `max_displacement`,
-  `max_velocity`, `max_acceleration`, `max_applied_force`, `history` (None for
-  `output_type = 0`; otherwise a 0-based array of length `outMax * 2`, element `t − 1` =
-  state at the end of sample `t`), `output_type`, `free_decay_samples`, and (Session V.1,
-  trailing, default None) `trace`.
+  `max_velocity`, `max_acceleration`, `max_unbalance_force`, `displacement_history`,
+  `velocity_history`, `acceleration_history` (0-based arrays of length `outMax * 2`, element
+  `t − 1` = state at the end of sample `t`; `output_type` is gone since review session R.9),
+  `free_decay_sample_count` and `trace`. `trace.Trace` carries the frame columns under the
+  nomenclature names and, for a junction-coupling run, `Trace.column`, a `trace.ColumnTrace`
+  of the grid and the per-frame grid-point pressures and velocities.
 * Private, not an interface (parameter objects since review session R.5,
   `docs/review/parameter_objects.md`): `response._integrate(unbalance_force_samples,
   sdof_params, settings, column, trace_request)` (the Python orchestrator;
   `settings` is a `response.RunSettings(substep_duration, substep_count,
-  nominal_forced_sample_count, output_type, is_per_phase_parity)` built by the entry
+  nominal_forced_sample_count, is_per_phase_parity)` built by the entry
   points, `trace_request` a `trace.TraceRequest` or `None`),
-  `response._integrate_kernel(schedule, sdof_params, settings, response_history, column,
+  `response._integrate_kernel(schedule, sdof_params, settings, histories, column,
   buffers) -> _KernelResult` (the compiled loop; it starts the junction force at 0.0 since
   review session R.6; `schedule` is a
   `response._ForceSchedule` of the per-sub-step forces, `buffers` a `trace.TraceBuffers`
@@ -199,11 +212,11 @@ Interfaces fixed in Stage 4.1 so that later sessions write against them:
   column)`), `trace.write_frame_row(buffers, frame_index, values)` (`values` a
   `trace.FrameRow`) and `trace.write_frame_column(buffers, frame_index, column)` (review
   session R.7, plan 4.7 / 4.8), `response._kernel_inputs(unbalance_force_samples, settings,
-  column, trace_request)` and `response._peak_response(result, sdof_params, output_type,
-  response_history, trace)` (plan 4.10), `loads.flatten_unbalance_force(samples)` and
-  `loads.flatten_elbow_forces(samples)` (plan 4.12), `response._record_sample(history, output_type,
-  index, x, v, a)` (the per-sample history write, called once per sample; it stores nothing
-  for `output_type` 0),
+  column, trace_request)` and `response._peak_response(result, sdof_params,
+  histories, trace)` (plan 4.10), `loads.flatten_unbalance_force(samples)` and
+  `loads.flatten_elbow_forces(samples)` (plan 4.12), `response._record_sample(histories,
+  index, x, v, a)` (the per-sample write of the three `ResponseHistories`, called once per
+  sample),
   `response._free_decay_product(x, x_zero)` and `trace.build_trace(request, settings,
   params, buffers, n_frames, column)`.
 

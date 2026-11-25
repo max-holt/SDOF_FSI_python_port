@@ -48,37 +48,43 @@ common ones are inline below. The VBA's third function, `GetPressureResponse` (v
 water hammer), was unused legacy code: its live port was removed in review session R.1b, and
 only the frozen `legacy_port.get_pressure_response` keeps it.
 
-* `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length,
-  flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq,
-  restrain_freq_ratio=1, gap=0, output_type=0, trace_every=0)` is `GetPeakResponse`.
-  `force_history` is the force-time history in N, 1-D or 2-D; a 2-D history (or `valve_pattern`
-  below) is walked column-major, first index fastest, exactly as Excel hands a range to VBA
-  (D-10). `step_qty` is the number of sub-steps per sample, `sample_freq` the sample rate (Hz),
-  `physical_length` the span between elbows (m), `flexural_rigidity_ei` E·I (N·m²), `celerity`
-  the propagation speed along the pipe (m/s), `mass_per_unit_len` kg/m, `damping_percent` the
-  damping as a percentage of critical, `dynamic_fric` the Coulomb coefficient (dimensionless),
-  `nat_freq` the natural frequency with the gaps open (Hz), `restrain_freq_ratio` the
-  gaps-closed over gaps-open frequency ratio (dimensionless), `gap` the support gap at the centre
-  of mass (m). It returns a `PeakResponse` whose attributes are
+* `surge_sdof.response.peak_response(force_history, sample_rate, *, span, restraint,
+  integration)` is `GetPeakResponse`. `force_history` is the force-time history in N, 1-D or
+  2-D; a 2-D history is walked column-major, first index fastest, exactly as Excel hands a range
+  to VBA (D-10). `sample_rate` is its sample rate (Hz). The other arguments are frozen
+  dataclasses of `response` (session R.9):
+
+  * `PipeSpan(span_length, flexural_rigidity, mass_per_length, celerity)`: the span between
+    the elbows (m), E·I (N·m²), the mass per length of pipe and contents (kg/m) and the
+    pressure-wave speed (m/s), which is also the speed the force travels between the elbows;
+  * `Restraint(natural_frequency, damping_percent, friction_coefficient, support_gap=0,
+    closed_gap_frequency_ratio=1)`: the natural frequency with the gaps open (Hz), damping as a
+    percentage of critical, the Coulomb coefficient, the support gap at the centre of mass (m)
+    and the gaps-closed over gaps-open frequency ratio;
+  * `Integration(substep_count, trace_every=0)`: substeps per sample and the trace stride.
+
+  It returns a `PeakResponse` whose attributes are
 
   * `max_static_equivalent_force` (N), `max_displacement` (m), `max_velocity` (m/s),
-    `max_acceleration` (m/s²), `max_applied_force` (N, the largest `|forceA − forceB|`): the
-    five maxima of the VBA `resultArray(0 To 4)`;
-  * `history`: for `output_type` 1 / 2 / 3 the displacement (m) / velocity (m/s) /
-    acceleration (m/s²) at the end of each sample, 0-based, length `outMax * 2` (unfilled
-    trailing elements 0); `None` for `output_type = 0`;
-  * `trace`: the sub-step trace when called with `trace_every > 0` (below), else `None`;
-    also `output_type` and `free_decay_samples` (the samples integrated in the free-decay phase).
-* `surge_sdof.response.peak_response_jc(...)` is `GetPeakResponseJC`: the same arguments plus
-  `fluid_densty` (the fluid density, kg/m³; the VBA's spelling is kept so the keyword matches the
-  VBA argument) and `fluid_area` (the internal pressure area of the pipe, m²), and three
-  keyword-only flags. Each flag has a value that reproduces the VBA bitwise and a value that
-  applies an approved fix; **the fixes are the defaults**.
+    `max_acceleration` (m/s²), `max_unbalance_force` (N, the largest `|forceA − forceB|`): the
+    five maxima of the VBA `resultArray(0 To 4)` (`summary()` returns them in that order);
+  * `displacement_history` (m), `velocity_history` (m/s), `acceleration_history` (m/s²): the
+    state at the end of each sample, 0-based, length `2 * outMax` (unfilled trailing elements
+    0); the VBA returned one of them per call, by `outputType`;
+  * `free_decay_sample_count` (the samples integrated in the free-decay phase) and `trace`
+    (the substep trace when `trace_every > 0`, below, else `None`).
+* `surge_sdof.response.peak_response_jc(force_history, sample_rate, *, span, restraint, fluid,
+  integration, coupling=FIXED_COUPLING)` is `GetPeakResponseJC`: the same arguments plus
+  `Fluid(fluid_density, flow_area)` (kg/m³; the internal pressure area of the pipe, m²) and
+  `coupling`, a `CouplingModel` of three flags. Each flag has a value that reproduces the VBA
+  bitwise and a value that applies an approved fix; **the fixes are the defaults**
+  (`FIXED_COUPLING`); `VBA_COUPLING` holds the three legacy values. An unknown value raises
+  when the `CouplingModel` is built (D-25).
 
   | flag | default (fix) | legacy value | what it selects |
   |---|---|---|---|
-  | `vav_denominator` | `"fixed"` | `"legacy"` | F-1: the mean fluid velocity divides by the `2N + 1` terms summed; the VBA divides by `2N − 1` (DEVIATIONS D-17). Numerically inert for the outputs (rounding level). |
-  | `parity` | `"running"` | `"per_phase"` | F-2: one running sub-step counter drives the even/odd MoC alternation for the whole run; the VBA restarts the index per phase and can update one half-grid twice at a phase boundary (D-19). |
+  | `mean_velocity_divisor` | `"fixed"` | `"legacy"` | F-1: the mean fluid velocity divides by the `2N + 1` terms summed; the VBA divides by `2N − 1` (DEVIATIONS D-17). Numerically inert for the outputs (rounding level). |
+  | `parity` | `"running"` | `"per_phase"` | F-2: one running substep counter drives the even/odd MoC alternation for the whole run; the VBA restarts the index per phase and can update one half-grid twice at a phase boundary (D-19). |
   | `fraction_profile` | `"fixed"` | `"legacy"` | F-4/F-4b: your corrected `interpFractionA/B` of 27 Oct 2026 (`legacy/vba/interpFraction_fix_2026-10-27.bas`), symmetric about the pipe centre with equal legs; the VBA originals have the `n < 3` test and the pivot-4 division by zero (D-4). |
 
   With all three legacy values the result equals `legacy_port` bitwise and Excel to 8.6e-13.
@@ -86,8 +92,11 @@ only the frozen `legacy_port.get_pressure_response` keeps it.
   cases (up to 4.5e-2 on the coarsest sweep case), almost entirely from the profile correction;
   the measured deltas are in DEVIATIONS D-4 and `docs/jc_sweep.md`.
 
-`trace_every=k > 0` on either peak solver also records every `k`-th sub-step (state, elbow
-forces, friction force, the MoC column) as `PeakResponse.trace`; the maxima are unchanged.
+`Integration(trace_every=k > 0)` on either peak solver also records every `k`-th substep
+(state, elbow forces, friction force, and in `Trace.column` the MoC column) as
+`PeakResponse.trace`; the other results are unchanged bitwise. The fixtures and
+`legacy_port` keep the VBA argument names; `tools/fixture_cases.solver_inputs(kw)` turns such
+a keyword dict into the arguments above.
 
 ## Install
 

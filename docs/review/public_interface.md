@@ -544,4 +544,40 @@ repository (section 6 lists what a caller outside it changes).
 
 ## 6. What a caller outside this repository changes
 
-(Filled in at the end of the session from what was applied.)
+As applied in session R.9 up to plan 6.3b (`docs/review/plan.md`, progress R.9). Later steps
+(6.3c `LoopLayout`, 6.4 `histories` / `export`, 6.5 the schema bump) add to this list.
+
+1. **The call.** `peak_response(force_history, step_qty, sample_freq, physical_length,
+   flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq,
+   restrain_freq_ratio, gap, output_type, trace_every)` becomes
+   `peak_response(force_history, sample_freq, span=PipeSpan(physical_length,
+   flexural_rigidity_ei, mass_per_unit_len, celerity), restraint=Restraint(nat_freq,
+   damping_percent, dynamic_fric, gap, restrain_freq_ratio), integration=Integration(step_qty,
+   trace_every))`. Everything after the sample rate is keyword-only.
+2. **Junction coupling** adds `fluid=Fluid(fluid_densty, fluid_area)` and replaces the three
+   keyword flags with `coupling=CouplingModel(vav_denominator, parity, fraction_profile)`
+   (field `mean_velocity_divisor` for `vav_denominator`); the VBA behaviour is
+   `coupling=VBA_COUPLING`. An unknown flag value now raises on every path (D-25).
+3. **`output_type` is gone.** Read `displacement_history`, `velocity_history` or
+   `acceleration_history` (output types 1, 2, 3) instead of `history`; `output_type` is no
+   longer a field. A dict of the old keywords can be converted with
+   `tools/fixture_cases.solver_inputs` (repository tool, not part of the package).
+4. **Result fields.** `max_applied_force` → `max_unbalance_force`, `free_decay_samples` →
+   `free_decay_sample_count` (`summary()` is unchanged). `PeakResponse` equality no longer
+   compares the histories (as `histories.History`).
+5. **Trace fields.** `t`, `sub_step`, `sample`, `phase`, `x`, `v`, `a`, `f_a`, `f_b`,
+   `f_unbalance`, `f_friction`, `stick`, `d_f`, `dt`, `step_qty`, `out_max`, `params`,
+   `n_frames` → `time`, `substep_index`, `sample_index`, `load_phase`, `displacement`,
+   `velocity`, `acceleration`, `elbow_a_force`, `elbow_b_force`, `unbalance_force`,
+   `friction_force`, `is_sticking`, `junction_force`, `substep_duration`, `substep_count`,
+   `nominal_forced_sample_count`, `sdof_params`, `frame_count`. The column fields move to
+   `Trace.column` (None for a lumped run): `n_cells`, `pivot_seg_qty`, `pipe_seg_qty`,
+   `ext_qty`, `p_cells`, `v_cells`, `cell_position`, `cell_kind`, `moving_fraction` →
+   `column.grid_point_count`, `.end_to_elbow_cell_count`, `.column_cell_count`,
+   `.inactive_end_cell_count`, `.grid_point_pressure`, `.grid_point_velocity`,
+   `.grid_point_position`, `.grid_point_kind`, `.grid_point_moving_fraction`.
+   `Trace.inputs` is the call grouped as passed (`sample_rate`, `span`, `restraint`, ...).
+6. **Set-up helpers.** `structure.lumped_params` / `jc_params`, `response.solver_setup` and
+   `response.column_grid` take the input objects (signatures in `docs/architecture.md`).
+7. **Exported files are unchanged so far**: the trace and sweep documents keep schema 1 / 2
+   and every key until the schema bump.

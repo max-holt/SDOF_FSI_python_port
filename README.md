@@ -46,14 +46,21 @@ Python. The `Makefile` wraps the common commands: `make test`, `make test-nojit`
 
 | Python | VBA | What it returns |
 |---|---|---|
-| `surge_sdof.response.peak_response(force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio=1, gap=0, output_type=0, trace_every=0)` | `GetPeakResponse` | `PeakResponse`: the five maxima (static-equivalent force N, displacement m, velocity m/s, acceleration m/s², applied force N) and, for `output_type` 1-3, the per-sample history; with `trace_every=k > 0` also `.trace`, a `surge_sdof.trace.Trace` of every `k`-th sub-step (state, elbow forces, friction force, stick flag; the maxima and history are unchanged bitwise) |
-| `surge_sdof.response.peak_response_jc(..., fluid_densty, fluid_area, ..., trace_every=0, *, vav_denominator="fixed", parity="running", fraction_profile="fixed")` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; the keyword flags select the three approved fixes (DEVIATIONS D-17, D-19, D-4); the values `"legacy"` / `"per_phase"` / `"legacy"` reproduce the VBA bitwise; a JC trace adds the junction force and the interleaved pressure / velocity column per frame with the grid geometry |
+| `surge_sdof.response.peak_response(force_history, sample_rate, *, span, restraint, integration)` | `GetPeakResponse` | `PeakResponse`: the five maxima (static-equivalent force N, displacement m, velocity m/s, acceleration m/s², unbalance force N), the displacement, velocity and acceleration history of every sample, the free-decay sample count; with `Integration(trace_every=k > 0)` also `.trace`, a `surge_sdof.trace.Trace` of every `k`-th substep (state, elbow forces, friction force, stick flag; the other results are unchanged bitwise) |
+| `surge_sdof.response.peak_response_jc(force_history, sample_rate, *, span, restraint, fluid, integration, coupling=FIXED_COUPLING)` | `GetPeakResponseJC` | `PeakResponse`, with the MoC fluid column coupled to the mass; `coupling` selects the three approved fixes (DEVIATIONS D-17, D-19, D-4; the default) or `VBA_COUPLING`, which reproduces the VBA bitwise; a JC trace adds the junction force and `Trace.column` (the interleaved pressure / velocity column per frame and the grid geometry) |
+
+The inputs are frozen dataclasses of `surge_sdof.response`: `PipeSpan(span_length,
+flexural_rigidity, mass_per_length, celerity)`, `Restraint(natural_frequency, damping_percent,
+friction_coefficient, support_gap=0, closed_gap_frequency_ratio=1)`, `Fluid(fluid_density,
+flow_area)`, `Integration(substep_count, trace_every=0)` and `CouplingModel(mean_velocity_divisor,
+parity, fraction_profile)`, which rejects an unknown value when it is built (D-25).
 
 Units are consistent SI (the VBA fixes m and s only through the friction term). The docstrings
 give the unit of every argument. A 2-D `force_history` is walked column-major, first index
 fastest, exactly as Excel hands a range to VBA (D-10). `legacy_port.get_peak_response` and
-`get_peak_response_jc` take the same arguments and return the VBA arrays (1-based pad included,
-D-16).
+`get_peak_response_jc` keep the VBA's positional arguments (`step_qty, sample_freq,
+physical_length, ...`) and return the VBA arrays (1-based pad included, D-16);
+`tools/fixture_cases.solver_inputs` turns such a keyword dict into the arguments above.
 
 The VBA's third function, `GetPressureResponse` (a valve / pump water-hammer model), was unused
 legacy code; its live port (`surge_sdof.pressure`) was removed in review session R.1b. The
@@ -71,7 +78,7 @@ import json
 
 import numpy as np
 
-from surge_sdof.response import peak_response
+from surge_sdof.response import Integration, PipeSpan, Restraint, peak_response
 
 case = next(
     c
@@ -79,9 +86,18 @@ case = next(
     if c["case_id"] == "example_lumped"
 )
 force = np.array(case["force_history"], dtype=float)  # 25 samples, N, as Excel's (25, 1) range
-result = peak_response(force, **case["kwargs"])
+kw = case["kwargs"]  # the VBA argument names, as the fixture records them
+result = peak_response(
+    force,
+    kw["sample_freq"],
+    span=PipeSpan(
+        kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["celerity"]
+    ),
+    restraint=Restraint(kw["nat_freq"], kw["damping_percent"], kw["dynamic_fric"]),
+    integration=Integration(kw["step_qty"]),
+)
 for name, excel in zip(case["output_names"], case["expected"], strict=True):
-    python = getattr(result, name)
+    python = result.summary()[case["output_names"].index(name)]
     print(f"{name:28s} {python:22.15g} {excel:22.15g} {abs(python - excel) / abs(excel):8.1e}")
 ```
 
@@ -97,8 +113,8 @@ max_applied_force                  405063.291139243       405063.291139243  0.0e
 
 The `kwargs` of that case are `step_qty=80, sample_freq=10, physical_length=6,
 flexural_rigidity_ei=1e7, celerity=1200, mass_per_unit_len=100, damping_percent=0.5,
-dynamic_fric=0.01, nat_freq=2`; the VBA defaults `restrain_freq_ratio=1, gap=0, output_type=0`
-apply. The same file holds `example_jc` (for `peak_response_jc`) and `example_pressure` (for
+dynamic_fric=0.01, nat_freq=2` (the VBA names); the VBA defaults `restrain_freq_ratio=1, gap=0`
+are the `Restraint` defaults. The same file holds `example_jc` (for `peak_response_jc`) and `example_pressure` (for
 `legacy_port.get_pressure_response`, whose `valve_pattern` and 121 expected pressures are
 included).
 `tests/test_golden.py::test_golden_example` runs all three at a relative tolerance of 1e-12.

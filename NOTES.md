@@ -6,16 +6,52 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
-Session R.9 (public API, plan group 6 with 3.7 and 3.10, 2026-11-25) **stopped for the
-owner after step 1**, as the brief asks. Rulings 67-75 recorded (`84ac732`); `tools/review_ab.py`
-has a sweep case, `sweep_noise` (`5d86458`, ruling 70). The proposal and the old-to-new key
-table are in `docs/review/public_interface.md`; nothing in `src/` has changed. Its questions
-Q-PI-1 to Q-PI-7 (section 5) wait for the owner. The viewer's browser tests run here (26
-passed) with `PLAYWRIGHT_BROWSERS_PATH` pointed at a scratch directory whose
-`chromium-1243/chrome-linux/chrome` links to `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`
-(the test globs `chrome-linux`, the installed build is `chrome-linux64`; playwright 1.56 wants
-1194 by default). Gates at the start and before each commit: lint, 949 + 24 compiled, 947 + 26
-pure Python. **Next:** the owner's answers, then `public_interface.md` section 4 in order.
+Session R.9 (public API, plan group 6 with 3.7 and 3.10, 2026-11-25) **stopped at a green
+commit** (ruling 75: the context ran long), after plan 6.3b. Rulings 67-84 in the charter;
+`docs/review/public_interface.md` approved (option A with the answers of rulings 76-84) and its
+§6 lists what a caller outside the repository changes so far.
+
+Done, one change per commit, each gated (lint and the compiled fast suite before the commit,
+the pure-Python suite before the next; snapshot and support exact in both modes):
+`84ac732` rulings 67-75; `5d86458` `review_ab.py` sweep case `sweep_noise` (ruling 70);
+`3ce6f9c` the proposal; `d6b2823` rulings 76-84 and the style / nomenclature entries;
+`b79a89a` 6.1 `CouplingModel`, validated on construction (DEVIATIONS D-25, pinning test
+`test_d25_unknown_flags_raise_on_every_path`); `edc7231` the input types; `8fb227b` 3.7;
+`1a73b49` 6.2a, the kernel records the three histories (ruling 83: its own commit);
+`48df391` 3.10 and 6.2b, the new entry points, callers moved through
+`tools/fixture_cases.solver_inputs` / `history_of`, `output_type` and the old signatures
+removed; 6.3a `PeakResponse` renames; 6.3b `Trace` renames and `ColumnTrace`.
+
+A/B against the commit before (`tools/review_ab.py`, B/A over the eleven cases): 6.1
+0.94-1.04 (3 rounds, host busy), 3.7 0.96-1.03, 6.2a 0.95-1.04 (5 rounds), 6.2b 0.97-1.04
+(5 rounds), 6.3b 0.98-1.04 (three traced / lumped cases). Fast suite 955 + 24 compiled, 953 + 26
+pure Python (six D-25 cases added); pure Python about 200 s per run (170 s at R.8's start: the
+D-25 cases and a busier host, below a quarter longer).
+
+Test assertions dropped (ruling 23: they asserted a property of the removed `output_type`
+field itself): `res.output_type == output_type` in `test_differential._check_peak_response`
+and `_check_peak_response_jc`, and `a.output_type == b.output_type` in
+`test_trace._same_result`. Rename-forced restatements: the lumped `Trace` checks
+`n_cells == 0`, `p_cells is None`, `v_cells is None`, `cell_position is None` are now
+`column is None`; the signature-default checks read `CouplingModel` through the `coupling`
+parameter.
+
+Temporary until the schema bump: `export._schema_1_inputs` writes the grouped `Trace.inputs`
+in the schema-1 flat form (`output_type` 0, as every exported trace had), so every exported
+file stays byte-identical; `tools/review_ab.py` picks the worktree's call form
+(`fixture_cases.solver_inputs` where it exists) so it can time across the signature change.
+
+Viewer browser tests run here with `PLAYWRIGHT_BROWSERS_PATH` pointed at a scratch directory
+whose `chromium-1243/chrome-linux/chrome` links to
+`/opt/pw-browsers/chromium-1243/chrome-linux64/chrome` (26 passed at the session start).
+
+**Next** (`docs/review/plan.md`, progress R.9): 6.3c `LoopLayout` renames; 6.4 `histories`
+and `export.to_*_dict` signatures with the `History` fields (`SweepProvenance`); the
+`RunSettings` → `KernelSettings` rename; 6.5 the schema bump (before it, list the re-exported
+data files and the renamed CSV headers, and run the viewer tests on that commit, ruling 84;
+remove `_schema_1_inputs`); 6.6 docstrings (module docstrings of `response` and `trace` still
+describe the old signatures); 6.7; 6.8 lint limits; then remove the `review_ab.py` call-form
+switch.
 
 Previous: session R.8 (supporting modules and tools, plan group 5 with 3.11, 2026-11-24/25) **done**.
 Rulings 62-66 in the charter (`f74bc81`): the kernel's 56 statements a `docs/style.md` §11

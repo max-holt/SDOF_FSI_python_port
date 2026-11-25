@@ -72,6 +72,15 @@ group 6).
 `docs/review/public_interface.md` (input groups, the entry points, `output_type`, the flags,
 `Trace` / `LoopLayout` / `History`, `histories` and `export` signatures, the old-to-new key
 table of the schema bump, the commit order); stopped there for the owner before 6.1.
+Approved (rulings 76-84). Done, one change per commit, each gated and, on the solver or sweep
+path, A/B timed: 6.1 (`CouplingModel`, D-25), the input types, 3.7, 6.2a (the three
+histories, the kernel change on its own), 3.10 with 6.2b (the new entry points, the callers
+moved, `output_type` and the old signatures removed), 6.3a (`PeakResponse` renames), 6.3b
+(`Trace` renames and `ColumnTrace`). **Stopped there** (ruling 75, the context). Not yet made:
+6.3c (`LoopLayout` renames), 6.4 (`histories`, `export.to_*_dict`, `History` fields), 6.5 (the
+schema bump), 6.6 (docstrings), 6.7, 6.8 (lint limits), and the `RunSettings` →
+`KernelSettings` rename of `public_interface.md` §1.2.
+
 
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought
