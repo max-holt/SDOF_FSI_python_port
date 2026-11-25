@@ -20,15 +20,32 @@ import numpy as np
 
 
 def _nominal_size_in(set_name: str) -> float | None:
+    """The nominal pipe size, inches, a fixture set's name gives (``curve_10in`` -> 10.0),
+    or None for a name without one."""
     m = re.fullmatch(r"curve_(\d+)in", set_name)
     return float(m.group(1)) if m else None
 
 
 def golden_sweep_rows(cases=None, params=None, set_name: str = "curve_10in") -> list[dict]:
-    """``sweep`` rows from the ``curve_10in`` case table: ``case_id``, ``size_in``,
-    ``span_length``, ``natural_frequency``, ``history_type = "golden"``, ``friction_coefficient``,
-    ``characteristic_impedance`` and the ``max_static_equivalent_force_*`` /
-    ``max_unbalance_force_*`` of the row's own solver; everything else null."""
+    """``sweep`` rows from the ``curve_10in`` case table.
+
+    Parameters
+    ----------
+    cases : list of dict or None
+        Rows of the case table; None reads ``fixture_cases.load_cases()``.
+    params : dict or None
+        The set's parameters; None reads ``fixture_cases.load_params()``.
+    set_name : str
+        The fixture set's directory name; it gives ``size_in``.
+
+    Returns
+    -------
+    list of dict
+        Per case: ``case_id``, ``size_in`` (in), ``span_length`` (m), ``natural_frequency``
+        (Hz), ``history_type = "golden"``, ``friction_coefficient``,
+        ``characteristic_impedance`` (Pa·s/m) and the ``max_static_equivalent_force_*`` /
+        ``max_unbalance_force_*`` (N) of the row's own solver; every other column is null.
+    """
     cases = tg.load_cases() if cases is None else cases
     params = tg.load_params() if params is None else params
     size_in = _nominal_size_in(set_name)
@@ -53,6 +70,8 @@ def golden_sweep_rows(cases=None, params=None, set_name: str = "curve_10in") -> 
 
 
 def golden_regen() -> dict:
+    """``regen`` of the ``curve_10in`` case table: the ``tools/export.py trace --golden``
+    command of a row's ``case_id``."""
     return {
         "template": "python tools/export.py trace --golden {case_id} --out {case_id}.json",
         "columns_used": ["case_id"],
@@ -81,7 +100,8 @@ def sweep_regen() -> dict:
 
 
 def uniform_value(rows, column: str):
-    """The one value ``column`` holds in every row (empty cells ignored), else None."""
+    """The one value ``column`` holds in every row of ``rows`` (dicts; empty cells
+    ignored), else None."""
     values = {r.get(column) for r in rows} - {None, ""}
     return values.pop() if len(values) == 1 else None
 
@@ -104,13 +124,28 @@ _OUTPUT_NAMES = {"max_applied_force": "max_unbalance_force"}
 
 
 def _output_names(names) -> list:
+    """A fixture's output names under today's names (``_OUTPUT_NAMES``)."""
     return [_OUTPUT_NAMES.get(name, name) for name in names]
 
 
 def _grouped_inputs(kw: dict, history_key: str, history) -> dict:
-    """A fixture case's solver keywords in the form of ``Trace.inputs``: the history under
-    ``history_key``, then ``sample_rate`` and the input objects as dicts (no ``coupling``:
-    the fixtures name no flags)."""
+    """A fixture case's solver keywords in the form of ``Trace.inputs``.
+
+    Parameters
+    ----------
+    kw : dict
+        Fixture keyword arguments (``fixture_cases.solver_inputs`` translates them).
+    history_key : str
+        The key the history goes under (``"force_history"`` or ``"force"``).
+    history : numpy.ndarray or dict
+        The force history (N) or its spec.
+
+    Returns
+    -------
+    dict
+        The history, then ``sample_rate`` (Hz) and the input objects as dicts (no
+        ``coupling``: the fixtures name no flags).
+    """
     arguments = tg.solver_inputs(kw)
     grouped = {history_key: history, "sample_rate": arguments["sample_rate"]}
     for group in ("span", "restraint", "fluid", "integration"):
@@ -120,7 +155,14 @@ def _grouped_inputs(kw: dict, history_key: str, history) -> dict:
 
 
 def reference_block() -> dict:
-    """The three Example-sheet cases and the three JC golden rows with their Excel values."""
+    """The ``reference`` block of a sweep document: the three Example-sheet cases and the
+    three JC golden rows, each a ``ReferenceCase`` as a dict with its Excel values.
+
+    Returns
+    -------
+    dict
+        ``{"example_cases": [...], "jc_golden_rows": [...]}``.
+    """
     params = tg.load_params()
     example = []
     for case in tg.load_example_cases():
@@ -168,10 +210,27 @@ GOLDEN_CSV_HEADER = ("case_id", "source_row", "solver", "max_static_equivalent_f
 
 
 def sweep_rows_from_csv(path: str | Path) -> tuple[list[dict], str]:
-    """Rows of a CSV: the ``curve_10in`` ``cases.csv`` layout is mapped by
-    ``golden_sweep_rows``; a Session 5b CSV whose header is a subset of the sweep columns
-    passes through (missing columns null). Returns ``(rows, layout)`` with layout
-    ``"golden"`` or ``"sweep"``."""
+    """The sweep rows of a CSV file.
+
+    Parameters
+    ----------
+    path : str or Path
+        The ``curve_10in`` ``cases.csv`` (mapped by ``golden_sweep_rows``) or a Session 5b
+        sweep CSV whose header is a subset of the sweep columns (passed through, missing
+        columns null).
+
+    Returns
+    -------
+    rows : list of dict
+        The rows.
+    layout : {"golden", "sweep"}
+        Which of the two the file was.
+
+    Raises
+    ------
+    SystemExit
+        A header with a column the sweep document does not have.
+    """
     from surge_sdof.export import SWEEP_COLUMNS, read_csv
 
     header, rows = read_csv(path)
