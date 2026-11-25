@@ -1,27 +1,28 @@
 """Elbow-to-elbow unbalance force from a force history: transit delay and the VBA's
 three-phase scheduling.
 
-The force arrives at elbow A at sample ``t`` and at elbow B ``unballanceStepQTY =
-L / (c / sampleFreq)`` samples later; the structure sees ``forceA - forceB``. The VBA
+The force arrives at elbow A at sample ``t`` and at elbow B ``L / (c / sample_rate)``
+samples later (VBA ``unballanceStepQTY``); the structure sees the unbalance force, the
+force at elbow A less the force at elbow B (VBA ``forceA - forceB``). The VBA
 (``GetPeakResponse`` lines 394-567, identically in ``GetPeakResponseJC``) walks the
 history column-major in three phases:
 
 1. **transit** (``forceA`` held at the first sample, ``forceB`` ramps through the
    history) until ``(totInd - 1) * stepQTY + 1 + k > unballanceStepQTY * stepQTY``, which
    exits the last transit sample part way through (``Exit For``);
-2. **forced** (both forces interpolate; ``forceB`` runs ``kOverlap`` sub-steps ahead of
-   the sample boundary, so each sample's sub-steps are split into
+2. **forced** (both forces interpolate; ``forceB`` runs ``kOverlap`` substeps ahead of
+   the sample boundary, so each sample's substeps are split into
    ``stepQTY - kOverlap`` from one pair of samples and ``kOverlap`` from the next);
 3. **free decay** has no unbalance force and is the caller's business.
 
 ``unbalance_force`` yields one ``list`` of Python floats per sample, holding exactly the
-per-sub-step ``forceA - forceB`` values the VBA computes (``tests/test_differential.py``
+per-substep ``forceA - forceB`` values the VBA computes (``tests/test_differential.py``
 compares them bitwise with the legacy solver's locals). ``elbow_forces`` (Session V.1)
 yields the two forces apart, per sample with its phase, for the solver trace; both walk
 the history through one private ``_schedule`` generator and differ only in their inner
 ``k`` loops. The linear ramp
 ``k / (stepQTY - 1)`` (D-7: ``stepQTY = 1`` divides by zero; D-18: the ramp spans
-``stepQTY - 1`` sub-steps) is tabulated once per run; the table holds the same doubles.
+``stepQTY - 1`` substeps) is tabulated once per run; the table holds the same doubles.
 
 This module knows nothing about the structure, stiffness, damping, fluid coupling, or
 what the caller does at sample boundaries. See ``docs/architecture.md``.
@@ -56,7 +57,7 @@ __all__ = [
 
 
 def as_history_2d(force_history) -> np.ndarray:
-    """The history as a 0-based 2-D float array ``(rows, cols)``.
+    """The force history as a 0-based 2-D float array, shape ``(rows, columns)``.
 
     Parameters
     ----------
@@ -66,9 +67,10 @@ def as_history_2d(force_history) -> np.ndarray:
     Returns
     -------
     numpy.ndarray
-        A 1-D input becomes one column (the VBA ``AddDimension(arr, 1, 1)`` path); a 2-D
-        input is returned as is and walked column-major, first index fastest, by the
-        callers (VBA quirk D-10, Excel range semantics).
+        float64, N. A 1-D input of length ``n`` becomes one column, shape ``(n, 1)`` (the
+        VBA ``AddDimension(arr, 1, 1)`` path); a 2-D input is returned as is and walked
+        column-major, first index fastest, by the callers (VBA quirk D-10, Excel range
+        semantics).
 
     Raises
     ------
@@ -85,7 +87,7 @@ def as_history_2d(force_history) -> np.ndarray:
 
 # VBA line 375
 def transit_delay(span_length: float, celerity: float, sample_rate: float) -> float:
-    """``unballanceStepQTY`` (VBA line 375): the elbow-to-elbow transit time in samples.
+    """The elbow-to-elbow transit time of the force, in samples.
 
     Parameters
     ----------
@@ -99,33 +101,42 @@ def transit_delay(span_length: float, celerity: float, sample_rate: float) -> fl
     Returns
     -------
     float
-        ``physicalLength / (celerity / sampleFreq)``, samples (fractional).
+        ``span_length / (celerity / sample_rate)``, samples (fractional).
+
+    Notes
+    -----
+    VBA ``unballanceStepQTY`` (line 375).
     """
     return float(span_length) / (float(celerity) / float(sample_rate))
 
 
 # VBA line 380
 def overlap_substeps(transit_delay_samples: float, substep_count: int) -> int:
-    """``kOverlap`` (VBA line 380): the fractional part of the transit delay in sub-steps.
+    """The fractional part of the transit delay, in substeps.
 
     Parameters
     ----------
     transit_delay_samples : float
         Transit delay from ``transit_delay``, samples.
     substep_count : int
-        Sub-steps per sample.
+        Substeps per sample.
 
     Returns
     -------
     int
-        ``CLng((unballanceStepQTY - floor(unballanceStepQTY)) * stepQTY)``, 0 .. ``stepQTY``
-        (``CLng`` rounds half to even; ``floor`` is the fixed VBA floor, D-1).
+        ``0 .. substep_count``: the fractional part of ``transit_delay_samples`` times
+        ``substep_count``, rounded half to even.
+
+    Notes
+    -----
+    VBA ``kOverlap`` (line 380): ``CLng((unballanceStepQTY - floor(unballanceStepQTY)) *
+    stepQTY)``; ``floor`` is the fixed VBA floor (D-1).
     """
     return clng((transit_delay_samples - vba_floor(transit_delay_samples)) * substep_count)
 
 
 class _Run(NamedTuple):
-    """Per-run constants of the walk, computed once by ``_walk_constants``."""
+    """Per-run constants of the schedule walk, computed once by ``_walk_constants``."""
 
     force_history_one_based: list  # [i][j] is the VBA forceHistory(i, j), 1-based (vba_2d)
     history_row_count: int  # UBound(forceHistory, 1)
@@ -139,6 +150,20 @@ class _Run(NamedTuple):
 
 
 def _walk_constants(force_history, sample_rate, span_length, celerity, substep_count) -> _Run:
+    """The per-run constants of the schedule walk.
+
+    Parameters
+    ----------
+    force_history, sample_rate, span_length, celerity, substep_count
+        As ``unbalance_force``.
+
+    Returns
+    -------
+    _Run
+        The history 1-based (as the VBA indexes it), its row and column counts, the
+        transit delay in samples and substeps, the overlap in substeps and the two ramp
+        weight tables of ``substep_count`` entries.
+    """
     force_history_one_based = vba_2d(as_history_2d(force_history)).tolist()
     substep_count = int(substep_count)
     transit_delay_samples = transit_delay(span_length, celerity, sample_rate)
@@ -171,7 +196,7 @@ class _TransitSample(NamedTuple):
 
 class _ForcedSample(NamedTuple):
     """One forced-phase sample of ``_schedule`` (N): elbow A ramps between the first pair;
-    elbow B between the second pair for the first ``stepQTY - kOverlap`` sub-steps and
+    elbow B between the second pair for the first ``stepQTY - kOverlap`` substeps and
     between the advanced pair for the remaining ``kOverlap``."""
 
     elbow_a_force_current: float
@@ -183,29 +208,67 @@ class _ForcedSample(NamedTuple):
 
 
 def _wraps_to_next_column(row: int, column: int, row_count: int, column_count: int) -> bool:
-    """Whether the column-major walk goes from ``(row, column)`` to the top of the next
-    column: the last row of any column but the last (1-based)."""
+    """Whether the column-major walk of the history goes from ``(row, column)`` to the
+    top of the next column: the last row of any column but the last (1-based).
+
+    Parameters
+    ----------
+    row, column : int
+        1-based position in the history.
+    row_count, column_count : int
+        The history's rows and columns.
+
+    Returns
+    -------
+    bool
+    """
     return row + 1 > row_count and column < column_count
 
 
 def _next_position(row: int, column: int, row_count: int, column_count: int) -> tuple[int, int]:
-    """The 1-based ``(row, column)`` after ``(row, column)`` in the column-major walk of the
+    """The 1-based position after ``(row, column)`` in the column-major walk of the
     history: one row down, or the top of the next column from the last row of any column but
-    the last; the last element is its own successor. Integer only."""
+    the last; the last element is its own successor. Integer only.
+
+    Parameters
+    ----------
+    row, column : int
+        1-based position in the history.
+    row_count, column_count : int
+        The history's rows and columns.
+
+    Returns
+    -------
+    tuple of int
+        ``(row, column)``, 1-based.
+    """
     if _wraps_to_next_column(row, column, row_count, column_count):
         return 1, min(column + 1, column_count)
     return min(row + 1, row_count), column
 
 
 def _schedule(walk: _Run) -> Iterator[_TransitSample | _ForcedSample]:
-    """The VBA index walk, one item per sample, shared by ``unbalance_force`` and
-    ``elbow_forces`` (which differ only in their inner ``k`` loops).
+    """The walk of the history through the transit and forced phases, one item per
+    sample, shared by ``unbalance_force`` and ``elbow_forces`` (which differ only in their
+    inner ``k`` loops).
 
-    Transit-phase samples are ``_TransitSample``; the consumer truncates the last one at the
-    VBA ``Exit For`` (``first_substep_number + k > unballanceStepQTY * stepQTY``).
-    Forced-phase samples are ``_ForcedSample``. Each item is yielded after every index it
-    needs is read, so a D-8 ``IndexError`` surfaces where the legacy raised it: at the first
-    forced sample, after every transit sample."""
+    Parameters
+    ----------
+    walk : _Run
+        From ``_walk_constants``.
+
+    Yields
+    ------
+    _TransitSample or _ForcedSample
+        The elbow forces of one sample, N. The consumer truncates the last transit sample
+        at the VBA ``Exit For`` (``first_substep_number + k > transit_delay_substeps``).
+
+    Notes
+    -----
+    The VBA index walk of lines 394-567. Each item is yielded after every index it needs
+    is read, so a D-8 ``IndexError`` surfaces where the legacy raised it: at the first
+    forced sample, after every transit sample.
+    """
     (
         force_history_one_based,
         history_row_count,
@@ -303,7 +366,7 @@ def _schedule(walk: _Run) -> Iterator[_TransitSample | _ForcedSample]:
 def unbalance_force(
     force_history, sample_rate: float, span_length: float, celerity: float, substep_count: int
 ) -> Iterator[list[float]]:
-    """Yield, per sample, the list of per-sub-step ``forceA - forceB`` values.
+    """The unbalance force on the span, per substep, one list per sample.
 
     Parameters
     ----------
@@ -316,12 +379,12 @@ def unbalance_force(
     celerity : float
         Propagation speed of the force along the pipe, m/s.
     substep_count : int
-        Sub-steps per sample.
+        Substeps per sample.
 
     Yields
     ------
     list of float
-        The unbalance force ``forceA - forceB``, N, for each sub-step of one sample.
+        The unbalance force (VBA ``forceA - forceB``), N, for each substep of one sample.
         The transit phase yields ``totInd`` samples, the last one truncated at the VBA
         ``Exit For``; the forced phase yields one full sample per history element. Free
         decay has no unbalance force and is not yielded.
@@ -337,7 +400,7 @@ def unbalance_force(
     -----
     * VBA quirk D-18 preserved: the ramp reaches the next sample at ``k = stepQTY - 1``
       and the next sample's ``k = 0`` repeats it, so each sample value is held for two
-      consecutive sub-steps.
+      consecutive substeps.
     * The ramp fractions are tabulated once per run; the table holds the same doubles
       the per-step expression produced.
     * Session V.1: the index walk is ``_schedule``, shared with ``elbow_forces``; the
@@ -411,9 +474,10 @@ def unbalance_force(
 def elbow_forces(
     force_history, sample_rate: float, span_length: float, celerity: float, substep_count: int
 ) -> Iterator[tuple[int, list[float], list[float]]]:
-    """Yield, per sample, ``(phase, forceA list, forceB list)`` for the trace (Session V.1).
+    """The forces at the two elbows, per substep, one pair of lists per sample with its
+    load phase, for the trace.
 
-    The same walk and the same per-sub-step values as ``unbalance_force``, kept apart
+    The same walk and the same per-substep values as ``unbalance_force``, kept apart
     before the subtraction: ``forceA[k] - forceB[k]`` of a sample is bitwise the
     corresponding ``unbalance_force`` value (same operands, same operation;
     ``tests/test_trace.py`` pins it on the sweep and the golden history).
@@ -429,13 +493,17 @@ def elbow_forces(
         ``PHASE_TRANSIT`` (0: ``forceA`` held at the first sample while ``forceB``
         ramps) or ``PHASE_FORCED`` (1: both ramp).
     elbow_a_force, elbow_b_force : list of float
-        The force at elbow A and the delayed force at elbow B, N, per sub-step; the same
+        The force at elbow A and the delayed force at elbow B, N, per substep; the same
         lengths as the ``unbalance_force`` samples (the last delay sample truncated).
 
     Raises
     ------
     ZeroDivisionError, IndexError
         As ``unbalance_force`` (D-7, D-8).
+
+    Notes
+    -----
+    Added in session V.1 for the solver trace; the VBA has no counterpart.
     """
     walk = _walk_constants(force_history, sample_rate, span_length, celerity, substep_count)
     (
@@ -501,7 +569,7 @@ def elbow_forces(
 
 
 def flatten_unbalance_force(samples: Iterable[list[float]]) -> tuple[np.ndarray, np.ndarray]:
-    """The schedule of ``unbalance_force`` as the compiled loop reads it.
+    """The unbalance force of every substep as one array, as the compiled loop reads it.
 
     Parameters
     ----------
@@ -512,10 +580,11 @@ def flatten_unbalance_force(samples: Iterable[list[float]]) -> tuple[np.ndarray,
     Returns
     -------
     unbalance_force_by_substep : numpy.ndarray
-        float64, every sample's per-sub-step ``forceA - forceB`` in order, N.
+        float64, shape ``(substeps,)``: every sample's per-substep unbalance force in
+        order, N.
     sample_start : numpy.ndarray
-        int64, samples + 1: where each sample's sub-steps start (the truncated last
-        transit sample keeps its length).
+        int64, shape ``(samples + 1,)``: where each sample's substeps start (the truncated
+        last transit sample keeps its length).
     """
     unbalance_forces = []
     sample_start = [0]
@@ -528,7 +597,8 @@ def flatten_unbalance_force(samples: Iterable[list[float]]) -> tuple[np.ndarray,
 def flatten_elbow_forces(
     samples: Iterable[tuple[int, list[float], list[float]]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    """The schedule of ``elbow_forces`` as the compiled loop's trace reads it.
+    """The elbow forces of every substep as two arrays, as the compiled loop's trace
+    reads them.
 
     Parameters
     ----------
@@ -538,11 +608,12 @@ def flatten_elbow_forces(
     Returns
     -------
     elbow_a_force_by_substep, elbow_b_force_by_substep : numpy.ndarray
-        float64, every sample's per-sub-step elbow forces in order, N.
+        float64, shape ``(substeps,)``: every sample's per-substep elbow forces in order, N.
     sample_start : numpy.ndarray
-        int64, samples + 1, as ``flatten_unbalance_force`` (the caller compares the two).
+        int64, shape ``(samples + 1,)``, as ``flatten_unbalance_force`` (the caller
+        compares the two).
     transit_substep_count : int
-        Sub-steps of the transit phase: the transit -> forced boundary.
+        Substeps of the transit phase: the transit -> forced boundary.
     """
     elbow_a_forces = []
     elbow_b_forces = []
