@@ -76,13 +76,14 @@ DEFAULT_LEAD_IN_S = 0.1
 DEFAULT_TAIL_S = 2.0
 # For Ben to confirm: the basis of 1.33 (set by the lead author on 22 Oct 2026).
 PEAK_TO_DESIGN_PRESSURE_RATIO = 1.33
-"""The sweep's peak pressure as a multiple of the design pressure, dimensionless:
-``p_cap = amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * p_design``. Set by the lead
-author on 22 Oct 2026."""
+"""The sweep's peak pressure as a multiple of the design pressure, dimensionless
+(``peak_pressure_target``: ``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO *
+design_pressure``). Set by the lead author on 22 Oct 2026."""
 STEP_TO_PEAK_RATIO = 0.5
 """The held step of the ``step_sine`` and ``step_noise`` sweep histories as a fraction of
-their peak, dimensionless (``canonical``: the step holds ``0.5 cap``; docs/data_format.md
-``p_step``). The sweep's convention; its basis is not recorded in the code or the documents."""
+their peak, dimensionless (``canonical``: ``step_pressure = STEP_TO_PEAK_RATIO *
+target_pressure``; docs/data_format.md ``step_pressure``). The sweep's convention; its basis
+is not recorded in the code or the documents."""
 DEFAULT_ENVELOPE_DECAY_CYCLES = 10.0
 """Default cycles (of the oscillation or the noise reference frequency) over which the
 envelope of ``step_sine`` and ``step_noise`` falls by its decay fraction.
