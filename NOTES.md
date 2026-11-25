@@ -45,6 +45,11 @@ Viewer browser tests run here with `PLAYWRIGHT_BROWSERS_PATH` pointed at a scrat
 whose `chromium-1243/chrome-linux/chrome` links to
 `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome` (26 passed at the session start).
 
+Session gates: `-m slow` 150 passed; `tools/bench.py --skip-full-python`
+(`docs/bench/fb90eb2.json`): every digest equal to the literal port's; the compiled rows 0.94 to
+1.07 of the previous row `662ea10` (another host; ruling 50), the pure-Python rows 1.05 to
+1.08; peak RSS 153.6 / 153.8 MB with the three histories recorded.
+
 **Next** (`docs/review/plan.md`, progress R.9): 6.3c `LoopLayout` renames; 6.4 `histories`
 and `export.to_*_dict` signatures with the `History` fields (`SweepProvenance`); the
 `RunSettings` → `KernelSettings` rename; 6.5 the schema bump (before it, list the re-exported
