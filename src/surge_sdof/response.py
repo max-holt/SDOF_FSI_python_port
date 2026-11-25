@@ -1118,9 +1118,9 @@ def _kernel_inputs(
     unbalance_force_by_substep, sample_start = loads.flatten_unbalance_force(
         unbalance_force_samples
     )
-    # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
-    # the forced samples and an equal allowance for free decay; later free decay is integrated
-    # but not recorded.
+    # Proposed derivation, for Ben to confirm: the recorded history holds
+    # nominal_forced_sample_count * 2 samples (VBA outMax * 2), the forced samples and an equal
+    # allowance for free decay; later free decay is integrated but not recorded.
     recorded_sample_count = nominal_forced_sample_count * 2
     histories = ResponseHistories(
         np.zeros(recorded_sample_count),
@@ -1323,9 +1323,9 @@ def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; doc
         parity_offset = _parity_offset(
             is_per_phase_parity, sample_number, substep_count, state.substep_index, 1
         )
-        # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
-        # the forced samples and an equal allowance for free decay; later free decay is integrated
-        # but not recorded.
+        # Proposed derivation, for Ben to confirm: the recorded history holds
+        # nominal_forced_sample_count * 2 samples (VBA outMax * 2), the forced samples and an
+        # equal allowance for free decay; later free decay is integrated but not recorded.
         is_in_record_window = sample_number <= nominal_forced_sample_count * 2
         for _k in range(substep_count):
             substep_index = state.substep_index

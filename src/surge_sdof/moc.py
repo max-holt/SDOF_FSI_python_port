@@ -641,8 +641,8 @@ def step(
     * The dead ``useUndamped`` branch (VBA lines 803-818) is not ported.
     * Compiled with ``numba.njit(cache=True)`` (no fastmath);
       with ``NUMBA_DISABLE_JIT=1`` it is this Python function. Inside the compiled
-      function ``numpy.errstate`` does not apply: ``rho_c = 0`` is rejected by the
-      caller's set-up (``response.peak_response_jc``, D-9) and an overflow propagates
+      function ``numpy.errstate`` does not apply: ``rho_c = 0`` is rejected when the
+      column is built (``coupling.fluid_column``, D-9) and an overflow propagates
       nan/inf to the structure state, where the end-of-run check raises (D-23).
     """
     pressure_a = column.pressure_a
