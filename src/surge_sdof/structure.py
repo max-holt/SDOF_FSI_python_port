@@ -6,7 +6,7 @@ Behaviour is that of ``GetPeakResponse`` in ``legacy/vba/Existing Code.bas`` (VB
 function against ``legacy_port.py`` bitwise on the golden inputs and a seeded sweep.
 
 This module knows nothing about force histories, transit delays, fluid coupling, sample
-bookkeeping, max trackers or output types: ``step_scalars`` takes the already-summed
+bookkeeping or peak trackers: ``step_scalars`` takes the already-summed
 applied force and returns the new state. See ``docs/architecture.md``.
 
 State and parameters
@@ -94,7 +94,7 @@ class SdofParams(NamedTuple):
     damping : float
         Viscous damping coefficient, N·s/m (VBA ``damping``).
     friction_velocity_step : float
-        Velocity Coulomb friction removes per sub-step, m/s (VBA ``fricAcc`` =
+        Velocity Coulomb friction removes per substep, m/s (VBA ``fricAcc`` =
         ``0.5 * dynamicFric * 9.81 * dt``; the only quantity whose units are fixed to m
         and s by the VBA).
     support_gap : float
@@ -116,10 +116,7 @@ class SdofParams(NamedTuple):
 def solve_quartic(
     quartic_constant: float, cubic_coefficient: float, quartic_coefficient: float
 ) -> float:
-    """Relaxed Newton solve of ``varA + varB * L^3 + varC * L^4 = 0`` for ``L``.
-
-    Literal copy of ``legacy_port.solve_poly`` (VBA line 137) so that this module does
-    not import the frozen legacy module.
+    """The root ``L`` of ``c0 + c3 L^3 + c4 L^4 = 0``, by relaxed Newton iteration.
 
     Parameters
     ----------
@@ -135,6 +132,8 @@ def solve_quartic(
 
     Notes
     -----
+    VBA ``solvePoly`` (line 137); a literal copy of ``legacy_port.solve_poly`` so that this
+    module does not import the frozen legacy module.
     Seed ``(-varA / varB) ^ (1 / 3)``, relaxation 0.25, at most 100 iterations, stop
     when ``|error / varA| < 1e-6``; there is no convergence check at exit. VBA quirk
     D-12: a negative base makes the Python seed complex where VBA raises error 5.
@@ -155,12 +154,11 @@ def solve_quartic(
 def solve_portal_height(
     span_length: float, flexural_rigidity: float, mass_per_length: float, natural_frequency: float
 ) -> float:
-    """Leg height of the portal-frame proxy (VBA lines 384-387).
+    """The leg height of the portal-frame proxy that gives the span its natural frequency.
 
     The height ``h`` at which the frame stiffness ``12 EI (0.5 + 1.5 (h / (L + h))^2) / h^3``
-    gives ``natFreq`` with the mass ``(L + 4h/3) * massPerUnitLen``: the seed
-    ``solve_quartic`` (VBA ``solvePoly``) call plus the VBA's 11 refinement passes of the
-    end-fixity factor.
+    gives the natural frequency with the mass ``(L + 4h/3) m'``: the seed
+    ``solve_quartic`` call plus 11 refinement passes of the end-fixity factor.
 
     Parameters
     ----------
@@ -176,7 +174,11 @@ def solve_portal_height(
     Returns
     -------
     float
-        ``portalFrameHeight``, m.
+        Leg height, m.
+
+    Notes
+    -----
+    VBA lines 384-387 (``portalFrameHeight``; the seed is VBA ``solvePoly``).
     """
     omega_squared = (2 * VBA_PI * natural_frequency) ** 2
     cubic_coefficient = span_length * mass_per_length
@@ -209,7 +211,7 @@ def solve_portal_height(
 def lumped_params(
     span: PipeSpan, restraint: Restraint, portal_frame_height: float, substep_duration: float
 ) -> SdofParams:
-    """Mass, stiffness, damping and friction increment of the lumped proxy (VBA 389-392).
+    """Mass, stiffness, damping and friction increment of the lumped proxy.
 
     Parameters
     ----------
@@ -221,7 +223,7 @@ def lumped_params(
     portal_frame_height : float
         From ``solve_portal_height``, m.
     substep_duration : float
-        Sub-step, s (``1 / (sampleFreq * stepQTY)``).
+        Substep, s (``1 / (sample_rate * substep_count)``).
 
     Returns
     -------
@@ -232,8 +234,9 @@ def lumped_params(
 
     Notes
     -----
-    ``jc_params`` is the ``GetPeakResponseJC`` variant (core fluid removed from the
-    mass); the two are kept as separate functions, not a flag.
+    VBA lines 389-392 (``GetPeakResponse``). ``jc_params`` is the ``GetPeakResponseJC``
+    variant (core fluid removed from the mass); the two are kept as separate functions,
+    not a flag.
     """
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
@@ -258,8 +261,7 @@ def jc_params(
     portal_frame_height: float,
     substep_duration: float,
 ) -> SdofParams:
-    """Mass, stiffness, damping and friction increment of the junction-coupling proxy
-    (VBA lines 726-729).
+    """Mass, stiffness, damping and friction increment of the junction-coupling proxy.
 
     The core fluid is removed from the mass (rigid mass only) while stiffness, critical
     damping and the friction increment are scaled on the total mass, as the VBA does.
@@ -276,7 +278,7 @@ def jc_params(
     portal_frame_height : float
         From ``solve_portal_height``, m.
     substep_duration : float
-        Sub-step, s.
+        Substep, s.
 
     Returns
     -------
@@ -287,7 +289,8 @@ def jc_params(
 
     Notes
     -----
-    The expressions keep the VBA's left-to-right association, which differs from
+    VBA lines 726-729 (``GetPeakResponseJC``). The expressions keep the VBA's left-to-right
+    association, which differs from
     ``lumped_params`` (there ``stiffness = w2 * mass``; here ``w2 * (L + h * 4 / 3) * m'``).
     """
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
@@ -332,9 +335,26 @@ def _sdof_params(
     friction_velocity_step: float,
     restraint: Restraint,
 ) -> SdofParams:
-    """The ``SdofParams`` of a set-up: mass (kg), stiffness (N/m), damping (N·s/m) and the
-    friction velocity step (m/s) as floats, the support gap (m) of ``restraint`` and the
-    square of its closed-gap frequency ratio."""
+    """The ``SdofParams`` of a set-up, every field a Python float.
+
+    Parameters
+    ----------
+    mass : float
+        Modal mass, kg.
+    stiffness : float
+        Stiffness with the gaps open, N/m.
+    damping : float
+        Viscous damping coefficient, N·s/m.
+    friction_velocity_step : float
+        Velocity Coulomb friction removes per substep, m/s.
+    restraint : response.Restraint
+        Its support gap (m) and closed-gap frequency ratio (dimensionless) are read.
+
+    Returns
+    -------
+    SdofParams
+        With ``closed_gap_stiffness_ratio`` the square of the closed-gap frequency ratio.
+    """
     return SdofParams(
         float(mass),
         float(stiffness),
@@ -350,7 +370,8 @@ def _sdof_params(
 def effective_displacement(
     x: float, support_gap: float, closed_gap_stiffness_ratio: float
 ) -> float:
-    """Displacement seen by the open-gap stiffness (VBA line 424 and 611).
+    """The displacement seen by the open-gap stiffness, with the support gap closed
+    beyond it.
 
     ``minUnsigned(gap, x) + max(0, |x| - gap) * sign(x) * ratio^2``: ``x`` up to the
     support gap, then ``gap + (|x| - gap) * closed_gap_stiffness_ratio`` with the sign of
@@ -372,10 +393,11 @@ def effective_displacement(
 
     Notes
     -----
-    The VBA helpers' ladders (``max`` lines 11-17, ``minUnsigned`` 19-33, ``sign``
-    51-59) are written out branch for branch, including the ``gap = 0`` and ``x = 0``
-    cases. Compiled (``numba.njit(cache=True)``, scalars only): ``step_scalars`` calls it
-    for the restoring term, ``response._integrate`` for the static-equivalent force.
+    VBA line 424 (restoring term) and 611 (static-equivalent force). The VBA helpers'
+    ladders (``max`` lines 11-17, ``minUnsigned`` 19-33, ``sign`` 51-59) are written out
+    branch for branch, including the ``gap = 0`` and ``x = 0`` cases. Compiled
+    (``numba.njit(cache=True)``, scalars only): ``step_scalars`` calls it for the restoring
+    term, ``response._peak_response`` for the static-equivalent force.
     """
     x_magnitude = abs(x)
     # minUnsigned(gap, x)
@@ -407,38 +429,39 @@ def step_scalars(
     sdof_params: SdofParams,
     dt: float,
 ) -> tuple[float, float, float]:
-    """One VBA sub-step (lines 424-432) of the SDOF proxy.
+    """Advance the SDOF proxy by one substep: displacement, velocity and acceleration.
 
-    Explicit ``aNew`` from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``, and
-    stick (``|v| < fricAcc``) / slip Coulomb friction. Compiled with
+    Explicit new acceleration from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``,
+    and stick (``|v| < friction_velocity_step``) / slip Coulomb friction. Compiled with
     ``numba.njit(cache=True)`` (no fastmath; Stage 5); with ``NUMBA_DISABLE_JIT=1`` it is
-    this Python function. Called per sub-step from ``response._integrate_kernel``.
+    this Python function. Called per substep from ``response._integrate_kernel``.
 
     Parameters
     ----------
     x, v, a : float
-        State at the end of the previous sub-step: m, m/s, m/s².
+        State at the end of the previous substep: m, m/s, m/s².
     f_applied : float
-        Everything the caller adds to the restoring and damping terms, N: ``forceA -
-        forceB`` plus the coupling force ``dF``, or ``dF`` alone in free decay.
+        Everything the caller adds to the restoring and damping terms, N: the unbalance
+        force plus the junction force, or the junction force alone in free decay.
     sdof_params : SdofParams
         Mass (kg), stiffness (N/m), damping (N·s/m), friction velocity step (m/s), support
         gap (m) and closed-gap stiffness ratio (dimensionless).
     dt : float
-        Sub-step, s.
+        Substep, s.
 
     Returns
     -------
     tuple of float
-        ``(x, v, a)`` at the end of this sub-step: m, m/s, m/s².
+        ``(x, v, a)`` at the end of this substep: m, m/s, m/s².
 
     Notes
     -----
+    * VBA lines 424-432 (``aNew``, ``fricAcc``, ``forceA - forceB``, ``dF``).
     * The scheme is explicit in the acceleration (not average-acceleration Newmark):
       with zero damping the amplitude grows about 2.5 % per cycle at ``omega dt`` of
       0.016 (NOTES.md "Findings worth knowing").
     * VBA quirk D-20 preserved: the slip branch uses ``sign(v, 0.000001)``, so for
-      ``fricAcc <= |v| < 1e-6`` no friction is applied in that sub-step.
+      ``fricAcc <= |v| < 1e-6`` no friction is applied in that substep.
     * ``(a + aNew) * dt / 2`` is computed as ``(a + aNew) * half_dt``; scaling by a
       power of two commutes with rounding, so the doubles are identical to the VBA's.
     """
@@ -476,14 +499,30 @@ def step_scalars(
 def substep_friction(
     sdof_params: SdofParams, v_before: float, a_before: float, v: float, a: float, dt: float
 ) -> tuple[float, bool]:
-    """The friction force of one ``step_scalars`` sub-step, as the trace records it, and
-    whether the sub-step stuck.
+    """The friction force of one ``step_scalars`` substep, as the trace records it, and
+    whether the substep stuck.
 
     The friction force is what the trapezoidal velocity change misses: ``mass * (v -
-    (v_before + (a_before + a) * half_dt)) / dt`` (N), with the same ``half_dt = dt / 2``
-    as ``step_scalars``; the sub-step sticks when ``|v_before| < friction_velocity_step``.
-    ``v_before``, ``a_before`` are the state before the sub-step, ``v``, ``a`` after it
-    (m/s, m/s²); ``dt`` in s. Scalars only.
+    (v_before + (a_before + a) * half_dt)) / dt``, with the same ``half_dt = dt / 2`` as
+    ``step_scalars``. Scalars only.
+
+    Parameters
+    ----------
+    sdof_params : SdofParams
+        Its mass (kg) and friction velocity step (m/s) are read.
+    v_before, a_before : float
+        Velocity (m/s) and acceleration (m/s²) before the substep.
+    v, a : float
+        Velocity (m/s) and acceleration (m/s²) after it.
+    dt : float
+        Substep, s.
+
+    Returns
+    -------
+    friction_force : float
+        N.
+    is_sticking : bool
+        ``|v_before| < friction_velocity_step``.
     """
     half_dt = dt / 2
     friction_force = sdof_params.mass * (v - (v_before + (a_before + a) * half_dt)) / dt
