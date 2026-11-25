@@ -261,8 +261,10 @@ def test_fraction_profile_flag_reaches_the_coupling_and_the_trace():
                 kw, trace_every=1, **dict(td.LEGACY_FLAGS, fraction_profile=profile)
             ),
         )
-        fa, fb = moc.moving_fractions(res.trace.pipe_seg_qty, res.trace.pivot_seg_qty, profile)
-        assert np.array_equal(res.trace.moving_fraction, interleave(fa, fb))
+        fa, fb = moc.moving_fractions(
+            res.trace.column.column_cell_count, res.trace.column.end_to_elbow_cell_count, profile
+        )
+        assert np.array_equal(res.trace.column.grid_point_moving_fraction, interleave(fa, fb))
         assert res.trace.inputs["coupling"]["fraction_profile"] == profile
 
 

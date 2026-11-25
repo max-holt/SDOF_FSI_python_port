@@ -90,9 +90,9 @@ def main_trace(args) -> None:
     tr = result.trace
     meta = doc["meta"]
     print(
-        f"{name}: {meta['solver']}, trace_every {trace_every} ({tr.n_frames} traced frames + the "
-        f"rest frame), dt = {tr.dt:.4g} s ({trace_every * tr.dt * 1e3:.3g} ms a frame), "
-        f"{meta['n_cells']} cells, t = 0 .. {tr.t[-1]:.4g} s"
+        f"{name}: {meta['solver']}, trace_every {trace_every} ({tr.frame_count} traced frames + the "
+        f"rest frame), dt = {tr.substep_duration:.4g} s ({trace_every * tr.substep_duration * 1e3:.3g} ms a frame), "
+        f"{meta['n_cells']} cells, t = 0 .. {tr.time[-1]:.4g} s"
         + ("; trace capped by the history window" if meta["params"]["capped"] else "")
     )
     on_disk = Path(args.out).stat().st_size

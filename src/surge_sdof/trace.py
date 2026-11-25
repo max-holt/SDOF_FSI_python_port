@@ -56,7 +56,7 @@ and the ``vAv`` subtraction of the sub-step.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple
 
 import numba
@@ -72,10 +72,12 @@ if TYPE_CHECKING:
 __all__ = [
     "MAX_TRACE_VALUES",
     "FRAME_COLUMNS",
+    "FRAME_FIELDS",
     "INT_FRAME_COLUMNS",
     "PHASE_TRANSIT",
     "PHASE_FORCED",
     "PHASE_FREE_DECAY",
+    "ColumnTrace",
     "Trace",
     "frame_capacity",
     "check_memory",
@@ -112,28 +114,33 @@ COL_SUBSTEP_INDEX, COL_SAMPLE_INDEX, COL_LOAD_PHASE, COL_IS_STICKING = range(4)
 _STATE = "state"  # a column of ``TraceBuffers.frame_state`` (float64)
 _INDEX = "index"  # a column of ``TraceBuffers.frame_index_columns`` (int64)
 FRAME_COLUMN_TABLE = (
-    # (Trace field and trace-document column, kernel array, kernel column), in the document's
-    # order. ``t`` is derived from ``sub_step`` and ``dt``; ``stick`` is the int column != 0.
-    ("t", None, None),
-    ("sub_step", _INDEX, COL_SUBSTEP_INDEX),
-    ("sample", _INDEX, COL_SAMPLE_INDEX),
-    ("phase", _INDEX, COL_LOAD_PHASE),
-    ("x", _STATE, COL_X),
-    ("v", _STATE, COL_V),
-    ("a", _STATE, COL_A),
-    ("f_a", _STATE, COL_ELBOW_A_FORCE),
-    ("f_b", _STATE, COL_ELBOW_B_FORCE),
-    ("f_unbalance", _STATE, COL_UNBALANCE_FORCE),
-    ("f_friction", _STATE, COL_FRICTION_FORCE),
-    ("stick", _INDEX, COL_IS_STICKING),
-    ("d_f", _STATE, COL_JUNCTION_FORCE),
+    # (trace-document column, Trace field, kernel array, kernel column), in the document's
+    # order. ``time`` is derived from ``substep_index`` and the substep; ``is_sticking`` is
+    # the int column != 0.
+    ("t", "time", None, None),
+    ("sub_step", "substep_index", _INDEX, COL_SUBSTEP_INDEX),
+    ("sample", "sample_index", _INDEX, COL_SAMPLE_INDEX),
+    ("phase", "load_phase", _INDEX, COL_LOAD_PHASE),
+    ("x", "displacement", _STATE, COL_X),
+    ("v", "velocity", _STATE, COL_V),
+    ("a", "acceleration", _STATE, COL_A),
+    ("f_a", "elbow_a_force", _STATE, COL_ELBOW_A_FORCE),
+    ("f_b", "elbow_b_force", _STATE, COL_ELBOW_B_FORCE),
+    ("f_unbalance", "unbalance_force", _STATE, COL_UNBALANCE_FORCE),
+    ("f_friction", "friction_force", _STATE, COL_FRICTION_FORCE),
+    ("stick", "is_sticking", _INDEX, COL_IS_STICKING),
+    ("d_f", "junction_force", _STATE, COL_JUNCTION_FORCE),
 )
-FRAME_COLUMNS = tuple(name for name, _, _ in FRAME_COLUMN_TABLE)
-"""The per-frame fields of ``Trace``: the ``trace.frames`` columns, in the document's order."""
-INT_FRAME_COLUMNS = frozenset(name for name, array, _ in FRAME_COLUMN_TABLE if array == _INDEX)
+FRAME_COLUMNS = tuple(column for column, _, _, _ in FRAME_COLUMN_TABLE)
+"""The ``trace.frames`` columns of a trace document, in the document's order."""
+FRAME_FIELDS = tuple(field_name for _, field_name, _, _ in FRAME_COLUMN_TABLE)
+"""The per-frame fields of ``Trace``, in the same order as ``FRAME_COLUMNS``."""
+INT_FRAME_COLUMNS = frozenset(
+    column for column, _, array, _ in FRAME_COLUMN_TABLE if array == _INDEX
+)
 """The frame columns written as integers (the int64 kernel columns)."""
-FRAME_STATE_COLUMN_COUNT = sum(array == _STATE for _, array, _ in FRAME_COLUMN_TABLE)
-FRAME_INDEX_COLUMN_COUNT = sum(array == _INDEX for _, array, _ in FRAME_COLUMN_TABLE)
+FRAME_STATE_COLUMN_COUNT = sum(array == _STATE for _, _, array, _ in FRAME_COLUMN_TABLE)
+FRAME_INDEX_COLUMN_COUNT = sum(array == _INDEX for _, _, array, _ in FRAME_COLUMN_TABLE)
 
 MAX_TRACE_VALUES = 50_000_000
 """Memory guard: the largest number of 8-byte values (``frame_capacity * (float columns +
@@ -142,90 +149,119 @@ int columns + 2 * n_cells)``, 400 MB) a trace may allocate; ``check_memory`` rai
 
 
 @dataclass(frozen=True)
+class ColumnTrace:
+    """The fluid column of a junction-coupling trace: its MoC grid and, per frame, the
+    pressure and velocity at every point of the interleaved display grid (``A0 B0 A1 ...
+    AN``).
+
+    Attributes
+    ----------
+    column_cell_count : int
+        ``N``, the B cells of the whole column (VBA ``pipeSegQTY``).
+    end_to_elbow_cell_count : int
+        Cells from each end of the column to the elbow at the foot of the leg (VBA
+        ``pivotSegQTY``).
+    inactive_end_cell_count : int
+        Cells at each end that receive no mass acceleration (VBA ``extQTY``).
+    grid_point_position : numpy.ndarray
+        float64, ``(2N + 1,)``: position along the column from the first A node, m.
+    grid_point_kind : numpy.ndarray
+        int, ``(2N + 1,)``: 0 for an A node, 1 for a B cell.
+    grid_point_moving_fraction : numpy.ndarray
+        float64, ``(2N + 1,)``: the share of the structure's acceleration each point
+        receives, dimensionless.
+    grid_point_pressure, grid_point_velocity : numpy.ndarray
+        float64, ``(frames, 2N + 1)``: the column after each recorded substep, Pa and m/s
+        (velocity relative to the pipe).
+    """
+
+    column_cell_count: int
+    end_to_elbow_cell_count: int
+    inactive_end_cell_count: int
+    grid_point_position: np.ndarray = field(repr=False)
+    grid_point_kind: np.ndarray = field(repr=False)
+    grid_point_moving_fraction: np.ndarray = field(repr=False)
+    grid_point_pressure: np.ndarray = field(repr=False)
+    grid_point_velocity: np.ndarray = field(repr=False)
+
+    @property
+    def grid_point_count(self) -> int:
+        """Points of the interleaved display grid, ``2N + 1``."""
+        return int(self.grid_point_position.shape[0])
+
+
+@dataclass(frozen=True)
 class Trace:
-    """Every ``trace_every``-th sub-step of a peak-response run (see the module docstring).
+    """Every ``trace_every``-th substep of a peak-response run (see the module docstring).
 
     Attributes
     ----------
     solver : str
-        ``"peak_response"`` or ``"peak_response_jc"``; a JC call that took the short-pipe
-        fallback produces a ``"peak_response"`` trace (JC fields None).
+        ``"peak_response"`` or ``"peak_response_jc"``; a junction-coupling call that took the
+        short-pipe fallback produces a ``"peak_response"`` trace (no column).
     trace_every : int
-        The stride in sub-steps.
-    dt : float
-        Sub-step, s.
-    step_qty : int
-        Sub-steps per sample.
-    out_max : int
-        The VBA ``outMax``; free decay is traced while ``sample < out_max * 2``.
+        The stride in substeps.
+    substep_duration : float
+        One substep, s.
+    substep_count : int
+        Substeps per sample.
+    nominal_forced_sample_count : int
+        The VBA ``outMax``; free decay is traced while ``sample_index < 2 *
+        nominal_forced_sample_count``.
     portal_frame_height : float
         Leg height of the portal-frame proxy of the run (``response.solver_setup``), m.
-    params : SdofParams
+    sdof_params : SdofParams
         ``(mass, stiffness, damping, friction_velocity_step, support_gap,
-        closed_gap_stiffness_ratio)`` of the run (kg, N/m, N·s/m,
-        m/s, m, dimensionless).
+        closed_gap_stiffness_ratio)`` of the run (kg, N/m, N·s/m, m/s, m, dimensionless).
     inputs : dict
-        The case inputs as the solver received them (``force_history`` as the 2-D array
-        the walk used; the JC keyword flags included), so the trace is self-describing.
-    t, sub_step, sample, phase : numpy.ndarray
-        Per frame: time at the end of the sub-step (s), the 0-based sub-step index, the
-        0-based sample index, the phase (0 transit, 1 forced, 2 free decay).
-    x, v, a : numpy.ndarray
-        State at the end of the sub-step: m, m/s, m/s².
-    f_a, f_b, f_unbalance : numpy.ndarray
-        Force at elbow A, delayed force at elbow B and ``f_a - f_b`` applied in the
-        sub-step, N (zero in free decay).
-    f_friction : numpy.ndarray
+        The solver's arguments grouped as they were passed (``force_history`` as the 2-D
+        array the walk used, ``sample_rate``, and the input objects as dicts), so the trace
+        is self-describing.
+    time, substep_index, sample_index, load_phase : numpy.ndarray
+        Per frame: time at the end of the substep (s), the 0-based substep index, the
+        0-based sample index, the load phase (0 transit, 1 forced, 2 free decay).
+    displacement, velocity, acceleration : numpy.ndarray
+        State at the end of the substep: m, m/s, m/s².
+    elbow_a_force, elbow_b_force, unbalance_force : numpy.ndarray
+        Force at elbow A, delayed force at elbow B and their difference applied in the
+        substep, N (zero in free decay).
+    friction_force : numpy.ndarray
         ``mass * dv_friction / dt``, N (see the module docstring).
-    stick : numpy.ndarray
-        bool, ``|v_old| < fric_acc``: the sub-step took the stick branch.
-    d_f : numpy.ndarray
-        Junction force used in the sub-step, N (zeros for the lumped solver).
-    n_cells, pivot_seg_qty, pipe_seg_qty, ext_qty : int
-        JC grid: ``2N + 1``, ``pivotSegQTY``, ``pipeSegQTY``, ``extQTY`` (0 for lumped).
-    p_cells, v_cells : numpy.ndarray or None
-        JC only, ``(n_frames, n_cells)``: the interleaved column after the sub-step, Pa
-        and m/s.
-    cell_position, cell_kind, moving_fraction : numpy.ndarray or None
-        JC only, length ``n_cells``: position along the column (m), 0 = A node / 1 = B
-        cell, and the moving fraction of the cell (dimensionless).
+    is_sticking : numpy.ndarray
+        bool, ``|v before| < friction_velocity_step``: the substep took the stick branch.
+    junction_force : numpy.ndarray
+        Junction force used in the substep, N (zeros for the lumped solver).
+    column : ColumnTrace or None
+        The fluid column of a junction-coupling run; None for a lumped one.
     """
 
     solver: str
     trace_every: int
-    dt: float
-    step_qty: int
-    out_max: int
+    substep_duration: float
+    substep_count: int
+    nominal_forced_sample_count: int
     portal_frame_height: float
-    params: SdofParams
+    sdof_params: SdofParams
     inputs: dict
-    t: np.ndarray
-    sub_step: np.ndarray
-    sample: np.ndarray
-    phase: np.ndarray
-    x: np.ndarray
-    v: np.ndarray
-    a: np.ndarray
-    f_a: np.ndarray
-    f_b: np.ndarray
-    f_unbalance: np.ndarray
-    f_friction: np.ndarray
-    stick: np.ndarray
-    d_f: np.ndarray
-    n_cells: int = 0
-    pivot_seg_qty: int = 0
-    pipe_seg_qty: int = 0
-    ext_qty: int = 0
-    p_cells: np.ndarray | None = None
-    v_cells: np.ndarray | None = None
-    cell_position: np.ndarray | None = None
-    cell_kind: np.ndarray | None = None
-    moving_fraction: np.ndarray | None = None
+    time: np.ndarray
+    substep_index: np.ndarray
+    sample_index: np.ndarray
+    load_phase: np.ndarray
+    displacement: np.ndarray
+    velocity: np.ndarray
+    acceleration: np.ndarray
+    elbow_a_force: np.ndarray
+    elbow_b_force: np.ndarray
+    unbalance_force: np.ndarray
+    friction_force: np.ndarray
+    is_sticking: np.ndarray
+    junction_force: np.ndarray
+    column: ColumnTrace | None = None
 
     @property
-    def n_frames(self) -> int:
+    def frame_count(self) -> int:
         """Frames recorded."""
-        return int(self.t.shape[0])
+        return int(self.time.shape[0])
 
 
 def frame_capacity(
@@ -576,18 +612,18 @@ def build_trace(
     fields = {
         "solver": solver,
         "trace_every": int(buffers.trace_every),
-        "dt": float(substep_duration),
-        "step_qty": int(substep_count),
-        "out_max": int(nominal_forced_sample_count),
+        "substep_duration": float(substep_duration),
+        "substep_count": int(substep_count),
+        "nominal_forced_sample_count": int(nominal_forced_sample_count),
         "portal_frame_height": float(request.portal_frame_height),
-        "params": params,
+        "sdof_params": params,
         "inputs": inputs,
     }
-    for name, array, column_index in FRAME_COLUMN_TABLE:
+    for _, name, array, column_index in FRAME_COLUMN_TABLE:
         if array is not None:
             fields[name] = kernel_arrays[array][:, column_index].copy()
-    fields["t"] = (fields["sub_step"] + 1) * float(substep_duration)
-    fields["stick"] = fields["stick"] != 0
+    fields["time"] = (fields["substep_index"] + 1) * float(substep_duration)
+    fields["is_sticking"] = fields["is_sticking"] != 0
     if column.is_fluid_coupled:
         grid = interleaved_grid(
             int(column.column_cell_count),
@@ -597,15 +633,14 @@ def build_trace(
             celerity,
             substep_duration,
         )
-        fields.update(
-            n_cells=int(grid.position.shape[0]),
-            pivot_seg_qty=grid.end_to_elbow_cell_count,
-            pipe_seg_qty=grid.column_cell_count,
-            ext_qty=int(moc.INACTIVE_END_CELL_COUNT),
-            p_cells=buffers.frame_pressure[:n_frames].copy(),
-            v_cells=buffers.frame_velocity[:n_frames].copy(),
-            cell_position=grid.position,
-            cell_kind=grid.kind,
-            moving_fraction=grid.moving_fraction,
+        fields["column"] = ColumnTrace(
+            grid.column_cell_count,
+            grid.end_to_elbow_cell_count,
+            int(moc.INACTIVE_END_CELL_COUNT),
+            grid.position,
+            grid.kind,
+            grid.moving_fraction,
+            buffers.frame_pressure[:n_frames].copy(),
+            buffers.frame_velocity[:n_frames].copy(),
         )
     return Trace(**fields)

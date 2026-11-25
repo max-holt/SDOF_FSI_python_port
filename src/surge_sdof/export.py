@@ -29,7 +29,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from surge_sdof.trace import FRAME_COLUMNS, INT_FRAME_COLUMNS, PHASE_FREE_DECAY, PHASE_TRANSIT
+from surge_sdof.trace import (
+    FRAME_COLUMNS,
+    FRAME_FIELDS,
+    INT_FRAME_COLUMNS,
+    PHASE_FREE_DECAY,
+    PHASE_TRANSIT,
+)
 from surge_sdof.viz.geometry import layout_from_trace
 
 if TYPE_CHECKING:
@@ -265,8 +271,8 @@ def _geometry(layout: LoopLayout) -> dict:
 
 def _synthetic_phase(trace: Trace) -> int:
     """Phase of the ``t = 0`` rest frame: transit, unless the run has no transit sub-step."""
-    if trace.n_frames and trace.sub_step[0] == 0 and trace.phase[0] != PHASE_TRANSIT:
-        return int(trace.phase[0])
+    if trace.frame_count and trace.substep_index[0] == 0 and trace.load_phase[0] != PHASE_TRANSIT:
+        return int(trace.load_phase[0])
     return PHASE_TRANSIT
 
 
@@ -280,11 +286,13 @@ def is_capped(result: PeakResponse) -> bool:
         With a trace.
     """
     trace = result.trace
-    in_free_decay = trace.phase == PHASE_FREE_DECAY
+    in_free_decay = trace.load_phase == PHASE_FREE_DECAY
     if not in_free_decay.any():
         return False
-    forced_sample_count = int(trace.sample[in_free_decay].min())
-    return forced_sample_count + int(result.free_decay_sample_count) > 2 * int(trace.out_max)
+    forced_sample_count = int(trace.sample_index[in_free_decay].min())
+    return forced_sample_count + int(result.free_decay_sample_count) > 2 * int(
+        trace.nominal_forced_sample_count
+    )
 
 
 def _frames(trace: Trace) -> dict:
@@ -298,18 +306,21 @@ def _frames(trace: Trace) -> dict:
         "stick": 0,
     }
     out = {}
-    for name in FRAME_COLUMNS:
-        frame_values = getattr(trace, name)
+    for name, field_name in zip(FRAME_COLUMNS, FRAME_FIELDS, strict=True):
+        frame_values = getattr(trace, field_name)
         rest_value = rest_frame.get(name, 0.0)
         out[name] = _column(np.concatenate([[rest_value], frame_values]), name)
     return out
 
 
 def _cells(trace: Trace) -> dict:
-    grid_point_count = int(trace.p_cells.shape[1])
+    grid_point_count = int(trace.column.grid_point_pressure.shape[1])
     rest_frame = np.zeros((1, grid_point_count))
     blocks = {}
-    for name, arr in (("p", trace.p_cells), ("v", trace.v_cells)):
+    for name, arr in (
+        ("p", trace.column.grid_point_pressure),
+        ("v", trace.column.grid_point_velocity),
+    ):
         frame_values = np.concatenate([rest_frame, arr], axis=0)
         if not np.all(np.isfinite(frame_values)):
             raise ValueError(f"cells.{name}: non-finite value (the format has no NaN)")
@@ -321,7 +332,7 @@ def _meta_params(result: PeakResponse) -> dict:
     """``meta.params`` of a trace document: the SDOF constants, the sub-step and the run's
     trace settings."""
     trace = result.trace
-    sdof_params = trace.params
+    sdof_params = trace.sdof_params
     return {
         "mass": _finite(float(sdof_params.mass), "params.mass"),
         "stiffness": _finite(float(sdof_params.stiffness), "params.stiffness"),
@@ -329,9 +340,9 @@ def _meta_params(result: PeakResponse) -> dict:
         "fric_acc": _finite(float(sdof_params.friction_velocity_step), "params.fric_acc"),
         "gap": _finite(float(sdof_params.support_gap), "params.gap"),
         "ratio2": _finite(float(sdof_params.closed_gap_stiffness_ratio), "params.ratio2"),
-        "dt": _finite(float(trace.dt), "params.dt"),
-        "step_qty": int(trace.step_qty),
-        "out_max": int(trace.out_max),
+        "dt": _finite(float(trace.substep_duration), "params.dt"),
+        "step_qty": int(trace.substep_count),
+        "out_max": int(trace.nominal_forced_sample_count),
         "trace_every": int(trace.trace_every),
         "capped": int(bool(is_capped(result))),
     }
@@ -418,7 +429,7 @@ def to_trace_dict(
     if trace is None:
         raise ValueError("the result has no trace; run the solver with trace_every > 0")
     layout = layout_from_trace(trace)
-    is_junction_coupled = trace.p_cells is not None
+    is_junction_coupled = trace.column is not None
     git_sha_value, created_utc_value = _provenance(sha, created)
     doc = {
         "kind": KIND_TRACE,
@@ -429,8 +440,8 @@ def to_trace_dict(
             "inputs": _jsonable(_schema_1_inputs(trace.inputs), "inputs"),
             "params": _meta_params(result),
             "outputs": _meta_outputs(result),
-            "n_frames": int(trace.n_frames) + 1,
-            "n_cells": int(trace.n_cells) if is_junction_coupled else 0,
+            "n_frames": int(trace.frame_count) + 1,
+            "n_cells": int(trace.column.grid_point_count) if is_junction_coupled else 0,
             "git_sha": git_sha_value,
             "created_utc": created_utc_value,
         },

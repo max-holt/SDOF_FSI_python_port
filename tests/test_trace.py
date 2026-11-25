@@ -130,45 +130,47 @@ def _check_frames(res: response.PeakResponse, force, kw, stride):
     forced_substeps = len(flat)
     forced_samples = len(offsets) - 1
     step_qty = kw["step_qty"]
-    assert tr.out_max == out_max and tr.step_qty == step_qty
-    assert tr.dt == 1 / (kw["sample_freq"] * step_qty)
+    assert tr.nominal_forced_sample_count == out_max and tr.substep_count == step_qty
+    assert tr.substep_duration == 1 / (kw["sample_freq"] * step_qty)
     traced_decay = min(res.free_decay_sample_count, out_max * 2 - forced_samples)
     total = forced_substeps + traced_decay * step_qty
     n_frames = -(-total // stride)
-    assert tr.n_frames == n_frames
+    assert tr.frame_count == n_frames
     for name in (
-        "t", "sub_step", "sample", "phase", "x", "v", "a", "f_a", "f_b",
-        "f_unbalance", "f_friction", "stick", "d_f",
+        "time", "substep_index", "sample_index", "load_phase", "displacement", "velocity",
+        "acceleration", "elbow_a_force", "elbow_b_force", "unbalance_force", "friction_force",
+        "is_sticking", "junction_force",
     ):  # fmt: skip
         assert getattr(tr, name).shape == (n_frames,), name
-    assert np.array_equal(tr.sub_step, stride * np.arange(n_frames))
-    assert np.array_equal(tr.t, (tr.sub_step + 1) * tr.dt)
+    assert np.array_equal(tr.substep_index, stride * np.arange(n_frames))
+    assert np.array_equal(tr.time, (tr.substep_index + 1) * tr.substep_duration)
     # sample index: from the offsets in the forced phases, stepQTY per sample after
-    forced = tr.sub_step < forced_substeps
+    forced = tr.substep_index < forced_substeps
     assert np.array_equal(
-        tr.sample[forced], np.searchsorted(offsets, tr.sub_step[forced], side="right") - 1
+        tr.sample_index[forced],
+        np.searchsorted(offsets, tr.substep_index[forced], side="right") - 1,
     )
-    decay = tr.sub_step[~forced]
+    decay = tr.substep_index[~forced]
     assert np.array_equal(
-        tr.sample[~forced], forced_samples + (decay - forced_substeps) // step_qty
+        tr.sample_index[~forced], forced_samples + (decay - forced_substeps) // step_qty
     )
-    assert np.all(tr.sample < out_max * 2)
+    assert np.all(tr.sample_index < out_max * 2)
     # phase labels: transit while the delay samples last, history to the end of the
     # schedule, free decay after
     expected_phase = np.where(
-        tr.sub_step < delay_substeps,
+        tr.substep_index < delay_substeps,
         tracing.PHASE_TRANSIT,
         np.where(forced, tracing.PHASE_FORCED, tracing.PHASE_FREE_DECAY),
     )
-    assert np.array_equal(tr.phase, expected_phase)
-    assert delay_substeps > 0 and np.any(tr.phase == tracing.PHASE_TRANSIT)
-    assert np.any(tr.phase == tracing.PHASE_FORCED)
-    assert np.any(tr.phase == tracing.PHASE_FREE_DECAY) == (traced_decay > 0)
+    assert np.array_equal(tr.load_phase, expected_phase)
+    assert delay_substeps > 0 and np.any(tr.load_phase == tracing.PHASE_TRANSIT)
+    assert np.any(tr.load_phase == tracing.PHASE_FORCED)
+    assert np.any(tr.load_phase == tracing.PHASE_FREE_DECAY) == (traced_decay > 0)
     # forces: the loads sequence at the traced sub-steps, zero in free decay
-    assert np.array_equal(tr.f_unbalance[forced], flat[tr.sub_step[forced]])
-    assert np.array_equal(tr.f_a - tr.f_b, tr.f_unbalance)
-    assert not np.any(tr.f_a[~forced]) and not np.any(tr.f_b[~forced])
-    assert np.all(np.isfinite(tr.x)) and np.all(np.isfinite(tr.f_friction))
+    assert np.array_equal(tr.unbalance_force[forced], flat[tr.substep_index[forced]])
+    assert np.array_equal(tr.elbow_a_force - tr.elbow_b_force, tr.unbalance_force)
+    assert not np.any(tr.elbow_a_force[~forced]) and not np.any(tr.elbow_b_force[~forced])
+    assert np.all(np.isfinite(tr.displacement)) and np.all(np.isfinite(tr.friction_force))
     return tr
 
 
@@ -198,9 +200,8 @@ def test_lumped_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stri
         _same_result(base, res, output_type)
         tr = _check_frames(res, force, kw, stride)
         assert tr.solver == "peak_response"
-        assert not np.any(tr.d_f) and tr.n_cells == 0 and tr.p_cells is None
-        assert tr.v_cells is None and tr.cell_position is None
-        assert tr.params == structure.lumped_params(
+        assert not np.any(tr.junction_force) and tr.column is None
+        assert tr.sdof_params == structure.lumped_params(
             response.PipeSpan(
                 kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], 0.0
             ),
@@ -217,7 +218,7 @@ def test_lumped_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stri
                 kw["mass_per_unit_len"],
                 kw["nat_freq"],
             ),
-            tr.dt,
+            tr.substep_duration,
         )
 
 
@@ -233,8 +234,12 @@ def test_jc_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stride):
         _same_result(base, res, output_type)
         tr = _check_frames(res, force, kw, stride)
         assert tr.solver == "peak_response_jc"
-        assert tr.p_cells.shape == tr.v_cells.shape == (tr.n_frames, tr.n_cells)
-        assert np.any(tr.d_f)
+        assert (
+            tr.column.grid_point_pressure.shape
+            == tr.column.grid_point_velocity.shape
+            == (tr.frame_count, tr.column.grid_point_count)
+        )
+        assert np.any(tr.junction_force)
 
 
 @pytest.mark.parametrize("flags", [td.LEGACY_FLAGS, td.FIXED_FLAGS], ids=["legacy", "fixed"])
@@ -262,15 +267,15 @@ def test_free_decay_is_traced_only_inside_the_history_window(solver, stride):
     tr = _check_frames(res, CAPPED_FORCE, kw, stride)
     _flat, offsets, _delay, out_max = _schedule(CAPPED_FORCE, kw)
     assert res.free_decay_sample_count > out_max * 2 - (len(offsets) - 1)  # the cap is hit
-    assert tr.sample[-1] == out_max * 2 - 1
-    assert np.sum(tr.phase == tracing.PHASE_FREE_DECAY) > 0
+    assert tr.sample_index[-1] == out_max * 2 - 1
+    assert np.sum(tr.load_phase == tracing.PHASE_FREE_DECAY) > 0
     # the frames at sample ends agree with the history (the truncated delay sample
     # shifts the sample boundaries off the multiples of stepQTY)
     step_qty = kw["step_qty"]
     ends = np.concatenate([offsets[1:] - 1, offsets[-1] + step_qty * np.arange(1, out_max * 2) - 1])
-    last = np.isin(tr.sub_step, ends)
+    last = np.isin(tr.substep_index, ends)
     assert last.sum() > 0
-    assert np.array_equal(tr.x[last], base.displacement_history[tr.sample[last]])
+    assert np.array_equal(tr.displacement[last], base.displacement_history[tr.sample_index[last]])
 
 
 def test_f_friction_is_zero_without_friction():
@@ -278,8 +283,8 @@ def test_f_friction_is_zero_without_friction():
         force, kw, _ht = _lumped_case(idx)
         assert kw["dynamic_fric"] == 0
         tr = response.peak_response(force, **fc.solver_inputs(kw, trace_every=1)).trace
-        assert tr.params.friction_velocity_step == 0
-        assert not np.any(tr.f_friction) and not np.any(tr.stick)
+        assert tr.sdof_params.friction_velocity_step == 0
+        assert not np.any(tr.friction_force) and not np.any(tr.is_sticking)
 
 
 @pytest.mark.parametrize("idx", [8, 26], ids=[td.SWEEP_IDS[8], td.SWEEP_IDS[26]])
@@ -287,21 +292,27 @@ def test_f_friction_and_stick_follow_the_coulomb_branch(idx):
     force, kw, _ht = _lumped_case(idx)
     assert kw["dynamic_fric"] > 0
     tr = response.peak_response(force, **fc.solver_inputs(kw, trace_every=1)).trace
-    mass, fric_acc, dt = tr.params.mass, tr.params.friction_velocity_step, tr.dt
-    v_old = np.concatenate([[0.0], tr.v[:-1]])
-    a_old = np.concatenate([[0.0], tr.a[:-1]])
-    assert np.array_equal(tr.stick, np.abs(v_old) < fric_acc)
-    assert tr.stick.any() and (~tr.stick).any()
+    mass, fric_acc, dt = (
+        tr.sdof_params.mass,
+        tr.sdof_params.friction_velocity_step,
+        tr.substep_duration,
+    )
+    v_old = np.concatenate([[0.0], tr.velocity[:-1]])
+    a_old = np.concatenate([[0.0], tr.acceleration[:-1]])
+    assert np.array_equal(tr.is_sticking, np.abs(v_old) < fric_acc)
+    assert tr.is_sticking.any() and (~tr.is_sticking).any()
     # definition: mass * (v_new - (v_old + (a_old + a_new) dt / 2)) / dt, the same doubles
-    dv = tr.v - (v_old + (a_old + tr.a) * (dt / 2))
-    assert np.array_equal(tr.f_friction, mass * dv / dt)
+    dv = tr.velocity - (v_old + (a_old + tr.acceleration) * (dt / 2))
+    assert np.array_equal(tr.friction_force, mass * dv / dt)
     # slip: -+ fric_acc against the velocity; stick: the momentum removed, v_old
-    slip_pos = ~tr.stick & (v_old > 0.000001)
-    slip_neg = ~tr.stick & (v_old < -0.000001)
+    slip_pos = ~tr.is_sticking & (v_old > 0.000001)
+    slip_neg = ~tr.is_sticking & (v_old < -0.000001)
     assert slip_pos.any() and slip_neg.any()
-    np.testing.assert_allclose(tr.f_friction[slip_pos], -mass * fric_acc / dt, rtol=1e-9)
-    np.testing.assert_allclose(tr.f_friction[slip_neg], mass * fric_acc / dt, rtol=1e-9)
-    np.testing.assert_allclose(tr.f_friction[tr.stick], -mass * v_old[tr.stick] / dt, rtol=1e-6)
+    np.testing.assert_allclose(tr.friction_force[slip_pos], -mass * fric_acc / dt, rtol=1e-9)
+    np.testing.assert_allclose(tr.friction_force[slip_neg], mass * fric_acc / dt, rtol=1e-9)
+    np.testing.assert_allclose(
+        tr.friction_force[tr.is_sticking], -mass * v_old[tr.is_sticking] / dt, rtol=1e-6
+    )
 
 
 def test_jc_trace_geometry():
@@ -312,19 +323,25 @@ def test_jc_trace_geometry():
         kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
     )
     pipe_seg_qty, pivot_seg_qty = moc.grid_size(kw["physical_length"], h, kw["celerity"], dt)
-    assert (tr.pipe_seg_qty, tr.pivot_seg_qty, tr.ext_qty) == (
+    assert (
+        tr.column.column_cell_count,
+        tr.column.end_to_elbow_cell_count,
+        tr.column.inactive_end_cell_count,
+    ) == (
         pipe_seg_qty,
         pivot_seg_qty,
         moc.INACTIVE_END_CELL_COUNT,
     )
-    assert tr.n_cells == 2 * pipe_seg_qty + 1
-    assert np.array_equal(tr.cell_kind, np.arange(tr.n_cells) % 2)
-    assert np.array_equal(tr.cell_position, np.arange(tr.n_cells) * (kw["celerity"] * dt))
+    assert tr.column.grid_point_count == 2 * pipe_seg_qty + 1
+    assert np.array_equal(tr.column.grid_point_kind, np.arange(tr.column.grid_point_count) % 2)
+    assert np.array_equal(
+        tr.column.grid_point_position, np.arange(tr.column.grid_point_count) * (kw["celerity"] * dt)
+    )
     frac_a, frac_b = moc.moving_fractions(pipe_seg_qty, pivot_seg_qty)
-    assert np.array_equal(tr.moving_fraction[0::2], frac_a)
-    assert np.array_equal(tr.moving_fraction[1::2], frac_b)
-    assert np.array_equal(tr.moving_fraction, tracing.interleave(frac_a, frac_b))
-    assert tr.params == structure.jc_params(
+    assert np.array_equal(tr.column.grid_point_moving_fraction[0::2], frac_a)
+    assert np.array_equal(tr.column.grid_point_moving_fraction[1::2], frac_b)
+    assert np.array_equal(tr.column.grid_point_moving_fraction, tracing.interleave(frac_a, frac_b))
+    assert tr.sdof_params == structure.jc_params(
         response.PipeSpan(kw["physical_length"], 0.0, kw["mass_per_unit_len"], 0.0),
         response.Restraint(kw["nat_freq"], kw["damping_percent"], kw["dynamic_fric"], 0, 1),
         response.Fluid(kw["fluid_densty"], kw["fluid_area"]),
@@ -348,11 +365,11 @@ def test_interleave():
 def test_jc_column_at_frame_0_is_the_initial_column(stride):
     force, kw = _jc_case(0)
     tr = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride)).trace
-    p_a, v_a, p_b, v_b = moc.column_at_rest(tr.pipe_seg_qty)
-    assert np.array_equal(tr.p_cells[0], tracing.interleave(p_a, p_b))
-    assert np.array_equal(tr.v_cells[0], tracing.interleave(v_a, v_b))
-    assert tr.d_f[0] == 0.0
-    assert np.any(tr.p_cells[-1]) and np.any(tr.v_cells[-1])
+    p_a, v_a, p_b, v_b = moc.column_at_rest(tr.column.column_cell_count)
+    assert np.array_equal(tr.column.grid_point_pressure[0], tracing.interleave(p_a, p_b))
+    assert np.array_equal(tr.column.grid_point_velocity[0], tracing.interleave(v_a, v_b))
+    assert tr.junction_force[0] == 0.0
+    assert np.any(tr.column.grid_point_pressure[-1]) and np.any(tr.column.grid_point_velocity[-1])
 
 
 @pytest.mark.parametrize("idx", [0, 3], ids=[td.JC_SMALL_IDS[0], td.JC_SMALL_IDS[3]])
@@ -363,9 +380,9 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
     force, kw = _jc_case(idx)
     res = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=1))
     tr = res.trace
-    dt = tr.dt
+    dt = tr.substep_duration
     column = coupling.fluid_column(
-        moc.ColumnGrid(tr.pipe_seg_qty, tr.pivot_seg_qty),
+        moc.ColumnGrid(tr.column.column_cell_count, tr.column.end_to_elbow_cell_count),
         coupling.FluidConstants(
             kw["fluid_densty"] * kw["celerity"],
             kw["fluid_area"],
@@ -375,17 +392,19 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
     )
     a_prev = 0.0
     d_f = 0.0
-    for i in range(tr.n_frames):
-        d_f = td.advance_column(column, dt, int(tr.sub_step[i]), a_prev, d_f)
-        assert d_f == tr.d_f[i]
+    for i in range(tr.frame_count):
+        d_f = td.advance_column(column, dt, int(tr.substep_index[i]), a_prev, d_f)
+        assert d_f == tr.junction_force[i]
         assert np.array_equal(
-            tr.p_cells[i], tracing.interleave(column.pressure_a, column.pressure_b)
+            tr.column.grid_point_pressure[i],
+            tracing.interleave(column.pressure_a, column.pressure_b),
         )
         assert np.array_equal(
-            tr.v_cells[i], tracing.interleave(column.velocity_a, column.velocity_b)
+            tr.column.grid_point_velocity[i],
+            tracing.interleave(column.velocity_a, column.velocity_b),
         )
-        a_prev = float(tr.a[i])
-    assert tr.n_frames > 100
+        a_prev = float(tr.acceleration[i])
+    assert tr.frame_count > 100
 
 
 def test_memory_guard_names_a_stride_that_fits(monkeypatch):
@@ -397,9 +416,11 @@ def test_memory_guard_names_a_stride_that_fits(monkeypatch):
     assert stride > 1
     res = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride))
     per_frame = (
-        tracing.FRAME_STATE_COLUMN_COUNT + tracing.FRAME_INDEX_COLUMN_COUNT + 2 * res.trace.n_cells
+        tracing.FRAME_STATE_COLUMN_COUNT
+        + tracing.FRAME_INDEX_COLUMN_COUNT
+        + 2 * res.trace.column.grid_point_count
     )
-    assert res.trace.n_frames * per_frame <= 20_000
+    assert res.trace.frame_count * per_frame <= 20_000
     with pytest.raises(ValueError):
         response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride - 1))
     # the lumped path is guarded too (per-frame scalars only)
@@ -428,7 +449,7 @@ def test_jc_short_pipe_fallback_trace_is_lumped():
         force, **fc.solver_inputs(_lumped_kw(kw), output_type=1, trace_every=2)
     )
     _same_result(res, lumped, 1)
-    assert res.trace.solver == "peak_response" and res.trace.p_cells is None
+    assert res.trace.solver == "peak_response" and res.trace.column is None
     assert "fluid" not in res.trace.inputs
-    assert np.array_equal(res.trace.x, lumped.trace.x)
-    assert np.array_equal(res.trace.f_friction, lumped.trace.f_friction)
+    assert np.array_equal(res.trace.displacement, lumped.trace.displacement)
+    assert np.array_equal(res.trace.friction_force, lumped.trace.friction_force)

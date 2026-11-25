@@ -131,7 +131,7 @@ def test_trace_schema_against_the_document(case_id):
     frames = doc["frames"]
     assert_keys(frames, "trace.frames")
     n_frames = meta["n_frames"]
-    assert n_frames == example_result(case_id).trace.n_frames + 1
+    assert n_frames == example_result(case_id).trace.frame_count + 1
     for name, column in frames.items():
         assert len(column) == n_frames, name
     n = len(geom["cell_position_m"])
@@ -178,11 +178,14 @@ def test_frame_0_is_the_rest_frame_and_frame_1_the_first_traced(case_id):
         math.isclose(t, (s + 1) * dt, rel_tol=1e-12, abs_tol=0.0)
         for t, s in zip(f["t"], f["sub_step"], strict=True)
     )
-    assert f["t"][1] == tr.t[0] == tr.dt and f["x"][1:] == tr.x.tolist()
-    assert f["stick"][1:] == tr.stick.astype(int).tolist()
+    assert f["t"][1] == tr.time[0] == tr.substep_duration and f["x"][1:] == tr.displacement.tolist()
+    assert f["stick"][1:] == tr.is_sticking.astype(int).tolist()
     if "cells" in doc:
         n = doc["meta"]["n_cells"]
-        for name, arr in (("p", tr.p_cells), ("v", tr.v_cells)):
+        for name, arr in (
+            ("p", tr.column.grid_point_pressure),
+            ("v", tr.column.grid_point_velocity),
+        ):
             data = doc["cells"][name]["data"]
             assert data[:n] == [0.0] * n
             assert data[n : 2 * n] == arr[0].tolist()
@@ -194,9 +197,10 @@ def test_meta_carries_the_run_as_resolved():
     r = example_result("example_jc")
     p = doc["meta"]["params"]
     assert (
-        p["mass"] == r.trace.params.mass and p["fric_acc"] == r.trace.params.friction_velocity_step
+        p["mass"] == r.trace.sdof_params.mass
+        and p["fric_acc"] == r.trace.sdof_params.friction_velocity_step
     )
-    assert p["trace_every"] == 4 and p["step_qty"] == 80 and p["dt"] == r.trace.dt
+    assert p["trace_every"] == 4 and p["step_qty"] == 80 and p["dt"] == r.trace.substep_duration
     assert doc["meta"]["outputs"]["max_displacement"] == r.max_displacement
     assert doc["meta"]["inputs"]["vav_denominator"] == "fixed"
     assert (
@@ -445,7 +449,7 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
     with capsys.disabled():
         print(
             f"\nrow 96 at the default stride {stride}: {n_frames} frames "
-            f"({stride * result.trace.dt * 1e3:.1f} ms a frame), {doc['meta']['n_cells']} cells, "
+            f"({stride * result.trace.substep_duration * 1e3:.1f} ms a frame), {doc['meta']['n_cells']} cells, "
             f"{size / 1e6:.2f} MB of JSON"
         )
     assert size < 50_000_000
@@ -474,16 +478,17 @@ def test_is_capped():
         force, **fc.solver_inputs(tg.case_params(case, params), trace_every=100)
     )
     assert export.is_capped(res) is False
-    assert not np.any(res.trace.phase == PHASE_FREE_DECAY)
+    assert not np.any(res.trace.load_phase == PHASE_FREE_DECAY)
     # a run that decays past the window: the Example JC case with a long decay
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
     kw = dict(case["kwargs"], dynamic_fric=0.0, damping_percent=0.0)
     r = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=20))
-    assert np.any(r.trace.phase == PHASE_FREE_DECAY)
+    assert np.any(r.trace.load_phase == PHASE_FREE_DECAY)
     assert export.is_capped(r) is (
-        int(r.trace.sample[r.trace.phase == PHASE_FREE_DECAY].min()) + r.free_decay_sample_count
-        > 2 * r.trace.out_max
+        int(r.trace.sample_index[r.trace.load_phase == PHASE_FREE_DECAY].min())
+        + r.free_decay_sample_count
+        > 2 * r.trace.nominal_forced_sample_count
     )
 
 

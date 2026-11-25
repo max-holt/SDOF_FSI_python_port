@@ -62,34 +62,53 @@ _PEAK_FIELDS = {
 """``history``, the last peak key, is the history the case's ``output_type`` names
 (``fixture_cases.history_of``): the result carries all three since session R.9."""
 _TRACE_FIELDS = {
+    # snapshot key: Trace attribute; "column.<name>" reads Trace.column, and a lumped trace
+    # (no column) gives the value the flat Trace field had: 0 for a count, None otherwise
     "solver": "solver",
     "trace_every": "trace_every",
-    "dt": "dt",
-    "step_qty": "step_qty",
-    "out_max": "out_max",
-    "t": "t",
-    "sub_step": "sub_step",
-    "sample": "sample",
-    "phase": "phase",
-    "x": "x",
-    "v": "v",
-    "a": "a",
-    "f_a": "f_a",
-    "f_b": "f_b",
-    "f_unbalance": "f_unbalance",
-    "f_friction": "f_friction",
-    "stick": "stick",
-    "d_f": "d_f",
-    "n_cells": "n_cells",
-    "pivot_seg_qty": "pivot_seg_qty",
-    "pipe_seg_qty": "pipe_seg_qty",
-    "ext_qty": "ext_qty",
-    "p_cells": "p_cells",
-    "v_cells": "v_cells",
-    "cell_position": "cell_position",
-    "cell_kind": "cell_kind",
-    "moving_fraction": "moving_fraction",
+    "dt": "substep_duration",
+    "step_qty": "substep_count",
+    "out_max": "nominal_forced_sample_count",
+    "t": "time",
+    "sub_step": "substep_index",
+    "sample": "sample_index",
+    "phase": "load_phase",
+    "x": "displacement",
+    "v": "velocity",
+    "a": "acceleration",
+    "f_a": "elbow_a_force",
+    "f_b": "elbow_b_force",
+    "f_unbalance": "unbalance_force",
+    "f_friction": "friction_force",
+    "stick": "is_sticking",
+    "d_f": "junction_force",
+    "n_cells": "column.grid_point_count",
+    "pivot_seg_qty": "column.end_to_elbow_cell_count",
+    "pipe_seg_qty": "column.column_cell_count",
+    "ext_qty": "column.inactive_end_cell_count",
+    "p_cells": "column.grid_point_pressure",
+    "v_cells": "column.grid_point_velocity",
+    "cell_position": "column.grid_point_position",
+    "cell_kind": "column.grid_point_kind",
+    "moving_fraction": "column.grid_point_moving_fraction",
 }
+_LUMPED_COLUMN_COUNTS = {
+    "column.grid_point_count",
+    "column.end_to_elbow_cell_count",
+    "column.column_cell_count",
+    "column.inactive_end_cell_count",
+}
+
+
+def _trace_value(trace, attr: str):
+    """``Trace`` attribute ``attr``, through ``Trace.column`` for a ``column.`` path."""
+    if not attr.startswith("column."):
+        return getattr(trace, attr)
+    if trace.column is None:
+        return 0 if attr in _LUMPED_COLUMN_COUNTS else None
+    return getattr(trace.column, attr.removeprefix("column."))
+
+
 _PARAM_FIELDS = {
     "mass": "mass",
     "stiffness": "stiffness",
@@ -122,9 +141,9 @@ def run_solver(solver: str, history, params: dict, options: dict) -> dict:
     out["history"] = fc.history_of(result, options.get("output_type", 0))
     if result.trace is not None:
         for key, attr in _TRACE_FIELDS.items():
-            out[f"trace.{key}"] = getattr(result.trace, attr)
+            out[f"trace.{key}"] = _trace_value(result.trace, attr)
         for key, attr in _PARAM_FIELDS.items():
-            out[f"trace.params.{key}"] = getattr(result.trace.params, attr)
+            out[f"trace.params.{key}"] = getattr(result.trace.sdof_params, attr)
     return out
 
 

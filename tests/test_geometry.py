@@ -105,8 +105,8 @@ def test_loop_layout_geometry(which):
         tr.inputs["span"]["mass_per_length"],
         tr.inputs["restraint"]["natural_frequency"],
     )
-    if tr.moving_fraction is not None:
-        assert np.array_equal(layout.moving_fraction, tr.moving_fraction)
+    if tr.column is not None:
+        assert np.array_equal(layout.moving_fraction, tr.column.grid_point_moving_fraction)
 
 
 def test_example_jc_elbow_cells_are_distinct():
@@ -143,7 +143,7 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
         tr.inputs["restraint"]["natural_frequency"],
     )
     n_seg, piv = moc.grid_size(
-        tr.inputs["span"]["span_length"], h, tr.inputs["span"]["celerity"], tr.dt
+        tr.inputs["span"]["span_length"], h, tr.inputs["span"]["celerity"], tr.substep_duration
     )
     frac_a, frac_b = moc.moving_fractions(n_seg, piv)
     assert (layout.pipe_seg_qty, layout.pivot_seg_qty) == (n_seg, piv)

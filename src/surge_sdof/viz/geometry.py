@@ -241,7 +241,7 @@ def lumped_grid(trace: Trace) -> InterleavedGrid:
         Interleaved as ``Trace``.
     """
     span = response.PipeSpan(**trace.inputs["span"])
-    setup = response.SolverSetup(trace.dt, trace.portal_frame_height)
+    setup = response.SolverSetup(trace.substep_duration, trace.portal_frame_height)
     column_cell_count, end_to_elbow_cell_count = response.column_grid(setup, span)
     moving_fraction_a, moving_fraction_b = moc.display_moving_fractions(
         column_cell_count, end_to_elbow_cell_count
@@ -252,7 +252,7 @@ def lumped_grid(trace: Trace) -> InterleavedGrid:
         moving_fraction_a,
         moving_fraction_b,
         span.celerity,
-        trace.dt,
+        trace.substep_duration,
     )
 
 
@@ -268,14 +268,15 @@ def layout_from_trace(trace: Trace) -> LoopLayout:
     -------
     LoopLayout
     """
-    cell_length = 2.0 * float(trace.inputs["span"]["celerity"]) * float(trace.dt)
-    if trace.p_cells is None:
+    cell_length = 2.0 * float(trace.inputs["span"]["celerity"]) * float(trace.substep_duration)
+    column = trace.column
+    if column is None:
         return loop_layout(lumped_grid(trace), cell_length, trace.portal_frame_height)
     grid = InterleavedGrid(
-        trace.cell_position,
-        trace.cell_kind,
-        trace.moving_fraction,
-        trace.pipe_seg_qty,
-        trace.pivot_seg_qty,
+        column.grid_point_position,
+        column.grid_point_kind,
+        column.grid_point_moving_fraction,
+        column.column_cell_count,
+        column.end_to_elbow_cell_count,
     )
     return loop_layout(grid, cell_length, trace.portal_frame_height)
