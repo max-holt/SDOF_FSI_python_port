@@ -31,11 +31,14 @@ what the caller does at sample boundaries. See ``docs/architecture.md``.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
 from surge_sdof.vba_compat import clng, vba_2d, vba_floor
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 # The load phases this module produces, as recorded in the trace (``trace.PHASE_*``, the
 # integer codes of the exported ``phase`` column; docs/data_format.md). The third phase,
@@ -56,7 +59,7 @@ __all__ = [
 ]
 
 
-def as_history_2d(force_history) -> np.ndarray:
+def as_history_2d(force_history: ArrayLike) -> np.ndarray:
     """The force history as a 0-based 2-D float array, shape ``(rows, columns)``.
 
     Parameters
@@ -149,7 +152,13 @@ class _Run(NamedTuple):
     current_sample_weight: list  # 1 - k / (stepQTY - 1)
 
 
-def _walk_constants(force_history, sample_rate, span_length, celerity, substep_count) -> _Run:
+def _walk_constants(
+    force_history: ArrayLike,
+    sample_rate: float,
+    span_length: float,
+    celerity: float,
+    substep_count: int,
+) -> _Run:
     """The per-run constants of the schedule walk.
 
     Parameters
@@ -364,7 +373,11 @@ def _schedule(walk: _Run) -> Iterator[_TransitSample | _ForcedSample]:
 
 
 def unbalance_force(
-    force_history, sample_rate: float, span_length: float, celerity: float, substep_count: int
+    force_history: ArrayLike,
+    sample_rate: float,
+    span_length: float,
+    celerity: float,
+    substep_count: int,
 ) -> Iterator[list[float]]:
     """The unbalance force on the span, per substep, one list per sample.
 
@@ -472,7 +485,11 @@ def unbalance_force(
 
 
 def elbow_forces(
-    force_history, sample_rate: float, span_length: float, celerity: float, substep_count: int
+    force_history: ArrayLike,
+    sample_rate: float,
+    span_length: float,
+    celerity: float,
+    substep_count: int,
 ) -> Iterator[tuple[int, list[float], list[float]]]:
     """The forces at the two elbows, per substep, one pair of lists per sample with its
     load phase, for the trace.
