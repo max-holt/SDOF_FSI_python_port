@@ -2,9 +2,9 @@
 
 ``to_trace_dict(result, case_id)`` turns a traced ``PeakResponse`` into the ``trace`` document
 (meta, the loop geometry of ``viz.geometry``, the per-frame columns with the synthetic rest
-frame first, the JC column arrays as row-major blocks); ``to_sweep_dict(rows, ...)`` turns
-sweep rows into the ``sweep`` document (the 5b sweep CSV columns, ``schema_version`` 2,
-regen template, reference block);
+frame first, the JC column arrays as row-major blocks; ``schema_version`` 2);
+``to_sweep_dict(rows, ...)`` turns sweep rows into the ``sweep`` document (the sweep CSV
+columns, ``schema_version`` 3, regen template, reference block);
 ``write_json`` / ``read_json`` serialise them under the document's rules: column-wise arrays,
 floats via ``repr`` (the json module's default), no NaN (``allow_nan=False`` raises), UTF-8,
 LF, compact separators, optional gzip.
@@ -159,8 +159,18 @@ SWEEP_INT_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is 
 
 
 def git_sha(cwd: str | Path | None = None) -> str | None:
-    """``git rev-parse HEAD`` of ``cwd`` (default: this package's checkout), or None when
-    git or a repository is not there."""
+    """The commit a checkout is at (``git rev-parse HEAD``).
+
+    Parameters
+    ----------
+    cwd : str, Path or None
+        A directory in the checkout; None (default) is this package's.
+
+    Returns
+    -------
+    str or None
+        The full sha, or None when git or a repository is not there.
+    """
     where = Path(cwd) if cwd is not None else Path(__file__).resolve().parent
     try:
         out = subprocess.run(
@@ -178,7 +188,18 @@ def git_sha(cwd: str | Path | None = None) -> str | None:
 
 
 def created_utc(now: _dt.datetime | None = None) -> str:
-    """ISO 8601 UTC to the second, ``YYYY-MM-DDTHH:MM:SSZ``."""
+    """A time stamp as the documents write it: ISO 8601 UTC to the second.
+
+    Parameters
+    ----------
+    now : datetime.datetime or None
+        The time to stamp (an aware datetime, any zone); None (default) is now.
+
+    Returns
+    -------
+    str
+        ``YYYY-MM-DDTHH:MM:SSZ``.
+    """
     now = now if now is not None else _dt.datetime.now(_dt.timezone.utc)
     return now.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -196,7 +217,23 @@ def _provenance(sha: str | None | bool, created: str | None) -> tuple[str | None
 
 
 def array_block(a) -> dict:
-    """A 2-D array as ``{"shape": [n_rows, n_cols], "data": flat row-major}``."""
+    """A 2-D array as the documents store it.
+
+    Parameters
+    ----------
+    a : array_like
+        Two-dimensional, shape ``(n_rows, n_cols)``.
+
+    Returns
+    -------
+    dict
+        ``{"shape": [n_rows, n_cols], "data": the values flat, row-major}``.
+
+    Raises
+    ------
+    ValueError
+        The array is not 2-D.
+    """
     arr = np.ascontiguousarray(a)
     if arr.ndim != 2:
         raise ValueError(f"an array block needs a 2-D array, got shape {arr.shape}")
@@ -204,6 +241,7 @@ def array_block(a) -> dict:
 
 
 def _finite(value: float, where: str) -> float:
+    """``value`` itself, or ``ValueError`` naming ``where`` when it is NaN or infinite."""
     if not math.isfinite(value):
         raise ValueError(f"{where}: non-finite value {value!r} (the format has no NaN)")
     return value
@@ -248,6 +286,8 @@ def _column(a: np.ndarray, name: str) -> list:
 
 
 def _geometry(layout: LoopLayout) -> dict:
+    """The ``geometry`` block of a trace document: the loop layout's grid points (positions
+    and rest coordinates in m), its counts and segment indices, and its lengths (m)."""
     return {
         "grid_point_position": layout.grid_point_position.astype(np.float64).tolist(),
         "grid_point_kind": np.asarray(layout.grid_point_kind).astype(np.int64).tolist(),
@@ -273,20 +313,26 @@ def _geometry(layout: LoopLayout) -> dict:
 
 
 def _synthetic_phase(trace: Trace) -> int:
-    """Phase of the ``t = 0`` rest frame: transit, unless the run has no transit sub-step."""
+    """Phase of the ``t = 0`` rest frame: transit, unless the run has no transit substep."""
     if trace.frame_count and trace.substep_index[0] == 0 and trace.load_phase[0] != PHASE_TRANSIT:
         return int(trace.load_phase[0])
     return PHASE_TRANSIT
 
 
 def is_capped(result: PeakResponse) -> bool:
-    """True when the run decayed past the traced history window (``trace.py``: free decay
-    is traced while ``sample < 2 * out_max``), so the trace ends before the run did.
+    """Whether the trace ends before the run did: the run decayed past the traced window.
 
     Parameters
     ----------
     result : PeakResponse
         With a trace.
+
+    Returns
+    -------
+    bool
+        True when the forced samples and the free-decay samples together exceed twice the
+        nominal forced sample count (``trace.py``: free decay is traced while the sample
+        is below that).
     """
     trace = result.trace
     in_free_decay = trace.load_phase == PHASE_FREE_DECAY
@@ -317,6 +363,8 @@ def _frames(trace: Trace) -> dict:
 
 
 def _grid_points(trace: Trace) -> dict:
+    """The ``grid_points`` block of a junction-coupling trace: pressure (Pa) and velocity
+    (m/s) at every grid point and frame, as array blocks with the rest frame (zeros) first."""
     grid_point_count = int(trace.column.grid_point_pressure.shape[1])
     rest_frame = np.zeros((1, grid_point_count))
     blocks = {}
@@ -332,7 +380,7 @@ def _grid_points(trace: Trace) -> dict:
 
 
 def _meta_params(result: PeakResponse) -> dict:
-    """``meta.params`` of a trace document: the SDOF constants, the sub-step and the run's
+    """``meta.params`` of a trace document: the SDOF constants, the substep and the run's
     trace settings."""
     trace = result.trace
     sdof_params = trace.sdof_params
@@ -567,14 +615,43 @@ def to_sweep_dict(
 
 
 def dumps(obj) -> str:
-    """The document as text: compact separators, UTF-8 characters as they are, floats via
-    ``repr``, no NaN (``ValueError``), one trailing LF."""
+    """A document as text: compact separators, UTF-8 characters as they are, floats via
+    ``repr``, one trailing LF.
+
+    Parameters
+    ----------
+    obj : dict
+        A document of ``to_trace_dict`` or ``to_sweep_dict``.
+
+    Returns
+    -------
+    str
+
+    Raises
+    ------
+    ValueError
+        A NaN or infinite float.
+    """
     return json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n"
 
 
 def write_json(path: str | Path, obj, gzip: bool = False) -> int:
-    """Write ``obj`` as ``dumps`` to ``path`` (gzipped when ``gzip`` is True or the suffix is
-    ``.gz``); returns the number of JSON bytes before compression."""
+    """Write a document to a file, as ``dumps`` gives it.
+
+    Parameters
+    ----------
+    path : str or Path
+        The file; its directory is created if missing.
+    obj : dict
+        The document.
+    gzip : bool, optional
+        Compress; a ``.gz`` suffix compresses as well.
+
+    Returns
+    -------
+    int
+        The number of JSON bytes before compression.
+    """
     path = Path(path)
     text = dumps(obj).encode("utf-8")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -587,7 +664,18 @@ def write_json(path: str | Path, obj, gzip: bool = False) -> int:
 
 
 def read_json(path: str | Path):
-    """Read a document written by ``write_json`` (gzip by the ``.gz`` suffix)."""
+    """Read a document written by ``write_json``.
+
+    Parameters
+    ----------
+    path : str or Path
+        The file; a ``.gz`` suffix is read as gzip.
+
+    Returns
+    -------
+    dict
+        The document as plain Python values.
+    """
     path = Path(path)
     if path.suffix == ".gz":
         with _gzip.open(path, "rb") as fh:
@@ -602,6 +690,18 @@ def read_csv(path: str | Path) -> tuple[tuple[str, ...], list[dict]]:
 
     The one reader of the sweep CSVs and of the golden case table; it does no typing:
     ``to_sweep_dict`` types the cells of a sweep row.
+
+    Parameters
+    ----------
+    path : str or Path
+        A UTF-8 CSV file with a header line.
+
+    Returns
+    -------
+    header : tuple of str
+        The column names, in file order.
+    rows : list of dict
+        One dict per row, keyed by the header.
     """
     with Path(path).open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
