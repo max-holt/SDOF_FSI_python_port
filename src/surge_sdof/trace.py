@@ -1,4 +1,4 @@
-"""The solver trace for visualisation (Session V.1): ``Trace`` and its helpers.
+"""The solver trace for visualisation: ``Trace`` and its helpers.
 
 ``peak_response`` and ``peak_response_jc`` with ``Integration(substep_count, trace_every=k)``
 record every ``k``-th substep into preallocated arrays inside ``response._integrate_kernel``
@@ -274,26 +274,31 @@ def frame_capacity(
     substep_count: int,
     trace_every: int,
 ) -> int:
-    """Frames to allocate: the forced phases (``forced_substep_count`` sub-steps, known from the
+    """Frames to allocate: the forced phases (``forced_substep_count`` substeps, known from the
     unbalance schedule) plus free decay up to the history window (``outMax * 2`` samples
-    in all), every ``trace_every``-th sub-step; 0 when not tracing.
+    in all), every ``trace_every``-th substep; 0 when not tracing.
 
     Parameters
     ----------
     forced_substep_count : int
-        Sub-steps of the transit and forced phases (the length of the flat unbalance array).
+        Substeps of the transit and forced phases (the length of the flat unbalance array).
     forced_sample_count : int
         Samples of the transit and forced phases.
     nominal_forced_sample_count : int
         The VBA ``outMax``.
     substep_count : int
-        Sub-steps per sample.
+        Substeps per sample.
     trace_every : int
-        Stride in sub-steps, 0 for no trace.
+        Stride in substeps, 0 for no trace.
 
     Returns
     -------
     int
+        Frames, 0 when not tracing.
+
+    Notes
+    -----
+    ``nominal_forced_sample_count`` is VBA ``outMax``.
     """
     if trace_every <= 0:
         return 0
@@ -371,7 +376,7 @@ class TraceRequest(NamedTuple):
     arrays to build a ``Trace``. Built by the solver entry points when ``trace_every > 0``.
     """
 
-    stride: int  # trace_every > 0: record every stride-th sub-step
+    stride: int  # trace_every > 0: record every stride-th substep
     solver: str
     inputs: dict
     celerity: float
@@ -397,7 +402,7 @@ class TraceBuffers(NamedTuple):
         ``(capacity, grid_point_count)`` float64: the column interleaved ``A0 B0 A1 ... AN``
         per frame, Pa and m/s (no columns for a lumped run).
     trace_every : int
-        Record every ``trace_every``-th sub-step; 0 records nothing.
+        Record every ``trace_every``-th substep; 0 records nothing.
     """
 
     frame_state: np.ndarray
@@ -408,12 +413,13 @@ class TraceBuffers(NamedTuple):
 
 
 class FrameRow(NamedTuple):
-    """One recorded sub-step: the values ``write_frame_row`` writes into a frame row.
+    """One recorded substep: the values ``write_frame_row`` writes into a frame row.
 
-    Built by ``response._record_frame``. Units: forces in N, ``x`` / ``v`` / ``a`` in m, m/s, m/s².
+    Built by ``response._record_frame``. Units: forces in N, ``x`` / ``v`` / ``a`` in m,
+    m/s, m/s².
     """
 
-    substep_index: int  # running 0-based sub-step counter
+    substep_index: int  # running 0-based substep counter
     sample_index: int  # 0-based sample index
     load_phase: int  # PHASE_TRANSIT, PHASE_FORCED or PHASE_FREE_DECAY
     x: float
@@ -423,14 +429,14 @@ class FrameRow(NamedTuple):
     elbow_b_force: float
     unbalance_force: float
     friction_force: float  # recomputed from the velocity change, as the trace defines it
-    is_sticking: bool  # |v before the sub-step| < the friction velocity step
+    is_sticking: bool  # |v before the substep| < the friction velocity step
     junction_force: float  # 0.0 without fluid coupling
 
 
 @numba.njit(cache=True)
 def write_frame_row(buffers: TraceBuffers, frame_index: int, values: FrameRow) -> None:
-    """Write the scalars of one trace frame (Session V.1): ``values`` into row
-    ``frame_index`` of ``buffers.frame_state`` and ``buffers.frame_index_columns``
+    """Write the scalars of one trace frame: ``values`` (forces N, state m, m/s, m/s²) into
+    row ``frame_index`` of ``buffers.frame_state`` and ``buffers.frame_index_columns``
     (columns ``COL_*``)."""
     frame_state = buffers.frame_state
     frame_index_columns = buffers.frame_index_columns
@@ -450,9 +456,9 @@ def write_frame_row(buffers: TraceBuffers, frame_index: int, values: FrameRow) -
 
 @numba.njit(cache=True)
 def write_frame_column(buffers: TraceBuffers, frame_index: int, column: moc.FluidColumn) -> None:
-    """Write the fluid column of one trace frame: pressure and velocity interleaved ``A0 B0
-    A1 ... A(N)`` into row ``frame_index`` of ``buffers.frame_pressure`` /
-    ``buffers.frame_velocity``. Reads the column only."""
+    """Write the fluid column of one trace frame: pressure (Pa) and velocity (m/s)
+    interleaved ``A0 B0 A1 ... A(N)`` into row ``frame_index`` of ``buffers.frame_pressure``
+    / ``buffers.frame_velocity``. Reads the column only."""
     frame_pressure = buffers.frame_pressure
     frame_velocity = buffers.frame_velocity
     pressure_a = column.pressure_a
@@ -482,6 +488,10 @@ def allocate_frames(frame_capacity: int, grid_point_count: int, trace_every: int
         ``2N + 1`` or 0.
     trace_every : int
         The stride, 0 when not tracing.
+
+    Returns
+    -------
+    TraceBuffers
     """
     allocated_grid_point_count = grid_point_count if frame_capacity > 0 else 0
     return TraceBuffers(
@@ -560,9 +570,14 @@ def interleaved_grid(
     moving_fraction_a, moving_fraction_b : numpy.ndarray
         Length ``N + 1`` and ``N`` (``moc.moving_fractions``).
     celerity : float
-        m/s.
+        Pressure-wave speed, m/s.
     substep_duration : float
-        s.
+        Substep, s.
+
+    Returns
+    -------
+    InterleavedGrid
+        Arrays of shape ``(2N + 1,)``.
     """
     grid_point_count = 2 * column_cell_count + 1
     return InterleavedGrid(
@@ -591,7 +606,7 @@ def build_trace(
     request : TraceRequest
         The solver name, its inputs and the celerity (m/s, for the cell positions).
     settings : response.KernelSettings
-        The sub-step, sub-steps per sample and ``outMax`` of the run.
+        The substep (s), substeps per sample and nominal forced sample count of the run.
     params : SdofParams
         The run's SDOF constants.
     buffers : TraceBuffers
@@ -601,6 +616,10 @@ def build_trace(
     column : moc.FluidColumn
         The run's column: its grid and moving fractions with fluid coupling; the empty
         column of a lumped run adds no column fields.
+
+    Returns
+    -------
+    Trace
     """
     solver = request.solver
     inputs = request.inputs
