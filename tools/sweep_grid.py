@@ -80,6 +80,10 @@ def curve_sheet_nat_freqs() -> tuple[float, ...]:
 
 
 class Pipe(NamedTuple):
+    """The properties of one pipe size: nominal size (in), outside diameter and wall
+    thickness (mm), flow area (m²), mass per length of pipe and contents (kg/m), flexural
+    rigidity (N·m²) and design pressure (Pa)."""
+
     size_in: int
     outside_diameter_mm: float
     wall_thickness_mm: float
@@ -90,8 +94,18 @@ class Pipe(NamedTuple):
 
 
 def pipe(size_in: int) -> Pipe:
-    """The curve_10in sheet's formulas for one size (H11, H13, H15, J15) and the hoop-stress
-    design pressure ``2 t S / OD``."""
+    """The properties of one pipe size: the ``curve_10in`` sheet's formulas (H11, H13,
+    H15, J15) and the hoop-stress design pressure ``2 t S / OD``.
+
+    Parameters
+    ----------
+    size_in : int
+        Nominal size, in; a key of ``PIPES``.
+
+    Returns
+    -------
+    Pipe
+    """
     od_mm, thk_mm = PIPES[size_in]
     inside_radius = (od_mm / 2 - thk_mm) / MM_PER_M
     # od / 2000: the halving and the mm-to-m conversion as one divisor; kept as written,
@@ -115,8 +129,19 @@ def pipe(size_in: int) -> Pipe:
 
 
 def check_pipe_table(verbose: bool = True) -> None:
-    """Assert the design pressures against the owner's figures (0.1 bar) and the 10 in
-    properties against ``tests/fixtures/curve_10in/params.json``."""
+    """Check the pipe table: the design pressures against the owner's figures (within 0.1
+    bar) and the 10 in properties against ``tests/fixtures/curve_10in/params.json``.
+
+    Parameters
+    ----------
+    verbose : bool
+        Print the table and the result.
+
+    Raises
+    ------
+    AssertionError
+        A value off.
+    """
     import json
 
     for size, expected in P_DESIGN_EXPECTED_BAR.items():
@@ -145,6 +170,10 @@ def check_pipe_table(verbose: bool = True) -> None:
 
 
 class Case(NamedTuple):
+    """One case of the sweep grid: pipe size (in), span length (m), natural frequency
+    (Hz), history type with its sine frequency (Hz) or noise seed, the amplitude as a
+    fraction of the common peak, and the friction coefficient."""
+
     size_in: int
     length_m: float
     natural_frequency: float  # Hz
@@ -156,10 +185,12 @@ class Case(NamedTuple):
 
     @property
     def history_key(self) -> tuple:
+        """``(history_type, f_osc_hz, seed)``: the cases that share one history."""
         return (self.history_type, self.f_osc_hz, self.seed)
 
     @property
     def case_id(self) -> str:
+        """The case's id in the sweep CSV, such as ``s10_L12_f3_sine4_a1_mu0.15``."""
         if self.history_type == "step":
             h = "step"
         elif self.history_type == "step_sine":
@@ -173,7 +204,7 @@ class Case(NamedTuple):
 
 
 def tier_cases(tier: int) -> list[Case]:
-    """Every case of the tier, in grid order."""
+    """Every case of a tier (a key of ``TIERS``), in grid order."""
     t = TIERS[tier]
     nat_freqs = t["nat_freqs"] or curve_sheet_nat_freqs()
     variants = [("step", None, None)]
@@ -202,9 +233,25 @@ DIMENSIONS = (
 
 def stratified_subset(cases: list[Case], fraction: float, seed: int = 0) -> list[Case]:
     """About ``fraction`` of the cases, every level of every dimension represented and
-    balanced: a seeded shuffle, accepting a case while no level of any dimension exceeds
-    its quota ``ceil(n_target / n_levels)``, then filled from the remainder if the quotas
-    deadlock. Returned in grid order."""
+    balanced.
+
+    A seeded shuffle, accepting a case while no level of any dimension exceeds its quota
+    ``ceil(n_target / n_levels)``, then filled from the remainder if the quotas deadlock.
+
+    Parameters
+    ----------
+    cases : list of Case
+        The tier's cases.
+    fraction : float
+        The share to keep, ``(0, 1]``.
+    seed : int, optional
+        Seed of the shuffle (default 0).
+
+    Returns
+    -------
+    list of Case
+        In grid order.
+    """
     n_target = max(1, math.ceil(len(cases) * fraction))
     levels = {d: sorted({getattr(c, d) for c in cases}, key=repr) for d in DIMENSIONS}
     quota = {d: math.ceil(n_target / len(levels[d])) for d in DIMENSIONS}
@@ -228,4 +275,5 @@ def stratified_subset(cases: list[Case], fraction: float, seed: int = 0) -> list
 
 
 def coverage(cases: list[Case]) -> dict[str, dict]:
+    """How many of ``cases`` each level of each dimension (``DIMENSIONS``) has."""
     return {d: dict(Counter(getattr(c, d) for c in cases)) for d in DIMENSIONS}
