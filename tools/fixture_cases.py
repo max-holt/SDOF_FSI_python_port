@@ -59,18 +59,33 @@ CACHE_DIR = FIXTURES_DIR.parent / ".golden_cache"
 
 
 def load_params():
+    """The ``curve_10in`` parameters shared by every case (``params.json``): the fixture
+    keyword values in SI units, the force-history spec and the sample count."""
     with open(CURVE_DIR / "params.json") as fh:
         return json.load(fh)
 
 
 def load_cases():
+    """The ``curve_10in`` case table (``cases.csv``): one dict per case, every cell as its
+    text."""
     with open(CURVE_DIR / "cases.csv", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
 def load_force(params):
-    """The force history exactly as Excel built it: first n_samples of the chosen column,
-    multiplied left to right by the recorded multipliers, as an (n, 1) column."""
+    """The ``curve_10in`` force history exactly as Excel built it.
+
+    Parameters
+    ----------
+    params : dict
+        From ``load_params``.
+
+    Returns
+    -------
+    numpy.ndarray
+        float64, shape ``(n_samples, 1)``, N: the first ``n_samples`` of the chosen column,
+        multiplied left to right by the recorded multipliers.
+    """
     spec = params["force"]
     with open(CURVE_DIR / spec["file"], newline="") as fh:
         reader = csv.DictReader(fh)
@@ -82,11 +97,29 @@ def load_force(params):
 
 
 def load_example_cases():
+    """The three Example-sheet cases (``example/cases.json``), each with its own force
+    history, keyword arguments and expected outputs."""
     with open(EXAMPLE_DIR / "cases.json") as fh:
         return json.load(fh)
 
 
 def case_params(case, params):
+    """The fixture keyword arguments of one ``curve_10in`` case.
+
+    Parameters
+    ----------
+    case : dict
+        A row of ``load_cases``.
+    params : dict
+        From ``load_params``.
+
+    Returns
+    -------
+    dict
+        The shared parameters (the fluid ones for a junction-coupling case) with the
+        case's span length (m), natural frequency (Hz) and friction coefficient, in the
+        fixtures' vocabulary (``solver_inputs`` translates it).
+    """
     common = {
         k: params[k]
         for k in (
@@ -136,15 +169,26 @@ _JC_KEYS = frozenset(
 
 def solver_inputs(kw: dict, **overrides) -> dict:
     """The arguments of ``response.peak_response`` / ``peak_response_jc`` from a dict in the
-    fixtures' vocabulary: the keyword names of ``legacy_port`` and of the entry points before
-    the public API session (``step_qty``, ``sample_freq``, ``physical_length``, ...), with
-    ``overrides`` in the same vocabulary.
+    fixtures' vocabulary.
 
-    ``sample_rate`` and the ``span``, ``restraint`` and ``integration`` objects; with
-    ``fluid_densty`` in the dict also ``fluid`` and ``coupling`` (the flags it names, the
-    approved fixes otherwise). ``output_type`` is dropped: the result carries all three
-    histories, and ``history_of`` picks the one an output type named. The fixtures keep
-    their keys (``tests/fixtures/`` is frozen), so this is where the two vocabularies meet.
+    The fixtures keep their keys (``tests/fixtures/`` is frozen), so this is where the two
+    vocabularies meet. ``output_type`` is dropped: the result carries all three histories,
+    and ``history_of`` picks the one an output type named.
+
+    Parameters
+    ----------
+    kw : dict
+        The keyword names of ``legacy_port`` and of the entry points before the public API
+        session (``step_qty``, ``sample_freq``, ``physical_length``, ...), SI units.
+    **overrides
+        In the same vocabulary; they replace the keys of ``kw``.
+
+    Returns
+    -------
+    dict
+        ``sample_rate`` and the ``span``, ``restraint`` and ``integration`` objects; with
+        ``fluid_densty`` in the dict also ``fluid`` and ``coupling`` (the flags it names,
+        the approved fixes otherwise).
 
     Raises
     ------
@@ -189,8 +233,21 @@ def solver_inputs(kw: dict, **overrides) -> dict:
 
 
 def history_of(result: response.PeakResponse, output_type: int) -> np.ndarray | None:
-    """The history the VBA ``outputType`` named: None for 0 (peaks only), the displacement
-    (m), velocity (m/s) or acceleration (m/s²) history for 1, 2, 3."""
+    """The response history a VBA ``outputType`` named.
+
+    Parameters
+    ----------
+    result : response.PeakResponse
+        A solver result.
+    output_type : {0, 1, 2, 3}
+        The fixtures' ``output_type``.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        None for 0 (peaks only); the displacement (m), velocity (m/s) or acceleration
+        (m/s²) history for 1, 2, 3.
+    """
     return {
         0: None,
         1: result.displacement_history,
