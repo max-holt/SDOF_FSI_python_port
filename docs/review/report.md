@@ -45,8 +45,8 @@ docstrings and annotations, lint limits in `pyproject.toml`, and the approved fi
 | snapshot test alone, compiled / pure Python | 29 / 29 passed |
 | supporting-code checks (sweep rows exact, histories exact on X86_V4) | 23 passed |
 | `-m slow` (75 lumped golden cases, both layers) | 150 passed (415 s) |
-| golden `slow or jc_slow` incl. the 3 JC cases through the literal port | _pending_ |
-| `test_differential -m jc_slow` (refactored JC vs Excel, legacy flags) | _pending_ |
+| golden `slow or jc_slow`: 75 lumped; the 3 JC cases through the literal port (in parallel) | 75 passed; 3 passed (1607 / 1418 / 1303 s) |
+| `test_differential -m jc_slow` (refactored JC vs Excel, legacy flags) | 3 passed (1.2-1.5 s each) |
 | `tools/bench.py` digests | _pending_ |
 
 **Frozen paths.** `git rev-parse` gives the same tree for `tests/fixtures`, `legacy`,
