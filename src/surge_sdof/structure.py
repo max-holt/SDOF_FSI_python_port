@@ -1,12 +1,16 @@
 """The SDOF pipe proxy: portal-frame height, restraint with support gap, Coulomb
 friction and the time-step kernel.
 
-Behaviour is that of ``GetPeakResponse`` in ``legacy/vba/Existing Code.bas`` (VBA lines
-384-392 for the set-up, 424-445 for the step); ``tests/test_differential.py`` proves each
+Behaviour is that of the structure in ``GetPeakResponse`` and ``GetPeakResponseJC``
+(``legacy/vba/Existing Code.bas``: VBA lines 384-392 for the lumped set-up, 726-729 for the
+junction-coupling set-up, 424-445 for the step); ``tests/test_differential.py`` proves each
 function against ``legacy_port.py`` bitwise on the golden inputs and a seeded sweep.
 
-This module knows nothing about force histories, transit delays, fluid coupling, sample
-bookkeeping or peak trackers: ``step_scalars`` takes the already-summed
+This module knows nothing about force histories, transit delays, the MoC column, sample
+bookkeeping or peak trackers. Of the fluid it knows only what the junction-coupling set-up
+needs: ``jc_params`` reads the fluid density and flow area to take the core fluid out of
+the rigid mass. The set-up functions take ``response``'s ``PipeSpan``, ``Restraint`` and
+``Fluid`` (imported for the annotations only). ``step_scalars`` takes the already-summed
 applied force and returns the new state. See ``docs/architecture.md``.
 
 State and parameters

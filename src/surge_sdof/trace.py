@@ -16,8 +16,9 @@ fields and the kernel columns in one place.
 Frame convention
 ----------------
 Frame ``i`` is the **end of substep** ``i * trace_every``, where ``substep_index`` is the
-running 0-based counter ``n`` of the kernel (the index whose parity drives the MoC
-half-grids). ``time = (substep_index + 1) * substep_duration`` is the time at the end of
+kernel's running 0-based substep counter (with the default running parity, the index whose
+parity selects the MoC half-grid; ``response._parity_offset`` gives the VBA per-phase
+index). ``time = (substep_index + 1) * substep_duration`` is the time at the end of
 that substep; ``displacement``, ``velocity``, ``acceleration`` are the state after it;
 ``elbow_a_force``, ``elbow_b_force`` and ``unbalance_force`` the forces applied during it
 (zero in free decay); ``junction_force`` the junction force the substep used (``moc.step``

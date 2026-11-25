@@ -25,7 +25,7 @@ is not ported; only the live decaying boundary (``dacayFactor``) is.
 
 Approved fix F-1 (NOTES.md): the mean velocity ``vAv`` sums ``2N + 1`` terms; the VBA
 divides by ``2N - 1`` (D-17). ``mean_velocity_divisor`` returns either, selected by the caller's
-``CouplingModel.vav_denominator`` ("legacy" | "fixed").
+``CouplingModel.mean_velocity_divisor`` ("legacy" | "fixed").
 
 Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
 ``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``); F-4b

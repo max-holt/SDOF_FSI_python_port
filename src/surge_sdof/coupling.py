@@ -1,23 +1,11 @@
-"""The force the fluid column exerts on the structure.
+"""The fluid column of a junction-coupling run, built at rest: ``FluidConstants`` and
+``fluid_column``, which returns the ``moc.FluidColumn`` that ``peak_response_jc`` passes to
+the shared integration loop (``peak_response`` passes ``moc.empty_column()``).
 
-``peak_response`` and ``peak_response_jc`` share one integration loop and differ only in
-the fluid column they pass to it: ``moc.empty_column()`` (no fluid coupling) or the column
-``fluid_column`` builds. Per substep the loop evaluates the junction force *before* the
-SDOF update, with the state at the end of the previous substep (the VBA MoC block sits at
-the top of each ``k`` loop and reads the current ``a``), and adds the result to the
-unbalance force (transit and forced phases) or uses it alone (free decay).
-
-The compiled loop of Stage 5 (``response._integrate_kernel``) takes the ``moc.FluidColumn``
-(its ``is_fluid_coupled`` flag on or off) and starts the junction force at 0.0; it calls
-``moc.step`` on the half-grid the parity of the substep index selects and keeps the
-junction force (VBA ``dF``) as a float.
-
-The parity index is the running ``substep_index`` over the whole run (0 at the first
-substep; approved fix F-2, NOTES.md). With ``CouplingModel(parity="per_phase")`` the loop
-uses the VBA's per-phase index ``k + (totInd - 1) * stepQTY`` instead (D-19,
-``response._parity_offset``); the MoC step only ever sees whether it is even.
-
-This module knows nothing about the force history or the SDOF update.
+The column's arithmetic is ``moc.step``; advancing the column each substep and adding the
+junction force (VBA ``dF``) to the applied force are the loop's
+(``response._integrate_kernel``). This module knows nothing about the force history or the
+SDOF update.
 See ``docs/architecture.md``.
 """
 
