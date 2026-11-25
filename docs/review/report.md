@@ -145,3 +145,43 @@ a function), R5/T1 (the record window in four places), K14 (metrics read 0 for e
   `_schedule`, the two walks, `peak_response_jc`, `_kernel_inputs`, `build_trace`,
   `loop_layout`, three generators).
 * `review_ab.py` / `review_baseline.py` are exempt as "tools no test runs" but are the gates.
+
+## Addendum: close-out pass (after R.12)
+Documentation only, before the merge; no statement of code changed except the default of
+`tools/review_baseline.py`. Every commit touching Python is AST-equal to its parent once
+docstrings are stripped, the tool's single `--ignore-noqa` list element apart; lint and `make
+test-both` green on each (966 + 24 / 964 + 26).
+
+* **Stale text fixed:** R7 (the parity path in the `response` module docstring and the
+  `_integrate` Notes), R8 (`Trace.column` in place of `p_cells` / `v_cells`), R9 (the
+  solver values of `_trace_request`), the module docstrings of `coupling` (C1), `structure`
+  (S1 / S2) and `trace` (T8), moc.py:28 (M3), and the meaning column of
+  `docs/data_format.md` (E4, line 205): schema-3 key names only, no export rewritten.
+* **`docs/style.md` §11.** Restated: the loads nesting (the fourth level comes from the phase
+  dispatch inside the per-sample loop; removing it needs the schedule restructure deferred
+  with C-07) and `histories.canonical` (a public entry point: three case parameters, then
+  eleven generator parameters by keyword; its approved signature, not the generator columns;
+  `step_sine` / `step_noise` keep the columns reason on their own line). Both `noqa` texts
+  follow. Added: `_record_frame` (§4, ruling 56), the two review harnesses under ruling 87,
+  the kernel's 55 statements, and one reason for each function over about 40 code lines.
+  The report's "five" lines were read as its §11 list less the two restatements;
+  `histories.from_params` (44 lines) was missing from the report's list of eleven and is
+  added. For `_kernel_inputs` and `build_trace` no reason beyond "deferred to Stage 6"
+  (findings R4, T6) could be stated, and §11 says so instead of offering one.
+* **Session labels** (R15, T13, G6; owner): removed from the docstrings and comments of the
+  live modules (`src/surge_sdof`, the frozen two excepted); style §7 now forbids them there.
+  DEVIATIONS ids, finding ids, VBA line references and the "For Ben to review" / "Proposed
+  derivation" comments stay. Two pointers to NOTES.md sections that are now only in git
+  history point at DEVIATIONS D-4, D-17 and D-19 instead. `tools/` and `tests/` still carry
+  labels.
+* **`tools/review_baseline.py`** passes `--ignore-noqa` to ruff by default (K14), so the §11
+  exceptions show their real figures; `metrics_after.md`'s remark that the committed tool
+  prints 0 for them describes the tool before this pass.
+* **Speed:** NOTES.md records the 1.8x pure-Python lumped slowdown as accepted (verification
+  mode only; the compiled path is faster).
+* **Findings:** the open and paper-closed structural findings of `findings.md` and every S6
+  row of `findings_r12.md` are marked **deferred to Stage 6**; the r12 rec column gives each
+  "now" item's outcome. Not done here (outside the list): R16, R24, S6, the T3 docstring and
+  annotation, E11, H5.
+
+Not merged, not tagged.
