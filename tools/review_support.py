@@ -34,7 +34,20 @@ import test_review_support as support  # noqa: E402
 
 
 def write(sweep_csv: Path, tmp: Path) -> str:
-    """Replace every stored file; the one-line report."""
+    """Replace every stored file under ``tests/review_support/``.
+
+    Parameters
+    ----------
+    sweep_csv : Path
+        The sweep CSV just run, stored first (the sweep export reads it).
+    tmp : Path
+        A scratch directory for the exports.
+
+    Returns
+    -------
+    str
+        The one-line report.
+    """
     stored = support.SUPPORT_DIR
     stored.mkdir(exist_ok=True)
     for stale in stored.iterdir():
@@ -53,7 +66,20 @@ def write(sweep_csv: Path, tmp: Path) -> str:
 
 
 def differing(sweep_csv: Path, tmp: Path) -> tuple[list[str], int]:
-    """The stored files today's code does not reproduce, and the number compared."""
+    """The stored files today's code does not reproduce.
+
+    Parameters
+    ----------
+    sweep_csv : Path
+        The sweep CSV just run on the stored histories.
+    tmp : Path
+        A scratch directory for the exports.
+
+    Returns
+    -------
+    tuple
+        ``(names, count)``: the files that differ and the number compared.
+    """
     stored = support.SUPPORT_DIR
     equal = {
         support.SWEEP_CSV: support.sweep_cells(sweep_csv)
@@ -75,6 +101,8 @@ def differing(sweep_csv: Path, tmp: Path) -> tuple[list[str], int]:
 
 
 def main() -> int:
+    """Compare the stored files with today's code, or write them with ``--write``
+    (compiled path, the stored numpy kernel); the exit status, 1 when a file differs."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="write the files")
     args = parser.parse_args()
