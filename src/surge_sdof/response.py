@@ -858,19 +858,32 @@ def _decay_reference(x: float, x_zero: float) -> float:
     return x_zero
 
 
+class ResponseHistories(NamedTuple):
+    """The state at the end of each sample, the three arrays of one run (float64, each of
+    ``2 * nominal_forced_sample_count`` samples; unfilled trailing samples are 0).
+
+    Attributes
+    ----------
+    displacement : numpy.ndarray
+        m.
+    velocity : numpy.ndarray
+        m/s.
+    acceleration : numpy.ndarray
+        m/s².
+    """
+
+    displacement: np.ndarray
+    velocity: np.ndarray
+    acceleration: np.ndarray
+
+
 @numba.njit(cache=True)
-def _record_sample(
-    history: np.ndarray, output_type: int, index: int, x: float, v: float, a: float
-) -> None:
-    """Store the end-of-sample state in ``history[index]``: ``x`` for ``output_type`` 1,
-    ``v`` for 2, ``a`` for 3 (the VBA ``Select Case outputType`` after each sample); any
-    other ``output_type`` (0: peaks only) stores nothing."""
-    if output_type == 1:
-        history[index] = x
-    elif output_type == 2:
-        history[index] = v
-    elif output_type == 3:
-        history[index] = a
+def _record_sample(histories: ResponseHistories, index: int, x: float, v: float, a: float) -> None:
+    """Store the end-of-sample state at ``index`` of the three ``histories`` (what the VBA
+    ``Select Case outputType`` stores after each sample, for every output type at once)."""
+    histories.displacement[index] = x
+    histories.velocity[index] = v
+    histories.acceleration[index] = a
 
 
 class _RunState(NamedTuple):
@@ -994,14 +1007,14 @@ def _integrate(
     ``n`` (0 at the first sub-step), or with ``settings.is_per_phase_parity`` the VBA
     per-phase index ``k + (totInd - 1) * stepQTY`` (phase 3: ``k = 1 .. stepQTY``), written
     as ``n + off`` with ``off`` fixed per sample (D-19, approved fix F-2)."""
-    schedule, response_history, buffers = _kernel_inputs(
+    schedule, histories, buffers = _kernel_inputs(
         unbalance_force_samples, settings, column, trace_request
     )
     result = _integrate_kernel(
         schedule,
         sdof_params,
         settings,
-        response_history,
+        histories,
         column,
         buffers,
     )
@@ -1014,7 +1027,7 @@ def _integrate(
         trace = tracing.build_trace(
             trace_request, settings, sdof_params, buffers, int(result.frame_count), column
         )
-    return _peak_response(result, sdof_params, settings.output_type, response_history, trace)
+    return _peak_response(result, sdof_params, settings.output_type, histories, trace)
 
 
 def _kernel_inputs(
@@ -1022,24 +1035,27 @@ def _kernel_inputs(
     settings: RunSettings,
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
-) -> tuple[_ForceSchedule, np.ndarray, tracing.TraceBuffers]:
+) -> tuple[_ForceSchedule, ResponseHistories, tracing.TraceBuffers]:
     """The kernel's inputs: the ``_ForceSchedule`` (``unbalance_force_samples`` flattened
     by ``loads.flatten_unbalance_force``, and with a ``trace_request`` the elbow forces of
     ``trace_request.elbow_force_samples`` by ``loads.flatten_elbow_forces``, whose sample
-    starts must agree), the zeroed response
-    history (``nominal_forced_sample_count * 2`` samples for ``output_type`` 1-3, empty for
-    0) and the trace buffers (Session V.1: sized by ``trace.check_memory`` and allocated by
+    starts must agree), the zeroed ``ResponseHistories`` (``nominal_forced_sample_count * 2``
+    samples each, whatever the output type) and the trace buffers (Session V.1: sized by ``trace.check_memory`` and allocated by
     ``trace.allocate_frames``; without a request a stride of 0 and empty buffers)."""
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
-    output_type = settings.output_type
     unbalance_force_by_substep, sample_start = loads.flatten_unbalance_force(
         unbalance_force_samples
     )
     # Proposed derivation, for Ben to confirm: the recorded history holds out_max * 2 samples,
     # the forced samples and an equal allowance for free decay; later free decay is integrated
     # but not recorded.
-    response_history = np.zeros(nominal_forced_sample_count * 2 if output_type > 0 else 0)
+    recorded_sample_count = nominal_forced_sample_count * 2
+    histories = ResponseHistories(
+        np.zeros(recorded_sample_count),
+        np.zeros(recorded_sample_count),
+        np.zeros(recorded_sample_count),
+    )
 
     # ----------------------------------------------------------------- trace set-up
     grid_point_count = 2 * column.column_cell_count + 1 if column.is_fluid_coupled else 0
@@ -1074,14 +1090,14 @@ def _kernel_inputs(
         elbow_b_force_by_substep,
         int(transit_substep_count),
     )
-    return schedule, response_history, buffers
+    return schedule, histories, buffers
 
 
 def _peak_response(
     result: _KernelResult,
     sdof_params: SdofParams,
     output_type: int,
-    response_history: np.ndarray,
+    histories: ResponseHistories,
     trace: Trace | None,
 ) -> PeakResponse:
     """The ``PeakResponse`` of a finished run: the kernel's maxima as Python floats, the
@@ -1102,7 +1118,7 @@ def _peak_response(
         max_velocity=float(result.v_max),
         max_acceleration=float(result.a_max),
         max_applied_force=float(result.unbalance_force_max),
-        history=response_history if output_type > 0 else None,
+        history=histories[output_type - 1] if output_type > 0 else None,
         output_type=output_type,
         free_decay_samples=int(result.sample_number - result.forced_sample_count),
         trace=trace,
@@ -1114,7 +1130,7 @@ def _integrate_kernel(
     schedule: _ForceSchedule,
     sdof_params: SdofParams,
     settings: RunSettings,
-    response_history: np.ndarray,
+    histories: ResponseHistories,
     column: moc.FluidColumn,
     buffers: tracing.TraceBuffers,
 ) -> _KernelResult:
@@ -1127,8 +1143,8 @@ def _integrate_kernel(
     selected by the parity of ``substep_index + parity_offset``) and returns ``dF``, from
     0.0; the loop forms the applied force (forced phases ``dF + f`` or ``0.0 + f``, free
     decay ``dF`` or ``0.0``); ``_structure_substep`` steps the structure, raises the maxima
-    and counts the sub-step. Returns a ``_KernelResult``; ``response_history`` is filled in
-    place for ``output_type`` 1-3.
+    and counts the sub-step. Returns a ``_KernelResult``; the three ``histories`` are filled
+    in place.
 
     Trace (Session V.1): a sub-step ``_is_frame_due`` says is due (stride, capacity, and in
     free decay ``sample_number <= nominal_forced_sample_count * 2``) is written by
@@ -1145,7 +1161,6 @@ def _integrate_kernel(
     dt = settings.substep_duration
     substep_count = settings.substep_count
     nominal_forced_sample_count = settings.nominal_forced_sample_count
-    output_type = settings.output_type
     is_per_phase_parity = settings.is_per_phase_parity
     is_fluid_coupled = column.is_fluid_coupled
     junction_force = 0.0  # N; stays 0.0 without fluid coupling
@@ -1201,7 +1216,7 @@ def _integrate_kernel(
                     state,
                     frame_inputs,
                 )
-        _record_sample(response_history, output_type, sample_number - 1, state.x, state.v, state.a)
+        _record_sample(histories, sample_number - 1, state.x, state.v, state.a)
     unbalance_force_max = _largest_magnitude(unbalance_force_by_substep)
 
     # ---------------------------------------------------------- free decay
@@ -1254,9 +1269,7 @@ def _integrate_kernel(
                 )
             decay_start_displacement = _decay_reference(state.x, decay_start_displacement)
         if is_in_record_window:
-            _record_sample(
-                response_history, output_type, sample_number - 1, state.x, state.v, state.a
-            )
+            _record_sample(histories, sample_number - 1, state.x, state.v, state.a)
 
     return _KernelResult(
         state.x_max,
