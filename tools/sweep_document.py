@@ -13,10 +13,13 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import fixture_cases as tg  # tools/fixture_cases.py: the fixture loaders
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def _nominal_size_in(set_name: str) -> float | None:
@@ -26,7 +29,9 @@ def _nominal_size_in(set_name: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def golden_sweep_rows(cases=None, params=None, set_name: str = "curve_10in") -> list[dict]:
+def golden_sweep_rows(
+    cases: list[dict] | None = None, params: dict | None = None, set_name: str = "curve_10in"
+) -> list[dict]:
     """``sweep`` rows from the ``curve_10in`` case table.
 
     Parameters
@@ -99,7 +104,7 @@ def sweep_regen() -> dict:
     }
 
 
-def uniform_value(rows, column: str):
+def uniform_value(rows: Iterable[dict], column: str) -> object:
     """The one value ``column`` holds in every row of ``rows`` (dicts; empty cells
     ignored), else None."""
     values = {r.get(column) for r in rows} - {None, ""}
@@ -123,12 +128,12 @@ class ReferenceCase(NamedTuple):
 _OUTPUT_NAMES = {"max_applied_force": "max_unbalance_force"}
 
 
-def _output_names(names) -> list:
+def _output_names(names: Iterable[str]) -> list:
     """A fixture's output names under today's names (``_OUTPUT_NAMES``)."""
     return [_OUTPUT_NAMES.get(name, name) for name in names]
 
 
-def _grouped_inputs(kw: dict, history_key: str, history) -> dict:
+def _grouped_inputs(kw: dict, history_key: str, history: np.ndarray | dict) -> dict:
     """A fixture case's solver keywords in the form of ``Trace.inputs``.
 
     Parameters

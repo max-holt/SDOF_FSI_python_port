@@ -63,7 +63,7 @@ from surge_sdof import histories  # noqa: E402
 # ------------------------------------------------------------------ the run
 
 
-def git(*args) -> str:
+def git(*args: str) -> str:
     """The output of ``git *args`` in the repository, stripped; empty when git fails or
     is not there."""
     try:
@@ -96,13 +96,13 @@ def cpu_model() -> str:
     return platform.processor() or platform.machine() or "unknown"
 
 
-def _worker(args):
+def _worker(args: tuple) -> dict:
     """``run_case`` on one ``(case, provenance)`` pair: the process pool's task."""
     case, provenance = args
     return run_case(case, provenance)
 
 
-def run(args) -> Path:
+def run(args: argparse.Namespace) -> Path:
     """The ``run`` command: every case of the tier (or the chosen part of it) through
     both solvers in a process pool, the CSV written into ``--out``.
 
@@ -169,7 +169,7 @@ def run(args) -> Path:
     return out
 
 
-def plot(args) -> None:
+def plot(args: argparse.Namespace) -> None:
     """The ``plot`` command: the four PNGs and the report of a sweep CSV
     (``sweep_report``), at one friction level and, for the collapse panel, one amplitude."""
     import matplotlib
@@ -215,7 +215,7 @@ def plot(args) -> None:
 # ------------------------------------------------------------------ CLI
 
 
-def parse_args(argv=None):
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """The parsed command line (``argv`` None reads ``sys.argv``)."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -269,7 +269,7 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     """Run the ``check``, ``run`` or ``plot`` command of the command line."""
     args = parse_args(argv)
     if args.command == "check":

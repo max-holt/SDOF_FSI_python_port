@@ -58,21 +58,21 @@ CACHE_DIR = FIXTURES_DIR.parent / ".golden_cache"
 """Where the golden tests write each case's comparison for ``tools/golden_report.py``."""
 
 
-def load_params():
+def load_params() -> dict:
     """The ``curve_10in`` parameters shared by every case (``params.json``): the fixture
     keyword values in SI units, the force-history spec and the sample count."""
     with open(CURVE_DIR / "params.json") as fh:
         return json.load(fh)
 
 
-def load_cases():
+def load_cases() -> list[dict]:
     """The ``curve_10in`` case table (``cases.csv``): one dict per case, every cell as its
     text."""
     with open(CURVE_DIR / "cases.csv", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
-def load_force(params):
+def load_force(params: dict) -> np.ndarray:
     """The ``curve_10in`` force history exactly as Excel built it.
 
     Parameters
@@ -96,14 +96,14 @@ def load_force(params):
     return col.reshape(-1, 1)
 
 
-def load_example_cases():
+def load_example_cases() -> list[dict]:
     """The three Example-sheet cases (``example/cases.json``), each with its own force
     history, keyword arguments and expected outputs."""
     with open(EXAMPLE_DIR / "cases.json") as fh:
         return json.load(fh)
 
 
-def case_params(case, params):
+def case_params(case: dict, params: dict) -> dict:
     """The fixture keyword arguments of one ``curve_10in`` case.
 
     Parameters
@@ -167,7 +167,7 @@ _JC_KEYS = frozenset(
 )
 
 
-def solver_inputs(kw: dict, **overrides) -> dict:
+def solver_inputs(kw: dict, **overrides: object) -> dict:
     """The arguments of ``response.peak_response`` / ``peak_response_jc`` from a dict in the
     fixtures' vocabulary.
 

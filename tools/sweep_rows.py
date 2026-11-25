@@ -11,7 +11,7 @@ import csv
 import math
 import time
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 from sweep_grid import (
@@ -32,6 +32,9 @@ from sweep_grid import (
 )
 
 from surge_sdof import export, histories, moc, response
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ------------------------------------------------------------------ one case
 
@@ -146,7 +149,9 @@ def solver_inputs(case: Case, p: Pipe) -> dict:
     }
 
 
-def _timed(fn, *args, **kwargs):
+def _timed(
+    fn: Callable[..., object], *args: object, **kwargs: object
+) -> tuple[object, float, str | None]:
     """``(result, seconds, error)`` of one call: the error text (and a None result) when
     it raised."""
     t0 = time.perf_counter()

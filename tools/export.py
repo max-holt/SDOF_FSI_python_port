@@ -30,12 +30,16 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import cases  # tools/cases.py
 import fixture_cases  # tools/fixture_cases.py
 import sweep_document  # tools/sweep_document.py
 
 from surge_sdof import export, moc, response
+
+if TYPE_CHECKING:
+    import numpy as np
 
 JSON_BUDGET_MB = 45.0
 """The default stride keeps the estimated trace JSON under this many MB (``export_trace_every``:
@@ -76,7 +80,9 @@ def estimated_cells(kw: dict, solver: str) -> int:
     )
 
 
-def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: float) -> int:
+def export_trace_every(
+    force: np.ndarray, kw: dict, solver: str, target_frames: int, budget_mb: float
+) -> int:
     """The trace stride of an exported case, in substeps.
 
     Parameters
@@ -116,7 +122,7 @@ def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: fl
     return max(stride, math.ceil(substeps / frames_allowed))
 
 
-def main_trace(args) -> None:
+def main_trace(args: argparse.Namespace) -> None:
     """The ``trace`` command: rerun the case with a trace, write its document and print a
     summary."""
     force, kw, solver, name = cases.case_from_args(args)
@@ -141,7 +147,7 @@ def main_trace(args) -> None:
     )
 
 
-def main_sweep(args) -> None:
+def main_sweep(args: argparse.Namespace) -> None:
     """The ``sweep`` command: convert a sweep CSV to the sweep document and print a
     summary."""
     rows, layout = sweep_document.sweep_rows_from_csv(args.from_csv)
@@ -176,7 +182,7 @@ def main_sweep(args) -> None:
     )
 
 
-def parse_args(argv):
+def parse_args(argv: list[str] | None) -> argparse.Namespace:
     """The parsed command line (``argv`` None reads ``sys.argv``)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -198,7 +204,7 @@ def parse_args(argv):
     return ap.parse_args(argv)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     """Run the ``trace`` or ``sweep`` command of the command line."""
     args = parse_args(argv)
     if args.command == "trace":

@@ -34,7 +34,7 @@ PA_PER_BAR = 1e5
 """Pascals per bar: the step case's amplitude is given in bar."""
 
 
-def golden_case(case_id: str):
+def golden_case(case_id: str) -> tuple[np.ndarray, dict, str]:
     """A fixture case, rerun from ``tests/fixtures``.
 
     Parameters
@@ -90,13 +90,13 @@ class StepSpec(NamedTuple):
     damping: float
 
 
-def step_spec(args) -> StepSpec:
+def step_spec(args: argparse.Namespace) -> StepSpec:
     """The ``StepSpec`` of the parsed ``add_source_arguments`` options (an
     ``argparse.Namespace``)."""
     return StepSpec(**{name: getattr(args, name) for name in StepSpec._fields})
 
 
-def step_case(spec: StepSpec):
+def step_case(spec: StepSpec) -> tuple[np.ndarray, dict, str]:
     """A plain step case: zero force for ``lead_in_s`` (at least one sample), then
     ``amplitude_bar`` times the flow area for ``duration_s``.
 
@@ -151,7 +151,7 @@ def step_name(spec: StepSpec) -> str:
     )
 
 
-def forced_substep_count(force, kw) -> int:
+def forced_substep_count(force: np.ndarray, kw: dict) -> int:
     """Substeps of the forced phases (transit and forced), as the trace capacity counts
     them.
 
@@ -173,13 +173,13 @@ def forced_substep_count(force, kw) -> int:
     return int(np.size(force)) * kw["step_qty"] + int(transit_delay_samples * kw["step_qty"]) + 1
 
 
-def default_trace_every(force, kw, target_frames: int) -> int:
+def default_trace_every(force: np.ndarray, kw: dict, target_frames: int) -> int:
     """The trace stride, in substeps, that records about ``target_frames`` frames of the
     forced phases (``force`` and ``kw`` as ``forced_substep_count``); at least 1."""
     return max(1, math.ceil(forced_substep_count(force, kw) / target_frames))
 
 
-def run(force, kw, solver: str, trace_every: int):
+def run(force: np.ndarray, kw: dict, solver: str, trace_every: int) -> response.PeakResponse:
     """Run a case through its solver with a trace.
 
     Parameters
@@ -203,7 +203,7 @@ def run(force, kw, solver: str, trace_every: int):
     return response.peak_response(force, **tg.solver_inputs(kw, trace_every=trace_every))
 
 
-def add_source_arguments(ap) -> None:
+def add_source_arguments(ap: argparse.ArgumentParser) -> None:
     """Add the case options to an argparse parser: ``--golden | --step``, the step options,
     ``--name`` and ``--trace-every``."""
     src = ap.add_mutually_exclusive_group(required=True)
@@ -251,7 +251,7 @@ def add_source_arguments(ap) -> None:
     ap.add_argument("--damping", type=float, default=curve["damping_percent"])
 
 
-def case_from_args(args):
+def case_from_args(args: argparse.Namespace) -> tuple[np.ndarray, dict, str, str]:
     """The case the parsed ``add_source_arguments`` options name.
 
     Returns

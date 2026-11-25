@@ -135,7 +135,7 @@ def build(
     return out
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Build the page from the command line's paths, write it and print a JSON summary;
     the exit status."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
