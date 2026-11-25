@@ -81,6 +81,17 @@ moved, `output_type` and the old signatures removed), 6.3a (`PeakResponse` renam
 schema bump), 6.6 (docstrings), 6.7, 6.8 (lint limits), and the `RunSettings` →
 `KernelSettings` rename of `public_interface.md` §1.2.
 
+**Progress (session R.9, continued, 25 Nov 2026).** Done, one change per commit, each gated:
+6.3c (`LoopLayout` renames), 6.4a (`histories` signatures, `History` fields, `PARAM_KEYS`),
+6.4b (`export.to_*_dict`, `SweepProvenance`, S-33), the `KernelSettings` rename, 6.5 (the
+schema bump: trace 2, sweep 3, `_schema_1_inputs` removed, every committed data file
+re-exported and the sweep CSV headers renamed with the rows byte-identical; the viewer's
+browser tests pass on that commit), and 6.6 for the module docstrings of `response` and
+`trace` (docstring-only). **Stopped there** (ruling 75, the context). Not yet made: 6.6 for
+the other modules (`moc`, `structure`, `coupling`, `loads`, `export`, `histories`,
+`viz/geometry`, the gated tools), 6.7 (annotations), 6.8 (lint limits; measured nesting
+in `NOTES.md`), and the removal of the `review_ab.py` call-form switch.
+
 
 **Updated in session R.3 (23 Nov 2026) to the reconciliation with the second review**
 (charter ruling 22; `docs/review/plan_r2.md`). This plan stays the governing one. Brought

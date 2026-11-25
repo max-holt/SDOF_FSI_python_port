@@ -173,7 +173,7 @@ Session W.1: `surge_sdof.export` writes the data the single-file JS viewer (Sess
 and plays back live, from disk or a SharePoint / OCI bucket with no Python on the viewing
 machine. `docs/data_format.md` is the contract (`tests/test_export.py` parses it): a `trace` file
 holds one whole run at the trace stride (meta, the loop geometry, thirteen per-frame columns with
-the rest frame first, the JC column arrays as row-major blocks), a `sweep` file holds Session 5b
+the rest frame first, the JC column arrays as row-major blocks; trace schema 2 since the review's schema bump), a `sweep` file (schema 3) holds Session 5b
 rows as columns plus the Excel reference values the viewer self-checks against. Column-wise
 arrays, floats via `repr`, no NaN, optional gzip by the `.gz` suffix. The default `--trace-every`
 is the 2000-frame stride or the coarser one that keeps the JSON under 45 MB (row 96: 832 frames,

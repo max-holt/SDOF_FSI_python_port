@@ -19,8 +19,9 @@ network. The page is ~4.9 MB because it carries the full plotly.js bundle (see "
 
 Use the file picker or drop a file anywhere on the page. `.json` and `.json.gz` are both read
 (gzip is detected by the file's own magic bytes, not its name). A file whose `kind` is not
-`trace` at `schema_version` 1 or `sweep` at `schema_version` 2 (the Session 5b layout; the
-thirty-column W.1 sweep is not read) is refused with a message that names what was found. The
+`trace` at `schema_version` 2 or `sweep` at `schema_version` 3 (the key names of the R.9 schema
+bump; older files are re-exported with `tools/export.py`, and the thirty-column W.1 sweep is not
+read) is refused with a message that names what was found. The
 committed examples are in `docs/viz/data/`: `example_jc_step.json` (1.8 MB),
 `example_lumped_step.json` (0.14 MB), `golden_r096_jc.json.gz` (13.9 MB, inflates to 47 MB and
 takes a few seconds to parse), `reference_sweep.json` (the 78 `curve_10in` golden rows) and
@@ -86,19 +87,19 @@ colour by span length, symbol by length or size).
   matched), one trace per span length; when a filter left open still varies among the rows
   (several sine frequencies, seeds, amplitudes or frictions), each value is its own family,
   named in the legend and distinguished by the line dash.
-* **JC effect.** `ratio_f_eq` (or `ratio_v_peak`; the schema-2 columns, `ratio_f_peak` of the
-  W.1 layout no longer exists because `f_peak` is an input property) as circles sized by span
+* **JC effect.** `max_static_equivalent_force_ratio` (or `max_velocity_ratio`; a ratio of the
+  unbalance-force peak does not exist because that peak is an input property) as circles sized by span
   length, coloured by history type, opacity 0.6, with the report's ±5 % band at 1 and the
-  dashed 0.8 line. The tab animates over `amplitude_fraction` or `mu`: the frames are the
+  dashed 0.8 line. The tab animates over `amplitude_fraction` or `friction_coefficient`: the frames are the
   distinct values of that column among the filtered rows (its own dropdown is opened and
   locked while it animates), and the page's play / pause, speed buttons, slider and the space
   bar drive it, at 1 s per value at 1x (the trace controls that do not apply are hidden). The
   status text in the plot and the readout under the slider give the current value.
-* **collapse.** `f_eq_over_LD2` (top row) and `daf` (bottom row) with all sizes and lengths on
+* **collapse.** `force_per_length_diameter_squared` (top row) and `daf` (bottom row) with all sizes and lengths on
   one panel per history type: colour by length, symbol by size, lumped hollow and JC filled as
   above. The y axes of a row are matched across the panels.
 
-**Filters.** `history_type`, `f_osc_hz`, `seed`, `mu` and `amplitude_fraction`, each with `all`
+**Filters.** `history_type`, `oscillation_frequency`, `noise_seed`, `friction_coefficient` and `amplitude_fraction`, each with `all`
 and the column's distinct values (`(none)` for null). On open the defaults follow the report:
 one history type (the first of step, step + sine, step + noise, golden that the file has), the
 largest friction and amplitude when the column has two to six values, sine frequency and seed

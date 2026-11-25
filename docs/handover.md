@@ -201,6 +201,11 @@ cannot drift. Arrays are column-wise, floats are `repr` (shortest round-trip), t
 and `.gz` gzips. Every file carries `meta.git_sha` of the solver that wrote it: the viewer
 shows it, and `tests/test_export.py` fails if a committed file predates the current profile
 commit, so a stale export cannot sit unnoticed next to a changed solver.
+Since the review's schema bump (session R.9) the documents are `trace` schema 2 and `sweep`
+schema 3, with every key named as `docs/nomenclature.md` names it (the old-to-new table is
+`docs/review/public_interface.md` §3.3); the viewer refuses older files, which are
+re-exported with `tools/export.py`, and a sweep CSV written before the bump needs its header
+line renamed (the rows are unchanged).
 
 ## The oracle and the frozen directories
 

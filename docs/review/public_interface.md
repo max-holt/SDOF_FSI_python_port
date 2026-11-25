@@ -544,8 +544,9 @@ repository (section 6 lists what a caller outside it changes).
 
 ## 6. What a caller outside this repository changes
 
-As applied in session R.9 up to plan 6.3b (`docs/review/plan.md`, progress R.9). Later steps
-(6.3c `LoopLayout`, 6.4 `histories` / `export`, 6.5 the schema bump) add to this list.
+As applied in session R.9, plan 6.1 to 6.5 (`docs/review/plan.md`, progress R.9): the whole
+interface of this proposal. Later items (6.6 docstrings, 6.7 annotations, 6.8 lint limits)
+change no signature, field or key.
 
 1. **The call.** `peak_response(force_history, step_qty, sample_freq, physical_length,
    flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq,
@@ -579,5 +580,39 @@ As applied in session R.9 up to plan 6.3b (`docs/review/plan.md`, progress R.9).
    `Trace.inputs` is the call grouped as passed (`sample_rate`, `span`, `restraint`, ...).
 6. **Set-up helpers.** `structure.lumped_params` / `jc_params`, `response.solver_setup` and
    `response.column_grid` take the input objects (signatures in `docs/architecture.md`).
-7. **Exported files are unchanged so far**: the trace and sweep documents keep schema 1 / 2
-   and every key until the schema bump.
+7. **`LoopLayout`** (`viz.geometry`): `cell_position`, `cell_kind`, `moving_fraction`,
+   `pivot_seg_qty`, `pipe_seg_qty`, `ext_qty`, `portal_height`, `spacing`, `inlet_end`,
+   `run_start`, `run_end`, `outlet_start`, `elbow_pairs`, `x_nominal`, `y_nominal`,
+   `leg_height`, `leg_height_2`, `n_cells` → `grid_point_position`, `grid_point_kind`,
+   `grid_point_moving_fraction`, `end_to_elbow_cell_count`, `column_cell_count`,
+   `inactive_end_cell_count`, `portal_frame_height`, `grid_point_spacing`,
+   `inlet_elbow_index`, `run_start_index`, `run_end_index`, `outlet_elbow_index`,
+   `elbow_grid_point_pairs`, `x_at_rest`, `y_at_rest`, `inlet_leg_height`,
+   `outlet_leg_height`, `grid_point_count` (6.3c).
+8. **`histories`** (6.4a): `canonical(history_type, design_pressure, amplitude_fraction, *,
+   oscillation_frequency, noise_seed, envelope_reference_frequency, noise_cutoff_frequency,
+   requested_noise_rms, envelope_decay_cycles, envelope_decay_fraction, sample_rate,
+   lead_in_s, transit_s, tail_s)` (was `kind`, `p_design`, `f_osc`, `seed`, `f_ref`, `f_cut`,
+   `p_noise_rms`, `decay_cycles`, `decay_fraction`, `sample_freq`); `p_cap` →
+   `peak_pressure_target(design_pressure, amplitude_fraction)`; `History.force(flow_area)`.
+   `History` fields and `PARAM_KEYS` (the `from_params` keys): `kind`, `sample_freq`,
+   `p_step`, `p_osc`, `f_osc`, `p_noise_rms`, `f_cut`, `f_ref`, `seed`, `decay_cycles`,
+   `decay_fraction`, `p_cap`, `n_samples`, `peak`, `p_min`, `mean`, `rms`, `noise_rms` →
+   `history_type`, `sample_rate`, `step_pressure`, `oscillation_amplitude`,
+   `oscillation_frequency`, `requested_noise_rms`, `noise_cutoff_frequency`,
+   `envelope_reference_frequency`, `noise_seed`, `envelope_decay_cycles`,
+   `envelope_decay_fraction`, `peak_pressure_target`, `sample_count`, `pressure_max`,
+   `pressure_min`, `pressure_mean`, `pressure_rms`, `scaled_noise_rms`. The error messages
+   are unchanged (they still name `f_osc`, `seed`, `f_ref`, `p_cap`, `kind`).
+9. **`export`** (6.4b): `to_trace_dict(result, case_id, *, git_sha=True, created_utc=None)`
+   (was `sha`, `created`); `to_sweep_dict(rows, *, provenance=SweepProvenance(source, tier,
+   cpu, histories_version, git_sha, created_utc), regen, reference=None)`: `regen` is
+   required (the default `tools/` template left the package, S-33; the tool's templates are
+   `tools/sweep_document.golden_regen` / `sweep_regen`). `response.RunSettings` is
+   `KernelSettings` (internal).
+10. **Exported files** (6.5): trace schema 2 and sweep schema 3, every key through the table
+    of §3.3; `meta.inputs` and the reference entries' `inputs` are grouped as the call
+    (§1.7; the reference entries have no `coupling` group, the fixtures name no flags);
+    `output_names` say `max_unbalance_force`. The viewer reads only the new versions: a file
+    written before the bump is re-exported with `tools/export.py`, and a sweep CSV written
+    before it needs its header line renamed (55 of the 72 names; the rows are unchanged).
