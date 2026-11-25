@@ -907,6 +907,22 @@ def test_peak_response_jc_rejects_unknown_flags():
         response.peak_response_jc(force, **kw, vav_denominator="2N")
 
 
+@pytest.mark.parametrize(
+    "flag", [{"vav_denominator": "2N"}, {"parity": "phase"}, {"fraction_profile": "corrected"}]
+)
+@pytest.mark.parametrize("path", ["short_pipe", "rho_c_zero"])
+def test_d25_unknown_flags_raise_on_every_path(flag, path):
+    """D-25: every flag is checked at the entry, before the short-pipe fallback and the
+    rhoC = 0 error, where an unknown ``vav_denominator`` used to pass silently."""
+    force = _step_force()
+    if path == "short_pipe":
+        kw = dict(JC_SMALL_KW, physical_length=1.0)
+    else:
+        kw = dict(JC_SMALL_KW, fluid_densty=0.0)
+    with pytest.raises(ValueError, match=next(iter(flag)).replace("vav_denominator", "mean")):
+        response.peak_response_jc(force, **kw, **flag)
+
+
 def test_peak_response_jc_runtime_errors_are_raised():
     # D-9 as a raise, like the legacy: D-7, rhoC = 0 (FloatingPointError from the numpy
     # MoC arrays under errstate), D-8

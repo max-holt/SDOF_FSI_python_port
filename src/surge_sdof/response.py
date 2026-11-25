@@ -83,13 +83,66 @@ from surge_sdof.trace import (
 )
 from surge_sdof.vba_compat import clng
 
-__all__ = ["PeakResponse", "peak_response", "peak_response_jc"]
+__all__ = ["VBA_COUPLING", "CouplingModel", "PeakResponse", "peak_response", "peak_response_jc"]
 
 # Free decay runs while ``x * xZero`` exceeds this, m² (VBA ``Do While x * xZero > 0.01``,
 # lines 569 and 1109; ``xZero`` is ``x`` at the end of the forced phase, then 0 once the
 # product falls to it, lines 593 and 1188). VBA quirk D-21 preserved: an absolute
 # threshold, ``|x| > 0.1`` m at entry.
 FREE_DECAY_THRESHOLD = 0.01
+
+
+PARITIES = ("running", "per_phase")
+MEAN_VELOCITY_DIVISORS = ("fixed", "legacy")
+
+
+@dataclass(frozen=True)
+class CouplingModel:
+    """The junction-coupling model choices: the approved fixes or the VBA behaviour.
+
+    Validated on construction, so an unknown value raises before the solver runs, on every
+    path (DEVIATIONS D-25).
+
+    Attributes
+    ----------
+    mean_velocity_divisor : {"fixed", "legacy"}
+        Divisor of the MoC mean-velocity sum: the number of terms ``2N + 1`` (approved fix
+        F-1, default) or the VBA's ``2N - 1`` (D-17).
+    parity : {"running", "per_phase"}
+        MoC half-grid alternation: one running substep counter (approved fix F-2, default)
+        or the VBA per-phase index, which can double-step a half-grid at a phase boundary
+        (D-19).
+    fraction_profile : {"fixed", "legacy"}
+        The moving-fraction profiles: the lead author's corrected functions (approved fix
+        F-4, default) or the VBA ``interpFractionA/B`` (D-4).
+
+    Raises
+    ------
+    ValueError
+        Any other value of a field.
+    """
+
+    mean_velocity_divisor: str = "fixed"
+    parity: str = "running"
+    fraction_profile: str = "fixed"
+
+    def __post_init__(self) -> None:
+        if self.mean_velocity_divisor not in MEAN_VELOCITY_DIVISORS:
+            raise ValueError(
+                f"mean_velocity_divisor must be 'legacy' or 'fixed', "
+                f"got {self.mean_velocity_divisor!r}"
+            )
+        if self.parity not in PARITIES:
+            raise ValueError(f"parity must be 'per_phase' or 'running', got {self.parity!r}")
+        if self.fraction_profile not in moc.FRACTION_PROFILES:
+            raise ValueError(
+                f"fraction_profile must be one of {moc.FRACTION_PROFILES}, "
+                f"got {self.fraction_profile!r}"
+            )
+
+
+VBA_COUPLING = CouplingModel("legacy", "per_phase", "legacy")
+"""The VBA behaviour bitwise (D-4, D-17, D-19): the flags of the Excel acceptance runs."""
 
 
 @dataclass(frozen=True)
@@ -356,10 +409,8 @@ def peak_response_jc(
     Raises
     ------
     ValueError
-        Unknown ``parity`` or ``fraction_profile`` (checked at the entry); unknown
-        ``vav_denominator``, but only where the MoC column is built: a short pipe returns
-        ``peak_response`` and ``rhoC = 0`` raises ``FloatingPointError`` before that check
-        (validation at the entry is planned for the public API session); ``trace_every <
+        An unknown ``vav_denominator``, ``parity`` or ``fraction_profile``, checked at the
+        entry on every path, the short pipe and ``rhoC = 0`` included (D-25); ``trace_every <
         0`` or a trace over ``trace.MAX_TRACE_VALUES``; ``pivotSegQTY = 4`` at the set-up
         with the fixed fraction profile (the ramp needs ``pivot > ext``).
     ZeroDivisionError
@@ -383,12 +434,8 @@ def peak_response_jc(
     cases by up to 3.6e-2 (NOTES.md "Session F-4 — done"). The Excel acceptance test
     (``tests/test_golden.py``, the ``jc_slow`` cases) runs with the legacy flags.
     """
-    if parity not in ("per_phase", "running"):
-        raise ValueError(f"parity must be 'per_phase' or 'running', got {parity!r}")
-    if fraction_profile not in moc.FRACTION_PROFILES:
-        raise ValueError(
-            f"fraction_profile must be one of {moc.FRACTION_PROFILES}, got {fraction_profile!r}"
-        )
+    # every flag checked here, before the short-pipe and rhoC = 0 paths (D-25)
+    CouplingModel(vav_denominator, parity, fraction_profile)
     step_qty = int(step_qty)
     sample_freq = float(sample_freq)
     physical_length = float(physical_length)
