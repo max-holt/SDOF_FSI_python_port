@@ -47,7 +47,21 @@ BYTES_PER_MB = 1e6
 
 
 def estimated_cells(kw: dict, solver: str) -> int:
-    """``2N + 1`` cells a JC run will carry (0 for lumped or a short-pipe fallback)."""
+    """The grid points a traced run will carry per frame.
+
+    Parameters
+    ----------
+    kw : dict
+        Fixture keyword arguments of the case.
+    solver : {"lumped", "jc"}
+        The solver.
+
+    Returns
+    -------
+    int
+        ``2N + 1`` for a junction-coupling run; 0 for a lumped run or a short-pipe
+        fallback.
+    """
     if solver != "jc":
         return 0
     inputs = fixture_cases.solver_inputs(kw)
@@ -63,9 +77,32 @@ def estimated_cells(kw: dict, solver: str) -> int:
 
 
 def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: float) -> int:
-    """The stride of about ``target_frames`` frames of the forced phases
-    (``tools/cases.default_trace_every``), or the coarser stride whose estimated JSON fits
-    ``budget_mb`` (forced phases only; free decay adds frames)."""
+    """The trace stride of an exported case, in substeps.
+
+    Parameters
+    ----------
+    force : numpy.ndarray
+        The force history, N.
+    kw : dict
+        Fixture keyword arguments of the case.
+    solver : {"lumped", "jc"}
+        The solver.
+    target_frames : int
+        Frames of the forced phases to aim for (``tools/cases.default_trace_every``).
+    budget_mb : float
+        Largest estimated JSON size, MB (forced phases only; free decay adds frames).
+
+    Returns
+    -------
+    int
+        The stride of about ``target_frames`` frames, or the coarser one whose estimated
+        JSON fits ``budget_mb``.
+
+    Raises
+    ------
+    SystemExit
+        Not even one frame fits the budget.
+    """
     stride = cases.default_trace_every(force, kw, target_frames)
     substeps = cases.forced_substep_count(force, kw)
     grid_point_count = estimated_cells(kw, solver)
@@ -80,6 +117,8 @@ def export_trace_every(force, kw, solver: str, target_frames: int, budget_mb: fl
 
 
 def main_trace(args) -> None:
+    """The ``trace`` command: rerun the case with a trace, write its document and print a
+    summary."""
     force, kw, solver, name = cases.case_from_args(args)
     trace_every = args.trace_every or export_trace_every(
         force, kw, solver, args.trace_frames, args.budget_mb
@@ -103,6 +142,8 @@ def main_trace(args) -> None:
 
 
 def main_sweep(args) -> None:
+    """The ``sweep`` command: convert a sweep CSV to the sweep document and print a
+    summary."""
     rows, layout = sweep_document.sweep_rows_from_csv(args.from_csv)
     # a 5b CSV records its tier, CPU, histories version and sha in every row; the options override
     uniform = {
@@ -136,6 +177,7 @@ def main_sweep(args) -> None:
 
 
 def parse_args(argv):
+    """The parsed command line (``argv`` None reads ``sys.argv``)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     tr = sub.add_parser("trace", help="rerun a case with a trace and write the trace document")
@@ -157,6 +199,7 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    """Run the ``trace`` or ``sweep`` command of the command line."""
     args = parse_args(argv)
     if args.command == "trace":
         main_trace(args)
