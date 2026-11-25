@@ -95,7 +95,9 @@ def trace_doc(case_id: str) -> dict:
 
 @functools.cache
 def golden_sweep_doc() -> dict:
-    rows, layout = sweep_document.sweep_rows_from_csv(tg.CURVE_DIR / "cases.csv")
+    rows, layout = sweep_document.sweep_rows_from_csv(
+        tg.CURVE_DIR / "cases.csv", set_name=tg.CURVE_DIR.name
+    )
     assert layout == "golden"
     return export.to_sweep_dict(
         rows,
@@ -401,7 +403,7 @@ def test_sweep_csv_passthrough_and_rejection(tmp_path):
     path.write_text(
         "case_id,size_in,friction_coefficient,noise_seed,error\nrun1,10,0.005,3,\nrun2,10,,,boom\n"
     )
-    rows, layout = sweep_document.sweep_rows_from_csv(path)
+    rows, layout = sweep_document.sweep_rows_from_csv(path, set_name="curve_10in")
     assert layout == "sweep" and len(rows) == 2
     doc = export.to_sweep_dict(
         rows, provenance=export.SweepProvenance(str(path), git_sha=None), regen=_REGEN
@@ -411,7 +413,7 @@ def test_sweep_csv_passthrough_and_rejection(tmp_path):
     bad = tmp_path / "bad.csv"
     bad.write_text("case_id,nope\na,1\n")
     with pytest.raises(SystemExit, match="unknown columns"):
-        sweep_document.sweep_rows_from_csv(bad)
+        sweep_document.sweep_rows_from_csv(bad, set_name="curve_10in")
 
 
 # ------------------------------------------------------------------ the CLI
@@ -472,6 +474,20 @@ def test_cli_trace_and_sweep(tmp_path, capsys):
     doc3 = export.read_json(out3)
     assert doc3["kind"] == "sweep" and doc3["meta"]["tier"] == "golden"
     assert doc3["meta"]["n_rows"] == 78 and len(doc3["reference"]["jc_golden_rows"]) == 3
+
+
+@pytest.mark.parametrize("directory", ["curve_10in", "moved", "curve_12in"])
+def test_d27_size_in_from_the_caller_not_the_directory_name(tmp_path, directory):
+    """``tools/export.py sweep`` on a copy of the ``curve_10in`` ``cases.csv``: ``size_in`` is
+    10 wherever the file sits (DEVIATIONS D-27; it was read from the directory name, so the
+    copy in ``moved/`` exported null and the one in ``curve_12in/`` 12)."""
+    csv = tmp_path / directory / "cases.csv"
+    csv.parent.mkdir()
+    shutil.copyfile(tg.CURVE_DIR / "cases.csv", csv)
+    out = tmp_path / "sweep.json"
+    export_cli.main(["sweep", "--from-csv", str(csv), "--out", str(out)])
+    doc = export.read_json(out)
+    assert doc["columns"]["size_in"] == [10] * 78
 
 
 def test_default_stride_is_the_2000_frame_stride_unless_the_budget_bites():

@@ -150,7 +150,9 @@ def main_trace(args: argparse.Namespace) -> None:
 def main_sweep(args: argparse.Namespace) -> None:
     """The ``sweep`` command: convert a sweep CSV to the sweep document and print a
     summary."""
-    rows, layout = sweep_document.sweep_rows_from_csv(args.from_csv)
+    rows, layout = sweep_document.sweep_rows_from_csv(
+        args.from_csv, set_name=fixture_cases.CURVE_DIR.name
+    )
     # a 5b CSV records its tier, CPU, histories version and sha in every row; the options override
     uniform = {
         k: sweep_document.uniform_value(rows, k)

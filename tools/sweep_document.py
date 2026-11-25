@@ -41,7 +41,7 @@ def golden_sweep_rows(
     params : dict or None
         The set's parameters; None reads ``fixture_cases.load_params()``.
     set_name : str
-        The fixture set's directory name; it gives ``size_in``.
+        The fixture set's name (``curve_10in``); it gives ``size_in``.
 
     Returns
     -------
@@ -214,7 +214,7 @@ def reference_block() -> dict:
 GOLDEN_CSV_HEADER = ("case_id", "source_row", "solver", "max_static_equivalent_force")
 
 
-def sweep_rows_from_csv(path: str | Path) -> tuple[list[dict], str]:
+def sweep_rows_from_csv(path: str | Path, *, set_name: str) -> tuple[list[dict], str]:
     """The sweep rows of a CSV file.
 
     Parameters
@@ -223,6 +223,9 @@ def sweep_rows_from_csv(path: str | Path) -> tuple[list[dict], str]:
         The ``curve_10in`` ``cases.csv`` (mapped by ``golden_sweep_rows``) or a Session 5b
         sweep CSV whose header is a subset of the sweep columns (passed through, missing
         columns null).
+    set_name : str
+        The fixture set a ``cases.csv`` belongs to (``curve_10in``), for its ``size_in``;
+        a 5b sweep CSV carries its own.
 
     Returns
     -------
@@ -235,12 +238,16 @@ def sweep_rows_from_csv(path: str | Path) -> tuple[list[dict], str]:
     ------
     SystemExit
         A header with a column the sweep document does not have.
+
+    Notes
+    -----
+    Until session R.11 ``size_in`` of a ``cases.csv`` was read from the name of the directory
+    the file sits in (DEVIATIONS D-27, review finding S-36).
     """
     from surge_sdof.export import SWEEP_COLUMNS, read_csv
 
     header, rows = read_csv(path)
     if all(h in header for h in GOLDEN_CSV_HEADER):
-        set_name = Path(path).resolve().parent.name
         return golden_sweep_rows(rows, tg.load_params(), set_name), "golden"
     unknown = [h for h in header if h not in SWEEP_COLUMNS]
     if unknown:
