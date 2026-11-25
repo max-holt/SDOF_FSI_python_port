@@ -56,10 +56,25 @@ HISTORY_PARAM_COLUMNS = (
 )
 
 COLUMNS = export.SWEEP_COLUMNS
-"""The CSV columns: the ``sweep`` document's columns (``docs/data_format.md``, schema 2)."""
+"""The CSV columns: the ``sweep`` document's columns (``docs/data_format.md``, schema 3)."""
 
 
 def case_history(case: Case, p_design: float) -> histories.History:
+    """The pressure history of a case: ``histories.canonical`` with the case's history
+    type, amplitude and sine frequency or seed, at the sweep's sample rate and transit
+    allowance.
+
+    Parameters
+    ----------
+    case : Case
+        The case.
+    p_design : float
+        Design pressure of the case's pipe, Pa.
+
+    Returns
+    -------
+    histories.History
+    """
     return histories.canonical(
         case.history_type,
         p_design,
@@ -75,7 +90,18 @@ def case_history(case: Case, p_design: float) -> histories.History:
 
 
 def history_from_row(row: dict) -> histories.History:
-    """Rebuild a CSV row's history bitwise from its generator columns."""
+    """Rebuild a CSV row's history bitwise from its generator columns.
+
+    Parameters
+    ----------
+    row : dict
+        A sweep row, cells as text or values (``HISTORY_PARAM_COLUMNS``; an empty cell is
+        None).
+
+    Returns
+    -------
+    histories.History
+    """
     params = {}
     for column, key in HISTORY_PARAM_COLUMNS:
         value = row[column]
@@ -91,8 +117,21 @@ def history_from_row(row: dict) -> histories.History:
 
 
 def solver_inputs(case: Case, p: Pipe) -> dict:
-    """The arguments both solvers share for ``case`` on pipe ``p``: the sample rate, the
-    span, the restraint and the integration settings of the sweep."""
+    """The arguments both solvers share for a case.
+
+    Parameters
+    ----------
+    case : Case
+        Its span length (m), natural frequency (Hz) and friction coefficient are read.
+    p : Pipe
+        Its flexural rigidity (N·m²) and mass per length (kg/m) are read.
+
+    Returns
+    -------
+    dict
+        ``sample_rate`` (Hz) and the ``span``, ``restraint`` and ``integration`` objects of
+        the sweep's fixed inputs.
+    """
     return {
         "sample_rate": SAMPLE_RATE,
         "span": response.PipeSpan(case.length_m, p.flexural_rigidity, p.mass_per_length, CELERITY),
@@ -108,6 +147,8 @@ def solver_inputs(case: Case, p: Pipe) -> dict:
 
 
 def _timed(fn, *args, **kwargs):
+    """``(result, seconds, error)`` of one call: the error text (and a None result) when
+    it raised."""
     t0 = time.perf_counter()
     try:
         result = fn(*args, **kwargs)
@@ -126,7 +167,20 @@ class RunProvenance(NamedTuple):
 
 
 def run_case(case: Case, provenance: RunProvenance) -> dict:
-    """Both solvers on one case; the CSV row."""
+    """Both solvers on one case: its CSV row.
+
+    Parameters
+    ----------
+    case : Case
+        The case.
+    provenance : RunProvenance
+        Tier, subset, CPU and sha of the run.
+
+    Returns
+    -------
+    dict
+        Keyed by ``COLUMNS``; a column the run does not fill is None.
+    """
     pipe_properties = pipe(case.size_in)
     pressure_history = case_history(case, pipe_properties.design_pressure)
     force_history = pressure_history.force(pipe_properties.flow_area)
@@ -144,7 +198,26 @@ def _case_columns(
     provenance: RunProvenance,
 ) -> dict:
     """The row with every column that does not need a solver: the case, the pipe, the set-up,
-    the history and its generator parameters, the provenance."""
+    the history and its generator parameters, the provenance.
+
+    Parameters
+    ----------
+    case : Case
+        The case.
+    pipe_properties : Pipe
+        Its pipe.
+    pressure_history : histories.History
+        Its pressure history (Pa).
+    force_history : numpy.ndarray
+        The same as a force, N.
+    provenance : RunProvenance
+        Of the run.
+
+    Returns
+    -------
+    dict
+        Keyed by ``COLUMNS``; the solver columns None. Units as ``docs/data_format.md``.
+    """
     solver_arguments = solver_inputs(case, pipe_properties)
     setup = response.solver_setup(
         SAMPLE_RATE,
@@ -212,8 +285,25 @@ def _case_columns(
 def _solver_results(
     row: dict, case: Case, pipe_properties: Pipe, force_history: np.ndarray
 ) -> tuple:
-    """``(lumped, jc)``: both solvers run on the case, each timed into ``row``; a failure is
-    recorded in ``row["error"]`` and gives None, never skipped silently."""
+    """Both solvers run on a case, each timed into ``row``.
+
+    Parameters
+    ----------
+    row : dict
+        The case's row; its ``wall_time_*`` (s) and ``error`` columns are written.
+    case : Case
+        The case.
+    pipe_properties : Pipe
+        Its pipe.
+    force_history : numpy.ndarray
+        Its force history, N.
+
+    Returns
+    -------
+    tuple
+        ``(lumped, jc)``, each a ``response.PeakResponse`` or None for a solver that
+        raised (the failure is recorded in ``row["error"]``, never skipped silently).
+    """
     solver_arguments = solver_inputs(case, pipe_properties)
     errors = []
     lumped_result, row["wall_time_lumped"], err = _timed(
@@ -240,7 +330,22 @@ def _result_columns(
     pressure_history: histories.History,
     results: tuple,
 ) -> None:
-    """The result columns of each solver that ran, and the JC / lumped ratios, into ``row``."""
+    """Write the result columns of each solver that ran, and the JC / lumped ratios, into
+    ``row``.
+
+    Parameters
+    ----------
+    row : dict
+        The case's row; its ``total_mass`` (kg) is read.
+    case : Case
+        The case (its span length, m).
+    pipe_properties : Pipe
+        Its pipe (outside diameter, mm; flow area, m²).
+    pressure_history : histories.History
+        Its pressure history (peak, Pa).
+    results : tuple
+        ``(lumped, jc)`` from ``_solver_results``.
+    """
     lumped_result, jc_result = results
     total_mass = row["total_mass"]
     outside_diameter_squared = (pipe_properties.outside_diameter_mm / MM_PER_M) ** 2
@@ -267,6 +372,8 @@ def _result_columns(
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
+    """Write sweep rows as a CSV in ``COLUMNS`` order (None as an empty cell, LF line
+    ends); the directory is created if missing."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS, lineterminator="\n")
