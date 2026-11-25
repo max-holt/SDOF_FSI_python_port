@@ -668,7 +668,7 @@ def step_noise(  # noqa: PLR0913 (the sweep's generator columns one-for-one; doc
 # ------------------------------------------------------------------ the sweep's scaling
 
 
-def canonical(  # noqa: PLR0913 (the sweep's generator columns one-for-one; docs/style.md §11)
+def canonical(  # noqa: PLR0913 (public: case, then generator keywords; docs/style.md §11)
     history_type: str,
     design_pressure: float,
     amplitude_fraction: float,

@@ -434,7 +434,7 @@ def unbalance_force(
         walk.current_sample_weight,
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
-    for item in _schedule(walk):  # noqa: PLR1702 (C-07: two schedule walks; docs/style.md §11)
+    for item in _schedule(walk):  # noqa: PLR1702 (phase dispatch per sample; C-07; docs/style.md §11)
         if isinstance(item, _TransitSample):
             sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
@@ -537,7 +537,7 @@ def elbow_forces(
         walk.current_sample_weight,
     )
     pre_advance_substep_count = substep_count - overlap_substep_count
-    for item in _schedule(walk):  # noqa: PLR1702 (C-07: two schedule walks; docs/style.md §11)
+    for item in _schedule(walk):  # noqa: PLR1702 (phase dispatch per sample; C-07; docs/style.md §11)
         if isinstance(item, _TransitSample):
             sample_number, elbow_a_force, elbow_b_force_current, elbow_b_force_next = item
             first_substep_number = (sample_number - 1) * substep_count + 1
