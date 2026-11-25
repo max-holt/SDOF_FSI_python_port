@@ -12,7 +12,9 @@ Usage, from the repository root::
     .venv/bin/python tools/review_ab.py OLD NEW --only lumped_r20 --only jc_r96_full
     .venv/bin/python tools/review_ab.py HEAD HEAD          # A/A: the harness's own spread
 
-``OLD`` and ``NEW`` are any git revisions. Each is checked out into a temporary worktree;
+``OLD`` and ``NEW`` are git revisions from review session R.9 on (the grouped solver inputs
+of ``tools/fixture_cases.solver_inputs``; the switch for the older keyword form was removed in
+session R.10). Each is checked out into a temporary worktree;
 every round runs both in fresh child processes (compiled, each with its own
 ``NUMBA_CACHE_DIR``), alternating which goes first, and each case is timed as the minimum
 of ``--repeats`` runs after one warm-up call. The table gives, per case, the minimum over
@@ -63,12 +65,8 @@ def _cases():
     by_row = {c["source_row"]: c for c in tg.load_cases()}
     ramp = np.linspace(0, 1e7, 200)
 
-    # the worktree's own call form: the grouped inputs where its fixture_cases translates the
-    # fixture keywords (from session R.9), the keywords themselves before
-    translate = getattr(fixture_cases, "solver_inputs", lambda kw: kw)
-
     def kw(row, **extra):
-        return translate(dict(tg.case_params(by_row[row], params), **extra))
+        return fixture_cases.solver_inputs(dict(tg.case_params(by_row[row], params), **extra))
 
     lumped, jc = response.peak_response, response.peak_response_jc
     decay = {"damping_percent": 0.5, "dynamic_fric": 0.0}
