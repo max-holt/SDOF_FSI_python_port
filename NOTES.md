@@ -6,6 +6,45 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.11 (2026-11-25): **plan group 7 done**, and `cpu_model`. Rulings 89-91 in the
+charter (`c7569a1`). One change per commit, each gated (lint, `make test-both`: compiled and
+pure-Python fast suites, snapshot and support exact in both modes) before it was made.
+
+Commits: `c561a61` `tools/sweep_jc.cpu_model` at nesting depth 3 (the model lines read
+first, then the first picked), `noqa` removed (ruling 89); output equal to the old function on
+this host and on five synthetic `/proc/cpuinfo` contents. `6165f87` 7.1 (S-11, DEVIATIONS
+D-26): `Trace.forced_sample_count` from the kernel (`build_trace` takes the `_KernelResult` in
+place of `n_frames`, so it stays at 6 parameters); `export.is_capped` = forced + free-decay
+samples > 2 * nominal. A/B against the commit before, 5 rounds: 0.970-1.015 on the eleven
+cases. `032a3cc` 7.2 (S-36, D-27): `sweep_document.sweep_rows_from_csv(path, *, set_name)`,
+`tools/export.py sweep` passes `fixture_cases.CURVE_DIR.name`; three test calls pass
+`set_name` (call form only, ruling 6). `f392fb5` findings and plan progress.
+
+Changed outputs (both pinned, both tests fail on the parent):
+* D-26, `meta.params.is_capped`, only for `trace_every > substep_count`: (a) the stride skips
+  the first free-decay sample and forced + decay samples exactly fill the window: 1 -> 0
+  (1600 bar step, 0.05 m², 6 m, 10 Hz, 0.5 s, no friction or damping, 0.5 Hz, strides 79 to
+  400: N 6, F 7, D 5); (b) no free-decay substep traced and the run decays past the window:
+  0 -> 1 (same at 0.3 Hz, stride 800: D 12). Both solvers.
+* D-27, `size_in` of a golden-layout `cases.csv` copied elsewhere: null -> 10 outside a
+  `curve_<N>in` directory, N -> 10 inside one with N != 10.
+No stored snapshot, support file or committed data file changed (none of their traces is
+capped either way; the committed sweep is exported from the fixture path).
+
+Observation: `test_is_capped`'s "run that decays past the window" (the Example JC case with no
+friction or damping) has one free-decay sample and is not capped; the test still holds, but
+it does not exercise a capped run. The D-26 test does.
+
+Session gates: `-m slow` 150 passed (403 s); `tools/bench.py --skip-full-python` row
+`f392fb5`: every digest equal to the literal port. The JC golden cases (`-m jc_slow`) were not
+run: no kernel arithmetic changed.
+
+**Next:** the plan's groups are done. Open by ruling: C-07 (two schedule walks), the
+ungated tools' findings (rename-only), the suspected defects for the lead author (ruling 20).
+Stage 6 (removing `legacy_port.py` / `vba_compat.py`) is outside this review.
+
+Previous: session R.10 (below).
+
 Session R.10 (2026-11-25): **plan group 6 done** (the rest of it: the `histories` error
 messages, 6.6, 6.7, 6.8, the `review_ab.py` switch). Rulings 85-88 in the charter (`0efced1`).
 Every commit gated: lint and the compiled fast suite (955 + 24) before it, the pure-Python
@@ -41,7 +80,7 @@ now noted), `loads.unbalance_force` / `elbow_forces` (PLR1702, C-07, ruling 86),
 columns one-for-one, approved in `public_interface.md` §3.4; their style §11 line added in
 this commit), and `tools/sweep_jc.cpu_model` (PLR1702).
 
-**For the owner:** `tools/sweep_jc.cpu_model` nests 4 deep (try / with / for / if over
+**For the owner (answered in R.11, ruling 89):** `tools/sweep_jc.cpu_model` nests 4 deep (try / with / for / if over
 `/proc/cpuinfo`). `sweep_jc` is gated (the support check runs it), so ruling 87 does not
 cover it; it carries a `noqa` saying "no ruling yet". Either a style §11 line, or a small
 restructuring to depth 3 (read the model lines first, then pick), or leave it with S-23
