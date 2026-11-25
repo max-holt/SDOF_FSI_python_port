@@ -1,9 +1,9 @@
 """Canonical pressure histories for the junction-coupling sweep (Session 5b).
 
 Three deterministic generators return a ``History``: a ``(time, pressure)`` pair sampled at
-``sample_freq`` (default 1000 Hz) together with every generator parameter, so that a row of
+``sample_rate`` (default 1000 Hz) together with every generator parameter, so that a row of
 the sweep CSV reproduces its history bitwise through ``from_params``. The solvers take a
-*force* history: ``History.force(fluid_area)`` is the pressure times the pipe's fluid area.
+*force* history: ``History.force(flow_area)`` is the pressure times the pipe's flow area.
 
 * ``step(step_pressure)``: pressure 0 for the lead-in (``lead_in_s``, default 0.1 s), then
   ``step_pressure`` held to the end.
@@ -25,14 +25,16 @@ the sweep CSV reproduces its history bitwise through ``from_params``. The solver
   ``History.scaled_noise_rms``.
 
 Common scaling (``canonical``): the owner's convention for the sweep. Every history peaks at
-``p_cap = amplitude_fraction * 1.33 * p_design``: the step is a plain step to the cap; for
-``step_sine`` the step is ``0.5 p_cap`` and ``p_osc`` fills the rest so that the first positive
-peak of the enveloped sine hits the cap; for ``step_noise`` the step is ``0.5 p_cap`` and the
-noise is scaled so that the overall peak hits the cap.
+``peak_pressure_target = amplitude_fraction * 1.33 * design_pressure``: the step is a plain
+step to the target; for ``step_sine`` the step is half the target and the oscillation
+amplitude fills the rest so that the first positive peak of the enveloped sine hits the
+target; for ``step_noise`` the step is half the target and the noise is scaled so that the
+overall peak hits the target.
 
 Duration: lead-in + a transit allowance (the caller's, for the elbow-to-elbow delay) + the
-decay time (``decay_cycles / f_osc``, ``decay_cycles / f_ref``; 0 for the plain step) +
-``tail_s`` (default 2 s), rounded to whole samples. The generators are pure numpy and know
+decay time (``envelope_decay_cycles / oscillation_frequency``, ``envelope_decay_cycles /
+envelope_reference_frequency``; 0 for the plain step) + ``tail_s`` (default 2 s), rounded to
+whole samples. The generators are pure numpy and know
 nothing about the solvers.
 """
 
@@ -114,9 +116,9 @@ class History:
     history_type : str
         ``"step"``, ``"step_sine"`` or ``"step_noise"``.
     time : numpy.ndarray
-        Sample times, s, ``arange(n) / sample_rate``.
+        float64, shape ``(sample_count,)``: sample times, s, ``arange(n) / sample_rate``.
     pressure : numpy.ndarray
-        Pressure, Pa, the same length.
+        float64, the same shape: pressure, Pa.
     sample_rate, lead_in_s, transit_s, tail_s : float
         The sample rate (Hz) and the three duration terms (s) the generator received.
     step_pressure : float
@@ -173,12 +175,29 @@ peak_pressure_target : float / int / None
     version: str = HISTORIES_VERSION
 
     def params(self) -> dict:
-        """The generator parameters (``PARAM_KEYS``), enough for ``from_params`` to rebuild
-        the same arrays bitwise."""
+        """The generator parameters, enough for ``from_params`` to rebuild the same arrays
+        bitwise.
+
+        Returns
+        -------
+        dict
+            Keyed by ``PARAM_KEYS``; a parameter the generator does not take is None.
+        """
         return {key: getattr(self, key) for key in PARAM_KEYS}
 
     def force(self, flow_area: float) -> np.ndarray:
-        """The force history the solvers take: ``pressure * flow_area``, N."""
+        """The force history the solvers take.
+
+        Parameters
+        ----------
+        flow_area : float
+            Internal cross-sectional area of the pipe, m².
+
+        Returns
+        -------
+        numpy.ndarray
+            float64, shape ``(sample_count,)``: ``pressure * flow_area``, N.
+        """
         return self.pressure * float(flow_area)
 
 
@@ -186,20 +205,49 @@ peak_pressure_target : float / int / None
 
 
 def peak_pressure_target(design_pressure: float, amplitude_fraction: float = 1.0) -> float:
-    """``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * design_pressure``, Pa."""
+    """The peak pressure of the sweep's common scaling.
+
+    Parameters
+    ----------
+    design_pressure : float
+        Design pressure, Pa.
+    amplitude_fraction : float, optional
+        The peak as a fraction of ``PEAK_TO_DESIGN_PRESSURE_RATIO * design_pressure``
+        (default 1).
+
+    Returns
+    -------
+    float
+        ``amplitude_fraction * PEAK_TO_DESIGN_PRESSURE_RATIO * design_pressure``, Pa.
+    """
     return float(amplitude_fraction) * PEAK_TO_DESIGN_PRESSURE_RATIO * float(design_pressure)
 
 
 def decay_rate(
     frequency: float, envelope_decay_cycles: float, envelope_decay_fraction: float
 ) -> float:
-    """The envelope rate ``lambda`` (1/s) with ``exp(-lambda decay_cycles / f) ==
-    1 - decay_fraction``.
+    """The decay rate of the exponential envelope.
+
+    Parameters
+    ----------
+    frequency : float
+        The frequency whose cycles the decay is counted in, Hz.
+    envelope_decay_cycles : float
+        Cycles over which the envelope falls by ``envelope_decay_fraction``.
+    envelope_decay_fraction : float
+        The fall, dimensionless, in ``[0, 1)``.
+
+    Returns
+    -------
+    float
+        ``lambda``, 1/s, with ``exp(-lambda envelope_decay_cycles / frequency) == 1 -
+        envelope_decay_fraction``.
 
     Raises
     ------
     ValueError
-        ``envelope_decay_fraction`` outside ``[0, 1)``, or ``frequency`` / ``envelope_decay_cycles`` not positive.
+        ``envelope_decay_fraction`` outside ``[0, 1)``, or ``frequency`` /
+        ``envelope_decay_cycles`` not positive.
     """
     frequency = float(frequency)
     envelope_decay_cycles = float(envelope_decay_cycles)
@@ -219,8 +267,22 @@ def envelope(
     envelope_decay_cycles: float,
     envelope_decay_fraction: float,
 ) -> np.ndarray:
-    """``exp(-decay_rate(f, decay_cycles, decay_fraction) * tau)``: 1 at ``tau = 0``,
-    ``1 - decay_fraction`` at ``tau = decay_cycles / f``."""
+    """The exponential envelope over the time since the lead-in.
+
+    Parameters
+    ----------
+    time_since_lead_in : array_like
+        ``tau``, s.
+    frequency, envelope_decay_cycles, envelope_decay_fraction : float
+        As ``decay_rate``.
+
+    Returns
+    -------
+    numpy.ndarray
+        float64, the shape of ``time_since_lead_in``, dimensionless:
+        ``exp(-decay_rate(...) * tau)``, 1 at ``tau = 0`` and ``1 -
+        envelope_decay_fraction`` at ``tau = envelope_decay_cycles / frequency``.
+    """
     return np.exp(
         -decay_rate(frequency, envelope_decay_cycles, envelope_decay_fraction)
         * np.asarray(time_since_lead_in, dtype=float)
@@ -228,6 +290,8 @@ def envelope(
 
 
 def _duration(lead_in_s: float, transit_s: float, decay_s: float, tail_s: float) -> float:
+    """The history's duration, s: the sum of the four duration terms (s), each checked
+    non-negative (``ValueError`` names the first that is not)."""
     for name, value in (
         ("lead_in_s", lead_in_s),
         ("transit_s", transit_s),
@@ -240,7 +304,14 @@ def _duration(lead_in_s: float, transit_s: float, decay_s: float, tail_s: float)
 
 
 def _axis(duration_s: float, sample_rate: float, lead_in_s: float):
-    """``(time, n_lead)``: the sample times and the number of lead-in (zero) samples."""
+    """The sample times (s, float64, shape ``(sample_count,)``) and the number of lead-in
+    (zero) samples of a history of ``duration_s`` (s) at ``sample_rate`` (Hz).
+
+    Raises
+    ------
+    ValueError
+        ``sample_rate`` not positive, or no sample after the lead-in.
+    """
     if sample_rate <= 0.0:
         raise ValueError(f"sample_rate must be positive, got {sample_rate!r}")
     sample_count = int(round(duration_s * sample_rate))
@@ -251,6 +322,7 @@ def _axis(duration_s: float, sample_rate: float, lead_in_s: float):
 
 
 def _stats(pressure: np.ndarray) -> tuple[float, float, float, float]:
+    """Maximum, minimum, mean and RMS of a pressure history (Pa), as Python floats."""
     return (
         float(pressure.max()),
         float(pressure.min()),
@@ -351,8 +423,9 @@ def _sine_shape(
     envelope_decay_cycles,
     envelope_decay_fraction,
 ) -> np.ndarray:
-    """The unit enveloped sine: 0 over the lead-in, ``sin(2 pi f tau) envelope(tau)`` after,
-    ``time_since_lead_in`` from the first held sample."""
+    """The unit enveloped sine on the sample times ``time`` (s): 0 over the lead-in,
+    ``sin(2 pi oscillation_frequency tau) envelope(tau)`` after, ``tau`` counted from the
+    first held sample; dimensionless, the shape of ``time``."""
     time_since_lead_in = time[lead_in_sample_count:] - time[lead_in_sample_count]
     unit_sine = np.zeros_like(time)
     unit_sine[lead_in_sample_count:] = np.sin(
@@ -375,7 +448,7 @@ def step_sine(
     transit_s: float = 0.0,
     tail_s: float = DEFAULT_TAIL_S,
 ) -> History:
-    """The step plus ``p_osc sin(2 pi f_osc tau)`` under the exponential envelope.
+    """The step plus a sine of ``oscillation_amplitude`` under the exponential envelope.
 
     Parameters
     ----------
@@ -386,10 +459,11 @@ def step_sine(
     oscillation_frequency : float
         Sine frequency, Hz.
     envelope_decay_cycles, envelope_decay_fraction : float, optional
-        The envelope falls by ``envelope_decay_fraction`` (default 0.8), to ``1 - decay_fraction``
-        (0.2 by default), after ``envelope_decay_cycles`` (default 10) cycles of ``oscillation_frequency``.
+        The envelope falls by ``envelope_decay_fraction`` (default 0.8), to ``1 -
+        envelope_decay_fraction`` (0.2 by default), after ``envelope_decay_cycles`` (default
+        10) cycles of ``oscillation_frequency``.
     sample_rate, lead_in_s, transit_s, tail_s : float, optional
-        As ``step``; the duration adds ``decay_cycles / f_osc``.
+        As ``step``; the duration adds ``envelope_decay_cycles / oscillation_frequency``.
 
     Returns
     -------
@@ -437,8 +511,8 @@ def step_sine(
 
 
 def _lowpass(noise: np.ndarray, sample_rate: float, noise_cutoff_frequency: float) -> np.ndarray:
-    """FFT brick-wall low-pass: every bin above ``noise_cutoff_frequency`` zeroed; a cut-off at or above the
-    Nyquist frequency returns ``noise`` unchanged."""
+    """The noise low-passed by an FFT brick wall: every bin above ``noise_cutoff_frequency``
+    (Hz) zeroed; a cut-off at or above the Nyquist frequency returns ``noise`` unchanged."""
     if noise_cutoff_frequency >= sample_rate / 2.0:
         return noise
     spectrum = np.fft.rfft(noise)
@@ -451,7 +525,7 @@ def _scaled_to_peak(
     noise: np.ndarray, step_pressure: float, peak_pressure_target: float
 ) -> np.ndarray:
     """``noise`` scaled so that ``step_pressure + noise`` peaks at ``peak_pressure_target``:
-    times ``(p_cap - p_step) / max(noise)``; Pa.
+    times ``(peak_pressure_target - step_pressure) / max(noise)``; Pa.
 
     Raises
     ------
@@ -481,11 +555,12 @@ def step_noise(
 ) -> History:
     """The step plus enveloped, low-passed Gaussian noise, peak-scaled to ``peak_pressure_target``.
 
-    The noise is drawn with ``numpy.random.default_rng(seed).standard_normal`` over the
-    active window (every sample after the lead-in), scaled to ``requested_noise_rms``, low-passed at
-    ``noise_cutoff_frequency``, multiplied by the envelope defined on ``envelope_reference_frequency``, and finally scaled by
-    ``(p_cap - p_step) / max(noise)`` so that ``max(pressure) == p_cap``. Because the last
-    step is a ratio, ``requested_noise_rms`` has no effect on the result; it is kept as the
+    The noise is drawn with ``numpy.random.default_rng(noise_seed).standard_normal`` over
+    the active window (every sample after the lead-in), scaled to ``requested_noise_rms``,
+    low-passed at ``noise_cutoff_frequency``, multiplied by the envelope defined on
+    ``envelope_reference_frequency``, and finally scaled by ``(peak_pressure_target -
+    step_pressure) / max(noise)`` so that ``max(pressure) == peak_pressure_target``. Because
+    the last step is a ratio, ``requested_noise_rms`` has no effect on the result; it is kept as the
     generator's input and the resulting RMS of the noise over the active window is
     ``History.scaled_noise_rms``.
 
@@ -496,18 +571,19 @@ def step_noise(
     requested_noise_rms : float
         Requested white-noise RMS before the scaling, Pa (inert, see above).
     noise_cutoff_frequency : float or None, optional
-        Low-pass cut-off, Hz; None (default) is the Nyquist frequency ``sample_freq / 2``
+        Low-pass cut-off, Hz; None (default) is the Nyquist frequency ``sample_rate / 2``
         (no filtering).
     noise_seed : int, optional
         RNG seed (default 0).
     envelope_decay_cycles, envelope_decay_fraction : float, optional
-        As ``step_sine``, on the period ``1 / f_ref``.
+        As ``step_sine``, on the period ``1 / envelope_reference_frequency``.
     envelope_reference_frequency : float, keyword-only
         Reference frequency of the envelope, Hz.
     peak_pressure_target : float, keyword-only
-        The peak the scaled history reaches, Pa (``> p_step``).
+        The peak the scaled history reaches, Pa (``> step_pressure``).
     sample_rate, lead_in_s, transit_s, tail_s : float, optional
-        As ``step``; the duration adds ``decay_cycles / f_ref``.
+        As ``step``; the duration adds ``envelope_decay_cycles /
+        envelope_reference_frequency``.
 
     Returns
     -------
@@ -516,7 +592,8 @@ def step_noise(
     Raises
     ------
     ValueError
-        ``p_cap <= p_step``, or an enveloped noise whose maximum is not positive.
+        ``peak_pressure_target <= step_pressure``, or an enveloped noise whose maximum is
+        not positive.
     """
     step_pressure, requested_noise_rms, envelope_reference_frequency, peak_pressure_target = (
         float(step_pressure),
@@ -599,7 +676,7 @@ def canonical(
     tail_s: float = DEFAULT_TAIL_S,
 ) -> History:
     """A history of ``history_type`` under the sweep's common scaling: peak
-    ``amplitude_fraction * 1.33 * design_pressure``.
+    ``amplitude_fraction * 1.33 * design_pressure`` (``PEAK_TO_DESIGN_PRESSURE_RATIO``).
 
     ``"step"`` is a plain step to the target. ``"step_sine"`` (needs
     ``oscillation_frequency``) holds ``0.5`` of the target and sets the oscillation amplitude
@@ -618,7 +695,7 @@ def canonical(
         Peak as a fraction of ``1.33 * design_pressure``.
     oscillation_frequency, noise_seed, envelope_reference_frequency, \
 noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_decay_fraction
-        Passed to the generator (see each one).
+        Passed to the generator (see each one): frequencies in Hz, the RMS in Pa.
     sample_rate, lead_in_s, transit_s, tail_s : float, optional
         As the generators.
 
@@ -629,7 +706,8 @@ noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_dec
     Raises
     ------
     ValueError
-        Unknown ``history_type`` or a missing frequency / seed.
+        Unknown ``history_type`` or a missing frequency / seed (the message names the
+        parameter).
     """
     target_pressure = peak_pressure_target(design_pressure, amplitude_fraction)
     shared_arguments = {
@@ -679,13 +757,22 @@ noise_cutoff_frequency, requested_noise_rms, envelope_decay_cycles, envelope_dec
 
 
 def from_params(params: dict) -> History:
-    """Rebuild a history from ``History.params()`` (the ``PARAM_KEYS``; a key missing or
-    None is the generator's default where it has one).
+    """Rebuild a history from its parameters, bitwise.
+
+    Parameters
+    ----------
+    params : dict
+        ``History.params()``, keyed by ``PARAM_KEYS``; a key missing or None is the
+        generator's default where it has one. Units as ``History``.
+
+    Returns
+    -------
+    History
 
     Raises
     ------
     ValueError
-        Unknown ``kind``, or a key outside ``PARAM_KEYS``.
+        Unknown ``history_type``, or a key outside ``PARAM_KEYS``.
     """
     unknown = set(params) - set(PARAM_KEYS)
     if unknown:
