@@ -65,18 +65,34 @@ def _script(comment: str, body: bytes) -> bytes:
     return b"<script>\n/* " + comment.encode() + b" */\n" + body.rstrip(b"\n") + b"\n</script>"
 
 
-def build(src: bytes, plotly_js: bytes, pako_js: bytes, plotly_origin: str) -> bytes:
-    """The page bytes: ``src`` with the two markers replaced (each must occur exactly once)."""
-    import plotly
+def build(
+    src: bytes,
+    plotly_js: bytes,
+    pako_js: bytes,
+    plotly_origin: str,
+    licence: str | None = None,
+    plotly_package_version: str | None = None,
+) -> bytes:
+    """The page bytes: ``src`` with the two markers replaced (each must occur exactly once).
 
+    ``licence`` (default: the vendored ``PAKO_LICENSE`` file) is the pako licence text placed
+    in the page; ``plotly_package_version`` (default: the installed plotly package's) is
+    named in the plotly comment.
+    """
+    if plotly_package_version is None:
+        import plotly
+
+        plotly_package_version = plotly.__version__
+    if licence is None:
+        licence = PAKO_LICENSE.read_text(encoding="utf-8")
     pv = plotly_version(plotly_js)
     kv = pako_version(pako_js)
-    licence = PAKO_LICENSE.read_text(encoding="utf-8").strip()
+    licence = licence.strip()
     parts = {
         "plotly": _script(
             f"plotly.js v{pv} (MIT, Copyright 2012-2026 Plotly, Inc.), {len(plotly_js)} bytes, "
             f"copied by tools/build_viewer.py from {plotly_origin} (the plotly Python package "
-            f"{plotly.__version__}); never loaded from the network",
+            f"{plotly_package_version}); never loaded from the network",
             plotly_js,
         ),
         "pako": _script(

@@ -37,7 +37,8 @@ import sweep_document  # tools/sweep_document.py
 from surge_sdof import export, moc, response
 
 JSON_BUDGET_MB = 45.0
-"""The default stride keeps the estimated trace JSON under this many MB (``estimate_bytes``)."""
+"""The default stride keeps the estimated trace JSON under this many MB (``export_trace_every``:
+about ``BYTES_PER_FLOAT`` bytes a float, ``docs/data_format.md`` "Size expectations")."""
 BYTES_PER_FLOAT = 20
 """A float via ``repr`` plus its comma, on average."""
 BYTES_PER_MB = 1e6
@@ -63,13 +64,6 @@ def estimated_cells(kw: dict, solver: str) -> int:
         0
         if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)
         else 2 * column_cell_count + 1
-    )
-
-
-def estimate_bytes(n_frames: int, grid_point_count: int, n_samples: int) -> int:
-    """``docs/data_format.md`` "Size expectations": about 20 bytes a float."""
-    return BYTES_PER_FLOAT * (
-        n_frames * (len(export.FRAME_COLUMNS) + 2 * grid_point_count) + n_samples
     )
 
 
