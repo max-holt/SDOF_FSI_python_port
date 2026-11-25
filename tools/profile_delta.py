@@ -42,6 +42,7 @@ sys.path.insert(0, str(REPO / "tests"))
 sys.path.insert(0, str(REPO / "tools"))
 
 import cases  # noqa: E402
+import fixture_cases  # noqa: E402
 import test_differential as td  # noqa: E402
 
 from surge_sdof import legacy_port as lp  # noqa: E402
@@ -80,7 +81,7 @@ def run_golden():
         t0 = time.perf_counter()
         for name, flags in FLAG_SETS.items():
             res[name] = response.peak_response_jc(
-                force, **dict(kw, output_type=0), **flags
+                force, **fixture_cases.solver_inputs(kw, **flags)
             ).summary()
         elapsed = time.perf_counter() - t0
         assert np.array_equal(res["legacy"], legacy), f"{case_id}: legacy flags != cached legacy"
@@ -126,12 +127,14 @@ def run_sweep():
     for case in td.jc_sweep_cases():
         base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
         res = {
-            name: response.peak_response_jc(case.force, **case.kw, output_type=0, **flags).summary()
+            name: response.peak_response_jc(
+                case.force, **fixture_cases.solver_inputs(case.kw, **flags)
+            ).summary()
             for name, flags in FLAG_SETS.items()
         }
         assert np.array_equal(res["legacy"], base), f"{case.id}: legacy flags != legacy_port"
         f12 = response.peak_response_jc(
-            case.force, **case.kw, output_type=0, fraction_profile="legacy"
+            case.force, **fixture_cases.solver_inputs(case.kw, fraction_profile="legacy")
         ).summary()
         rows.append(
             {

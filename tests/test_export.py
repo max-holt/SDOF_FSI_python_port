@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 
 import cases  # tools/cases.py (through pythonpath = ["tools"])
+import fixture_cases as fc
 import numpy as np
 import pytest
 import sweep_document  # tools/sweep_document.py
@@ -76,8 +77,8 @@ def example_result(case_id: str):
     case = next(c for c in tg.load_example_cases() if c["case_id"] == case_id)
     force = np.asarray(case["force_history"], dtype=float)
     if case["solver"] == "jc":
-        return response.peak_response_jc(force, **case["kwargs"], trace_every=4)
-    return response.peak_response(force, **case["kwargs"], trace_every=4)
+        return response.peak_response_jc(force, **fc.solver_inputs(case["kwargs"], trace_every=4))
+    return response.peak_response(force, **fc.solver_inputs(case["kwargs"], trace_every=4))
 
 
 @functools.cache
@@ -200,7 +201,9 @@ def test_meta_carries_the_run_as_resolved():
     assert doc["meta"]["inputs"]["vav_denominator"] == "fixed"
     assert (
         doc["meta"]["inputs"]["fraction_profile"]
-        == inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default
+        == inspect.signature(response.peak_response_jc)
+        .parameters["coupling"]
+        .default.fraction_profile
     )
     assert doc["meta"]["inputs"]["force_history"]["shape"] == [25, 1]
     assert doc["meta"]["solver"] == "peak_response_jc"
@@ -210,7 +213,9 @@ def test_meta_carries_the_run_as_resolved():
 
 def test_trace_dict_needs_a_trace():
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_lumped")
-    bare = response.peak_response(np.asarray(case["force_history"], float), **case["kwargs"])
+    bare = response.peak_response(
+        np.asarray(case["force_history"], float), **fc.solver_inputs(case["kwargs"])
+    )
     with pytest.raises(ValueError, match="no trace"):
         export.to_trace_dict(bare, "bare")
 
@@ -465,14 +470,16 @@ def test_is_capped():
     params = tg.load_params()
     case = next(c for c in tg.load_cases() if c["case_id"] == "r096_jc_L24_f3")
     force = tg.load_force(params)[:500]  # the truncated row 96 history ends in phase 1
-    res = response.peak_response_jc(force, **tg.case_params(case, params), trace_every=100)
+    res = response.peak_response_jc(
+        force, **fc.solver_inputs(tg.case_params(case, params), trace_every=100)
+    )
     assert export.is_capped(res) is False
     assert not np.any(res.trace.phase == PHASE_FREE_DECAY)
     # a run that decays past the window: the Example JC case with a long decay
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
     kw = dict(case["kwargs"], dynamic_fric=0.0, damping_percent=0.0)
-    r = response.peak_response_jc(force, **kw, trace_every=20)
+    r = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=20))
     assert np.any(r.trace.phase == PHASE_FREE_DECAY)
     assert export.is_capped(r) is (
         int(r.trace.sample[r.trace.phase == PHASE_FREE_DECAY].min()) + r.free_decay_samples

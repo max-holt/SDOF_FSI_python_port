@@ -50,6 +50,7 @@ DECAY_CALLS = 20
 
 def _cases():
     """The timed cases of the worker, by name (imports from the worktree on ``sys.path``)."""
+    import fixture_cases  # noqa: PLC0415
     import numpy as np  # noqa: PLC0415
     import sweep_grid  # noqa: PLC0415
     import sweep_rows  # noqa: PLC0415
@@ -62,8 +63,12 @@ def _cases():
     by_row = {c["source_row"]: c for c in tg.load_cases()}
     ramp = np.linspace(0, 1e7, 200)
 
+    # the worktree's own call form: the grouped inputs where its fixture_cases translates the
+    # fixture keywords (from session R.9), the keywords themselves before
+    translate = getattr(fixture_cases, "solver_inputs", lambda kw: kw)
+
     def kw(row, **extra):
-        return dict(tg.case_params(by_row[row], params), **extra)
+        return translate(dict(tg.case_params(by_row[row], params), **extra))
 
     lumped, jc = response.peak_response, response.peak_response_jc
     decay = {"damping_percent": 0.5, "dynamic_fric": 0.0}

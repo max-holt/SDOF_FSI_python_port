@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+from surge_sdof import response
+
 __all__ = [
     "RTOL",
     "EXAMPLE_RTOL",
@@ -32,6 +34,8 @@ __all__ = [
     "load_force",
     "load_example_cases",
     "case_params",
+    "solver_inputs",
+    "history_of",
 ]
 
 RTOL = {
@@ -106,3 +110,90 @@ def case_params(case, params):
         nat_freq=float(case["nat_freq"]),
         dynamic_fric=float(case["dynamic_fric"]),
     )
+
+
+_SOLVER_KEYS = frozenset(
+    {
+        "step_qty",
+        "sample_freq",
+        "physical_length",
+        "flexural_rigidity_ei",
+        "celerity",
+        "mass_per_unit_len",
+        "damping_percent",
+        "dynamic_fric",
+        "nat_freq",
+        "restrain_freq_ratio",
+        "gap",
+        "output_type",
+        "trace_every",
+    }
+)
+_JC_KEYS = frozenset(
+    {"fluid_densty", "fluid_area", "vav_denominator", "parity", "fraction_profile"}
+)
+
+
+def solver_inputs(kw: dict, **overrides) -> dict:
+    """The arguments of ``response.peak_response`` / ``peak_response_jc`` from a dict in the
+    fixtures' vocabulary: the keyword names of ``legacy_port`` and of the entry points before
+    the public API session (``step_qty``, ``sample_freq``, ``physical_length``, ...), with
+    ``overrides`` in the same vocabulary.
+
+    ``sample_rate`` and the ``span``, ``restraint`` and ``integration`` objects; with
+    ``fluid_densty`` in the dict also ``fluid`` and ``coupling`` (the flags it names, the
+    approved fixes otherwise). ``output_type`` is dropped: the result carries all three
+    histories, and ``history_of`` picks the one an output type named. The fixtures keep
+    their keys (``tests/fixtures/`` is frozen), so this is where the two vocabularies meet.
+
+    Raises
+    ------
+    TypeError
+        A key the entry points never took, or a junction-coupling key without
+        ``fluid_densty``.
+    """
+    kw = dict(kw, **overrides)
+    unknown = set(kw) - _SOLVER_KEYS - _JC_KEYS
+    if unknown:
+        raise TypeError(f"unknown solver arguments {sorted(unknown)}")
+    arguments = {
+        "sample_rate": kw["sample_freq"],
+        "span": response.PipeSpan(
+            kw["physical_length"],
+            kw["flexural_rigidity_ei"],
+            kw["mass_per_unit_len"],
+            kw["celerity"],
+        ),
+        "restraint": response.Restraint(
+            kw["nat_freq"],
+            kw["damping_percent"],
+            kw["dynamic_fric"],
+            kw.get("gap", 0),
+            kw.get("restrain_freq_ratio", 1),
+        ),
+        "integration": response.Integration(kw["step_qty"], kw.get("trace_every", 0)),
+    }
+    if "fluid_densty" not in kw:
+        if set(kw) & _JC_KEYS:
+            raise TypeError(
+                f"junction-coupling arguments {sorted(set(kw) & _JC_KEYS)} without fluid"
+            )
+        return arguments
+    arguments["fluid"] = response.Fluid(kw["fluid_densty"], kw["fluid_area"])
+    arguments["coupling"] = response.CouplingModel(
+        kw.get("vav_denominator", response.FIXED_COUPLING.mean_velocity_divisor),
+        kw.get("parity", response.FIXED_COUPLING.parity),
+        kw.get("fraction_profile", response.FIXED_COUPLING.fraction_profile),
+    )
+    return arguments
+
+
+def history_of(result: response.PeakResponse, output_type: int) -> np.ndarray | None:
+    """The history the VBA ``outputType`` named: None for 0 (peaks only), the displacement
+    (m), velocity (m/s) or acceleration (m/s²) history for 1, 2, 3."""
+    return {
+        0: None,
+        1: result.displacement_history,
+        2: result.velocity_history,
+        3: result.acceleration_history,
+    }[output_type]

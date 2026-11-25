@@ -93,6 +93,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests"))
 
+import fixture_cases  # noqa: E402  (tools/fixture_cases.py: the fixture keyword bridge)
 import test_golden as tg  # noqa: E402  (tests/test_golden.py: fixture loaders)
 
 from surge_sdof import legacy_port as lp  # noqa: E402
@@ -169,6 +170,10 @@ def build_cases():
         if output_type is not None:
             kw = dict(kw, output_type=output_type)
         hist = force if n is None else force[:n]
+        # the entry points of response take the grouped inputs; legacy_port its own keywords
+        arguments = (
+            fixture_cases.solver_inputs(kw) if solver.__module__ == response.__name__ else kw
+        )
         expected = (
             None if n is not None else [float(case[name]) for name in params["expected_outputs"]]
         )
@@ -180,7 +185,7 @@ def build_cases():
             + (f", outputType {output_type}" if output_type is not None else "")
             + f" via {solver.__module__}.{solver.__name__}"
             + (f" {flags}" if flags else ""),
-            "run": lambda: summary(solver(hist, **kw)),
+            "run": lambda: summary(solver(hist, **arguments)),
             "substeps": substep_count(hist.shape[0], kw),
             "cells": pipe_seg_qty(kw) if case["solver"] == "jc" else None,
             "expected": expected,
@@ -262,7 +267,7 @@ def example_lumped_call():
     fresh process measures the kernel compile."""
     case = next(c for c in tg.EXAMPLE_CASES if c["solver"] == "lumped")
     force = np.asarray(case["force_history"], dtype=float)
-    return lambda: response.peak_response(force, **case["kwargs"])
+    return lambda: response.peak_response(force, **fixture_cases.solver_inputs(case["kwargs"]))
 
 
 # ------------------------------------------------------------------ environment

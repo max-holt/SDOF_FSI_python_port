@@ -88,19 +88,20 @@ def history_from_row(row: dict) -> histories.History:
     return histories.from_params(params)
 
 
-def solver_kwargs(case: Case, p: Pipe) -> dict:
+def solver_inputs(case: Case, p: Pipe) -> dict:
+    """The arguments both solvers share for ``case`` on pipe ``p``: the sample rate, the
+    span, the restraint and the integration settings of the sweep."""
     return {
-        "step_qty": SUBSTEP_COUNT,
-        "sample_freq": SAMPLE_RATE,
-        "physical_length": case.length_m,
-        "flexural_rigidity_ei": p.flexural_rigidity,
-        "celerity": CELERITY,
-        "mass_per_unit_len": p.mass_per_length,
-        "damping_percent": DAMPING_PERCENT,
-        "dynamic_fric": case.friction_coefficient,
-        "nat_freq": case.natural_frequency,
-        "restrain_freq_ratio": CLOSED_GAP_FREQUENCY_RATIO,
-        "gap": SUPPORT_GAP,
+        "sample_rate": SAMPLE_RATE,
+        "span": response.PipeSpan(case.length_m, p.flexural_rigidity, p.mass_per_length, CELERITY),
+        "restraint": response.Restraint(
+            case.natural_frequency,
+            DAMPING_PERCENT,
+            case.friction_coefficient,
+            SUPPORT_GAP,
+            CLOSED_GAP_FREQUENCY_RATIO,
+        ),
+        "integration": response.Integration(SUBSTEP_COUNT),
     }
 
 
@@ -142,17 +143,16 @@ def _case_columns(
 ) -> dict:
     """The row with every column that does not need a solver: the case, the pipe, the set-up,
     the history and its generator parameters, the provenance."""
+    solver_arguments = solver_inputs(case, pipe_properties)
     setup = response.solver_setup(
-        SUBSTEP_COUNT,
         SAMPLE_RATE,
-        case.length_m,
-        pipe_properties.flexural_rigidity,
-        pipe_properties.mass_per_length,
-        case.natural_frequency,
+        solver_arguments["span"],
+        solver_arguments["restraint"],
+        solver_arguments["integration"],
     )
     portal_frame_height = setup.portal_frame_height
     column_cell_count, end_to_elbow_cell_count = response.column_grid(
-        setup, case.length_m, CELERITY
+        setup, solver_arguments["span"]
     )
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
@@ -210,7 +210,7 @@ def _solver_results(
 ) -> tuple:
     """``(lumped, jc)``: both solvers run on the case, each timed into ``row``; a failure is
     recorded in ``row["error"]`` and gives None, never skipped silently."""
-    solver_arguments = solver_kwargs(case, pipe_properties)
+    solver_arguments = solver_inputs(case, pipe_properties)
     errors = []
     lumped_result, row["t_lumped_s"], err = _timed(
         response.peak_response, force_history, **solver_arguments
@@ -220,8 +220,7 @@ def _solver_results(
     jc_result, row["t_jc_s"], err = _timed(
         response.peak_response_jc,
         force_history,
-        fluid_densty=FLUID_DENSITY,
-        fluid_area=pipe_properties.flow_area,
+        fluid=response.Fluid(FLUID_DENSITY, pipe_properties.flow_area),
         **solver_arguments,
     )
     if err:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 
+import fixture_cases as fc
 import numpy as np
 import pytest
 import test_golden as tg
@@ -34,14 +35,18 @@ def golden_result(case_id):
     force = tg.load_force(params)
     kw = tg.case_params(case, params)
     if case["solver"] == "jc":
-        return response.peak_response_jc(force[:JC_SAMPLES], **kw, trace_every=JC_STRIDE)
-    return response.peak_response(force, **kw, trace_every=LUMPED_STRIDE)
+        return response.peak_response_jc(
+            force[:JC_SAMPLES], **fc.solver_inputs(kw, trace_every=JC_STRIDE)
+        )
+    return response.peak_response(force, **fc.solver_inputs(kw, trace_every=LUMPED_STRIDE))
 
 
 def _example_jc_result(**flags):
     case = next(c for c in tg.load_example_cases() if c["case_id"] == "example_jc")
     force = np.asarray(case["force_history"], dtype=float)
-    return response.peak_response_jc(force, **case["kwargs"], trace_every=4, **flags)
+    return response.peak_response_jc(
+        force, **fc.solver_inputs(case["kwargs"], trace_every=4, **flags)
+    )
 
 
 @pytest.mark.parametrize("which", ["lumped", "jc", "example_jc"])
@@ -95,10 +100,10 @@ def test_loop_layout_geometry(which):
     assert layout.elbow_pairs[2] == (layout.run_end, layout.run_end + 1)
     assert layout.elbow_pairs[3] == (layout.outlet_start - 1, layout.outlet_start)
     assert layout.portal_height == structure.solve_portal_height(
-        tr.inputs["physical_length"],
-        tr.inputs["flexural_rigidity_ei"],
-        tr.inputs["mass_per_unit_len"],
-        tr.inputs["nat_freq"],
+        tr.inputs["span"]["span_length"],
+        tr.inputs["span"]["flexural_rigidity"],
+        tr.inputs["span"]["mass_per_length"],
+        tr.inputs["restraint"]["natural_frequency"],
     )
     if tr.moving_fraction is not None:
         assert np.array_equal(layout.moving_fraction, tr.moving_fraction)
@@ -132,12 +137,14 @@ def test_lumped_layout_is_the_grid_the_case_would_have():
     tr = golden_result(LUMPED_ID).trace
     layout = geometry.layout_from_trace(tr)
     h = structure.solve_portal_height(
-        tr.inputs["physical_length"],
-        tr.inputs["flexural_rigidity_ei"],
-        tr.inputs["mass_per_unit_len"],
-        tr.inputs["nat_freq"],
+        tr.inputs["span"]["span_length"],
+        tr.inputs["span"]["flexural_rigidity"],
+        tr.inputs["span"]["mass_per_length"],
+        tr.inputs["restraint"]["natural_frequency"],
     )
-    n_seg, piv = moc.grid_size(tr.inputs["physical_length"], h, tr.inputs["celerity"], tr.dt)
+    n_seg, piv = moc.grid_size(
+        tr.inputs["span"]["span_length"], h, tr.inputs["span"]["celerity"], tr.dt
+    )
     frac_a, frac_b = moc.moving_fractions(n_seg, piv)
     assert (layout.pipe_seg_qty, layout.pivot_seg_qty) == (n_seg, piv)
     assert layout.n_cells == 2 * n_seg + 1

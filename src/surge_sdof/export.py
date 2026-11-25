@@ -351,6 +351,39 @@ def _meta_outputs(result: PeakResponse) -> dict:
     }
 
 
+def _schema_1_inputs(inputs: dict) -> dict:
+    """The solver's grouped ``Trace.inputs`` in the flat form and the order trace schema 1
+    stores them: the keyword arguments of the entry points before the public API session,
+    ``output_type`` 0 (every exported trace was run with it). Temporary: the schema bump
+    (plan 6.5) exports the grouped form and removes this."""
+    span, restraint, integration = inputs["span"], inputs["restraint"], inputs["integration"]
+    flat = {
+        "force_history": inputs["force_history"],
+        "step_qty": integration["substep_count"],
+        "sample_freq": inputs["sample_rate"],
+        "physical_length": span["span_length"],
+        "flexural_rigidity_ei": span["flexural_rigidity"],
+        "celerity": span["celerity"],
+        "mass_per_unit_len": span["mass_per_length"],
+    }
+    if "fluid" in inputs:
+        flat["fluid_densty"] = inputs["fluid"]["fluid_density"]
+        flat["fluid_area"] = inputs["fluid"]["flow_area"]
+    flat.update(
+        damping_percent=restraint["damping_percent"],
+        dynamic_fric=restraint["friction_coefficient"],
+        nat_freq=restraint["natural_frequency"],
+        restrain_freq_ratio=restraint["closed_gap_frequency_ratio"],
+        gap=restraint["support_gap"],
+        output_type=0,
+    )
+    if "coupling" in inputs:
+        flat["vav_denominator"] = inputs["coupling"]["mean_velocity_divisor"]
+        flat["parity"] = inputs["coupling"]["parity"]
+        flat["fraction_profile"] = inputs["coupling"]["fraction_profile"]
+    return flat
+
+
 def to_trace_dict(
     result: PeakResponse,
     case_id: str,
@@ -393,7 +426,7 @@ def to_trace_dict(
         "meta": {
             "case_id": str(case_id),
             "solver": str(trace.solver),
-            "inputs": _jsonable(dict(trace.inputs), "inputs"),
+            "inputs": _jsonable(_schema_1_inputs(trace.inputs), "inputs"),
             "params": _meta_params(result),
             "outputs": _meta_outputs(result),
             "n_frames": int(trace.n_frames) + 1,

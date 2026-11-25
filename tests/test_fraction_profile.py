@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import inspect
 
+import fixture_cases as fc
 import numpy as np
 import pytest
 import test_differential as td
@@ -66,9 +67,8 @@ def test_default_profile_is_fixed():
     assert inspect.signature(coupling.fluid_column).parameters["fraction_profile"].default == (
         "fixed"
     )
-    assert inspect.signature(response.peak_response_jc).parameters["fraction_profile"].default == (
-        "fixed"
-    )
+    coupling_default = inspect.signature(response.peak_response_jc).parameters["coupling"].default
+    assert coupling_default.fraction_profile == "fixed"
     fa, fb = moc.moving_fractions(pipe, pivot)
     xa, xb = fixed(pipe, pivot)
     assert np.array_equal(fa, xa) and np.array_equal(fb, xb)
@@ -81,7 +81,7 @@ def test_unknown_profile_is_rejected():
         moc.moving_fractions(30, 8, "corrected")
     _id, force, kw = td.JC_SMALL[0]
     with pytest.raises(ValueError, match="fraction_profile"):
-        response.peak_response_jc(force, **kw, fraction_profile="corrected")
+        response.peak_response_jc(force, **fc.solver_inputs(kw, fraction_profile="corrected"))
 
 
 def test_table_pivot_8_pipe_30():
@@ -252,15 +252,18 @@ def test_display_profile_survives_pivot_4_on_both_paths(monkeypatch):
 
 def test_fraction_profile_flag_reaches_the_coupling_and_the_trace():
     _id, force, kw = td.JC_SMALL[0]
-    sig = inspect.signature(response.peak_response_jc).parameters["fraction_profile"]
+    sig = inspect.signature(response.peak_response_jc).parameters["coupling"]
     assert sig.kind is inspect.Parameter.KEYWORD_ONLY
     for profile in moc.FRACTION_PROFILES:
         res = response.peak_response_jc(
-            force, **kw, trace_every=1, **dict(td.LEGACY_FLAGS, fraction_profile=profile)
+            force,
+            **fc.solver_inputs(
+                kw, trace_every=1, **dict(td.LEGACY_FLAGS, fraction_profile=profile)
+            ),
         )
         fa, fb = moc.moving_fractions(res.trace.pipe_seg_qty, res.trace.pivot_seg_qty, profile)
         assert np.array_equal(res.trace.moving_fraction, interleave(fa, fb))
-        assert res.trace.inputs["fraction_profile"] == profile
+        assert res.trace.inputs["coupling"]["fraction_profile"] == profile
 
 
 def test_fixed_profile_changes_a_fluid_coupled_run_and_nothing_else():
@@ -268,15 +271,17 @@ def test_fixed_profile_changes_a_fluid_coupled_run_and_nothing_else():
     (``dF = 0``) or in the short-pipe fallback it cannot act."""
     _id, force, kw = td.JC_SMALL[0]
     assert kw["fluid_area"] > 0
-    base = response.peak_response_jc(force, **kw, **td.LEGACY_FLAGS).summary()
+    base = response.peak_response_jc(force, **fc.solver_inputs(kw, **td.LEGACY_FLAGS)).summary()
     f4 = response.peak_response_jc(
-        force, **kw, **dict(td.LEGACY_FLAGS, fraction_profile="fixed")
+        force, **fc.solver_inputs(kw, **dict(td.LEGACY_FLAGS, fraction_profile="fixed"))
     ).summary()
     assert not np.array_equal(base, f4)
     assert td._max_rel_change(f4, base) < 1e-1  # a correction, not a different answer
     for kw2 in (dict(kw, fluid_area=0.0), dict(kw, physical_length=1.0)):
-        base = response.peak_response_jc(force, **kw2, **td.LEGACY_FLAGS).summary()
+        base = response.peak_response_jc(
+            force, **fc.solver_inputs(kw2, **td.LEGACY_FLAGS)
+        ).summary()
         f4 = response.peak_response_jc(
-            force, **kw2, **dict(td.LEGACY_FLAGS, fraction_profile="fixed")
+            force, **fc.solver_inputs(kw2, **dict(td.LEGACY_FLAGS, fraction_profile="fixed"))
         ).summary()
         assert np.array_equal(base, f4)

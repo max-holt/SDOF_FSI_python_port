@@ -35,6 +35,7 @@ import random
 from pathlib import Path
 from typing import NamedTuple
 
+import fixture_cases as fc
 import numpy as np
 import pytest
 
@@ -57,8 +58,9 @@ _PEAK_FIELDS = {
     "max_acceleration": "max_acceleration",
     "max_applied_force": "max_applied_force",
     "free_decay_samples": "free_decay_samples",
-    "history": "history",
 }
+"""``history``, the last peak key, is the history the case's ``output_type`` names
+(``fixture_cases.history_of``): the result carries all three since session R.9."""
 _TRACE_FIELDS = {
     "solver": "solver",
     "trace_every": "trace_every",
@@ -106,17 +108,18 @@ def run_solver(solver: str, history, params: dict, options: dict) -> dict:
     ``"setup"`` (the set-up scalars of a case), ``history`` the force history (N),
     ``params`` the case's physical arguments and
     ``options`` the run's switches (``output_type``, ``trace_every``, the JC flags), all
-    under today's keyword names.
+    under the fixtures' keyword names, which ``fixture_cases.solver_inputs`` translates.
     """
     if solver == "setup":
         return _setup_values(params)
     if solver == "peak_response":
-        result = response.peak_response(history, **params, **options)
+        result = response.peak_response(history, **fc.solver_inputs(params, **options))
     elif solver == "peak_response_jc":
-        result = response.peak_response_jc(history, **params, **options)
+        result = response.peak_response_jc(history, **fc.solver_inputs(params, **options))
     else:
         raise ValueError(f"unknown solver {solver!r}")
     out = {key: getattr(result, attr) for key, attr in _PEAK_FIELDS.items()}
+    out["history"] = fc.history_of(result, options.get("output_type", 0))
     if result.trace is not None:
         for key, attr in _TRACE_FIELDS.items():
             out[f"trace.{key}"] = getattr(result.trace, attr)

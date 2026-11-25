@@ -32,6 +32,7 @@ import math
 from pathlib import Path
 
 import cases  # tools/cases.py
+import fixture_cases  # tools/fixture_cases.py
 import sweep_document  # tools/sweep_document.py
 
 from surge_sdof import export, moc, response
@@ -49,17 +50,11 @@ def estimated_cells(kw: dict, solver: str) -> int:
     """``2N + 1`` cells a JC run will carry (0 for lumped or a short-pipe fallback)."""
     if solver != "jc":
         return 0
+    inputs = fixture_cases.solver_inputs(kw)
     setup = response.solver_setup(
-        kw["step_qty"],
-        kw["sample_freq"],
-        kw["physical_length"],
-        kw["flexural_rigidity_ei"],
-        kw["mass_per_unit_len"],
-        kw["nat_freq"],
+        inputs["sample_rate"], inputs["span"], inputs["restraint"], inputs["integration"]
     )
-    column_cell_count, end_to_elbow_cell_count = response.column_grid(
-        setup, kw["physical_length"], kw["celerity"]
-    )
+    column_cell_count, end_to_elbow_cell_count = response.column_grid(setup, inputs["span"])
     return (
         0
         if moc.is_short_pipe(column_cell_count, end_to_elbow_cell_count)

@@ -28,6 +28,7 @@ import random
 import sys
 from dataclasses import dataclass
 
+import fixture_cases as fc
 import numpy as np
 import pytest
 import test_golden as tg
@@ -424,17 +425,16 @@ def _check_peak_response(force, kw, output_types):
     results = {}
     for output_type in output_types:
         legacy = lp.get_peak_response(force, **kw, output_type=output_type)
-        res = response.peak_response(force, **kw, output_type=output_type)
+        res = response.peak_response(force, **fc.solver_inputs(kw, output_type=output_type))
         assert isinstance(res, response.PeakResponse)
-        assert res.output_type == output_type
         if output_type == 0:
-            assert res.history is None
+            assert fc.history_of(res, output_type) is None
             assert legacy.shape == (5,)
             assert_close(res.summary(), legacy)
         else:
-            assert res.history is not None
-            assert res.history.shape == (legacy.shape[0] - 1,)
-            assert_close(res.history, legacy[1:])
+            assert fc.history_of(res, output_type) is not None
+            assert fc.history_of(res, output_type).shape == (legacy.shape[0] - 1,)
+            assert_close(fc.history_of(res, output_type), legacy[1:])
         results[output_type] = res
     return results
 
@@ -451,7 +451,7 @@ def test_peak_response_matches_legacy_on_the_sweep(idx):
 
 def test_sweep_enters_free_decay_and_engages_the_gap():
     cases = sweep_cases()
-    results = [response.peak_response(c.force, **c.kw) for c in cases]
+    results = [response.peak_response(c.force, **fc.solver_inputs(c.kw)) for c in cases]
     assert sum(r.free_decay_samples > 0 for r in results) >= 1
     assert sum(r.max_displacement > c.kw["gap"] for r, c in zip(results, cases, strict=True)) >= 1
     # and the gap matters: the clamped case differs from the gap-free run
@@ -487,8 +487,8 @@ def test_peak_response_matches_legacy_on_the_golden_curve(case):
 
 def test_peak_response_1d_history_equals_its_column():
     case, force, kw = _example_lumped()
-    a = response.peak_response(force[:, 0], **kw)
-    b = response.peak_response(force, **kw)
+    a = response.peak_response(force[:, 0], **fc.solver_inputs(kw))
+    b = response.peak_response(force, **fc.solver_inputs(kw))
     assert a == b or np.array_equal(a.summary(), b.summary())
 
 
@@ -500,7 +500,7 @@ def test_peak_response_raises_on_overflow():
     with pytest.raises(FloatingPointError):
         lp.get_peak_response(force, **kw)
     with pytest.raises(FloatingPointError):
-        response.peak_response(force, **kw)
+        response.peak_response(force, **fc.solver_inputs(kw))
     # (b) stiffness = inf (pure-Python set-up overflow, D-14): the legacy raises at the
     # first invalid 0 * inf in the restoring term; the Python-float state carries the
     # nan to the end and peak_response raises there.
@@ -509,7 +509,7 @@ def test_peak_response_raises_on_overflow():
     with pytest.raises(FloatingPointError):
         lp.get_peak_response(force, **kw)
     with pytest.raises(FloatingPointError):
-        response.peak_response(force, **kw)
+        response.peak_response(force, **fc.solver_inputs(kw))
 
 
 # ================================================================== JC path (Stage 4.2)
@@ -849,18 +849,19 @@ def _check_peak_response_jc(force, kw, output_types, flags=LEGACY_FLAGS):
     results = {}
     for output_type in output_types:
         legacy = lp.get_peak_response_jc(force, **kw, output_type=output_type)
-        res = response.peak_response_jc(force, **kw, output_type=output_type, **flags)
+        res = response.peak_response_jc(
+            force, **fc.solver_inputs(kw, output_type=output_type, **flags)
+        )
         assert isinstance(res, response.PeakResponse)
-        assert res.output_type == output_type
         if output_type == 0:
-            assert res.history is None
+            assert fc.history_of(res, output_type) is None
             assert legacy.shape == (5,)
             assert_close(res.summary(), legacy)
             assert all(type(getattr(res, f)) is float for f in SUMMARY_FIELDS)
         else:
-            assert res.history is not None
-            assert res.history.shape == (legacy.shape[0] - 1,)
-            assert_close(res.history, legacy[1:])
+            assert fc.history_of(res, output_type) is not None
+            assert fc.history_of(res, output_type).shape == (legacy.shape[0] - 1,)
+            assert_close(fc.history_of(res, output_type), legacy[1:])
         results[output_type] = res
     return results
 
@@ -876,7 +877,7 @@ def test_peak_response_jc_matches_legacy_on_the_small_cases(idx):
 
 def test_peak_response_jc_matches_excel_on_the_example_case():
     case, force, kw = _example_jc()
-    res = response.peak_response_jc(force, **kw, **LEGACY_FLAGS)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, **LEGACY_FLAGS))
     np.testing.assert_allclose(
         res.summary(), np.asarray(case["expected"], float), rtol=tg.EXAMPLE_RTOL, atol=0
     )
@@ -889,13 +890,18 @@ def test_peak_response_jc_short_pipe_falls_back_to_the_lumped_solver():
     lumped_kw = {k: v for k, v in kw.items() if not k.startswith("fluid")}
     for output_type in (0, 1):
         res = _check_peak_response_jc(force, kw, (output_type,))[output_type]
-        lumped = response.peak_response(force, **lumped_kw, output_type=output_type)
+        lumped = response.peak_response(
+            force, **fc.solver_inputs(lumped_kw, output_type=output_type)
+        )
         assert np.array_equal(res.summary(), lumped.summary())
         assert res.free_decay_samples == lumped.free_decay_samples
         if output_type == 0:
-            assert res.history is None and lumped.history is None
+            assert fc.history_of(res, output_type) is None
+            assert fc.history_of(lumped, output_type) is None
         else:
-            assert np.array_equal(res.history, lumped.history)
+            assert np.array_equal(
+                fc.history_of(res, output_type), fc.history_of(lumped, output_type)
+            )
     # the legacy took its fallback too: no JC sub-step was traced
     assert not trace_legacy_jc(force, **kw, output_type=0).substeps
 
@@ -903,9 +909,9 @@ def test_peak_response_jc_short_pipe_falls_back_to_the_lumped_solver():
 def test_peak_response_jc_rejects_unknown_flags():
     _id, force, kw = JC_SMALL[0]
     with pytest.raises(ValueError):
-        response.peak_response_jc(force, **kw, parity="phase")
+        response.peak_response_jc(force, **fc.solver_inputs(kw, parity="phase"))
     with pytest.raises(ValueError):
-        response.peak_response_jc(force, **kw, vav_denominator="2N")
+        response.peak_response_jc(force, **fc.solver_inputs(kw, vav_denominator="2N"))
 
 
 @pytest.mark.parametrize(
@@ -921,7 +927,7 @@ def test_d25_unknown_flags_raise_on_every_path(flag, path):
     else:
         kw = dict(JC_SMALL_KW, fluid_densty=0.0)
     with pytest.raises(ValueError, match=next(iter(flag)).replace("vav_denominator", "mean")):
-        response.peak_response_jc(force, **kw, **flag)
+        response.peak_response_jc(force, **fc.solver_inputs(kw, **flag))
 
 
 def test_peak_response_jc_runtime_errors_are_raised():
@@ -929,11 +935,13 @@ def test_peak_response_jc_runtime_errors_are_raised():
     # MoC arrays under errstate), D-8
     force = _step_force()
     with pytest.raises(ZeroDivisionError):
-        response.peak_response_jc(force, **dict(JC_SMALL_KW, step_qty=1))
+        response.peak_response_jc(force, **fc.solver_inputs(dict(JC_SMALL_KW, step_qty=1)))
     with pytest.raises(FloatingPointError):
-        response.peak_response_jc(force, **dict(JC_SMALL_KW, fluid_densty=0.0))
+        response.peak_response_jc(force, **fc.solver_inputs(dict(JC_SMALL_KW, fluid_densty=0.0)))
     with pytest.raises(IndexError):
-        response.peak_response_jc(force.reshape(1, 100), **dict(JC_SMALL_KW, physical_length=12.5))
+        response.peak_response_jc(
+            force.reshape(1, 100), **fc.solver_inputs(dict(JC_SMALL_KW, physical_length=12.5))
+        )
 
 
 @pytest.mark.jc_slow
@@ -947,7 +955,7 @@ def test_peak_response_jc_matches_excel_on_the_golden_curve(case):
     the sweep, so the legacy solver is not re-run here (owner's decision, Stage 4.2)."""
     kw = {k: v for k, v in tg.case_params(case, tg.PARAMS).items() if k != "output_type"}
     force = tg.load_force(tg.PARAMS)
-    res = response.peak_response_jc(force, **kw, **LEGACY_FLAGS)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, **LEGACY_FLAGS))
     expected = [float(case[name]) for name in tg.OUTPUT_NAMES]
     tg.check_and_cache(
         case["case_id"] + "_response",
@@ -1112,7 +1120,7 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
     assert set(results) == {0, case.history_type}
     if case.fallback:
         lumped_kw = {k: v for k, v in case.kw.items() if not k.startswith("fluid")}
-        lumped = response.peak_response(case.force, **lumped_kw, output_type=0)
+        lumped = response.peak_response(case.force, **fc.solver_inputs(lumped_kw, output_type=0))
         assert np.array_equal(results[0].summary(), lumped.summary())
 
 
@@ -1120,16 +1128,16 @@ def test_peak_response_jc_matches_legacy_on_the_sweep(idx):
 
 
 def test_peak_response_jc_defaults_are_the_approved_fixes():
-    params = inspect.signature(response.peak_response_jc).parameters
-    assert params["vav_denominator"].default == "fixed"
-    assert params["parity"].default == "running"
-    assert params["fraction_profile"].default == "fixed"
+    defaults = inspect.signature(response.peak_response_jc).parameters["coupling"].default
+    assert defaults.mean_velocity_divisor == "fixed"
+    assert defaults.parity == "running"
+    assert defaults.fraction_profile == "fixed"
     jc_params = inspect.signature(coupling.fluid_column).parameters
     assert jc_params["vav_denominator"].default == "fixed"
     assert jc_params["fraction_profile"].default == "fixed"
     _id, force, kw = JC_SMALL[0]
-    default = response.peak_response_jc(force, **kw)
-    explicit = response.peak_response_jc(force, **kw, **FIXED_FLAGS)
+    default = response.peak_response_jc(force, **fc.solver_inputs(kw))
+    explicit = response.peak_response_jc(force, **fc.solver_inputs(kw, **FIXED_FLAGS))
     assert np.array_equal(default.summary(), explicit.summary())
 
 
@@ -1181,7 +1189,7 @@ def _half_grid_sequence(monkeypatch, force, kw, **flags):
     kernel = response._integrate_kernel
     monkeypatch.setattr(response, "_integrate_kernel", getattr(kernel, "py_func", kernel))
     monkeypatch.setattr(coupling.moc, "step", recording_step)
-    res = response.peak_response_jc(force, **kw, output_type=1, **flags)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, output_type=1, **flags))
     return evens, res
 
 
@@ -1229,7 +1237,7 @@ def test_running_parity_is_continuous_across_phase_boundaries(monkeypatch):
     assert len(running) == len(legacy_evens)
     assert running == [i % 2 == 0 for i in range(len(running))]
     assert res_legacy.free_decay_samples > 0 and res_fixed.free_decay_samples > 0
-    assert not np.array_equal(res_legacy.history, res_fixed.history)
+    assert not np.array_equal(fc.history_of(res_legacy, 1), fc.history_of(res_fixed, 1))
 
 
 @pytest.mark.parametrize("idx", range(N_CASES), ids=JC_SWEEP_IDS)
@@ -1238,7 +1246,9 @@ def test_legacy_flags_reproduce_legacy_bitwise(idx):
     bitwise (``jc_sweep_results`` compares at RTOL; this pins exact equality)."""
     case = jc_sweep_cases()[idx]
     legacy = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
-    res = response.peak_response_jc(case.force, **case.kw, output_type=0, **LEGACY_FLAGS)
+    res = response.peak_response_jc(
+        case.force, **fc.solver_inputs(case.kw, output_type=0, **LEGACY_FLAGS)
+    )
     assert np.array_equal(res.summary(), legacy)
 
 
@@ -1261,13 +1271,16 @@ def test_fixed_flags_change_only_where_expected(idx):
     res_legacy = jc_sweep_results(idx)[0]
     legacy_profile = {"fraction_profile": "legacy"}
     f1 = response.peak_response_jc(
-        case.force, **case.kw, vav_denominator="fixed", parity="per_phase", **legacy_profile
+        case.force,
+        **fc.solver_inputs(case.kw, vav_denominator="fixed", parity="per_phase", **legacy_profile),
     ).summary()
     f2 = response.peak_response_jc(
-        case.force, **case.kw, vav_denominator="legacy", parity="running", **legacy_profile
+        case.force,
+        **fc.solver_inputs(case.kw, vav_denominator="legacy", parity="running", **legacy_profile),
     ).summary()
     both = response.peak_response_jc(
-        case.force, **case.kw, vav_denominator="fixed", parity="running", **legacy_profile
+        case.force,
+        **fc.solver_inputs(case.kw, vav_denominator="fixed", parity="running", **legacy_profile),
     ).summary()
     no_effect = case.fallback or case.kw["fluid_area"] == 0.0
     if no_effect:
@@ -1295,10 +1308,12 @@ def test_fixed_fraction_profile_changes_every_fluid_coupled_moc_case(idx):
     case = jc_sweep_cases()[idx]
     base = lp.get_peak_response_jc(case.force, **case.kw, output_type=0)
     f4 = response.peak_response_jc(
-        case.force, **case.kw, **dict(LEGACY_FLAGS, fraction_profile="fixed")
+        case.force, **fc.solver_inputs(case.kw, **dict(LEGACY_FLAGS, fraction_profile="fixed"))
     ).summary()
-    defaults = response.peak_response_jc(case.force, **case.kw).summary()
-    explicit = response.peak_response_jc(case.force, **case.kw, **FIXED_FLAGS).summary()
+    defaults = response.peak_response_jc(case.force, **fc.solver_inputs(case.kw)).summary()
+    explicit = response.peak_response_jc(
+        case.force, **fc.solver_inputs(case.kw, **FIXED_FLAGS)
+    ).summary()
     assert np.array_equal(defaults, explicit)
     if case.fallback or case.kw["fluid_area"] == 0.0:
         assert np.array_equal(f4, base) and np.array_equal(defaults, base)

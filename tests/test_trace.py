@@ -7,6 +7,7 @@ itself stays pinned to ``legacy_port`` by ``tests/test_differential.py``.
 
 from __future__ import annotations
 
+import fixture_cases as fc
 import numpy as np
 import pytest
 import test_differential as td
@@ -98,14 +99,13 @@ def _lumped_kw(kw):
     return {k: v for k, v in kw.items() if not k.startswith("fluid")}
 
 
-def _same_result(a: response.PeakResponse, b: response.PeakResponse):
+def _same_result(a: response.PeakResponse, b: response.PeakResponse, output_type: int):
     assert np.array_equal(a.summary(), b.summary())
     assert a.free_decay_samples == b.free_decay_samples
-    assert a.output_type == b.output_type
-    if a.history is None:
-        assert b.history is None
+    if fc.history_of(a, output_type) is None:
+        assert fc.history_of(b, output_type) is None
     else:
-        assert np.array_equal(a.history, b.history)
+        assert np.array_equal(fc.history_of(a, output_type), fc.history_of(b, output_type))
 
 
 def _schedule(force, kw):
@@ -175,15 +175,15 @@ def _check_frames(res: response.PeakResponse, force, kw, stride):
 def test_trace_every_is_validated():
     force, kw, _ht = _lumped_case(LUMPED_IDX[0])
     with pytest.raises(ValueError, match="trace_every"):
-        response.peak_response(force, **kw, trace_every=-1)
+        response.peak_response(force, **fc.solver_inputs(kw, trace_every=-1))
     with pytest.raises(TypeError):
-        response.peak_response(force, **kw, trace_every=2.5)
+        response.peak_response(force, **fc.solver_inputs(kw, trace_every=2.5))
     jc_force, jc_kw = _jc_case(0)
     with pytest.raises(ValueError, match="trace_every"):
-        response.peak_response_jc(jc_force, **jc_kw, trace_every=-1)
-    assert response.peak_response(force, **kw).trace is None
-    assert response.peak_response(force, **kw, trace_every=0).trace is None
-    assert response.peak_response_jc(jc_force, **jc_kw).trace is None
+        response.peak_response_jc(jc_force, **fc.solver_inputs(jc_kw, trace_every=-1))
+    assert response.peak_response(force, **fc.solver_inputs(kw)).trace is None
+    assert response.peak_response(force, **fc.solver_inputs(kw, trace_every=0)).trace is None
+    assert response.peak_response_jc(jc_force, **fc.solver_inputs(jc_kw)).trace is None
 
 
 @pytest.mark.parametrize("stride", STRIDES)
@@ -191,9 +191,11 @@ def test_trace_every_is_validated():
 def test_lumped_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stride):
     force, kw, history_type = _lumped_case(idx)
     for output_type in (0, history_type):
-        base = response.peak_response(force, **kw, output_type=output_type)
-        res = response.peak_response(force, **kw, output_type=output_type, trace_every=stride)
-        _same_result(base, res)
+        base = response.peak_response(force, **fc.solver_inputs(kw, output_type=output_type))
+        res = response.peak_response(
+            force, **fc.solver_inputs(kw, output_type=output_type, trace_every=stride)
+        )
+        _same_result(base, res, output_type)
         tr = _check_frames(res, force, kw, stride)
         assert tr.solver == "peak_response"
         assert not np.any(tr.d_f) and tr.n_cells == 0 and tr.p_cells is None
@@ -224,9 +226,11 @@ def test_lumped_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stri
 def test_jc_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stride):
     force, kw = _jc_case(idx)
     for output_type in (0, 3):
-        base = response.peak_response_jc(force, **kw, output_type=output_type)
-        res = response.peak_response_jc(force, **kw, output_type=output_type, trace_every=stride)
-        _same_result(base, res)
+        base = response.peak_response_jc(force, **fc.solver_inputs(kw, output_type=output_type))
+        res = response.peak_response_jc(
+            force, **fc.solver_inputs(kw, output_type=output_type, trace_every=stride)
+        )
+        _same_result(base, res, output_type)
         tr = _check_frames(res, force, kw, stride)
         assert tr.solver == "peak_response_jc"
         assert tr.p_cells.shape == tr.v_cells.shape == (tr.n_frames, tr.n_cells)
@@ -236,11 +240,13 @@ def test_jc_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stride):
 @pytest.mark.parametrize("flags", [td.LEGACY_FLAGS, td.FIXED_FLAGS], ids=["legacy", "fixed"])
 def test_jc_trace_is_bitwise_under_both_flag_sets(flags):
     force, kw = _jc_case(1)
-    base = response.peak_response_jc(force, **kw, output_type=1, **flags)
-    res = response.peak_response_jc(force, **kw, output_type=1, trace_every=2, **flags)
-    _same_result(base, res)
-    assert res.trace.inputs["parity"] == flags["parity"]
-    assert res.trace.inputs["fraction_profile"] == flags["fraction_profile"]
+    base = response.peak_response_jc(force, **fc.solver_inputs(kw, output_type=1, **flags))
+    res = response.peak_response_jc(
+        force, **fc.solver_inputs(kw, output_type=1, trace_every=2, **flags)
+    )
+    _same_result(base, res, 1)
+    assert res.trace.inputs["coupling"]["parity"] == flags["parity"]
+    assert res.trace.inputs["coupling"]["fraction_profile"] == flags["fraction_profile"]
 
 
 @pytest.mark.parametrize("stride", [1, 5])
@@ -250,9 +256,9 @@ def test_free_decay_is_traced_only_inside_the_history_window(solver, stride):
         run, kw = response.peak_response_jc, CAPPED_KW
     else:
         run, kw = response.peak_response, _lumped_kw(CAPPED_KW)
-    base = run(CAPPED_FORCE, **kw, output_type=1)
-    res = run(CAPPED_FORCE, **kw, output_type=1, trace_every=stride)
-    _same_result(base, res)
+    base = run(CAPPED_FORCE, **fc.solver_inputs(kw, output_type=1))
+    res = run(CAPPED_FORCE, **fc.solver_inputs(kw, output_type=1, trace_every=stride))
+    _same_result(base, res, 1)
     tr = _check_frames(res, CAPPED_FORCE, kw, stride)
     _flat, offsets, _delay, out_max = _schedule(CAPPED_FORCE, kw)
     assert res.free_decay_samples > out_max * 2 - (len(offsets) - 1)  # the cap is hit
@@ -264,14 +270,14 @@ def test_free_decay_is_traced_only_inside_the_history_window(solver, stride):
     ends = np.concatenate([offsets[1:] - 1, offsets[-1] + step_qty * np.arange(1, out_max * 2) - 1])
     last = np.isin(tr.sub_step, ends)
     assert last.sum() > 0
-    assert np.array_equal(tr.x[last], base.history[tr.sample[last]])
+    assert np.array_equal(tr.x[last], base.displacement_history[tr.sample[last]])
 
 
 def test_f_friction_is_zero_without_friction():
     for idx in (10, 19, 24):  # dynamic_fric = 0 sweep cases that enter free decay
         force, kw, _ht = _lumped_case(idx)
         assert kw["dynamic_fric"] == 0
-        tr = response.peak_response(force, **kw, trace_every=1).trace
+        tr = response.peak_response(force, **fc.solver_inputs(kw, trace_every=1)).trace
         assert tr.params.friction_velocity_step == 0
         assert not np.any(tr.f_friction) and not np.any(tr.stick)
 
@@ -280,7 +286,7 @@ def test_f_friction_is_zero_without_friction():
 def test_f_friction_and_stick_follow_the_coulomb_branch(idx):
     force, kw, _ht = _lumped_case(idx)
     assert kw["dynamic_fric"] > 0
-    tr = response.peak_response(force, **kw, trace_every=1).trace
+    tr = response.peak_response(force, **fc.solver_inputs(kw, trace_every=1)).trace
     mass, fric_acc, dt = tr.params.mass, tr.params.friction_velocity_step, tr.dt
     v_old = np.concatenate([[0.0], tr.v[:-1]])
     a_old = np.concatenate([[0.0], tr.a[:-1]])
@@ -300,7 +306,7 @@ def test_f_friction_and_stick_follow_the_coulomb_branch(idx):
 
 def test_jc_trace_geometry():
     force, kw = _jc_case(3)  # example_jc
-    tr = response.peak_response_jc(force, **kw, trace_every=4).trace
+    tr = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=4)).trace
     dt = 1 / (kw["sample_freq"] * kw["step_qty"])
     h = structure.solve_portal_height(
         kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], kw["nat_freq"]
@@ -325,10 +331,8 @@ def test_jc_trace_geometry():
         h,
         dt,
     )
-    assert set(tr.inputs) == set(kw) | {
-        "force_history", "restrain_freq_ratio", "gap", "output_type", "vav_denominator", "parity",
-        "fraction_profile",
-    }  # fmt: skip
+    # every argument of the call is echoed, grouped as it was passed
+    assert set(tr.inputs) == set(fc.solver_inputs(kw)) | {"force_history"}
     assert np.array_equal(tr.inputs["force_history"], loads.as_history_2d(force))
 
 
@@ -343,7 +347,7 @@ def test_interleave():
 @pytest.mark.parametrize("stride", [1, 6])
 def test_jc_column_at_frame_0_is_the_initial_column(stride):
     force, kw = _jc_case(0)
-    tr = response.peak_response_jc(force, **kw, trace_every=stride).trace
+    tr = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride)).trace
     p_a, v_a, p_b, v_b = moc.column_at_rest(tr.pipe_seg_qty)
     assert np.array_equal(tr.p_cells[0], tracing.interleave(p_a, p_b))
     assert np.array_equal(tr.v_cells[0], tracing.interleave(v_a, v_b))
@@ -357,7 +361,7 @@ def test_jc_trace_reproduces_the_coupling_sequence(idx):
     traced acceleration of the previous sub-step and the running index, reproduces ``d_f``
     and the column bitwise."""
     force, kw = _jc_case(idx)
-    res = response.peak_response_jc(force, **kw, trace_every=1)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=1))
     tr = res.trace
     dt = tr.dt
     column = coupling.fluid_column(
@@ -388,20 +392,20 @@ def test_memory_guard_names_a_stride_that_fits(monkeypatch):
     force, kw = _jc_case(1)
     monkeypatch.setattr(tracing, "MAX_TRACE_VALUES", 20_000)
     with pytest.raises(ValueError, match="trace_every >= ") as info:
-        response.peak_response_jc(force, **kw, trace_every=1)
+        response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=1))
     stride = int(str(info.value).rsplit(">= ", 1)[1])
     assert stride > 1
-    res = response.peak_response_jc(force, **kw, trace_every=stride)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride))
     per_frame = (
         tracing.FRAME_STATE_COLUMN_COUNT + tracing.FRAME_INDEX_COLUMN_COUNT + 2 * res.trace.n_cells
     )
     assert res.trace.n_frames * per_frame <= 20_000
     with pytest.raises(ValueError):
-        response.peak_response_jc(force, **kw, trace_every=stride - 1)
+        response.peak_response_jc(force, **fc.solver_inputs(kw, trace_every=stride - 1))
     # the lumped path is guarded too (per-frame scalars only)
     monkeypatch.setattr(tracing, "MAX_TRACE_VALUES", 100)
     with pytest.raises(ValueError, match="trace_every >= "):
-        response.peak_response(force, **_lumped_kw(kw), trace_every=1)
+        response.peak_response(force, **fc.solver_inputs(_lumped_kw(kw), trace_every=1))
 
 
 def test_capacity_arithmetic():
@@ -419,10 +423,12 @@ def test_capacity_arithmetic():
 def test_jc_short_pipe_fallback_trace_is_lumped():
     force = td._step_force()
     kw = dict(td.JC_SMALL_KW, physical_length=1.0)
-    res = response.peak_response_jc(force, **kw, output_type=1, trace_every=2)
-    lumped = response.peak_response(force, **_lumped_kw(kw), output_type=1, trace_every=2)
-    _same_result(res, lumped)
+    res = response.peak_response_jc(force, **fc.solver_inputs(kw, output_type=1, trace_every=2))
+    lumped = response.peak_response(
+        force, **fc.solver_inputs(_lumped_kw(kw), output_type=1, trace_every=2)
+    )
+    _same_result(res, lumped, 1)
     assert res.trace.solver == "peak_response" and res.trace.p_cells is None
-    assert "fluid_area" not in res.trace.inputs
+    assert "fluid" not in res.trace.inputs
     assert np.array_equal(res.trace.x, lumped.trace.x)
     assert np.array_equal(res.trace.f_friction, lumped.trace.f_friction)

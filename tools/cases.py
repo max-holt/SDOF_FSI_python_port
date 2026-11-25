@@ -132,9 +132,9 @@ def default_trace_every(force, kw, target_frames: int) -> int:
 
 def run(force, kw, solver: str, trace_every: int):
     if solver == "jc":
-        return response.peak_response_jc(force, **kw, trace_every=trace_every)
+        return response.peak_response_jc(force, **tg.solver_inputs(kw, trace_every=trace_every))
     kw = {k: v for k, v in kw.items() if k not in JC_KEYS}
-    return response.peak_response(force, **kw, trace_every=trace_every)
+    return response.peak_response(force, **tg.solver_inputs(kw, trace_every=trace_every))
 
 
 def add_source_arguments(ap) -> None:

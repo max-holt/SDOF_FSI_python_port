@@ -63,6 +63,7 @@ set-up (D-4) rather than in the first MoC update.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import operator
 from dataclasses import dataclass
@@ -84,6 +85,7 @@ from surge_sdof.trace import (
 from surge_sdof.vba_compat import clng
 
 __all__ = [
+    "FIXED_COUPLING",
     "VBA_COUPLING",
     "CouplingModel",
     "Fluid",
@@ -235,40 +237,42 @@ class CouplingModel:
             )
 
 
+FIXED_COUPLING = CouplingModel()
+"""The approved fixes F-1, F-2 and F-4b: the default of ``peak_response_jc``."""
+
 VBA_COUPLING = CouplingModel("legacy", "per_phase", "legacy")
 """The VBA behaviour bitwise (D-4, D-17, D-19): the flags of the Excel acceptance runs."""
 
 
 @dataclass(frozen=True)
 class PeakResponse:
-    """Result of ``peak_response`` / ``peak_response_jc``.
+    """The peak response of a run and the state history it went through.
 
-    The five maxima are the VBA ``resultArray(0 To 4)`` of ``outputType = 0``.
+    The five maxima are the VBA ``resultArray(0 To 4)`` of ``outputType = 0``; the three
+    histories are what ``outputType`` 1, 2 and 3 returned one at a time.
 
     Attributes
     ----------
     max_static_equivalent_force : float
-        ``|effective_displacement(xMax)| * stiffness``, N (VBA line 611).
+        ``|effective_displacement(x_max)| * stiffness``, N (VBA line 611).
     max_displacement : float
-        ``xMax``, m.
+        Largest ``|x|``, m.
     max_velocity : float
-        ``vMax``, m/s.
+        Largest ``|v|``, m/s.
     max_acceleration : float
-        ``aMax``, m/s².
+        Largest ``|a|``, m/s².
     max_applied_force : float
-        ``FMax``, the largest ``|forceA - forceB|``, N.
-    history : numpy.ndarray or None
-        For ``output_type`` 1 / 2 / 3 the displacement (m) / velocity (m/s) /
-        acceleration (m/s²) at the end of each sample, 0-based, length ``outMax * 2``
-        (element ``t - 1`` is sample ``t``; unfilled trailing elements are 0). None for
-        ``output_type = 0``. The VBA pad element 0 (D-16) is not present.
-    output_type : int
-        The requested output type.
+        Largest ``|forceA - forceB|`` of the forced phases, N (VBA ``FMax``).
+    displacement_history, velocity_history, acceleration_history : numpy.ndarray
+        float64, the displacement (m), velocity (m/s) and acceleration (m/s²) at the end of
+        each sample, 0-based (element ``t - 1`` is sample ``t``), ``2 *
+        nominal_forced_sample_count`` samples; free decay past them is integrated but not
+        recorded, unfilled trailing elements are 0. The VBA pad element 0 (D-16) is not
+        present.
     free_decay_samples : int
         Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``, D-21).
     trace : trace.Trace or None
-        The sub-step trace when the solver was called with ``trace_every > 0``
-        (Session V.1); None otherwise.
+        The substep trace when ``Integration.trace_every > 0``; None otherwise.
     """
 
     max_static_equivalent_force: float
@@ -276,14 +280,12 @@ class PeakResponse:
     max_velocity: float
     max_acceleration: float
     max_applied_force: float
-    history: np.ndarray | None
-    """``output_type`` 1/2/3: displacement/velocity/acceleration at the end of each
-    sample, length ``outMax * 2`` (unfilled trailing elements 0); None for 0."""
-    output_type: int
+    # arrays take no part in ==, as in histories.History
+    displacement_history: np.ndarray = dataclasses.field(repr=False, compare=False)
+    velocity_history: np.ndarray = dataclasses.field(repr=False, compare=False)
+    acceleration_history: np.ndarray = dataclasses.field(repr=False, compare=False)
     free_decay_samples: int
-    """Samples integrated in the free-decay phase (``Do While x * xZero > 0.01``)."""
     trace: Trace | None = None
-    """``trace.Trace`` of the run when ``trace_every > 0``, else None (Session V.1)."""
 
     def summary(self) -> np.ndarray:
         """The five maxima as the VBA ``resultArray(0 To 4)`` (N, m, m/s, m/s², N)."""
@@ -300,59 +302,35 @@ class PeakResponse:
 
 def peak_response(
     force_history,
-    step_qty: int,
-    sample_freq: float,
-    physical_length: float,
-    flexural_rigidity_ei: float,
-    celerity: float,
-    mass_per_unit_len: float,
-    damping_percent: float,
-    dynamic_fric: float,
-    nat_freq: float,
-    restrain_freq_ratio: float = 1,
-    gap: float = 0,
-    output_type: int = 0,
-    trace_every: int = 0,
+    sample_rate: float,
+    *,
+    span: PipeSpan,
+    restraint: Restraint,
+    integration: Integration,
 ) -> PeakResponse:
-    """Peak response of the lumped SDOF proxy to a force history (``GetPeakResponse``).
+    """Peak response of the lumped SDOF proxy of a pipe span to an unbalance force history.
 
-    Units are consistent SI (the VBA states "consistent units except ``dynamicFric``",
-    whose ``9.81`` fixes m and s).
+    The force history acts at elbow A at once and at elbow B after the transit delay
+    ``span_length / celerity``; their difference drives the proxy through the transit and
+    forced phases, then free decay. Units are SI throughout (the friction step fixes m and s
+    through ``g = 9.81``).
 
     Parameters
     ----------
     force_history : array_like
-        Force-time history at one location, N; 1-D, or 2-D walked column-major (D-10).
-    step_qty : int
-        Sub-steps per sample.
-    sample_freq : float
-        Sample rate of the history, Hz.
-    physical_length : float
-        Length between elbows, m.
-    flexural_rigidity_ei : float
-        ``E * I``, N·m².
-    celerity : float
-        Propagation speed of the force along the pipe, m/s.
-    mass_per_unit_len : float
-        Mass per unit length, kg/m.
-    damping_percent : float
-        Damping as a percentage of critical, %.
-    dynamic_fric : float
-        Coulomb friction coefficient, dimensionless.
-    nat_freq : float
-        Natural frequency with the gaps open, Hz.
-    restrain_freq_ratio : float, optional
-        Natural frequency with the gaps closed over that with them open, dimensionless
-        (default 1).
-    gap : float, optional
-        Support gap at the centre of mass, m (default 0).
-    output_type : int, optional
-        0: the five maxima only; 1 / 2 / 3: also the displacement / velocity /
-        acceleration history (default 0).
-    trace_every : int, optional
-        0 (default): no trace. ``k > 0``: record every ``k``-th sub-step into
-        ``PeakResponse.trace`` (``trace.Trace``; Session V.1). The maxima and the history
-        are the same bitwise either way.
+        Force-time history at one elbow, N; 1-D, or 2-D walked column-major (D-10).
+    sample_rate : float
+        Samples per second of ``force_history``, Hz.
+    span : PipeSpan
+        Span length (m), flexural rigidity (N·m²), mass per length (kg/m) and celerity
+        (m/s).
+    restraint : Restraint
+        Natural frequency (Hz), damping (% of critical), friction coefficient, support gap
+        (m) and closed-gap frequency ratio.
+    integration : Integration
+        Substeps per sample and the trace stride (``trace_every`` 0: no trace; ``k > 0``:
+        every ``k``-th substep into ``PeakResponse.trace``, the other results unchanged
+        bitwise).
 
     Returns
     -------
@@ -363,74 +341,49 @@ def peak_response(
     ValueError
         ``trace_every < 0``, or a trace that would exceed ``trace.MAX_TRACE_VALUES``.
     ZeroDivisionError
-        ``step_qty = 1`` (D-7) or ``mass = 0``.
+        ``substep_count = 1`` (D-7) or a zero mass.
     IndexError
         A single-row 2-D history (D-8).
     TypeError
-        ``EI < 0`` or ``L * massPerUnitLen < 0`` (complex portal-frame seed, D-12).
+        A negative flexural rigidity or mass (complex portal-frame seed, D-12).
     FloatingPointError
         Overflow: at the free-decay test or once at the end of the run (D-23).
 
     Notes
     -----
-    Value-identical to ``legacy_port.get_peak_response`` (bitwise on the sweep and the
+    Reproduces ``GetPeakResponse`` (``legacy/vba/Existing Code.bas`` line 309);
+    value-identical to ``legacy_port.get_peak_response`` (bitwise on the sweep and the
     golden inputs, ``tests/test_differential.py``). Preserved VBA quirks: the force ramp
     plateau D-18, the friction dead zone D-20 and the free-decay threshold D-21; the
-    history has no VBA pad element (D-16).
+    histories have no VBA pad element (D-16).
     """
-    step_qty = int(step_qty)
-    sample_freq = float(sample_freq)
-    physical_length = float(physical_length)
-    flexural_rigidity_ei = float(flexural_rigidity_ei)
-    celerity = float(celerity)
-    mass_per_unit_len = float(mass_per_unit_len)
-    output_type = int(output_type)
-    trace_every = _trace_stride(trace_every)
+    integration = _checked_integration(integration)
+    sample_rate = float(sample_rate)
+    span = _coerced_span(span)
 
-    force_history_2d = loads.as_history_2d(force_history)
-    transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
-    # VBA line 377 (outMax)
-    nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
-        transit_delay_samples
-    )
-    substep_duration, portal_frame_height = solver_setup(
-        step_qty, sample_freq, physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
-    )
+    force_history_2d, nominal_forced_sample_count = _sample_grid(force_history, sample_rate, span)
+    setup = solver_setup(sample_rate, span, restraint, integration)
     sdof_params = structure.lumped_params(
-        PipeSpan(physical_length, flexural_rigidity_ei, mass_per_unit_len, celerity),
-        Restraint(nat_freq, damping_percent, dynamic_fric, gap, restrain_freq_ratio),
-        portal_frame_height,
-        substep_duration,
+        span, restraint, setup.portal_frame_height, setup.substep_duration
     )
     unbalance_force_samples = loads.unbalance_force(
-        force_history_2d, sample_freq, physical_length, celerity, step_qty
+        force_history_2d, sample_rate, span.span_length, span.celerity, integration.substep_count
     )
-    trace_request = None
-    if trace_every:
-        trace_request = tracing.TraceRequest(
-            trace_every,
-            "peak_response",
-            {
-                "force_history": force_history_2d,
-                "step_qty": step_qty,
-                "sample_freq": sample_freq,
-                "physical_length": physical_length,
-                "flexural_rigidity_ei": flexural_rigidity_ei,
-                "celerity": celerity,
-                "mass_per_unit_len": mass_per_unit_len,
-                "damping_percent": damping_percent,
-                "dynamic_fric": dynamic_fric,
-                "nat_freq": nat_freq,
-                "restrain_freq_ratio": restrain_freq_ratio,
-                "gap": gap,
-                "output_type": output_type,
-            },
-            celerity,
-            portal_frame_height,
-            loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
-        )
+    trace_request = _trace_request(
+        "peak_response",
+        {
+            "force_history": force_history_2d,
+            "sample_rate": sample_rate,
+            "span": dataclasses.asdict(span),
+            "restraint": dataclasses.asdict(restraint),
+            "integration": dataclasses.asdict(integration),
+        },
+        span,
+        integration,
+        setup,
+    )
     settings = RunSettings(
-        substep_duration, step_qty, nominal_forced_sample_count, output_type, False
+        setup.substep_duration, integration.substep_count, nominal_forced_sample_count, False
     )
     return _integrate(
         unbalance_force_samples, sdof_params, settings, moc.empty_column(), trace_request
@@ -439,190 +392,173 @@ def peak_response(
 
 def peak_response_jc(
     force_history,
-    step_qty: int,
-    sample_freq: float,
-    physical_length: float,
-    flexural_rigidity_ei: float,
-    celerity: float,
-    mass_per_unit_len: float,
-    fluid_densty: float,
-    fluid_area: float,
-    damping_percent: float,
-    dynamic_fric: float,
-    nat_freq: float,
-    restrain_freq_ratio: float = 1,
-    gap: float = 0,
-    output_type: int = 0,
-    trace_every: int = 0,
+    sample_rate: float,
     *,
-    vav_denominator: str = "fixed",
-    parity: str = "running",
-    fraction_profile: str = "fixed",
+    span: PipeSpan,
+    restraint: Restraint,
+    fluid: Fluid,
+    integration: Integration,
+    coupling: CouplingModel = FIXED_COUPLING,
 ) -> PeakResponse:
-    """Peak response with junction-coupling FSI (``GetPeakResponseJC``).
+    """Peak response of the SDOF proxy with junction-coupling FSI: a 1-D MoC fluid column
+    inside the span feeds the pressure-difference force at the elbows back to the structure.
 
     Parameters
     ----------
-    force_history, step_qty, sample_freq, physical_length, flexural_rigidity_ei, celerity, mass_per_unit_len, damping_percent, dynamic_fric, nat_freq, restrain_freq_ratio, gap, output_type
-        As ``peak_response``; ``mass_per_unit_len`` (kg/m) includes the fluid and
-        ``nat_freq`` (Hz) is modelled with the fluid mass included.
-    fluid_densty : float
-        Fluid density, kg/m³ (VBA spelling kept).
-    fluid_area : float
-        Internal cross-sectional (pressure) area of the pipe, m². The core fluid is
-        removed from the rigid mass and a 1-D MoC column inside the span feeds the
-        pressure-difference force ``dF`` (N) back.
-    trace_every : int, optional
-        As ``peak_response``; a JC trace also carries the column (``p_cells``,
-        ``v_cells``) and the grid geometry. The short-pipe fallback passes it on, so the
-        trace of such a call is a lumped one (``trace.solver == "peak_response"``).
-    vav_denominator : {"fixed", "legacy"}, keyword-only
-        Divisor of the MoC mean-velocity sum: the number of terms ``2N + 1`` (approved
-        fix F-1, default) or the VBA's ``2N - 1`` (D-17).
-    parity : {"running", "per_phase"}, keyword-only
-        MoC half-grid alternation: one running sub-step counter for the whole run
-        (approved fix F-2, default) or the VBA per-phase index ``k + (totInd - 1) *
-        stepQTY`` that can double-step a half-grid at a phase boundary (D-19).
-    fraction_profile : {"fixed", "legacy"}, keyword-only
-        The moving-fraction profiles weighting the mass acceleration along the column:
-        the lead author's corrected functions (approved fix F-4, default,
-        ``legacy/vba/interpFraction_fix_2026-10-26.bas``) or the VBA ``interpFractionA/B``
-        (D-4).
+    force_history, sample_rate, span, restraint, integration
+        As ``peak_response``; ``span.mass_per_length`` (kg/m) includes the fluid and
+        ``restraint.natural_frequency`` (Hz) is modelled with the fluid mass included. A
+        junction-coupling trace also carries the column (``Trace.p_cells``,
+        ``Trace.v_cells``) and the grid geometry.
+    fluid : Fluid
+        Fluid density (kg/m³) and flow area (m²). The core fluid is removed from the rigid
+        mass and the column inside the span feeds the junction force (N) back.
+    coupling : CouplingModel, optional
+        The model choices: the approved fixes (``FIXED_COUPLING``, default) or
+        ``VBA_COUPLING``, the VBA
+        behaviour bitwise.
 
     Returns
     -------
     PeakResponse
-        Spans too short for the MoC grid (``moc.is_short_pipe``) return
-        ``peak_response`` with the same arguments, as the VBA does (lines 736-740).
+        Spans too short for the MoC grid (``moc.is_short_pipe``) return ``peak_response``
+        with the same arguments, as the VBA does; the trace of such a call is a lumped one
+        (``trace.solver == "peak_response"``).
 
     Raises
     ------
     ValueError
-        An unknown ``vav_denominator``, ``parity`` or ``fraction_profile``, checked at the
-        entry on every path, the short pipe and ``rhoC = 0`` included (D-25); ``trace_every <
-        0`` or a trace over ``trace.MAX_TRACE_VALUES``; ``pivotSegQTY = 4`` at the set-up
-        with the fixed fraction profile (the ramp needs ``pivot > ext``).
+        ``trace_every < 0`` or a trace over ``trace.MAX_TRACE_VALUES``; an end-to-elbow
+        cell count of 4 at the set-up with the fixed fraction profile (the ramp needs it
+        above the inactive end cells).
     ZeroDivisionError
-        ``step_qty = 1`` (D-7); ``pivotSegQTY = 4`` at the set-up with the legacy fraction
-        profile (D-4).
+        ``substep_count = 1`` (D-7); an end-to-elbow cell count of 4 with the legacy
+        fraction profile (D-4).
     IndexError
         A single-row 2-D history (D-8).
     TypeError
-        ``EI < 0`` (D-12).
+        A negative flexural rigidity (D-12).
     FloatingPointError
-        ``rhoC = 0`` (checked once at the set-up, Stage 5) or an overflow in the fluid;
-        nothing is swallowed where the VBA's ``On Error GoTo ErrFound`` returned an empty
-        array (D-9).
+        A zero characteristic impedance ``fluid_density * celerity`` (checked once at the
+        set-up) or an overflow in the fluid; nothing is swallowed where the VBA's
+        ``On Error GoTo ErrFound`` returned an empty array (D-9).
 
     Notes
     -----
-    With ``vav_denominator="legacy", parity="per_phase", fraction_profile="legacy"`` the
-    result is bitwise identical to ``legacy_port.get_peak_response_jc`` on the differential
-    sweep. F-1/F-2 change the golden cases at rounding level (NOTES.md "Stage 4.2 — F-1/F-2
-    before/after"); F-4 changes them by about 1e-3 relative and the fluid-coupled sweep
-    cases by up to 3.6e-2 (NOTES.md "Session F-4 — done"). The Excel acceptance test
-    (``tests/test_golden.py``, the ``jc_slow`` cases) runs with the legacy flags.
+    Reproduces ``GetPeakResponseJC`` (``legacy/vba/Existing Code.bas`` line 622). With
+    ``coupling=VBA_COUPLING`` the result is bitwise identical to
+    ``legacy_port.get_peak_response_jc`` on the differential sweep. F-1/F-2 change the
+    golden cases at rounding level (NOTES.md "Stage 4.2 — F-1/F-2 before/after"); F-4
+    changes them by about 1e-3 relative and the fluid-coupled sweep cases by up to 3.6e-2
+    (NOTES.md "Session F-4 — done"). The Excel acceptance test (``tests/test_golden.py``,
+    the ``jc_slow`` cases) runs with ``VBA_COUPLING``. An unknown flag value raises when the
+    ``CouplingModel`` is built, before any path of the solver (D-25).
     """
-    # every flag checked here, before the short-pipe and rhoC = 0 paths (D-25)
-    CouplingModel(vav_denominator, parity, fraction_profile)
-    step_qty = int(step_qty)
-    sample_freq = float(sample_freq)
-    physical_length = float(physical_length)
-    flexural_rigidity_ei = float(flexural_rigidity_ei)
-    celerity = float(celerity)
-    mass_per_unit_len = float(mass_per_unit_len)
-    fluid_densty = float(fluid_densty)
-    fluid_area = float(fluid_area)
-    output_type = int(output_type)
-    trace_every = _trace_stride(trace_every)
+    integration = _checked_integration(integration)
+    sample_rate = float(sample_rate)
+    span = _coerced_span(span)
+    fluid = Fluid(float(fluid.fluid_density), float(fluid.flow_area))
 
-    force_history_2d = loads.as_history_2d(force_history)
-    transit_delay_samples = loads.transit_delay(physical_length, celerity, sample_freq)
-    # VBA line 714 (outMax)
-    nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
-        transit_delay_samples
-    )
-    setup = solver_setup(
-        step_qty, sample_freq, physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
-    )
-    substep_duration, portal_frame_height = setup
+    force_history_2d, nominal_forced_sample_count = _sample_grid(force_history, sample_rate, span)
+    setup = solver_setup(sample_rate, span, restraint, integration)
     # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
     sdof_params = structure.jc_params(
-        PipeSpan(physical_length, flexural_rigidity_ei, mass_per_unit_len, celerity),
-        Restraint(nat_freq, damping_percent, dynamic_fric, gap, restrain_freq_ratio),
-        Fluid(fluid_densty, fluid_area),
-        portal_frame_height,
-        substep_duration,
+        span, restraint, fluid, setup.portal_frame_height, setup.substep_duration
     )
     end_pressure_decay_factor = moc.end_pressure_decay_factor(
-        celerity, substep_duration, physical_length
+        span.celerity, setup.substep_duration, span.span_length
     )
-    grid = column_grid(setup, physical_length, celerity)
+    grid = column_grid(setup, span)
     if moc.is_short_pipe(grid.column_cell_count, grid.end_to_elbow_cell_count):
         # insufficient length, use lumped mass (VBA 736-740)
         return peak_response(
-            force_history,
-            step_qty,
-            sample_freq,
-            physical_length,
-            flexural_rigidity_ei,
-            celerity,
-            mass_per_unit_len,
-            damping_percent,
-            dynamic_fric,
-            nat_freq,
-            restrain_freq_ratio,
-            gap,
-            output_type,
-            trace_every,
+            force_history, sample_rate, span=span, restraint=restraint, integration=integration
         )
-    characteristic_impedance = fluid_densty * celerity
+    characteristic_impedance = fluid.fluid_density * span.celerity
     column = fluid_column(
         grid,
-        FluidConstants(characteristic_impedance, fluid_area, end_pressure_decay_factor),
-        vav_denominator,
-        fraction_profile,
+        FluidConstants(characteristic_impedance, fluid.flow_area, end_pressure_decay_factor),
+        coupling.mean_velocity_divisor,
+        coupling.fraction_profile,
     )
     unbalance_force_samples = loads.unbalance_force(
-        force_history_2d, sample_freq, physical_length, celerity, step_qty
+        force_history_2d, sample_rate, span.span_length, span.celerity, integration.substep_count
     )
-    trace_request = None
-    if trace_every:
-        trace_request = tracing.TraceRequest(
-            trace_every,
-            "peak_response_jc",
-            {
-                "force_history": force_history_2d,
-                "step_qty": step_qty,
-                "sample_freq": sample_freq,
-                "physical_length": physical_length,
-                "flexural_rigidity_ei": flexural_rigidity_ei,
-                "celerity": celerity,
-                "mass_per_unit_len": mass_per_unit_len,
-                "fluid_densty": fluid_densty,
-                "fluid_area": fluid_area,
-                "damping_percent": damping_percent,
-                "dynamic_fric": dynamic_fric,
-                "nat_freq": nat_freq,
-                "restrain_freq_ratio": restrain_freq_ratio,
-                "gap": gap,
-                "output_type": output_type,
-                "vav_denominator": vav_denominator,
-                "parity": parity,
-                "fraction_profile": fraction_profile,
-            },
-            celerity,
-            portal_frame_height,
-            loads.elbow_forces(force_history_2d, sample_freq, physical_length, celerity, step_qty),
-        )
+    trace_request = _trace_request(
+        "peak_response_jc",
+        {
+            "force_history": force_history_2d,
+            "sample_rate": sample_rate,
+            "span": dataclasses.asdict(span),
+            "restraint": dataclasses.asdict(restraint),
+            "fluid": dataclasses.asdict(fluid),
+            "integration": dataclasses.asdict(integration),
+            "coupling": dataclasses.asdict(coupling),
+        },
+        span,
+        integration,
+        setup,
+    )
     settings = RunSettings(
-        substep_duration,
-        step_qty,
+        setup.substep_duration,
+        integration.substep_count,
         nominal_forced_sample_count,
-        output_type,
-        parity == "per_phase",
+        coupling.parity == "per_phase",
     )
     return _integrate(unbalance_force_samples, sdof_params, settings, column, trace_request)
+
+
+def _coerced_span(span: PipeSpan) -> PipeSpan:
+    """``span`` with every field a float, as the entry points have always converted them."""
+    return PipeSpan(
+        float(span.span_length),
+        float(span.flexural_rigidity),
+        float(span.mass_per_length),
+        float(span.celerity),
+    )
+
+
+def _sample_grid(force_history, sample_rate: float, span: PipeSpan) -> tuple[np.ndarray, int]:
+    """The history as the 2-D array the walk reads (``loads.as_history_2d``) and the nominal
+    forced sample count: its samples plus the transit delay rounded as the VBA rounds it
+    (``outMax``, VBA lines 377 and 714)."""
+    force_history_2d = loads.as_history_2d(force_history)
+    transit_delay_samples = loads.transit_delay(span.span_length, span.celerity, sample_rate)
+    nominal_forced_sample_count = force_history_2d.shape[0] * force_history_2d.shape[1] + clng(
+        transit_delay_samples
+    )
+    return force_history_2d, nominal_forced_sample_count
+
+
+def _trace_request(
+    solver: str, inputs: dict, span: PipeSpan, integration: Integration, setup: SolverSetup
+) -> tracing.TraceRequest | None:
+    """What ``_integrate`` needs to build a ``Trace`` when ``integration.trace_every > 0``,
+    else None: the stride, the solver name, the ``inputs`` echo (whose 2-D force history and
+    sample rate (Hz) the elbow forces are walked from), the celerity (m/s), the portal-frame
+    height (m) and the per-sample elbow forces of ``loads.elbow_forces``."""
+    if not integration.trace_every:
+        return None
+    return tracing.TraceRequest(
+        integration.trace_every,
+        solver,
+        inputs,
+        span.celerity,
+        setup.portal_frame_height,
+        loads.elbow_forces(
+            inputs["force_history"],
+            inputs["sample_rate"],
+            span.span_length,
+            span.celerity,
+            integration.substep_count,
+        ),
+    )
+
+
+def _checked_integration(integration: Integration) -> Integration:
+    """``integration`` with the substep count an int and the trace stride checked
+    (``_trace_stride``)."""
+    return Integration(int(integration.substep_count), _trace_stride(integration.trace_every))
 
 
 def _trace_stride(trace_every) -> int:
@@ -641,7 +577,7 @@ class SolverSetup(NamedTuple):
     Attributes
     ----------
     substep_duration : float
-        One sub-step, ``1 / (sample_freq * step_qty)``, s.
+        One substep, ``1 / (sample_rate * substep_count)``, s.
     portal_frame_height : float
         Leg height of the portal-frame proxy (``structure.solve_portal_height``), m.
     """
@@ -651,39 +587,34 @@ class SolverSetup(NamedTuple):
 
 
 def solver_setup(
-    step_qty: int,
-    sample_freq: float,
-    physical_length: float,
-    flexural_rigidity_ei: float,
-    mass_per_unit_len: float,
-    nat_freq: float,
+    sample_rate: float, span: PipeSpan, restraint: Restraint, integration: Integration
 ) -> SolverSetup:
-    """The sub-step and the portal-frame height of a run, as the solver entry points form
+    """The substep and the portal-frame height of a run, as the solver entry points form
     them (VBA lines 377-387 and 714-724).
 
     Parameters
     ----------
-    step_qty : int
-        Sub-steps per sample.
-    sample_freq : float
+    sample_rate : float
         Samples per second of the force history, Hz.
-    physical_length : float
-        Span between the elbows, m.
-    flexural_rigidity_ei : float
-        N·m².
-    mass_per_unit_len : float
-        kg/m.
-    nat_freq : float
-        Hz.
+    span : PipeSpan
+        Span length (m), flexural rigidity (N·m²) and mass per length (kg/m) are read.
+    restraint : Restraint
+        The natural frequency (Hz) is read.
+    integration : Integration
+        The substep count is read.
+
+    Returns
+    -------
+    SolverSetup
     """
-    substep_duration = 1 / (sample_freq * step_qty)
+    substep_duration = 1 / (sample_rate * integration.substep_count)
     portal_frame_height = structure.solve_portal_height(
-        physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
+        span.span_length, span.flexural_rigidity, span.mass_per_length, restraint.natural_frequency
     )
     return SolverSetup(substep_duration, portal_frame_height)
 
 
-def column_grid(setup: SolverSetup, physical_length: float, celerity: float) -> moc.ColumnGrid:
+def column_grid(setup: SolverSetup, span: PipeSpan) -> moc.ColumnGrid:
     """The MoC grid of the junction-coupling solver for ``setup`` (``moc.grid_size``); a short
     pipe (``moc.is_short_pipe``) makes the solver fall back to the lumped one.
 
@@ -691,13 +622,15 @@ def column_grid(setup: SolverSetup, physical_length: float, celerity: float) -> 
     ----------
     setup : SolverSetup
         From ``solver_setup``.
-    physical_length : float
-        m.
-    celerity : float
-        m/s.
+    span : PipeSpan
+        Span length (m) and celerity (m/s) are read.
+
+    Returns
+    -------
+    moc.ColumnGrid
     """
     return moc.grid_size(
-        physical_length, setup.portal_frame_height, celerity, setup.substep_duration
+        span.span_length, setup.portal_frame_height, span.celerity, setup.substep_duration
     )
 
 
@@ -707,14 +640,12 @@ class RunSettings(NamedTuple):
     Attributes
     ----------
     substep_duration : float
-        One sub-step, ``1 / (sample_freq * step_qty)``, s.
+        One substep, ``1 / (sample_rate * substep_count)``, s.
     substep_count : int
         Sub-steps per sample (VBA ``stepQTY``).
     nominal_forced_sample_count : int
         History samples plus the rounded transit delay (VBA ``outMax``); the response
-        history and the trace keep twice this many samples.
-    output_type : int
-        0 (peaks only) or 1 / 2 / 3 (the history of ``x`` / ``v`` / ``a``).
+        histories and the trace keep twice this many samples.
     is_per_phase_parity : bool
         The VBA per-phase MoC parity index (``parity="per_phase"``, D-19) in place of the
         running sub-step counter; always False for the lumped solver.
@@ -723,7 +654,6 @@ class RunSettings(NamedTuple):
     substep_duration: float
     substep_count: int
     nominal_forced_sample_count: int
-    output_type: int
     is_per_phase_parity: bool
 
 
@@ -1027,7 +957,7 @@ def _integrate(
         trace = tracing.build_trace(
             trace_request, settings, sdof_params, buffers, int(result.frame_count), column
         )
-    return _peak_response(result, sdof_params, settings.output_type, histories, trace)
+    return _peak_response(result, sdof_params, histories, trace)
 
 
 def _kernel_inputs(
@@ -1096,13 +1026,12 @@ def _kernel_inputs(
 def _peak_response(
     result: _KernelResult,
     sdof_params: SdofParams,
-    output_type: int,
     histories: ResponseHistories,
     trace: Trace | None,
 ) -> PeakResponse:
     """The ``PeakResponse`` of a finished run: the kernel's maxima as Python floats, the
-    static-equivalent force from the largest displacement, the history for ``output_type``
-    1-3, the free-decay sample count and the ``trace``."""
+    static-equivalent force from the largest displacement, the three histories, the
+    free-decay sample count and the ``trace``."""
     # VBA line 611: Abs(minUnsigned(gap, xMax) + max(0, |xMax| - gap) * ...) * stiffness
     static_equivalent_force_max = (
         abs(
@@ -1118,8 +1047,9 @@ def _peak_response(
         max_velocity=float(result.v_max),
         max_acceleration=float(result.a_max),
         max_applied_force=float(result.unbalance_force_max),
-        history=histories[output_type - 1] if output_type > 0 else None,
-        output_type=output_type,
+        displacement_history=histories.displacement,
+        velocity_history=histories.velocity,
+        acceleration_history=histories.acceleration,
         free_decay_samples=int(result.sample_number - result.forced_sample_count),
         trace=trace,
     )
