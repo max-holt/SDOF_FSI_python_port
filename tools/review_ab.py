@@ -24,7 +24,11 @@ Cases (inputs from the golden fixtures, ``tests/test_golden.py``): lumped rows 2
 JC row 96 on the first 2000 samples with the legacy flags, the default flags and traced
 (stride 25); lumped row 20 traced; the full JC rows 96 and 97 (legacy flags); and two cases
 that spend about half the run in free decay (a 200-sample ramp to about 1 m, light
-damping, no friction; 20 calls per timing), which no golden case reaches.
+damping, no friction; 20 calls per timing), which no golden case reaches. ``sweep_noise``
+is one Tier 1 sweep case through ``sweep_rows.run_case`` (the first ``step_noise`` case, 10 in,
+3 m: history generation, both solvers and the row), so a change on the sweep path is timed
+too (owner's ruling, session R.9). It picks the case and builds the provenance by position, so
+it runs against both sides of an A/B across a rename of their fields.
 """
 
 from __future__ import annotations
@@ -47,6 +51,8 @@ DECAY_CALLS = 20
 def _cases():
     """The timed cases of the worker, by name (imports from the worktree on ``sys.path``)."""
     import numpy as np  # noqa: PLC0415
+    import sweep_grid  # noqa: PLC0415
+    import sweep_rows  # noqa: PLC0415
     import test_golden as tg  # noqa: PLC0415
 
     from surge_sdof import response  # noqa: PLC0415
@@ -61,6 +67,10 @@ def _cases():
 
     lumped, jc = response.peak_response, response.peak_response_jc
     decay = {"damping_percent": 0.5, "dynamic_fric": 0.0}
+    # by position: (size, length, natural frequency, history type, ...) and (tier, subset,
+    # cpu, sha), so that the field names may differ between the two sides
+    sweep_case = next(c for c in sweep_grid.tier_cases(1) if c[3] == "step_noise")
+    provenance = sweep_rows.RunProvenance(1, "", "ab", "ab")
     return {
         "lumped_r20": lambda: lumped(force, **kw("20")),
         "lumped_r80": lambda: lumped(force, **kw("80")),
@@ -74,6 +84,7 @@ def _cases():
             lumped(ramp, **kw("20", **decay)) for _ in range(DECAY_CALLS)
         ],
         "jc_r96_decay_x20": lambda: [jc(ramp, **kw("96", **decay)) for _ in range(DECAY_CALLS)],
+        "sweep_noise": lambda: sweep_rows.run_case(sweep_case, provenance),
     }
 
 
