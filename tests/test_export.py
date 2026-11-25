@@ -81,10 +81,15 @@ def example_result(case_id: str):
     return response.peak_response(force, **fc.solver_inputs(case["kwargs"], trace_every=4))
 
 
+# The sweep provenance and regen of the tests that check the rows only (the tool's template).
+_NO_SHA = export.SweepProvenance("x", git_sha=None)
+_REGEN = sweep_document.golden_regen()
+
+
 @functools.cache
 def trace_doc(case_id: str) -> dict:
     return export.to_trace_dict(
-        example_result(case_id), case_id, sha="0" * 40, created="2026-10-26T00:00:00Z"
+        example_result(case_id), case_id, git_sha="0" * 40, created_utc="2026-10-26T00:00:00Z"
     )
 
 
@@ -94,11 +99,11 @@ def golden_sweep_doc() -> dict:
     assert layout == "golden"
     return export.to_sweep_dict(
         rows,
-        source="tests/fixtures/curve_10in/cases.csv",
+        provenance=export.SweepProvenance(
+            "tests/fixtures/curve_10in/cases.csv", git_sha=None, created_utc="2026-10-26T00:00:00Z"
+        ),
         regen=sweep_document.golden_regen(),
         reference=sweep_document.reference_block(),
-        sha=None,
-        created="2026-10-26T00:00:00Z",
     )
 
 
@@ -258,21 +263,22 @@ def test_non_finite_values_are_refused(tmp_path):
     with pytest.raises(ValueError):
         export.write_json(tmp_path / "nan.json", {"x": [float("nan")]})
     with pytest.raises(ValueError, match="non-finite"):
-        export.to_sweep_dict([{"case_id": "a", "mu": float("nan")}], source="x", sha=None)
+        export.to_sweep_dict(
+            [{"case_id": "a", "mu": float("nan")}], provenance=_NO_SHA, regen=_REGEN
+        )
     with pytest.raises(ValueError, match="unknown sweep columns"):
-        export.to_sweep_dict([{"case_id": "a", "bogus": 1.0}], source="x", sha=None)
+        export.to_sweep_dict([{"case_id": "a", "bogus": 1.0}], provenance=_NO_SHA, regen=_REGEN)
     with pytest.raises(TypeError):
-        export.to_sweep_dict([{"case_id": 7}], source="x", sha=None)
+        export.to_sweep_dict([{"case_id": 7}], provenance=_NO_SHA, regen=_REGEN)
     with pytest.raises(ValueError, match="integer"):
-        export.to_sweep_dict([{"seed": 1.5}], source="x", sha=None)
+        export.to_sweep_dict([{"seed": 1.5}], provenance=_NO_SHA, regen=_REGEN)
 
 
 def test_sweep_values_are_typed_and_null_where_unknown():
     doc = export.to_sweep_dict(
         [{"case_id": "a", "seed": "7", "mu": "0.005", "error": None}, {"error": "boom", "mu": ""}],
-        source="x",
-        sha=None,
-        created="2026-10-26T00:00:00Z",
+        provenance=export.SweepProvenance("x", git_sha=None, created_utc="2026-10-26T00:00:00Z"),
+        regen=_REGEN,
     )
     c = doc["columns"]
     assert c["seed"] == [7, None] and c["mu"] == [0.005, None] and c["error"] == [None, "boom"]
@@ -353,7 +359,9 @@ def test_sweep_csv_passthrough_and_rejection(tmp_path):
     path.write_text("case_id,size_in,mu,seed,error\nrun1,10,0.005,3,\nrun2,10,,,boom\n")
     rows, layout = sweep_document.sweep_rows_from_csv(path)
     assert layout == "sweep" and len(rows) == 2
-    doc = export.to_sweep_dict(rows, source=str(path), sha=None)
+    doc = export.to_sweep_dict(
+        rows, provenance=export.SweepProvenance(str(path), git_sha=None), regen=_REGEN
+    )
     assert doc["columns"]["seed"] == [3, None] and doc["columns"]["error"] == [None, "boom"]
     assert doc["columns"]["f_eq_jc"] == [None, None]
     bad = tmp_path / "bad.csv"
@@ -442,7 +450,7 @@ def test_row_96_at_the_default_stride_stays_under_50_mb(capsys):
     force, kw, solver = cases.golden_case("r096_jc_L24_f3")
     stride = export_cli.export_trace_every(force, kw, solver, 2000, export_cli.JSON_BUDGET_MB)
     result = cases.run(force, kw, solver, stride)
-    doc = export.to_trace_dict(result, "r096_jc_L24_f3", sha=None)
+    doc = export.to_trace_dict(result, "r096_jc_L24_f3", git_sha=None)
     text = export.dumps(doc)
     size = len(text.encode("utf-8"))
     n_frames = doc["meta"]["n_frames"]

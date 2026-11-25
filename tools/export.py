@@ -110,8 +110,7 @@ def main_sweep(args) -> None:
         for k in ("tier", "cpu", "histories_version", "git_sha")
     }
     tier = args.tier if args.tier is not None else uniform["tier"]
-    doc = export.to_sweep_dict(
-        rows,
+    provenance = export.SweepProvenance(
         source=str(args.from_csv),
         tier=None if tier is None else str(tier),
         cpu=args.cpu if args.cpu is not None else uniform["cpu"],
@@ -120,9 +119,13 @@ def main_sweep(args) -> None:
             if args.histories_version is not None
             else uniform["histories_version"]
         ),
+        git_sha=uniform["git_sha"] if uniform["git_sha"] else True,
+    )
+    doc = export.to_sweep_dict(
+        rows,
+        provenance=provenance,
         regen=sweep_document.golden_regen() if layout == "golden" else sweep_document.sweep_regen(),
         reference=sweep_document.reference_block(),
-        sha=uniform["git_sha"] if uniform["git_sha"] else True,
     )
     n_bytes = export.write_json(args.out, doc)
     print(

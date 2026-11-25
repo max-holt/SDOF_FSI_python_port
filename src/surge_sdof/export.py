@@ -24,6 +24,7 @@ import gzip as _gzip
 import json
 import math
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -58,6 +59,7 @@ __all__ = [
     "is_capped",
     "to_trace_dict",
     "to_sweep_dict",
+    "SweepProvenance",
     "dumps",
     "write_json",
     "read_json",
@@ -399,8 +401,8 @@ def to_trace_dict(
     result: PeakResponse,
     case_id: str,
     *,
-    sha: str | None | bool = True,
-    created: str | None = None,
+    git_sha: str | None | bool = True,
+    created_utc: str | None = None,
 ) -> dict:
     """The ``trace`` document of a traced run (``docs/data_format.md``).
 
@@ -410,9 +412,9 @@ def to_trace_dict(
         From ``peak_response`` / ``peak_response_jc`` with ``trace_every > 0``.
     case_id : str
         ``meta.case_id``.
-    sha : str, None or True
+    git_sha : str, None or True
         ``meta.git_sha``; True (default) asks git for the checkout's HEAD.
-    created : str or None
+    created_utc : str or None
         ``meta.created_utc``; None stamps now.
 
     Returns
@@ -430,7 +432,7 @@ def to_trace_dict(
         raise ValueError("the result has no trace; run the solver with trace_every > 0")
     layout = layout_from_trace(trace)
     is_junction_coupled = trace.column is not None
-    git_sha_value, created_utc_value = _provenance(sha, created)
+    git_sha_value, created_utc_value = _provenance(git_sha, created_utc)
     doc = {
         "kind": KIND_TRACE,
         "schema_version": SCHEMA_VERSION,
@@ -504,17 +506,36 @@ def _sweep_value(name: str, value, row: int):
     return _sweep_float(value, where)
 
 
+@dataclass(frozen=True)
+class SweepProvenance:
+    """Where a sweep document's rows come from: its ``meta`` fields other than ``n_rows``.
+
+    Attributes
+    ----------
+    source : str
+        ``meta.source``: the file the rows were read from, as given.
+    tier, cpu, histories_version : str or None
+        ``meta`` fields; None when unknown.
+    git_sha : str, None or True
+        ``meta.git_sha``; True (default) asks git for the checkout's HEAD.
+    created_utc : str or None
+        ``meta.created_utc``; None (default) stamps now.
+    """
+
+    source: str
+    tier: str | None = None
+    cpu: str | None = None
+    histories_version: str | None = None
+    git_sha: str | None | bool = True
+    created_utc: str | None = None
+
+
 def to_sweep_dict(
     rows,
     *,
-    source: str,
-    tier: str | None = None,
-    cpu: str | None = None,
-    histories_version: str | None = None,
-    regen: dict | None = None,
+    provenance: SweepProvenance,
+    regen: dict,
     reference: dict | None = None,
-    sha: str | None | bool = True,
-    created: str | None = None,
 ) -> dict:
     """The ``sweep`` document of a list of rows (``docs/data_format.md``).
 
@@ -524,18 +545,13 @@ def to_sweep_dict(
         One dict per row, keyed by ``SWEEP_COLUMNS`` names; a missing column is null, an
         unknown key raises. Values are numbers (``seed`` an int), strings for the string
         columns, None, or numeric strings (a CSV cell; ``""`` is null).
-    source : str
-        ``meta.source``.
-    tier, cpu, histories_version : str or None
-        ``meta`` fields; None when unknown.
-    regen : dict or None
-        ``{"template", "columns_used", "note"}``; None gives the ``--golden {case_id}`` template.
+    provenance : SweepProvenance
+        The ``meta`` fields.
+    regen : dict
+        ``{"template", "columns_used", "note"}``: how a row is reproduced (the tool's
+        templates are ``tools/sweep_document.golden_regen`` and ``sweep_regen``).
     reference : dict or None
         ``{"example_cases": [...], "jc_golden_rows": [...]}``; None gives two empty lists.
-    sha : str, None or True
-        ``meta.git_sha``; True asks git.
-    created : str or None
-        ``meta.created_utc``; None stamps now.
 
     Returns
     -------
@@ -554,25 +570,19 @@ def to_sweep_dict(
             raise ValueError(f"row {i}: unknown sweep columns {sorted(unknown)}")
         for name in SWEEP_COLUMNS:
             columns[name].append(_sweep_value(name, row.get(name), i))
-    if regen is None:
-        regen = {
-            "template": "python tools/export.py trace --golden {case_id} --out {case_id}.json",
-            "columns_used": ["case_id"],
-            "note": None,
-        }
     if reference is None:
         reference = {"example_cases": [], "jc_golden_rows": []}
-    git_sha_value, created_utc_value = _provenance(sha, created)
+    git_sha_value, created_utc_value = _provenance(provenance.git_sha, provenance.created_utc)
     return {
         "kind": KIND_SWEEP,
         "schema_version": SWEEP_SCHEMA_VERSION,
         "meta": {
             "git_sha": git_sha_value,
-            "tier": tier,
+            "tier": provenance.tier,
             "created_utc": created_utc_value,
-            "cpu": cpu,
-            "histories_version": histories_version,
-            "source": str(source),
+            "cpu": provenance.cpu,
+            "histories_version": provenance.histories_version,
+            "source": str(provenance.source),
             "n_rows": len(rows),
         },
         "columns": columns,
