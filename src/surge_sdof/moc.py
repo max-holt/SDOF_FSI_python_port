@@ -10,10 +10,10 @@ Grid
 ``pipeSegQTY = N`` cells of length ``2 c dt`` along the whole modelled column (the span,
 both legs and the end cells, not only the span between the elbows), ``pivotSegQTY`` cells
 from each end to the portal-frame pivot, ``extQTY = 4`` end cells that receive no mass
-acceleration. Two staggered half-grids: the A nodes ``0 .. N`` (pressure ``p_a``,
-velocity ``v_a``) and the B cells ``0 .. N-1`` (``p_b``, ``v_b``), the VBA
+acceleration. Two staggered half-grids: the A nodes ``0 .. N`` (``pressure_a``,
+``velocity_a``) and the B cells ``0 .. N-1`` (``pressure_b``, ``velocity_b``), the VBA
 ``arrayA(0 To 1, 0 To N)`` and ``arrayB(0 To 1, 0 To N-1)`` split into four contiguous
-1-D float64 arrays. Even sub-steps update the A grid from B, odd sub-steps the B grid
+1-D float64 arrays. Even substeps update the A grid from B, odd substeps the B grid
 from A; the structure's acceleration enters as ``a dt`` weighted by the moving-fraction
 profiles, which depend only on the grid and are tabulated once per run.
 
@@ -25,7 +25,7 @@ is not ported; only the live decaying boundary (``dacayFactor``) is.
 
 Approved fix F-1 (NOTES.md): the mean velocity ``vAv`` sums ``2N + 1`` terms; the VBA
 divides by ``2N - 1`` (D-17). ``mean_velocity_divisor`` returns either, selected by the caller's
-``vav_denominator`` flag ("legacy" | "fixed").
+``CouplingModel.vav_denominator`` ("legacy" | "fixed").
 
 Approved fix F-4 (NOTES.md, DEVIATIONS D-4): the lead author replaced ``interpFractionA`` and
 ``interpFractionB`` (``legacy/vba/interpFraction_fix_2026-10-26.bas``); F-4b
@@ -46,9 +46,9 @@ Exactness
 ---------
 Every expression keeps the VBA's operation order. The sweeps carry the previous cell's
 values in locals instead of re-reading them, which changes nothing numerically.
-``a * dt * f`` is ``(a * dt) * f`` in VBA and here ``a_dt * f``. ``2 * rhoC`` is hoisted
-(the same double). This module knows nothing about the structure proxy, the force
-history or output types. See ``docs/architecture.md``.
+``a * dt * f`` is ``(a * dt) * f`` in VBA and here ``structure_velocity_step * f``.
+``2 * rhoC`` is hoisted (the same double). This module knows nothing about the structure proxy, the force
+history or the load phases. See ``docs/architecture.md``.
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ class ColumnGrid(NamedTuple):
 def grid_size(
     span_length: float, portal_frame_height: float, celerity: float, substep_duration: float
 ) -> ColumnGrid:
-    """``(pipeSegQTY, pivotSegQTY)`` of the MoC grid (VBA lines 733-734).
+    """The size of the MoC grid for a span, a leg height and a substep.
 
     Parameters
     ----------
@@ -122,15 +122,20 @@ def grid_size(
     celerity : float
         Pressure-wave speed, m/s.
     substep_duration : float
-        Sub-step, s; a cell is ``2 * celerity * dt`` long.
+        Substep, s; a cell is ``2 * celerity * dt`` long.
 
     Returns
     -------
     ColumnGrid
-        ``pipeSegQTY`` (cells in the whole column: the span, about ``L / (2 c dt)`` cells,
-        plus ``pivotSegQTY + 1`` cells at each end; even by construction) and
-        ``pivotSegQTY`` (cells from each end to the pivot, ``extQTY`` + the rounded
-        height in cells; ``CLng`` rounds half to even).
+        ``column_cell_count`` (cells in the whole column: the span, about ``L / (2 c dt)``
+        cells, plus ``end_to_elbow_cell_count + 1`` cells at each end; even by
+        construction) and ``end_to_elbow_cell_count`` (cells from each end to the pivot,
+        ``INACTIVE_END_CELL_COUNT`` + the rounded height in cells; ``CLng`` rounds half to
+        even).
+
+    Notes
+    -----
+    VBA lines 733-734: ``pipeSegQTY`` and ``pivotSegQTY``.
     """
     end_to_elbow_cell_count = INACTIVE_END_CELL_COUNT + clng(
         portal_frame_height / (2 * celerity * substep_duration)
@@ -146,8 +151,8 @@ def grid_size(
 
 # VBA line 736
 def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
-    """``pipeSegQTY - 2 * pivotSegQTY <= 2`` (VBA line 736): the span cannot hold the MoC
-    grid and ``GetPeakResponseJC`` falls back to the lumped solver.
+    """Whether the span is too short to hold the MoC grid between the two legs, so that
+    the junction-coupling solver falls back to the lumped one.
 
     Parameters
     ----------
@@ -157,6 +162,11 @@ def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
     Returns
     -------
     bool
+        ``column_cell_count - 2 * end_to_elbow_cell_count <= 2``.
+
+    Notes
+    -----
+    VBA line 736 (``pipeSegQTY - 2 * pivotSegQTY <= 2`` in ``GetPeakResponseJC``).
     """
     return column_cell_count - 2 * end_to_elbow_cell_count <= 2
 
@@ -165,14 +175,14 @@ def is_short_pipe(column_cell_count: int, end_to_elbow_cell_count: int) -> bool:
 def end_pressure_decay_factor(
     celerity: float, substep_duration: float, span_length: float
 ) -> float:
-    """``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)`` (VBA line 731).
+    """The factor by which the end-node pressure decays at each even update.
 
     Parameters
     ----------
     celerity : float
         Pressure-wave speed, m/s.
     substep_duration : float
-        Sub-step, s.
+        Substep, s.
     span_length : float
         Length between elbows, m.
 
@@ -183,29 +193,37 @@ def end_pressure_decay_factor(
         at every even update, once every ``2 dt``. Compounded over ``L / (c dt)`` even
         updates, ``2 L / c`` seconds, it makes a factor of 2: a half-life of two transits
         of the length ``L``, not one.
+
+    Notes
+    -----
+    VBA line 731: ``dacayFactor = 2 ^ ((celerity * dt) / physicalLength)``.
     """
     return 2 ** ((celerity * substep_duration) / span_length)
 
 
 # VBA line 105: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def moving_fraction_a(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
-    """Cell-centred weighting of the mass acceleration at A node ``n`` (VBA line 105).
-
-    Literal copy of ``legacy_port.interp_fraction_a`` so this module does not import the
-    frozen legacy module.
+    """The share of the structure's acceleration the fluid at A node ``n`` receives
+    (cell-centred), on the legacy profile.
 
     Parameters
     ----------
     n : int
-        A node index, ``0 .. pipeSegQTY``.
+        A node index, ``0 .. column_cell_count``.
     end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
     Returns
     -------
     float
-        0 in the ``extQTY`` end cells, a squared ramp up to the pivot, 1 between the
-        pivots; dimensionless.
+        0 in the ``INACTIVE_END_CELL_COUNT`` end cells, a squared ramp up to the pivot, 1
+        between the pivots; dimensionless.
+
+    Notes
+    -----
+    VBA ``interpFractionA`` (line 105); a literal copy of
+    ``legacy_port.interp_fraction_a`` so this module does not import the frozen legacy
+    module.
     """
     if n < INACTIVE_END_CELL_COUNT:
         return 0.0
@@ -227,14 +245,13 @@ def moving_fraction_a(n: int, end_to_elbow_cell_count: int, column_cell_count: i
 
 # VBA line 121: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def moving_fraction_b(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
-    """Node-centred weighting of the mass acceleration at B cell ``n`` (VBA line 121).
-
-    Literal copy of ``legacy_port.interp_fraction_b``.
+    """The share of the structure's acceleration the fluid at B cell ``n`` receives
+    (node-centred), on the legacy profile.
 
     Parameters
     ----------
     n : int
-        B cell index, ``0 .. pipeSegQTY - 1``.
+        B cell index, ``0 .. column_cell_count - 1``.
     end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
@@ -245,6 +262,7 @@ def moving_fraction_b(n: int, end_to_elbow_cell_count: int, column_cell_count: i
 
     Notes
     -----
+    VBA ``interpFractionB`` (line 121); a literal copy of ``legacy_port.interp_fraction_b``.
     VBA quirk D-4 preserved: the first test is ``n < 3`` where ``moving_fraction_a`` uses
     ``n < extQTY`` (4), so ``n = 3`` takes the ramp branch and ``pivotSegQTY = 4``
     divides by zero.
@@ -268,16 +286,13 @@ def moving_fraction_b(n: int, end_to_elbow_cell_count: int, column_cell_count: i
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionA(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def moving_fraction_a_fixed(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
-    """``moving_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
-    moved one node outward by F-4b).
-
-    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``; the tests
-    are on ``n + 1`` as written there.
+    """The share of the structure's acceleration the fluid at A node ``n`` receives, on
+    the corrected profile.
 
     Parameters
     ----------
     n : int
-        A node index, ``0 .. pipeSegQTY``.
+        A node index, ``0 .. column_cell_count``.
     end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
@@ -289,6 +304,13 @@ def moving_fraction_a_fixed(n: int, end_to_elbow_cell_count: int, column_cell_co
         ``A(N - n)`` on the outlet leg (``N - pivot + 2 <= n <= N - 4``), 1 between;
         dimensionless. At ``pivotSegQTY = 4`` the ramp branch is unreachable (the zero test
         covers it), so nothing divides by zero here.
+
+    Notes
+    -----
+    ``moving_fraction_a`` as corrected by the lead author (approved fix F-4, outlet side
+    moved one node outward by F-4b). Literal transcription of
+    ``legacy/vba/interpFraction_fix_2026-10-27.bas``; the tests are on ``n + 1`` as written
+    there.
     """
     if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
@@ -310,16 +332,13 @@ def moving_fraction_a_fixed(n: int, end_to_elbow_cell_count: int, column_cell_co
 
 # interpFraction_fix_2026-10-27.bas: Function interpFractionB(n As Long, pivotSegQTY As Long, pipeSegQTY As Long)
 def moving_fraction_b_fixed(n: int, end_to_elbow_cell_count: int, column_cell_count: int) -> float:
-    """``moving_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
-    moved one cell outward by F-4b).
-
-    Literal transcription of ``legacy/vba/interpFraction_fix_2026-10-27.bas``. The first
-    test is ``n + 1 < extQTY + 0.5`` as in the A profile, so ``n = 3`` is 0 (D-4 fixed).
+    """The share of the structure's acceleration the fluid at B cell ``n`` receives, on
+    the corrected profile.
 
     Parameters
     ----------
     n : int
-        B cell index, ``0 .. pipeSegQTY - 1``.
+        B cell index, ``0 .. column_cell_count - 1``.
     end_to_elbow_cell_count, column_cell_count : int
         From ``grid_size``.
 
@@ -330,6 +349,13 @@ def moving_fraction_b_fixed(n: int, end_to_elbow_cell_count: int, column_cell_co
         ``((n + 1 - 4) / (pivot - 4))^2`` for ``4 <= n <= pivot - 2`` and its mirror
         ``B(N - 1 - n)`` on the outlet leg (``N - pivot + 1 <= n <= N - 5``), 1 between;
         dimensionless. As for the A profile the ramp is unreachable at ``pivotSegQTY = 4``.
+
+    Notes
+    -----
+    ``moving_fraction_b`` as corrected by the lead author (approved fix F-4, outlet side
+    moved one cell outward by F-4b). Literal transcription of
+    ``legacy/vba/interpFraction_fix_2026-10-27.bas``. The first test is
+    ``n + 1 < extQTY + 0.5`` as in the A profile, so ``n = 3`` is 0 (D-4 fixed).
     """
     if n + 1 < INACTIVE_END_CELL_COUNT + 0.5:
         return 0.0
@@ -351,7 +377,7 @@ def moving_fraction_b_fixed(n: int, end_to_elbow_cell_count: int, column_cell_co
 def moving_fractions(
     column_cell_count: int, end_to_elbow_cell_count: int, fraction_profile: str = "fixed"
 ) -> tuple[np.ndarray, np.ndarray]:
-    """The two profiles tabulated once per grid.
+    """The two moving-fraction profiles of a grid, tabulated once per run.
 
     Parameters
     ----------
@@ -365,10 +391,11 @@ def moving_fractions(
     Returns
     -------
     fractions_a : numpy.ndarray
-        Length ``N + 1``; ``fractions_a[n]`` for the A nodes ``n = 1 .. N-1`` (elements 0 and
-        ``N`` are never used by ``step`` and are 0).
+        float64, shape ``(N + 1,)``, dimensionless; ``fractions_a[n]`` for the A nodes
+        ``n = 1 .. N-1`` (elements 0 and ``N`` are never used by ``step`` and are 0).
     fractions_b : numpy.ndarray
-        Length ``N``; ``fractions_b[n]`` for the B cells ``n = 0 .. N-1``.
+        float64, shape ``(N,)``, dimensionless; ``fractions_b[n]`` for the B cells
+        ``n = 0 .. N-1``.
 
     Raises
     ------
@@ -441,7 +468,7 @@ def display_moving_fractions(
 
 
 def column_at_rest(column_cell_count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """``(p_a, v_a, p_b, v_b)`` at rest.
+    """The four state arrays of a column at rest: no pressure and no velocity anywhere.
 
     Parameters
     ----------
@@ -451,8 +478,13 @@ def column_at_rest(column_cell_count: int) -> tuple[np.ndarray, np.ndarray, np.n
     Returns
     -------
     tuple of numpy.ndarray
-        The VBA ``arrayA(0 To 1, 0 To N)`` and ``arrayB(0 To 1, 0 To N-1)`` zeroed, as
-        four contiguous float64 arrays: pressures in Pa (``rhoC * v``), velocities in m/s.
+        ``(pressure_a, velocity_a, pressure_b, velocity_b)``, four contiguous float64
+        arrays of zeros, shapes ``(N + 1,)``, ``(N + 1,)``, ``(N,)``, ``(N,)``: pressures
+        in Pa (``rhoC * v``), velocities in m/s.
+
+    Notes
+    -----
+    The VBA ``arrayA(0 To 1, 0 To N)`` and ``arrayB(0 To 1, 0 To N-1)``, zeroed.
     """
     return (
         np.zeros(column_cell_count + 1),
@@ -463,7 +495,7 @@ def column_at_rest(column_cell_count: int) -> tuple[np.ndarray, np.ndarray, np.n
 
 
 def mean_velocity_divisor(column_cell_count: int, vav_denominator: str) -> int:
-    """Divisor of the mean-velocity sum (``2N + 1`` terms).
+    """The divisor of the column's mean-velocity sum (a sum of ``2N + 1`` terms).
 
     Parameters
     ----------
@@ -476,6 +508,7 @@ def mean_velocity_divisor(column_cell_count: int, vav_denominator: str) -> int:
     Returns
     -------
     int
+        ``2N - 1`` or ``2N + 1``.
 
     Raises
     ------
@@ -500,11 +533,14 @@ class FluidColumn(NamedTuple):
     Attributes
     ----------
     pressure_a, velocity_a : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the A nodes ``0 .. N``.
+        float64, shape ``(N + 1,)``: pressure (Pa) and velocity (m/s) on the A nodes
+        ``0 .. N``.
     pressure_b, velocity_b : numpy.ndarray
-        Pressure (Pa) and velocity (m/s) on the B cells ``0 .. N-1``.
+        float64, shape ``(N,)``: pressure (Pa) and velocity (m/s) on the B cells
+        ``0 .. N-1``.
     moving_fraction_a, moving_fraction_b : numpy.ndarray
-        From ``moving_fractions``, dimensionless.
+        float64, shapes ``(N + 1,)`` and ``(N,)``: from ``moving_fractions``,
+        dimensionless.
     column_cell_count : int
         ``N`` (VBA ``pipeSegQTY``).
     end_to_elbow_cell_count : int
@@ -514,7 +550,7 @@ class FluidColumn(NamedTuple):
     end_pressure_decay_factor : float
         From ``end_pressure_decay_factor``, dimensionless.
     mean_velocity_divisor : int
-        From ``mean_velocity_divisor``.
+        From ``mean_velocity_divisor``; dimensionless.
     flow_area : float
         Internal cross-sectional area, m².
     is_fluid_coupled : bool
@@ -540,7 +576,13 @@ class FluidColumn(NamedTuple):
 
 def empty_column() -> FluidColumn:
     """The column of a run without fluid coupling: six empty arrays and placeholder values
-    of the same types as a real column's, which the compiled loop never reads."""
+    of the same types as a real column's, which the compiled loop never reads.
+
+    Returns
+    -------
+    FluidColumn
+        ``is_fluid_coupled`` False; the arrays float64 of shape ``(0,)``.
+    """
     no_column = np.zeros(0)
     return FluidColumn(
         no_column,
@@ -566,30 +608,33 @@ def step(
     column: FluidColumn,
     junction_force: float,
 ) -> float:
-    """One MoC sub-step in place (VBA lines 795-847) and the new junction force ``dF``.
+    """Advance the fluid column by one substep and return the new junction force.
 
     Parameters
     ----------
     is_even_substep : bool
-        Half-grid to update. Even sub-steps update the A nodes from the B cells
+        Half-grid to update. Even substeps update the A nodes from the B cells
         (mean-velocity subtraction, decaying end nodes, then the B velocities receive
-        the mass acceleration); odd sub-steps update the B cells from the A nodes (then
+        the mass acceleration); odd substeps update the B cells from the A nodes (then
         the A velocities receive the mass acceleration).
     structure_velocity_step : float
-        Structure acceleration times the sub-step, ``a * dt``, m/s.
+        Structure acceleration times the substep, ``a * dt``, m/s.
     column : FluidColumn
         The column; its four state arrays are updated in place.
     junction_force : float
-        Junction force after the previous sub-step, N.
+        Junction force after the previous substep, N.
 
     Returns
     -------
     float
-        ``dampingA * dF + (1 - dampingA) * fluidArea * (pressure difference across the
-        two pivots)``, N (Pa·m²).
+        The junction force, N: ``JUNCTION_FORCE_FILTER_WEIGHT * junction_force + (1 -
+        JUNCTION_FORCE_FILTER_WEIGHT) * flow_area * (pressure difference across the two
+        pivots)``.
 
     Notes
     -----
+    * VBA lines 795-847 (the MoC block of ``GetPeakResponseJC``; the junction force is
+      ``dF``, the filter weight ``dampingA``).
     * Every expression keeps the VBA's operation order; the previous cell's values are
       carried in locals, ``2 * rhoC`` is hoisted (the same double).
     * VBA quirk D-17: the divisor of the mean velocity is the column's ``mean_velocity_divisor``.
