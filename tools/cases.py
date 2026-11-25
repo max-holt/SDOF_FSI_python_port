@@ -35,7 +35,25 @@ PA_PER_BAR = 1e5
 
 
 def golden_case(case_id: str):
-    """``(force_history, kwargs, solver_name)`` of a fixture case."""
+    """A fixture case, rerun from ``tests/fixtures``.
+
+    Parameters
+    ----------
+    case_id : str
+        A ``curve_10in`` id such as ``r096_jc_L24_f3`` or an Example-sheet id.
+
+    Returns
+    -------
+    tuple
+        ``(force_history, kwargs, solver_name)``: the force history (N, float64), the
+        fixture keyword arguments (``fixture_cases.case_params``) and ``"lumped"`` or
+        ``"jc"``.
+
+    Raises
+    ------
+    SystemExit
+        An unknown id.
+    """
     params = tg.load_params()
     for case in tg.load_cases():
         if case["case_id"] == case_id:
@@ -73,13 +91,27 @@ class StepSpec(NamedTuple):
 
 
 def step_spec(args) -> StepSpec:
-    """The ``StepSpec`` of the parsed ``add_source_arguments`` options."""
+    """The ``StepSpec`` of the parsed ``add_source_arguments`` options (an
+    ``argparse.Namespace``)."""
     return StepSpec(**{name: getattr(args, name) for name in StepSpec._fields})
 
 
 def step_case(spec: StepSpec):
-    """A plain step: zero for ``lead_in_s`` (at least one sample), then ``amplitude_bar`` x
-    flow area for ``duration_s``."""
+    """A plain step case: zero force for ``lead_in_s`` (at least one sample), then
+    ``amplitude_bar`` times the flow area for ``duration_s``.
+
+    Parameters
+    ----------
+    spec : StepSpec
+        The step options.
+
+    Returns
+    -------
+    tuple
+        ``(force_history, kwargs, solver_name)`` as ``golden_case``: the force (N,
+        float64, shape ``(samples, 1)``), the fixture keyword arguments with the
+        ``curve_10in`` restraint, and the spec's solver.
+    """
     params = tg.load_params()
     flow_area = (
         spec.area if spec.area else math.pi * (spec.internal_diameter_mm / MM_PER_M) ** 2 / 4.0
@@ -109,6 +141,8 @@ def step_case(spec: StepSpec):
 
 
 def step_name(spec: StepSpec) -> str:
+    """A one-line description of a step case (amplitude, pipe, span, frequency, friction,
+    solver), the default case name."""
     return (
         f"step {spec.amplitude_bar:g} bar at t = {spec.lead_in_s:g} s, "
         + (f"area {spec.area:g} m², " if spec.area else f"{spec.internal_diameter_mm:g} mm, ")
@@ -118,7 +152,21 @@ def step_name(spec: StepSpec) -> str:
 
 
 def forced_substep_count(force, kw) -> int:
-    """Sub-steps of the forced phases (transit + history), as the trace capacity counts them."""
+    """Substeps of the forced phases (transit and forced), as the trace capacity counts
+    them.
+
+    Parameters
+    ----------
+    force : array_like
+        The force history, N.
+    kw : dict
+        Fixture keyword arguments (``physical_length`` m, ``celerity`` m/s,
+        ``sample_freq`` Hz, ``step_qty``).
+
+    Returns
+    -------
+    int
+    """
     transit_delay_samples = loads.transit_delay(
         kw["physical_length"], kw["celerity"], kw["sample_freq"]
     )
@@ -126,11 +174,29 @@ def forced_substep_count(force, kw) -> int:
 
 
 def default_trace_every(force, kw, target_frames: int) -> int:
-    """The stride that records about ``target_frames`` frames of the forced phases."""
+    """The trace stride, in substeps, that records about ``target_frames`` frames of the
+    forced phases (``force`` and ``kw`` as ``forced_substep_count``); at least 1."""
     return max(1, math.ceil(forced_substep_count(force, kw) / target_frames))
 
 
 def run(force, kw, solver: str, trace_every: int):
+    """Run a case through its solver with a trace.
+
+    Parameters
+    ----------
+    force : array_like
+        The force history, N.
+    kw : dict
+        Fixture keyword arguments; the fluid ones are dropped for the lumped solver.
+    solver : {"lumped", "jc"}
+        The solver.
+    trace_every : int
+        Trace stride, substeps.
+
+    Returns
+    -------
+    response.PeakResponse
+    """
     if solver == "jc":
         return response.peak_response_jc(force, **tg.solver_inputs(kw, trace_every=trace_every))
     kw = {k: v for k, v in kw.items() if k not in JC_KEYS}
@@ -138,7 +204,8 @@ def run(force, kw, solver: str, trace_every: int):
 
 
 def add_source_arguments(ap) -> None:
-    """``--golden | --step`` and the step options, ``--name``, ``--trace-every``."""
+    """Add the case options to an argparse parser: ``--golden | --step``, the step options,
+    ``--name`` and ``--trace-every``."""
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--golden", metavar="CASE_ID", help="fixture case id to rerun with a trace")
     src.add_argument("--step", action="store_true", help="a plain built-in step history")
@@ -185,7 +252,14 @@ def add_source_arguments(ap) -> None:
 
 
 def case_from_args(args):
-    """``(force, kwargs, solver, name)`` of the parsed ``add_source_arguments`` options."""
+    """The case the parsed ``add_source_arguments`` options name.
+
+    Returns
+    -------
+    tuple
+        ``(force, kwargs, solver, name)``: as ``golden_case`` or ``step_case``, and the
+        case name (``--name``, else the case id or ``step_name``).
+    """
     if args.golden:
         force, kw, solver = golden_case(args.golden)
         return force, kw, solver, args.name or args.golden
