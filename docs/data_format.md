@@ -100,7 +100,8 @@ W.1 layout. The old-to-new key table is `docs/review/public_interface.md` §3.3.
 
 The `LoopLayout` of `surge_sdof.viz.geometry.layout_from_trace` (the rules are in
 `docs/architecture.md`, "the animation", Geometry): a JC run's own grid; for a lumped run the grid
-the case would have (`moc.grid_size`, `moc.moving_fractions`). Arrays are length `n` = the number
+the case would have (`moc.grid_size`, `moc.display_moving_fractions`: the solver's default
+fraction profile, or the legacy pair for a grid that profile refuses; display only). Arrays are length `n` = the number
 of grid points of that grid (equal to `meta.grid_point_count` for a JC run).
 
 | key | type | meaning |
