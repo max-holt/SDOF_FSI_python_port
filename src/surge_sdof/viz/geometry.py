@@ -37,71 +37,73 @@ class LoopLayout:
     """The column laid on the expansion loop (see the module docstring and ``loop_layout``).
 
     The elbows of the force model are the two ends of the run: elbow A, which the pressure
-    wave reaches first (force A acts at once; the inlet side), is the ``run_start`` corner
-    at ``x = 0``; elbow B, reached after the transit delay, is the ``run_end`` corner at
-    ``x = run_length``. The junction force taps the column there (``moc.step``).
+    wave reaches first (force A acts at once; the inlet side), is the ``run_start_index``
+    corner at ``x = 0``; elbow B, reached after the transit delay, is the ``run_end_index``
+    corner at ``x = run_length``. The junction force taps the column there (``moc.step``).
 
     Attributes
     ----------
-    cell_position, cell_kind, moving_fraction : numpy.ndarray
-        As ``Trace`` (m along the column; 0 = A node / 1 = B cell; the moving fraction).
-    pivot_seg_qty, pipe_seg_qty, ext_qty : int
+    grid_point_position, grid_point_kind, grid_point_moving_fraction : numpy.ndarray
+        As ``trace.ColumnTrace`` (m along the column; 0 = A node / 1 = B cell; the moving
+        fraction).
+    end_to_elbow_cell_count, column_cell_count, inactive_end_cell_count : int
         The grid (``moc.grid_size``, ``moc.INACTIVE_END_CELL_COUNT``).
     cell_length : float
-        ``2 * celerity * dt``, m (a cell; ``cell_position`` steps by half of it).
-    portal_height : float
+        ``2 * celerity * dt``, m (a cell; ``grid_point_position`` steps by half of it).
+    portal_frame_height : float
         ``Trace.portal_frame_height`` of the run, m (printed, not used for the layout).
-    spacing : float
-        Distance between consecutive cells along the centreline, m (``celerity * dt``).
-    inlet_end, run_start, run_end, outlet_start : int
-        Cell indices: the last fraction-0 cell of the inlet (the inlet / leg elbow), the
-        first and last fraction-1 cells (the leg / run elbows), the first fraction-0 cell
-        of the outlet (the leg / outlet elbow).
-    elbow_pairs : tuple of (int, int)
-        The two cells either side of each of the four elbows, in centreline order.
-    x_nominal, y_nominal : numpy.ndarray
-        Circle centres at rest, m: the run along ``y = 0`` from ``x = 0`` (``run_start``)
-        to ``x = run_length`` (``run_end``); leg 1 up ``x = 0`` to the inlet elbow cell at
-        ``(0, leg_height)``, the inlet extending left from it at ``y = leg_height``; leg 2
-        up ``x = run_length`` to the outlet elbow cell at ``(run_length, leg_height_2)``,
-        the outlet extending right from it. Sharp corners: the model has no bends.
+    grid_point_spacing : float
+        Distance between consecutive grid points along the centreline, m (``celerity * dt``).
+    inlet_elbow_index, run_start_index, run_end_index, outlet_elbow_index : int
+        Grid-point indices: the last fraction-0 point of the inlet (the inlet / leg elbow),
+        the first and last fraction-1 points (the leg / run elbows), the first fraction-0
+        point of the outlet (the leg / outlet elbow).
+    elbow_grid_point_pairs : tuple of (int, int)
+        The two grid points either side of each of the four elbows, in centreline order.
+    x_at_rest, y_at_rest : numpy.ndarray
+        Circle centres at rest, m: the run along ``y = 0`` from ``x = 0``
+        (``run_start_index``) to ``x = run_length`` (``run_end_index``); leg 1 up ``x = 0``
+        to the inlet elbow point at ``(0, inlet_leg_height)``, the inlet extending left from
+        it at ``y = inlet_leg_height``; leg 2 up ``x = run_length`` to the outlet elbow point
+        at ``(run_length, outlet_leg_height)``, the outlet extending right from it. Sharp
+        corners: the model has no bends.
     run_length : float
-        ``cell_position[run_end] - cell_position[run_start]``, m.
-    leg_height, leg_height_2 : float
+        ``grid_point_position[run_end_index] - grid_point_position[run_start_index]``, m.
+    inlet_leg_height, outlet_leg_height : float
         Height of the inlet and outlet pipes above the run, m: the centreline length
-        between the elbow cells.
+        between the elbow points.
     """
 
-    cell_position: np.ndarray
-    cell_kind: np.ndarray
-    moving_fraction: np.ndarray
-    pivot_seg_qty: int
-    pipe_seg_qty: int
-    ext_qty: int
+    grid_point_position: np.ndarray
+    grid_point_kind: np.ndarray
+    grid_point_moving_fraction: np.ndarray
+    end_to_elbow_cell_count: int
+    column_cell_count: int
+    inactive_end_cell_count: int
     cell_length: float
-    portal_height: float
-    spacing: float
-    inlet_end: int
-    run_start: int
-    run_end: int
-    outlet_start: int
-    elbow_pairs: tuple
-    x_nominal: np.ndarray
-    y_nominal: np.ndarray
+    portal_frame_height: float
+    grid_point_spacing: float
+    inlet_elbow_index: int
+    run_start_index: int
+    run_end_index: int
+    outlet_elbow_index: int
+    elbow_grid_point_pairs: tuple
+    x_at_rest: np.ndarray
+    y_at_rest: np.ndarray
     run_length: float
-    leg_height: float
-    leg_height_2: float
+    inlet_leg_height: float
+    outlet_leg_height: float
 
     @property
-    def n_cells(self) -> int:
-        return int(self.cell_position.shape[0])
+    def grid_point_count(self) -> int:
+        return int(self.grid_point_position.shape[0])
 
 
 # ------------------------------------------------------------------ geometry
 
 
 def _segments(grid_point_moving_fraction: np.ndarray) -> tuple[int, int, int, int]:
-    """``(inlet_end, run_start, run_end, outlet_start)`` from the fraction profile: the
+    """``(inlet_elbow_index, run_start_index, run_end_index, outlet_elbow_index)`` from the fraction profile: the
     fraction-1 block is the run; the last fraction-0 cell before it and the first after it
     are the upper elbows. With the F-4 profile both legs hold ``2 pivot - 10`` interleaved
     cells and every inlet / outlet cell has fraction 0; with the legacy profile the inlet
@@ -129,9 +131,9 @@ def loop_layout(
     """Lay the interleaved column on the expansion loop, uniformly by ``grid_point_position``.
 
     The centreline runs: inlet (horizontal, leftwards from the inlet elbow cell at ``(0,
-    leg_height)``), leg 1 (down ``x = 0``), the run (``y = 0`` from ``x = 0`` to ``x =
+    inlet_leg_height)``), leg 1 (down ``x = 0``), the run (``y = 0`` from ``x = 0`` to ``x =
     run_length``), leg 2 (up ``x = run_length``), outlet (horizontal, rightwards from the
-    outlet elbow cell at ``(run_length, leg_height_2)``). The elbows are sharp corners at
+    outlet elbow cell at ``(run_length, outlet_leg_height)``). The elbows are sharp corners at
     the elbow cells (``_segments``): the model has no bends, and the cells either side of
     a corner are one spacing from the corner cell along its two segments. A grid point at
     ``centreline_position`` along the column is at that centreline length, so every inlet /
@@ -199,30 +201,30 @@ def loop_layout(
         outlet_leg_height,
     )
     return LoopLayout(
-        cell_position=centreline_position,
-        cell_kind=np.asarray(grid.kind),
-        moving_fraction=moving_fraction_array,
-        pivot_seg_qty=int(grid.end_to_elbow_cell_count),
-        pipe_seg_qty=int(grid.column_cell_count),
-        ext_qty=int(moc.INACTIVE_END_CELL_COUNT),
+        grid_point_position=centreline_position,
+        grid_point_kind=np.asarray(grid.kind),
+        grid_point_moving_fraction=moving_fraction_array,
+        end_to_elbow_cell_count=int(grid.end_to_elbow_cell_count),
+        column_cell_count=int(grid.column_cell_count),
+        inactive_end_cell_count=int(moc.INACTIVE_END_CELL_COUNT),
         cell_length=float(cell_length),
-        portal_height=float(portal_frame_height),
-        spacing=grid_point_spacing,
-        inlet_end=inlet_elbow_index,
-        run_start=run_start_index,
-        run_end=run_end_index,
-        outlet_start=outlet_elbow_index,
-        elbow_pairs=(
+        portal_frame_height=float(portal_frame_height),
+        grid_point_spacing=grid_point_spacing,
+        inlet_elbow_index=inlet_elbow_index,
+        run_start_index=run_start_index,
+        run_end_index=run_end_index,
+        outlet_elbow_index=outlet_elbow_index,
+        elbow_grid_point_pairs=(
             (inlet_elbow_index, inlet_elbow_index + 1),
             (run_start_index - 1, run_start_index),
             (run_end_index, run_end_index + 1),
             (outlet_elbow_index - 1, outlet_elbow_index),
         ),
-        x_nominal=x_at_rest,
-        y_nominal=y_at_rest,
+        x_at_rest=x_at_rest,
+        y_at_rest=y_at_rest,
         run_length=run_length,
-        leg_height=inlet_leg_height,
-        leg_height_2=outlet_leg_height,
+        inlet_leg_height=inlet_leg_height,
+        outlet_leg_height=outlet_leg_height,
     )
 
 
