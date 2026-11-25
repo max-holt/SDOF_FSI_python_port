@@ -275,15 +275,16 @@ def test_lumped_params_match_legacy(idx):
     case, trace = sweep_cases()[idx], sweep_trace(idx)
     kw, su = case.kw, trace.setup
     p = structure.lumped_params(
-        kw["physical_length"],
+        response.PipeSpan(kw["physical_length"], 0.0, kw["mass_per_unit_len"], 0.0),
+        response.Restraint(
+            kw["nat_freq"],
+            kw["damping_percent"],
+            kw["dynamic_fric"],
+            kw["gap"],
+            kw["restrain_freq_ratio"],
+        ),
         su["portal_frame_height"],
-        kw["mass_per_unit_len"],
-        kw["damping_percent"],
-        kw["dynamic_fric"],
-        kw["nat_freq"],
         su["dt"],
-        kw["gap"],
-        kw["restrain_freq_ratio"],
     )
     assert (p.mass, p.stiffness, p.damping, p.friction_velocity_step) == (
         su["mass"],
@@ -822,17 +823,17 @@ def test_jc_params_match_legacy(idx):
     _id, _force, kw = JC_SMALL[idx]
     su = jc_small_trace(idx).setup
     p = structure.jc_params(
-        kw["physical_length"],
+        response.PipeSpan(kw["physical_length"], 0.0, kw["mass_per_unit_len"], 0.0),
+        response.Restraint(
+            kw["nat_freq"],
+            kw["damping_percent"],
+            kw["dynamic_fric"],
+            kw.get("gap", 0.0),
+            kw.get("restrain_freq_ratio", 1.0),
+        ),
+        response.Fluid(kw["fluid_densty"], kw["fluid_area"]),
         su["portal_frame_height"],
-        kw["mass_per_unit_len"],
-        kw["fluid_densty"],
-        kw["fluid_area"],
-        kw["damping_percent"],
-        kw["dynamic_fric"],
-        kw["nat_freq"],
         su["dt"],
-        kw.get("gap", 0.0),
-        kw.get("restrain_freq_ratio", 1.0),
     )
     assert (p.mass, p.stiffness, p.damping, p.friction_velocity_step) == (
         su["mass"],

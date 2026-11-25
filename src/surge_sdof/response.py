@@ -397,15 +397,10 @@ def peak_response(
         step_qty, sample_freq, physical_length, flexural_rigidity_ei, mass_per_unit_len, nat_freq
     )
     sdof_params = structure.lumped_params(
-        physical_length,
+        PipeSpan(physical_length, flexural_rigidity_ei, mass_per_unit_len, celerity),
+        Restraint(nat_freq, damping_percent, dynamic_fric, gap, restrain_freq_ratio),
         portal_frame_height,
-        mass_per_unit_len,
-        damping_percent,
-        dynamic_fric,
-        nat_freq,
         substep_duration,
-        gap,
-        restrain_freq_ratio,
     )
     unbalance_force_samples = loads.unbalance_force(
         force_history_2d, sample_freq, physical_length, celerity, step_qty
@@ -553,17 +548,11 @@ def peak_response_jc(
     substep_duration, portal_frame_height = setup
     # VBA order: mass, stiffness, damping, fricAcc (726-729), then the grid (731-734)
     sdof_params = structure.jc_params(
-        physical_length,
+        PipeSpan(physical_length, flexural_rigidity_ei, mass_per_unit_len, celerity),
+        Restraint(nat_freq, damping_percent, dynamic_fric, gap, restrain_freq_ratio),
+        Fluid(fluid_densty, fluid_area),
         portal_frame_height,
-        mass_per_unit_len,
-        fluid_densty,
-        fluid_area,
-        damping_percent,
-        dynamic_fric,
-        nat_freq,
         substep_duration,
-        gap,
-        restrain_freq_ratio,
     )
     end_pressure_decay_factor = moc.end_pressure_decay_factor(
         celerity, substep_duration, physical_length

@@ -199,20 +199,23 @@ def test_lumped_trace_leaves_the_result_bitwise_and_follows_the_stride(idx, stri
         assert not np.any(tr.d_f) and tr.n_cells == 0 and tr.p_cells is None
         assert tr.v_cells is None and tr.cell_position is None
         assert tr.params == structure.lumped_params(
-            kw["physical_length"],
+            response.PipeSpan(
+                kw["physical_length"], kw["flexural_rigidity_ei"], kw["mass_per_unit_len"], 0.0
+            ),
+            response.Restraint(
+                kw["nat_freq"],
+                kw["damping_percent"],
+                kw["dynamic_fric"],
+                kw["gap"],
+                kw["restrain_freq_ratio"],
+            ),
             structure.solve_portal_height(
                 kw["physical_length"],
                 kw["flexural_rigidity_ei"],
                 kw["mass_per_unit_len"],
                 kw["nat_freq"],
             ),
-            kw["mass_per_unit_len"],
-            kw["damping_percent"],
-            kw["dynamic_fric"],
-            kw["nat_freq"],
             tr.dt,
-            kw["gap"],
-            kw["restrain_freq_ratio"],
         )
 
 
@@ -316,9 +319,12 @@ def test_jc_trace_geometry():
     assert np.array_equal(tr.moving_fraction[1::2], frac_b)
     assert np.array_equal(tr.moving_fraction, tracing.interleave(frac_a, frac_b))
     assert tr.params == structure.jc_params(
-        kw["physical_length"], h, kw["mass_per_unit_len"], kw["fluid_densty"], kw["fluid_area"],
-        kw["damping_percent"], kw["dynamic_fric"], kw["nat_freq"], dt, 0, 1,
-    )  # fmt: skip
+        response.PipeSpan(kw["physical_length"], 0.0, kw["mass_per_unit_len"], 0.0),
+        response.Restraint(kw["nat_freq"], kw["damping_percent"], kw["dynamic_fric"], 0, 1),
+        response.Fluid(kw["fluid_densty"], kw["fluid_area"]),
+        h,
+        dt,
+    )
     assert set(tr.inputs) == set(kw) | {
         "force_history", "restrain_freq_ratio", "gap", "output_type", "vav_denominator", "parity",
         "fraction_profile",

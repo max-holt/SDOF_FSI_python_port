@@ -29,9 +29,12 @@ Exactness
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numba
+
+if TYPE_CHECKING:
+    from surge_sdof.response import Fluid, PipeSpan, Restraint
 
 __all__ = [
     "VBA_PI",
@@ -204,38 +207,21 @@ def solve_portal_height(
 
 # VBA lines 389-392
 def lumped_params(
-    span_length: float,
-    portal_frame_height: float,
-    mass_per_length: float,
-    damping_percent: float,
-    friction_coefficient: float,
-    natural_frequency: float,
-    substep_duration: float,
-    support_gap: float,
-    closed_gap_frequency_ratio: float,
+    span: PipeSpan, restraint: Restraint, portal_frame_height: float, substep_duration: float
 ) -> SdofParams:
     """Mass, stiffness, damping and friction increment of the lumped proxy (VBA 389-392).
 
     Parameters
     ----------
-    span_length : float
-        Length between elbows, m.
+    span : response.PipeSpan
+        The span: its length (m) and mass per length (kg/m) are read.
+    restraint : response.Restraint
+        Natural frequency (Hz), damping (% of critical), friction coefficient, support gap
+        (m) and closed-gap frequency ratio.
     portal_frame_height : float
         From ``solve_portal_height``, m.
-    mass_per_length : float
-        Mass per unit length, kg/m.
-    damping_percent : float
-        Damping as a percentage of critical, %.
-    friction_coefficient : float
-        Coulomb friction coefficient, dimensionless (the VBA fixes m and s here).
-    natural_frequency : float
-        Natural frequency with the gaps open, Hz.
     substep_duration : float
         Sub-step, s (``1 / (sampleFreq * stepQTY)``).
-    support_gap : float
-        Support gap, m.
-    closed_gap_frequency_ratio : float
-        Natural frequency with the gaps closed over that with them open, dimensionless.
 
     Returns
     -------
@@ -252,36 +238,25 @@ def lumped_params(
     # Proposed derivation, for Ben to confirm: the 4 / 3 is the span's full mass plus two
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
+    span_length = span.span_length
+    mass_per_length = span.mass_per_length
     mass = (span_length + portal_frame_height * 4 / 3) * mass_per_length
-    stiffness = ((natural_frequency * 2 * VBA_PI) ** 2) * mass
-    damping = 2 * ((stiffness * mass) ** 0.5) * damping_percent / PERCENT
+    stiffness = ((restraint.natural_frequency * 2 * VBA_PI) ** 2) * mass
+    damping = 2 * ((stiffness * mass) ** 0.5) * restraint.damping_percent / PERCENT
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
     # on the moving part, so the Coulomb force is 0.5 * mu * m * g and its velocity step per
     # substep 0.5 * mu * g * dt.
-    friction_velocity_step = 0.5 * friction_coefficient * GRAVITY * substep_duration
-    return SdofParams(
-        float(mass),
-        float(stiffness),
-        float(damping),
-        float(friction_velocity_step),
-        float(support_gap),
-        float(closed_gap_frequency_ratio) ** 2,
-    )
+    friction_velocity_step = 0.5 * restraint.friction_coefficient * GRAVITY * substep_duration
+    return _sdof_params(mass, stiffness, damping, friction_velocity_step, restraint)
 
 
 # VBA lines 726-729 (GetPeakResponseJC)
 def jc_params(
-    span_length: float,
+    span: PipeSpan,
+    restraint: Restraint,
+    fluid: Fluid,
     portal_frame_height: float,
-    mass_per_length: float,
-    fluid_density: float,
-    flow_area: float,
-    damping_percent: float,
-    friction_coefficient: float,
-    natural_frequency: float,
     substep_duration: float,
-    support_gap: float,
-    closed_gap_frequency_ratio: float,
 ) -> SdofParams:
     """Mass, stiffness, damping and friction increment of the junction-coupling proxy
     (VBA lines 726-729).
@@ -291,28 +266,17 @@ def jc_params(
 
     Parameters
     ----------
-    span_length : float
-        Length between elbows, m.
+    span : response.PipeSpan
+        The span: its length (m) and mass per length of pipe *and* fluid (kg/m) are read.
+    restraint : response.Restraint
+        As ``lumped_params``; the natural frequency (Hz) is modelled with the fluid mass
+        included.
+    fluid : response.Fluid
+        Fluid density (kg/m³) and flow area (m²): the core fluid removed from the mass.
     portal_frame_height : float
         From ``solve_portal_height``, m.
-    mass_per_length : float
-        Mass per unit length of pipe *and* fluid, kg/m.
-    fluid_density : float
-        Fluid density, kg/m³ (VBA spelling kept).
-    flow_area : float
-        Internal cross-sectional (pressure) area of the pipe, m².
-    damping_percent : float
-        Damping as a percentage of critical, %.
-    friction_coefficient : float
-        Coulomb friction coefficient, dimensionless (m and s fixed by the VBA).
-    natural_frequency : float
-        Natural frequency with the gaps open, Hz (modelled with the fluid mass included).
     substep_duration : float
         Sub-step, s.
-    support_gap : float
-        Support gap, m.
-    closed_gap_frequency_ratio : float
-        Natural frequency with the gaps closed over that with them open, dimensionless.
 
     Returns
     -------
@@ -330,8 +294,11 @@ def jc_params(
     # thirds of each leg's mass taking part in the motion, (L + 2 * (2/3) h) m' = (L + 4h/3) m'.
     # Written for the single expansion-loop shape.
     # The same factor in the three total-mass terms below.
+    span_length = span.span_length
+    mass_per_length = span.mass_per_length
+    natural_frequency = restraint.natural_frequency
     mass = (portal_frame_height * 4 / 3) * mass_per_length + span_length * (
-        mass_per_length - fluid_density * flow_area
+        mass_per_length - fluid.fluid_density * fluid.flow_area
     )  # remove core fluid to get rigid mass
     stiffness = (
         ((natural_frequency * 2 * VBA_PI) ** 2)
@@ -341,7 +308,7 @@ def jc_params(
     damping = (
         2
         * ((stiffness * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)) ** 0.5)
-        * damping_percent
+        * restraint.damping_percent
         / PERCENT
     )  # assume critical damping is relative to total mass
     # Proposed derivation, for Ben to confirm: the 0.5 is the share of the pipe's weight carried
@@ -349,19 +316,32 @@ def jc_params(
     # contents) while the velocity step acts on the rigid mass, hence total mass / rigid mass.
     friction_velocity_step = (
         0.5
-        * friction_coefficient
+        * restraint.friction_coefficient
         * GRAVITY
         * substep_duration
         * ((span_length + portal_frame_height * 4 / 3) * mass_per_length)
         / mass
     )  # mass correction from frictional to inertial
+    return _sdof_params(mass, stiffness, damping, friction_velocity_step, restraint)
+
+
+def _sdof_params(
+    mass: float,
+    stiffness: float,
+    damping: float,
+    friction_velocity_step: float,
+    restraint: Restraint,
+) -> SdofParams:
+    """The ``SdofParams`` of a set-up: mass (kg), stiffness (N/m), damping (N·s/m) and the
+    friction velocity step (m/s) as floats, the support gap (m) of ``restraint`` and the
+    square of its closed-gap frequency ratio."""
     return SdofParams(
         float(mass),
         float(stiffness),
         float(damping),
         float(friction_velocity_step),
-        float(support_gap),
-        float(closed_gap_frequency_ratio) ** 2,
+        float(restraint.support_gap),
+        float(restraint.closed_gap_frequency_ratio) ** 2,
     )
 
 
