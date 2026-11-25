@@ -82,7 +82,7 @@ def fluid_column(
 
     Notes
     -----
-    The column of VBA ``GetPeakResponseJC``. The compiled loop (Stage 5) advances it one
+    The column of VBA ``GetPeakResponseJC``. The compiled loop advances it one
     substep at a time (``moc.step``) on the half-grid selected by the parity index (even
     first, as the VBA's index 0) with ``a * dt`` from the previous substep's acceleration.
     The parity source (running counter, F-2, or the VBA per-phase index, D-19) is the

@@ -9,7 +9,7 @@ the same in both cases, so a traced run returns the same ``PeakResponse`` values
 
 The kernel writes each frame through the two compiled writers here (``write_frame_row``,
 the scalars of a ``FrameRow``; ``write_frame_column``, the interleaved column), called by
-``response._record_frame`` on recorded substeps only (review session R.7, plan 4.8).
+``response._record_frame`` on recorded substeps only.
 ``FRAME_COLUMN_TABLE`` names the frame columns of the ``trace`` document, the ``Trace``
 fields and the kernel columns in one place.
 

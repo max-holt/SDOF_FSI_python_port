@@ -17,7 +17,7 @@ State and parameters
 --------------------
 The state ``(x, v, a)`` is a plain tuple of Python floats; ``SdofParams`` is a named
 tuple. Python floats (not numpy scalars) are used on purpose: the arithmetic is IEEE double either way (``**`` calls C ``pow`` on both),
-and the Stage 4.0 profile showed numpy-scalar overhead at about a third of the lumped
+and a profile of the lumped solver showed numpy-scalar overhead at about a third of its
 wall time.
 
 Exactness
@@ -437,7 +437,7 @@ def step_scalars(
 
     Explicit new acceleration from the old ``x`` and ``v``, trapezoidal ``v`` and ``x``,
     and stick (``|v| < friction_velocity_step``) / slip Coulomb friction. Compiled with
-    ``numba.njit(cache=True)`` (no fastmath; Stage 5); with ``NUMBA_DISABLE_JIT=1`` it is
+    ``numba.njit(cache=True)`` (no fastmath); with ``NUMBA_DISABLE_JIT=1`` it is
     this Python function. Called per substep from ``response._integrate_kernel``.
 
     Parameters

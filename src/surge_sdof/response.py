@@ -1,7 +1,7 @@
 """Public API: peak response of the SDOF pipe proxy to a force history.
 
 The two entry points take the force history and its sample rate, then keyword-only input
-objects (public API session, R.9; ``docs/review/public_interface.md``)::
+objects (``docs/review/public_interface.md``)::
 
     peak_response(force_history, sample_rate, *, span, restraint, integration)
     peak_response_jc(force_history, sample_rate, *, span, restraint, fluid, integration,
@@ -15,7 +15,7 @@ free-decay sample count, the displacement, velocity and acceleration at the end 
 sample, and the ``Trace`` when one was asked for.
 
 ``peak_response`` reproduces ``GetPeakResponse`` (``legacy/vba/Existing Code.bas``
-line 309) from the Stage 4 modules: ``structure`` (portal-frame proxy, SDOF kernel),
+line 309) from the modules ``structure`` (portal-frame proxy, SDOF kernel) and
 ``loads`` (unbalance force schedule), with no fluid coupling. Set-up is done here per
 solver; the sample loop, max trackers, the three response histories and the free-decay
 phase live in one shared ``_integrate``. ``peak_response_jc`` reproduces
@@ -37,7 +37,7 @@ passes whether the sum is even to ``moc.step`` as ``is_even_substep``.
 author's corrected profiles, approved fix F-4) is passed to the coupling, which tabulates
 the profile once (``moc.moving_fractions``).
 
-Stage 5 (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
+Compilation (Numba): ``_integrate`` is the Python orchestrator and ``_integrate_kernel`` the
 ``numba.njit(cache=True)`` loop (no fastmath). The orchestrator concatenates the
 ``loads.unbalance_force`` per-sample lists once into a flat float64 array with int64
 sample offsets, passes ``SdofParams`` whole and the fluid column (``moc.empty_column()``
@@ -45,9 +45,9 @@ for the lumped solver, its coupling flag off; ``coupling.fluid_column``'s, on), 
 kernel and builds the ``PeakResponse``. The kernel takes floats, ints, bools and numpy
 arrays only and calls ``structure.step_scalars`` and ``moc.step``, which Numba compiles
 into it. With ``NUMBA_DISABLE_JIT=1`` the same source runs as Python (the unbalance value
-and ``dF`` are cast with ``float`` so the state stays on Python floats as in Stage 4).
+and ``dF`` are cast with ``float`` so the state stays on Python floats).
 
-Session V.1 (trace): ``Integration.trace_every`` (default 0). With ``k > 0`` every
+Trace: ``Integration.trace_every`` (default 0). With ``k > 0`` every
 ``k``-th substep is recorded into preallocated arrays the kernel takes (``trace.allocate_frames``)
 and returned as ``PeakResponse.trace`` (a ``trace.Trace``); with ``0`` the kernel takes
 empty arrays and the recording branch is never entered. The recording reads the state and
@@ -72,7 +72,7 @@ Differences from ``legacy_port.get_peak_response`` (all proved value-identical b
 Differences of ``peak_response_jc`` from ``legacy_port.get_peak_response_jc`` (proved
 value-identical with the legacy flags by ``tests/test_differential.py``): the same
 return type and float state; ``rhoC = 0`` raises ``FloatingPointError`` once at the set-up
-(Stage 5; the legacy raised it from numpy at the first MoC update) and an overflow in the
+(the legacy raised it from numpy at the first MoC update) and an overflow in the
 fluid raises ``FloatingPointError`` at the end of the run as D-23 (inside the compiled
 kernel ``np.errstate`` does not apply; nan/inf propagate to the structure state), so
 nothing is swallowed (D-9); a ``pivotSegQTY`` of 4 raises ``ZeroDivisionError`` at the
@@ -473,9 +473,9 @@ def peak_response_jc(  # noqa: PLR0913 (7: sample rate beside the history; docs/
     Reproduces ``GetPeakResponseJC`` (``legacy/vba/Existing Code.bas`` line 622). With
     ``coupling=VBA_COUPLING`` the result is bitwise identical to
     ``legacy_port.get_peak_response_jc`` on the differential sweep. F-1/F-2 change the
-    golden cases at rounding level (NOTES.md "Stage 4.2 — F-1/F-2 before/after"); F-4
-    changes them by about 1e-3 relative and the fluid-coupled sweep cases by up to 3.6e-2
-    (NOTES.md "Session F-4 — done"). The Excel acceptance test (``tests/test_golden.py``,
+    golden cases at rounding level (DEVIATIONS D-17, D-19); F-4 changes them by about 1e-3
+    relative and the fluid-coupled sweep cases by up to a few per cent (DEVIATIONS D-4 gives
+    the figures). The Excel acceptance test (``tests/test_golden.py``,
     the ``jc_slow`` cases) runs with ``VBA_COUPLING``. An unknown flag value raises when the
     ``CouplingModel`` is built, before any path of the solver (D-25).
     """
@@ -1060,7 +1060,8 @@ def _integrate(
     is the running substep counter ``substep_index`` (0 at the first substep), or with
     ``settings.is_per_phase_parity`` the VBA per-phase index ``k + (totInd - 1) * stepQTY``
     (phase 3: ``k = 1 .. stepQTY``), written as ``substep_index + parity_offset`` with
-    ``parity_offset`` (``_parity_offset``) fixed per sample (D-19, approved fix F-2). The kernel is the Stage 5 compiled loop."""
+    ``parity_offset`` (``_parity_offset``) fixed per sample (D-19, approved fix F-2). The
+    kernel is the compiled loop."""
     schedule, histories, buffers = _kernel_inputs(
         unbalance_force_samples, settings, column, trace_request
     )
@@ -1246,8 +1247,7 @@ def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; doc
 
     Notes
     -----
-    The Stage 5 kernel (``numba.njit(cache=True)``); the trace frames were added in
-    session V.1. The junction force is VBA ``dF``.
+    Compiled with ``numba.njit(cache=True)``. The junction force is VBA ``dF``.
     """
     unbalance_force_by_substep = schedule.unbalance_force_by_substep
     sample_start = schedule.sample_start
@@ -1264,7 +1264,7 @@ def _integrate_kernel(  # noqa: PLR0915 (the substep sequence stays visible; doc
     frame_inputs = _FrameInputs(sdof_params, dt, column)
     sample_number = 0
     forced_sample_count = sample_start.shape[0] - 1
-    # trace (Session V.1)
+    # trace frames
     frame_count = 0
     trace_every = buffers.trace_every
     frame_capacity = buffers.frame_index_columns.shape[0]

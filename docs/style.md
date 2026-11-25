@@ -53,6 +53,7 @@ Basis: the Google Python Style Guide. The rules below add to it or depart from i
 - Every physical argument and return states its unit.
 - Equations, VBA line references and DEVIATIONS ids go in Notes.
 - Comments say why, never what. A comment that restates the line below it is deleted.
+- No session or stage labels (R.n, Stage n, Session V.1, plan item numbers and the like) in docstrings or comments of the live modules: when and in which session something changed is history, and history belongs in git and NOTES.md. DEVIATIONS ids, review finding ids, VBA line references and the "For Ben to review" and "Proposed derivation" comments stay.
 
 ## 8. Formatting (departure from Google)
 - 100 columns, not 80. Equation-heavy lines read better unbroken. ruff format decides everything else.

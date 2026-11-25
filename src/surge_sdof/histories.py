@@ -1,4 +1,4 @@
-"""Canonical pressure histories for the junction-coupling sweep (Session 5b).
+"""Canonical pressure histories for the junction-coupling sweep.
 
 Three deterministic generators return a ``History``: a ``(time, pressure)`` pair sampled at
 ``sample_rate`` (default 1000 Hz) together with every generator parameter, so that a row of

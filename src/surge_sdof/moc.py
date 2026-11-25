@@ -18,7 +18,7 @@ from A; the structure's acceleration enters as ``a dt`` weighted by the moving-f
 profiles, which depend only on the grid and are tabulated once per run.
 
 ``step`` is one function over the four arrays and scalars with scalar loop bodies: no
-per-cell helper calls and no Python objects; Stage 5 compiles it whole with ``@njit`` (``cache=True``,
+per-cell helper calls and no Python objects; it is compiled whole with ``@njit`` (``cache=True``,
 no fastmath; the same source runs as Python under ``NUMBA_DISABLE_JIT=1``). The
 dead ``useUndamped`` branch (``Const useUndamped = False``, the AFT infinite-pipe boundary)
 is not ported; only the live decaying boundary (``dacayFactor``) is.
@@ -639,7 +639,7 @@ def step(
       carried in locals, ``2 * rhoC`` is hoisted (the same double).
     * VBA quirk D-17: the divisor of the mean velocity is the column's ``mean_velocity_divisor``.
     * The dead ``useUndamped`` branch (VBA lines 803-818) is not ported.
-    * Stage 5: compiled with ``numba.njit(cache=True)`` (no fastmath), body unchanged;
+    * Compiled with ``numba.njit(cache=True)`` (no fastmath);
       with ``NUMBA_DISABLE_JIT=1`` it is this Python function. Inside the compiled
       function ``numpy.errstate`` does not apply: ``rho_c = 0`` is rejected by the
       caller's set-up (``response.peak_response_jc``, D-9) and an overflow propagates

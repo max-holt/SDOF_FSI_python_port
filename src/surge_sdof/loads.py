@@ -17,7 +17,7 @@ history column-major in three phases:
 
 ``unbalance_force`` yields one ``list`` of Python floats per sample, holding exactly the
 per-substep ``forceA - forceB`` values the VBA computes (``tests/test_differential.py``
-compares them bitwise with the legacy solver's locals). ``elbow_forces`` (Session V.1)
+compares them bitwise with the legacy solver's locals). ``elbow_forces``
 yields the two forces apart, per sample with its phase, for the solver trace; both walk
 the history through one private ``_schedule`` generator and differ only in their inner
 ``k`` loops. The linear ramp
@@ -416,8 +416,8 @@ def unbalance_force(
       consecutive substeps.
     * The ramp fractions are tabulated once per run; the table holds the same doubles
       the per-step expression produced.
-    * Session V.1: the index walk is ``_schedule``, shared with ``elbow_forces``; the
-      inner ``k`` loops here are the Stage 4 ones (same operands, same operations).
+    * The index walk is ``_schedule``, shared with ``elbow_forces``; the inner ``k``
+      loops are this function's own (same operands, same operations as the VBA).
     """
     walk = _walk_constants(force_history, sample_rate, span_length, celerity, substep_count)
     (
@@ -520,7 +520,7 @@ def elbow_forces(
 
     Notes
     -----
-    Added in session V.1 for the solver trace; the VBA has no counterpart.
+    For the solver trace; the VBA has no counterpart.
     """
     walk = _walk_constants(force_history, sample_rate, span_length, celerity, substep_count)
     (

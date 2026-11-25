@@ -1,4 +1,4 @@
-"""The expansion-loop geometry of a traced run (Session V.2b / V.2c, moved here in W.1).
+"""The expansion-loop geometry of a traced run.
 
 ``layout_from_trace(trace)`` lays the interleaved MoC column on the expansion loop the
 viewer draws and the data files describe (``docs/data_format.md``, ``trace.geometry``):

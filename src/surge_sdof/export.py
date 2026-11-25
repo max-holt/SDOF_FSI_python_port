@@ -1,4 +1,4 @@
-"""Results data files for the JS viewer (Session W.1): ``docs/data_format.md`` is the contract.
+"""Results data files for the JS viewer: ``docs/data_format.md`` is the contract.
 
 ``to_trace_dict(result, case_id)`` turns a traced ``PeakResponse`` into the ``trace`` document
 (meta, the loop geometry of ``viz.geometry``, the per-frame columns with the synthetic rest
@@ -70,10 +70,10 @@ __all__ = [
 ]
 
 SCHEMA_VERSION = 2
-"""``schema_version`` of a ``trace`` document (2 since the schema bump of the review, R.9)."""
+"""``schema_version`` of a ``trace`` document (2: the key names of ``docs/data_format.md``)."""
 SWEEP_SCHEMA_VERSION = 3
-"""``schema_version`` of a ``sweep`` document (2 since Session 5b: the sweep CSV columns; 3
-since the schema bump of the review, R.9: the column names)."""
+"""``schema_version`` of a ``sweep`` document (2: the sweep CSV columns; 3: their present
+names)."""
 KIND_TRACE = "trace"
 KIND_SWEEP = "sweep"
 
@@ -152,8 +152,8 @@ _SWEEP_COLUMN_TYPES = {
     for solver in (SWEEP_SOLVERS if "{solver}" in name else (None,))
 }
 SWEEP_COLUMNS = tuple(_SWEEP_COLUMN_TYPES)
-"""``sweep.columns`` names, in the document's order: the Session 5b sweep CSV columns
-(``tools/sweep_jc.py``), sweep ``schema_version`` 3 (the W.1 schema 1 had thirty)."""
+"""``sweep.columns`` names, in the document's order: the sweep CSV columns
+(``tools/sweep_jc.py``), sweep ``schema_version`` 3 (schema 1 had thirty)."""
 SWEEP_STRING_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is str)
 SWEEP_INT_COLUMNS = frozenset(n for n, t in _SWEEP_COLUMN_TYPES.items() if t is int)
 
@@ -339,7 +339,7 @@ def is_capped(result: PeakResponse) -> bool:
 
     Notes
     -----
-    Until session R.11 the forced sample count was inferred from the smallest traced
+    The forced sample count was once inferred from the smallest traced
     free-decay sample, which differs when the stride skips the first free-decay sample or
     no free-decay substep is traced (DEVIATIONS D-26, review finding S-11).
     """
