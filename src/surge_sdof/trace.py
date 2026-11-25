@@ -71,6 +71,8 @@ from surge_sdof.loads import PHASE_FORCED, PHASE_TRANSIT
 from surge_sdof.structure import SdofParams
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from surge_sdof.response import KernelSettings, _KernelResult
 
 __all__ = [
@@ -377,16 +379,35 @@ def check_memory(
 
 
 class TraceRequest(NamedTuple):
-    """A traced run: the stride and what ``response._integrate`` needs beyond the kernel
-    arrays to build a ``Trace``. Built by the solver entry points when ``trace_every > 0``.
+    """A traced run, built by ``response._trace_request`` when ``trace_every > 0``.
+
+    It carries two kinds of field: ``stride`` and ``elbow_force_samples`` are read by the
+    kernel's set-up (``response._kernel_inputs``) for the loop; ``solver``, ``inputs``,
+    ``celerity`` and ``portal_frame_height`` are read by ``build_trace`` after it.
+
+    Attributes
+    ----------
+    stride : int
+        Record every ``stride``-th substep, > 0.
+    solver : str
+        The entry point's name, ``"peak_response"`` or ``"peak_response_jc"``.
+    inputs : dict
+        The echo of the entry point's inputs (``Trace.inputs``).
+    celerity : float
+        Wave celerity, m/s (for the grid-point positions).
+    portal_frame_height : float
+        Of the run's set-up (``response.solver_setup``), m.
+    elbow_force_samples : Iterator
+        The lazy ``loads.elbow_forces`` generator: per sample, the load phase and the
+        forces at elbows A and B per substep, N.
     """
 
-    stride: int  # trace_every > 0: record every stride-th substep
+    stride: int
     solver: str
     inputs: dict
     celerity: float
-    portal_frame_height: float  # m, of the run's set-up (response.solver_setup)
-    elbow_force_samples: object  # the loads.elbow_forces generator
+    portal_frame_height: float
+    elbow_force_samples: Iterator[tuple[int, list[float], list[float]]]
 
 
 class TraceBuffers(NamedTuple):
