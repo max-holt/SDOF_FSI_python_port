@@ -40,6 +40,10 @@ from surge_sdof.trace import (
 from surge_sdof.viz.geometry import layout_from_trace
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from numpy.typing import ArrayLike
+
     from surge_sdof.response import PeakResponse
     from surge_sdof.trace import Trace
     from surge_sdof.viz.geometry import LoopLayout
@@ -216,7 +220,7 @@ def _provenance(sha: str | None | bool, created: str | None) -> tuple[str | None
 # ------------------------------------------------------------------ values
 
 
-def array_block(a) -> dict:
+def array_block(a: ArrayLike) -> dict:
     """A 2-D array as the documents store it.
 
     Parameters
@@ -247,7 +251,7 @@ def _finite(value: float, where: str) -> float:
     return value
 
 
-def _jsonable(value, where: str = "value"):
+def _jsonable(value: object, where: str = "value") -> object:
     """Python scalars and lists for numpy input; 2-D arrays become array blocks, 1-D arrays
     plain lists; strings, None and bools pass; NaN / inf raise."""
     if value is None or isinstance(value, (str, bool)):
@@ -478,14 +482,14 @@ def to_trace_dict(
 # ------------------------------------------------------------------ sweep
 
 
-def _sweep_string(value, where: str) -> str | None:
+def _sweep_string(value: object, where: str) -> str | None:
     """A string column's value: the string, or None for an empty one (an empty CSV cell)."""
     if isinstance(value, str):
         return value or None  # an empty CSV cell is null
     raise TypeError(f"{where}: expected a string or None, got {type(value).__name__}")
 
 
-def _sweep_int(name: str, value, where: str) -> int:
+def _sweep_int(name: str, value: object, where: str) -> int:
     """An int column's value: an int, or a float with no fractional part."""
     if isinstance(value, float):
         if not value.is_integer():
@@ -496,7 +500,7 @@ def _sweep_int(name: str, value, where: str) -> int:
     return value
 
 
-def _sweep_float(value, where: str) -> float:
+def _sweep_float(value: object, where: str) -> float:
     """A float column's value: a finite float (an int is converted)."""
     if isinstance(value, int):
         value = float(value)
@@ -505,7 +509,7 @@ def _sweep_float(value, where: str) -> float:
     return _finite(value, where)
 
 
-def _sweep_value(name: str, value, row: int):
+def _sweep_value(name: str, value: object, row: int) -> object:
     """The JSON value of one sweep cell: None, or the column's type (``_SWEEP_COLUMN_TABLE``);
     a CSV cell's text is parsed first. The checks run in this order."""
     where = f"columns.{name}[{row}]"
@@ -551,7 +555,7 @@ class SweepProvenance:
 
 
 def to_sweep_dict(
-    rows,
+    rows: Iterable[dict],
     *,
     provenance: SweepProvenance,
     regen: dict,
@@ -614,7 +618,7 @@ def to_sweep_dict(
 # ------------------------------------------------------------------ files
 
 
-def dumps(obj) -> str:
+def dumps(obj: dict) -> str:
     """A document as text: compact separators, UTF-8 characters as they are, floats via
     ``repr``, one trailing LF.
 
@@ -635,7 +639,7 @@ def dumps(obj) -> str:
     return json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n"
 
 
-def write_json(path: str | Path, obj, gzip: bool = False) -> int:
+def write_json(path: str | Path, obj: dict, gzip: bool = False) -> int:
     """Write a document to a file, as ``dumps`` gives it.
 
     Parameters
@@ -663,7 +667,7 @@ def write_json(path: str | Path, obj, gzip: bool = False) -> int:
     return len(text)
 
 
-def read_json(path: str | Path):
+def read_json(path: str | Path) -> dict:
     """Read a document written by ``write_json``.
 
     Parameters
