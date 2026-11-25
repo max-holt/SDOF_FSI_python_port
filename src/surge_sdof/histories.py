@@ -42,8 +42,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 __all__ = [
     "HISTORIES_VERSION",
@@ -262,7 +266,7 @@ def decay_rate(
 
 
 def envelope(
-    time_since_lead_in,
+    time_since_lead_in: ArrayLike,
     frequency: float,
     envelope_decay_cycles: float,
     envelope_decay_fraction: float,
@@ -303,7 +307,7 @@ def _duration(lead_in_s: float, transit_s: float, decay_s: float, tail_s: float)
     return lead_in_s + transit_s + decay_s + tail_s
 
 
-def _axis(duration_s: float, sample_rate: float, lead_in_s: float):
+def _axis(duration_s: float, sample_rate: float, lead_in_s: float) -> tuple[np.ndarray, int]:
     """The sample times (s, float64, shape ``(sample_count,)``) and the number of lead-in
     (zero) samples of a history of ``duration_s`` (s) at ``sample_rate`` (Hz).
 
@@ -346,7 +350,13 @@ _KIND_SPECIFIC_PARAMS = (
 
 
 def _history(
-    history_type, time, pressure, decay_s, duration_s, scaled_noise_rms=None, **params
+    history_type: str,
+    time: np.ndarray,
+    pressure: np.ndarray,
+    decay_s: float,
+    duration_s: float,
+    scaled_noise_rms: float | None = None,
+    **params: object,
 ) -> History:
     """The ``History`` of a generated pressure: its statistics, and ``params`` with every
     kind-specific parameter the generator does not set as None."""
@@ -417,11 +427,11 @@ def step(
 
 
 def _sine_shape(
-    time,
-    lead_in_sample_count,
-    oscillation_frequency,
-    envelope_decay_cycles,
-    envelope_decay_fraction,
+    time: np.ndarray,
+    lead_in_sample_count: int,
+    oscillation_frequency: float,
+    envelope_decay_cycles: float,
+    envelope_decay_fraction: float,
 ) -> np.ndarray:
     """The unit enveloped sine on the sample times ``time`` (s): 0 over the lead-in,
     ``sin(2 pi oscillation_frequency tau) envelope(tau)`` after, ``tau`` counted from the
