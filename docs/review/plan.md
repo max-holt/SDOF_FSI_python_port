@@ -92,6 +92,12 @@ the other modules (`moc`, `structure`, `coupling`, `loads`, `export`, `histories
 `viz/geometry`, the gated tools), 6.7 (annotations), 6.8 (lint limits; measured nesting
 in `NOTES.md`), and the removal of the `review_ab.py` call-form switch.
 
+**Progress (session R.11, 25 Nov 2026).** Rulings 89-91. `tools/sweep_jc.cpu_model` at
+nesting depth 3, its `noqa` removed (ruling 89); group 7 done: 7.1 (`is_capped` from the
+kernel's count, DEVIATIONS D-26) and 7.2 (`size_in` from the caller, D-27), each a recorded
+behaviour change with a pinning test; no stored snapshot, support file or committed data file
+changed. Group 7 is the last group of the plan; the findings left open by ruling stay open (C-07, the ungated tools).
+
 **Progress (session R.10, 25 Nov 2026).** Rulings 85-88. Group 6 done, one change per commit,
 each gated: the `histories` error messages (ruling 85); 6.6 for `moc`, `structure`,
 `coupling`, `loads`, `export`, `histories`, `viz/geometry`, the ten gated tools, and the
