@@ -489,3 +489,23 @@ The public API session (plan group 6, with 3.7 and 3.10).
 84. **Before the schema bump** the report lists every committed data file re-exported and
     every file whose header is renamed, and confirms the viewer's browser tests ran and
     passed on that commit.
+
+## Rulings (owner, session R.10, 25 Nov 2026)
+
+The rest of plan group 6: the `histories` error messages, docstrings (6.6), annotations
+(6.7) and the lint limits (6.8).
+
+85. **The `histories` error messages** take the new parameter names (`history_type`,
+    `oscillation_frequency`, `noise_seed`, `envelope_reference_frequency`,
+    `peak_pressure_target`, `step_pressure`, `sample_rate`, `envelope_decay_*`), and
+    `tests/test_histories.py` matches the new text. The assertion is unchanged: the error
+    names the offending parameter.
+86. **`loads.unbalance_force` and `loads.elbow_forces` stay at nesting depth 4**, a recorded
+    exception in `docs/style.md` §11, tied to finding C-07 (the two schedule walks, open by
+    decision, ruling 63).
+87. **The tools that no test runs keep their nesting depth**; they are outside the lint
+    limits (as they are outside the gates, ruling 3).
+88. **The other restated assertions of the schema-bump session are accepted** (the
+    schema-version checks, the reference entries' `output_names` through the one rename, the
+    viewer's `friction_coefficient` readout and refused-schema check; `NOTES.md`, R.9
+    continued).
