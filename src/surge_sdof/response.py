@@ -83,7 +83,7 @@ import dataclasses
 import math
 import operator
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numba
 import numpy as np
@@ -98,6 +98,12 @@ from surge_sdof.trace import (
     PHASE_TRANSIT,
     Trace,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import SupportsIndex
+
+    from numpy.typing import ArrayLike
 from surge_sdof.vba_compat import clng
 
 __all__ = [
@@ -318,7 +324,7 @@ class PeakResponse:
 
 
 def peak_response(
-    force_history,
+    force_history: ArrayLike,
     sample_rate: float,
     *,
     span: PipeSpan,
@@ -408,7 +414,7 @@ def peak_response(
 
 
 def peak_response_jc(
-    force_history,
+    force_history: ArrayLike,
     sample_rate: float,
     *,
     span: PipeSpan,
@@ -535,7 +541,9 @@ def _coerced_span(span: PipeSpan) -> PipeSpan:
     )
 
 
-def _sample_grid(force_history, sample_rate: float, span: PipeSpan) -> tuple[np.ndarray, int]:
+def _sample_grid(
+    force_history: ArrayLike, sample_rate: float, span: PipeSpan
+) -> tuple[np.ndarray, int]:
     """The force history as the walk reads it and the nominal forced sample count.
 
     Parameters
@@ -616,7 +624,7 @@ def _checked_integration(integration: Integration) -> Integration:
     return Integration(int(integration.substep_count), _trace_stride(integration.trace_every))
 
 
-def _trace_stride(trace_every) -> int:
+def _trace_stride(trace_every: SupportsIndex) -> int:
     """``trace_every`` as a non-negative int (``operator.index``: no silent truncation;
     ``ValueError`` when negative)."""
     trace_every = operator.index(trace_every)
@@ -1011,7 +1019,7 @@ def _record_frame(
 
 
 def _integrate(
-    unbalance_force_samples,
+    unbalance_force_samples: Iterable[list[float]],
     sdof_params: SdofParams,
     settings: KernelSettings,
     column: moc.FluidColumn,
@@ -1075,7 +1083,7 @@ def _integrate(
 
 
 def _kernel_inputs(
-    unbalance_force_samples,
+    unbalance_force_samples: Iterable[list[float]],
     settings: KernelSettings,
     column: moc.FluidColumn,
     trace_request: tracing.TraceRequest | None,
