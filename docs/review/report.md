@@ -1,165 +1,147 @@
 # Clean-code review — close-out report (session R.12, 25 Nov 2026)
 
-Branch `claude/solver-review-charter-oe8gtr`, 264 commits from the branch point `177c8b1`
-(main) to `6fe7b50`, plus this session's three. Session R.12 changed no solver code: one
-comment in `tests/test_export.py` (`7e726e0`), the docs below.
+Branch `claude/solver-review-charter-oe8gtr`: 264 commits from the branch point `177c8b1` to
+`6fe7b50`, then this session's. R.12 changed no code: one test comment (`7e726e0`) and docs.
 
 ## Summary
-
-* **Results are identical.** Every gate is green on `7e726e0`; the frozen reference
-  (`tests/fixtures/`, `legacy/`, `legacy_port.py`, `vba_compat.py`) is byte-identical to the
-  branch point; every change to the stored snapshot and support files is one of the expected
-  kinds; a scan of all 184 code commits finds no floating-point expression change outside the
-  recorded ones. Two recorded behaviour changes (D-26, D-27) change output on edge inputs only,
-  and touched no stored file.
-* **The code is much easier to follow.** The kernel went from 36 parameters and 212 code lines
-  to 6 and 137; every core function now meets the parameter, complexity and nesting targets or
-  carries a recorded exception. A fresh reader can follow one substep from the entry point to
-  the state update; all four cold readers said so, and named where they stall.
-* **What is left.** A fresh cold read confirmed 125 of 132 findings, almost all Readability
-  and none a defect. Eleven are documentation that is wrong today (four on public entry points
-  or the data contract); they are docstring-only and should be fixed first. About ten Design
-  findings are boundaries the refactor itself drew (parameter objects that carry two jobs, a
-  private type crossing modules, a computation fed from the export echo). They are worth one
-  more session, not a blocker.
-* **Speed:** _see "Speed" below_.
+* **Results are identical.** All gates green on `7e726e0`, the three JC golden cases included;
+  the frozen reference byte-identical to the branch point; every stored-file change of an
+  expected kind; no floating-point expression change in 184 code commits outside the recorded
+  ones. D-26 / D-27 change output on edge inputs only and touched no stored file.
+* **The code is much easier to follow.** Kernel: 36 parameters and 212 code lines → 6 and
+  137; every core function meets the targets or has a recorded exception. Can an engineer
+  follow one substep from the entry point to the state update without the VBA? Three cold
+  readers said "mostly yes", one "partly"; they stall at stale docstrings, the parity index
+  and the grid's VBA vocabulary.
+* **What is left.** 132 findings checked, 125 confirmed, none a defect. Twelve are
+  documentation wrong today (including the public `peak_response_jc` docstring and the data
+  contract); about ten Design findings are boundaries the refactor itself drew.
+* **Speed.** Compiled paths 3-22 % faster than at the branch point (against the literal port,
+  one host); the pure-Python lumped path is about 1.8x slower.
 
 ## What changed
-
-Groups 0-7 of `plan.md` were made across R.3-R.11: names (`docs/nomenclature.md`), named
-constants, parameter objects (`SdofParams`, `FluidColumn`, `TraceBuffers`, `KernelSettings`),
-one structure substep shared by both loops (`_structure_substep`), the trace writers moved to
-`trace.py`, the supporting modules split (`fixture_cases`, `sweep_grid` / `sweep_rows` /
-`sweep_report`, `sweep_document`), the public interface (`PipeSpan`, `Restraint`, `Fluid`,
-`Integration`, `CouplingModel`; `output_type` removed; trace schema 2, sweep schema 3),
-docstrings and annotations, lint limits in `pyproject.toml`, and the approved fixes D-25
-(flag validation), D-26 (`is_capped`), D-27 (`size_in`). The pressure solver was removed
-(R.1b). `docs/handover.md` now opens with the current layout.
+Plan groups 0-7 (R.3-R.11): names (`docs/nomenclature.md`) and named constants; parameter
+objects (`SdofParams`, `FluidColumn`, `TraceBuffers`, `KernelSettings`) and one structure
+substep for both loops; the trace writers in `trace.py`; the tools split (`fixture_cases`,
+`sweep_grid` / `sweep_rows` / `sweep_report`, `sweep_document`); the public interface
+(`PipeSpan`, `Restraint`, `Fluid`, `Integration`, `CouplingModel`; `output_type` gone; trace
+schema 2, sweep schema 3); docstrings, annotations, lint limits; the approved fixes D-25 (flag
+validation), D-26 (`is_capped`), D-27 (`size_in`). The pressure solver went in R.1b; the
+handover now opens with the current layout.
 
 ## Evidence that results are identical
-
-| check (on `7e726e0`, after `make clean-cache`) | result |
+| check (`7e726e0`, after `make clean-cache`) | result |
 |---|---|
-| `make lint` | pass |
-| `make test-both` (fast suite compiled / `NUMBA_DISABLE_JIT=1`) | 966 + 24 skipped / 964 + 26 skipped |
-| snapshot test alone, compiled / pure Python | 29 / 29 passed |
-| supporting-code checks (sweep rows exact, histories exact on X86_V4) | 23 passed |
-| `-m slow` (75 lumped golden cases, both layers) | 150 passed (415 s) |
-| golden `slow or jc_slow`: 75 lumped; the 3 JC cases through the literal port (in parallel) | 75 passed; 3 passed (1607 / 1418 / 1303 s) |
-| `test_differential -m jc_slow` (refactored JC vs Excel, legacy flags) | 3 passed (1.2-1.5 s each) |
-| `tools/bench.py` digests | _pending_ |
+| `make lint`; `make test-both` (compiled / pure Python) | pass; 966 + 24 skipped / 964 + 26 skipped |
+| snapshot test alone, compiled / pure Python; supporting-code checks | 29 / 29 passed; 23 passed (exact) |
+| `-m slow`; golden `slow or jc_slow` (75 lumped; 3 JC cases through the literal port) | 150 passed; 75 + 3 passed (JC 27, 24, 22 min) |
+| `test_differential -m jc_slow` (refactored JC vs Excel, legacy flags) | 3 passed |
+| `tools/bench.py --skip-full-python` (row `da0c855`) | every digest equal to the literal port |
 
-**Frozen paths.** `git rev-parse` gives the same tree for `tests/fixtures`, `legacy`,
-`legacy_port.py` and `vba_compat.py` at `177c8b1` and `HEAD`; no commit touches them.
+**Frozen paths:** same git tree at `177c8b1` and `HEAD`; no commit touches them.
 
-**Stored files.** Five commits change `tests/review_snapshot/` or `tests/review_support/`,
-all expected: `d2af940` / `d4f510d` create them; `253210a` rewrites the stored sweep CSV from a
-clean tree (only `git_sha`, `t_lumped_s`, `t_jc_s` differ: run columns); `5530447` deletes
-the seven pressure documents; `37d1d75` adds `sweep_histories.txt`; `9d2d2c3` (schema bump)
-rewrites nine files. In it, compared leaf by leaf with keys ignored: the CSV header is renamed
-and every data cell is equal; the JSON values are equal except `schema_version`, the
-`output_names` entry `max_applied_force` → `max_unbalance_force`, and the `inputs` echo, now
-grouped (`span`, `restraint`, …), without `output_type` and with `trace_every` and the
-restraint defaults written out. No stored result value changed. The group 7 fixes (`6165f87`,
-`032a3cc`) change no stored file (the stored cases do not reach their edge inputs).
+**Stored files.** Six commits touch `tests/review_snapshot/` or `tests/review_support/`:
+`d2af940` and `d4f510d` create them; `253210a` rewrites the stored CSV from a clean tree (only
+the run columns and `git_sha` differ); `5530447` deletes the seven pressure documents;
+`37d1d75` adds `sweep_histories.txt`; `9d2d2c3` (the schema bump) rewrites nine files.
+Compared leaf by leaf with keys ignored, its CSV differs in the header only, and its JSON in
+`schema_version`, one `output_names` entry (`max_applied_force` → `max_unbalance_force`) and
+the `inputs` echo (now grouped, no `output_type`, `trace_every` and the restraint defaults
+written out). No stored result value changed.
 
-**Commits that do not name a single refactoring.** 184 commits touch code under `src/` or
-`tools/`. I compared, per commit, the multiset of arithmetic expressions with identifiers
-blanked (so renames cancel) and read every commit where it differs (58): the review
-infrastructure (R.0, R.0b, R.1b, R.7's `review_ab.py`), the pressure-solver removal, removals of
-test-only wrappers, literal → named constant with the same value and literal type (`PERCENT =
-100`, sweep `MM_PER_M = 1000`, cases `MM_PER_M = 1000.0`, `GRAVITY = 9.81`, …), duplicated
-expressions collapsed into one copy (`effective_displacement`, `substep_friction`,
-`interleaved_grid`, `solver_setup`: identical bodies), integer index arithmetic (parity
-offset, sample starts), annotations (`X | None`), a printed message, and two revert pairs
-(2.15: `loads.py` identical after `848adb8`; 4.9a: tree identical after `b1ce745`). Commits
-whose message names several changes (e.g. `88dd1d9`, `9520d1d`, `2f1dce2`, `a212356`, `c6abb02`,
-`48df391`, `78c0449`, `7c24b47`, `b79a89a`, `9d2d2c3`) contain no other arithmetic change.
-One test tolerance was loosened on the branch: property 4 of `test_properties.py`, 1e-12 →
-5e-12, approved by the lead author on 17 Nov (R.0b) for a counterexample at 1.27e-12 that
-predates every refactoring.
+**Commits that do not name a single refactoring.** For each of the 184 commits touching
+`src/` or `tools/` I compared the multiset of arithmetic expressions with identifiers blanked,
+so renames cancel out, and read all 58 where it differs. They hold only the review harnesses,
+the pressure-solver removal, removed test-only wrappers, literals replaced by constants of the
+same value and literal type (`PERCENT = 100`, sweep `MM_PER_M = 1000`, cases `MM_PER_M =
+1000.0`), duplicates collapsed into one identical body (`effective_displacement`,
+`substep_friction`, `interleaved_grid`, `solver_setup`), integer index arithmetic, `X | None`
+annotations, one printed message, and two revert pairs that restore the tree (2.15, 4.9a).
+The multi-change commits (`88dd1d9`, `9520d1d`, `2f1dce2`, `a212356`, `c6abb02`, `48df391`,
+`78c0449`, `7c24b47`, `b79a89a`, `9d2d2c3`) contain nothing more. One tolerance was loosened
+on the branch: property 4 of `test_properties.py`, from 1e-12 to 5e-12. The lead author
+approved it in R.0b for a counterexample at 1.27e-12 that predates every refactoring.
 
-## Metrics (`docs/review/metrics_after.md` has every function)
+## Metrics (every function: `metrics_after.md`)
+Commands of `baseline.md` plus `--ignore-noqa` (K14). Ruff counts, before → after:
 
-Commands of `baseline.md` plus `--ignore-noqa` (see K14 below). Before → after, ruff counts:
-
-| function | args | cc | statements | nesting | code lines |
+| function | args | cc | stmts | nest | code lines |
 |---|---|---|---|---|---|
 | `response._integrate_kernel` | 36 → 6 | 23 → 10 | 75 → 55 | 3 | 212 → 137 |
 | `response._integrate` | 10 → 5 | 10 → 3 | 44 → 8 | 2 → 1 | 126 → 26 |
-| `response.peak_response_jc` | 19 → 7 | 6 → 2 | 32 → 16 | 1 | 136 → 62 |
-| `response.peak_response` | 14 → 5 | 2 → 1 | 19 → 10 | 1 → 0 | 77 → 38 |
-| `response._trace_frame` → `_record_frame` | 23 → 6 | 3 → 2 | 20 → 5 | 2 → 1 | 45 → 32 |
+| `response.peak_response_jc` / `peak_response` | 19 / 14 → 7 / 5 | 6 / 2 → 2 / 1 | 32 / 19 → 16 / 10 | 1 / 1 → 1 / 0 | 136 / 77 → 62 / 38 |
 | `moc.step` | 15 → 4 | 7 | 32 → 44 | 2 | 66 → 103 |
 | `structure.step_scalars` | 11 → 6 | 9 → 4 | 29 → 19 | 2 | 47 → 36 |
 | `loads._schedule` | 1 | 14 → 10 | 60 → 41 | 3 | 75 → 92 |
 | `loads.unbalance_force` / `elbow_forces` | 5 | 7 | 24 | 4 | 38 / 36 → 70 / 68 |
-| `trace.build` → `build_trace` | 15 → 6 | 2 → 4 | 9 → 17 | 1 → 2 | 57 → 55 |
-| `export._sweep_value` | 3 | 14 → 8 | 23 → 12 | 3 → 2 | 29 → 17 |
 | `viz.geometry.loop_layout` | 8 → 3 | 1 | 21 | 0 | 55 → 75 |
-| `histories.canonical` / `step_noise` | 14 / 12 | 6 / 3 → 2 | 14 / 24 → 21 | 2 / 1 | 48 / 64 → 62 / 72 |
 
-Over target, core: 10 / 2 / 2 / 2 / 9 (args / cc / statements / nesting / > 40 lines) → 1 / 0 /
-1 / 2 / 7, the four the §11 exceptions; supporting: 6 / 1 / 0 / 0 / 7 → 3 / 0 / 0 / 0 / 6
-(the three history generators); `tools/`: 1 / 2 / 1 / 7 / 17 → 1 / 2 / 1 / 7 / 21, all in
-ungated tools or the review's harnesses except five over the 40-line mark only.
+Over target (args / cc / statements / nesting / > 40 lines): core 10/2/2/2/9 → 1/0/1/2/7;
+supporting 6/1/0/0/7 → 3/0/0/0/6; `tools/` 1/2/1/7/17 → 1/2/1/7/21, all in ungated tools or
+the review harnesses except five functions over the line mark only.
 
-**These are indicators.** Where they improved without the code getting easier to read:
-* The committed `tools/review_baseline.py` honours the targeted `noqa` comments of R.10 and so
-  prints 0 for the parameters of `peak_response_jc`, the kernel's statements, the loads
-  nesting and the generators' parameters: the exceptions vanish from the table (K14).
-* Parameter counts fell by grouping (kernel 36 → 6, `build_trace` 15 → 6). The groups mostly
-  help, but two now carry two jobs: `TraceRequest` holds the kernel's elbow-force generator
-  and `build_trace`'s inputs (T3), and `build_trace` takes response's private `_KernelResult`
-  for two integers (R2).
-* `loads._schedule` met the complexity target by extracting `_next_position`, yet the transit
-  phase still writes that rule out inline (L3).
-* The other way: code lines grew where names got longer and `ruff format` wraps (`unbalance_force`
-  36 → 68 lines at an unchanged 24 statements; `moc.step` gained its derivation comments). That
-  growth reads better, not worse.
+**These numbers are indicators.** They improved without the code getting easier where the
+committed `review_baseline.py` honours R.10's targeted `noqa` and prints 0 in exactly the §11
+exception columns (K14); where grouping cut parameter counts into objects with two jobs
+(`TraceRequest`, T3; `build_trace` taking a private result for two integers, R2); and where
+`_schedule` met its complexity target by extracting `_next_position` while the transit phase
+still writes the rule out inline (L3). The other way, line counts grew where longer names wrap
+(`unbalance_force` 36 → 68 lines at 24 statements throughout); that reads better, not worse.
 
 ## Speed
+A/B per session (`review_ab.py` or its predecessor; rulings 43, 50), new / old:
 
-_pending_
+| session | R.5 | R.6 | R.7 | R.8 | R.9 | R.10 | R.11 |
+|---|---|---|---|---|---|---|---|
+| range | 0.980-1.016 | 0.973-1.027 | lumped 0.885 / 0.935, rest 0.972-1.021 | 0.958-1.021 | 0.926-1.032 | 0.984-1.027 | 0.970-1.015 |
+
+Outliers (R.9 1.054, R.10 1.050) did not repeat; the one-walk schedule (R.4, +20 %) and design
+A's substep (R.6, 1.1-2.0x) were reverted. Before and after on this host: `tools/bench.py
+--skip-full-python` at `177c8b1` (worktree; `r12_bench_branch_point_177c8b1.json`) and at
+`da0c855`, back to back; each time over the unchanged literal lumped r20 of the same run:
+
+| case | 177c8b1 | da0c855 | after / before |
+|---|---|---|---|
+| Numba lumped r20 / r80 | 0.1026 / 0.0982 | 0.0798 / 0.0837 | 0.78 / 0.85 |
+| Numba JC r96 n2000 | 0.0441 | 0.0410 | 0.93 |
+| Numba JC r96 / r97 / r98 full | 0.592 / 0.503 / 0.471 | 0.537 / 0.488 / 0.455 | 0.91 / 0.97 / 0.97 |
+| pure Python lumped r20 / r80; JC r96 n2000 | 0.340 / 0.350; 29.79 | 0.629 / 0.619; 27.13 | 1.85 / 1.77; 0.91 |
+
+Compiled: 3-22 % faster. Pure Python (the test mode) is about 1.8x slower on the lumped cases;
+the cause was not investigated. The pure-Python fast suite took 207 s (156-246 s across the
+sessions), inside ruling 54's limit.
 
 ## Remaining findings and recommendations
+The full list with verdicts is in `findings_r12.md`. Refuted: L4, T11, T12 and W6. Unclear:
+the session labels in docstrings, which no style rule covers; the owner decides.
 
-Full list with verdicts: `docs/review/findings_r12.md`. 132 checked, 125 confirmed, 4 refuted,
-1 split, 2 unclear (session labels in docstrings: no style rule says, owner to decide).
+**Original findings (`findings.md`).** Of the 93 accepted, 74 are closed in code, 4 by
+ruling (C-04, C-05, C-13, the 4.4 half of C-03), 11 open by ruling (C-07, S-23, nine
+ungated-tool findings); S-31 is out of the bump. **Closed on paper only:** C-36 (the kernel's
+`forced_samples` is still there, R6); C-23 (`elbow_force_samples` still typed `object`, T3);
+C-40 / S-50 (VBA names still the primary definitions, four module docstrings wrong: R7, C1,
+T8, M5); C-19 (callers still named, moc.py:645); C-45 (`vav_denominator` survives, M3); S-47
+(marked done, its bump half left out by ruling 81); C-11 (repetition down from ~60 lines to
+25, R3, not removed).
 
-**Original findings (`findings.md`).** Of the 93 accepted, 74 are closed in the code, 4 closed
-by ruling (C-04, C-05, C-13, the 4.4 half of C-03), 11 open by ruling (C-07; S-23; the nine
-ungated-tool findings) and S-31 left out of the bump (ruling 81). **Closed on paper only:**
-C-36 says done but the kernel's `forced_samples` (kept "until group 4") is still there (R6);
-C-23's typing of `elbow_force_samples` "with 6.7" is still `object` (T3); C-40 / S-50 say every
-docstring has its VBA names in Notes, but Parameters / Returns still define quantities by VBA
-name and four module docstrings are wrong (R7, C1, T8, M5); C-19's "stop naming callers" is
-not done (moc.py:645, R16); C-45's divisor / denominator pair survives as `vav_denominator`
-(M3); S-47 says done though its bump half was left out by ruling 81; C-11 is reduced (about
-60 → 25 repeated lines, R3), not removed.
-
-**Introduced by the refactor.** R1 (the trace walk fed from the export echo), R2/T4 (trace
-depends on response's private result), T3 (`TraceRequest` two jobs), T2 (the grid in three
-forms), C1 (`coupling.py` a factory under a docstring about other modules), S1 (structure
-typed by response's input classes), M1 (a display profile in the solver module), M3 (one name
-for a choice, an int and a function), R5/T1 (the record window in four places), K14.
+**Introduced by the refactor:** R1 (trace walk fed from the export echo), R2/T4 (trace
+imports a private response type), T3 (`TraceRequest` two jobs), T2 (the grid in three forms),
+C1 (`coupling.py` a factory under a docstring about other modules), S1 (structure typed by
+response's input classes), M1 (display profile in moc), M3 (one name for a choice, an int and
+a function), R5/T1 (the record window in four places), K14 (metrics read 0 for exceptions).
 
 | recommendation | findings |
 |---|---|
-| **fix now** (docstring / comment / tool flag, R0; gates only) | R7, R8, R9, T8, R16, C1 docstring, S1/S2 docstring, M3 (moc.py:28), T3 docstring and annotation, E4, H5, R24, S6, W11 (data_format.md:205), K14 |
-| **defer to Stage 6** (structure; gates and A/B) | R1+R3, R2/T4, T1/R5, T2, T3 split, S1 move, M1, C1 move, G1, L1-L3, R4, R6, K1, K2, W1, E3 and the confirmed Readability renames |
-| **leave** | refuted (L4, T11, T12, W6); Nits (ruling 8); ungated tools (K3, K4, W2); next-schema-bump keys (E9, E10, E15, W11 notes); G3 (approved interface); session labels (owner) |
+| **fix now** (docstring, comment, tool flag; R0, gates only) | R7, R8, R9, T8, R16, R24, C1 and S1/S2 docstrings, S6, M3 (moc.py:28), T3 docstring and annotation, E4, H5, data_format.md:205, K14 |
+| **defer to Stage 6** (structural; gates and an A/B) | R1+R3, R2/T4, T1/R5, T2, the T3 split, the S1 / M1 / C1 moves, G1, L1-L3, R4, R6, K1, K2, W1, E3, the confirmed renames |
+| **leave** | refuted; Nits (ruling 8); ungated tools (K3, K4, W2); keys for a later schema bump (E9, E10, E15, `regen.note`); G3 (approved interface); session labels (owner) |
 
 ## Deviations from `docs/style.md` to record in §11
-
-* `response._record_frame`: called per recorded substep with the buffers and the column, a
-  §4 departure kept by ruling 56 (R19).
-* `loads.unbalance_force` / `elbow_forces`: keep the line but restate its reason; the fourth
-  level is the phase dispatch, not the two walks (L1). Same for `histories.canonical`, whose
-  reason fits `step_sine` / `step_noise` only (H4).
-* `_integrate_kernel`: the line says 56 statements; ruff counts 55 (54 once R6 is made).
-* §3's "a function that misses a target carries a one-line reason": none of the eleven
-  functions over 40 code lines carries one (`moc.step` 103, `loads._schedule` 92, the walks,
-  `peak_response_jc`, `_kernel_inputs`, `build_trace`, `loop_layout`, three generators).
-* `tools/review_ab.py` and `review_baseline.py` are exempt from the limits in `pyproject.toml`
-  as "tools no test runs", though they are the review's gates; `review_ab.main` nests 4.
+* `response._record_frame`: called per recorded substep with arrays (§4; ruling 56; R19).
+* Restate two reasons: the loads walks' nesting of 4 comes from the phase dispatch, not
+  the two walks (L1); `histories.canonical`'s reason fits only `step_sine` / `step_noise` (H4).
+* `_integrate_kernel`: §11 says 56 statements, ruff counts 55.
+* §3's one-line reason is missing on all eleven functions over 40 code lines (`moc.step`,
+  `_schedule`, the two walks, `peak_response_jc`, `_kernel_inputs`, `build_trace`,
+  `loop_layout`, three generators).
+* `review_ab.py` / `review_baseline.py` are exempt as "tools no test runs" but are the gates.

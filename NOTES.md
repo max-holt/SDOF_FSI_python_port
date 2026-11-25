@@ -6,6 +6,31 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Session R.12 (2026-11-25): **review close-out**, no code changed. `7e726e0` corrects the
+`test_is_capped` comment (its second case reaches free decay inside the window; case and
+assertion unchanged). `docs/review/report.md` is the close-out; `findings_r12.md` the fresh
+cold read (4 reviewers, one verifier per module: 132 checked, 125 confirmed, 4 refuted, 1
+split, 2 unclear); `metrics_after.md` the per-function metrics (baseline commands plus
+`--ignore-noqa`); `docs/handover.md` gains a "How the code is laid out" section.
+
+Gates on `7e726e0`: lint; `make test-both` 966 + 24 / 964 + 26; snapshot 29 / 29 both modes;
+support 23; `-m slow` 150 passed (415 s); golden lumped 75 passed; the three JC golden cases
+through the literal port passed (1607 / 1418 / 1303 s, run in parallel);
+`test_differential -m jc_slow` 3 passed. Bench row `da0c855`: every digest equal to the literal
+port. Before / after on this host (`177c8b1` in a worktree, `docs/review/r12_bench_branch_point_177c8b1.json`):
+compiled 0.78-0.97 of the branch point relative to the literal port; pure-Python lumped
+1.85 / 1.77 (not investigated; the pure-Python fast suite is 207 s).
+
+Found: the committed `tools/review_baseline.py` honours the R.10 `noqa` comments and prints 0
+for the §11 exception columns (K14); the §11 reasons for the loads nesting (L1) and for
+`histories.canonical` (H4) do not fit the code; twelve docstrings / doc lines are wrong today
+(report, "fix now"). Not merged, not tagged.
+
+**Next:** the owner's decision on the merge; the "fix now" list of `report.md` (docstring,
+comment and tool-flag only) if wanted before it; the rest is Stage 6 or left by ruling.
+
+Previous: session R.11 (below).
+
 Session R.11 (2026-11-25): **plan group 7 done**, and `cpu_model`. Rulings 89-91 in the
 charter (`c7569a1`). One change per commit, each gated (lint, `make test-both`: compiled and
 pure-Python fast suites, snapshot and support exact in both modes) before it was made.
@@ -830,14 +855,7 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-**Group 2 of `docs/review/plan.md`** (constants, units, control flow): 2.1 the phase
-constants defined once and imported (the bare 0 / 1 tags of `loads`), 2.2 the plain
-`is_fluid_coupled` flag (ruling 16), 2.4 to 2.7 the core literals, 2.9 the supporting-code
-conversions, 2.10, 2.11, then the schedule clean-up 2.13 to 2.15. Rules: one literal per
-commit for 2.4 to 2.7; `make clean-cache` before tests whenever a compiled function or a
-constant it reads changes. Then stop before group 3 and write
-`docs/review/parameter_objects.md` (ruling 10); group 3 applies the kernel names fixed in
-`docs/nomenclature.md`.
+See "Current stage" (R.12): the merge decision, then the report's "fix now" list.
 
 **Still open for the owner:** R.0b question 5 (the `docs/viz/data/` files and the viewer's
 old schema at the bump) and 8 (lint rules for style §7-§9); for Ben: the derivation
