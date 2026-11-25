@@ -430,3 +430,35 @@ The supporting-modules session (plan group 5, with 3.11 moved there by ruling 48
     applies (rulings 43, 54).
 66. **The plan wins** where `docs/review/plan.md` and the session brief differ (rulings 46,
     50).
+
+## Rulings (owner, session R.9, 25 Nov 2026)
+
+The public API session (plan group 6, with 3.7 and 3.10).
+
+67. **`tools/fixture_cases.py` stays in `tools/`.**
+68. **Sweep modules in `sys.modules`.** That the sweep modules enter `sys.modules` when a test
+    loads the sweep tool is accepted. If a property test turns red because its generated
+    examples moved, the session stops and reports it; the test is not loosened.
+69. **The adapter change in `tests/test_review_support.py`** is allowed under rule 6.
+70. **A sweep case in the A/B harness.** `tools/review_ab.py` gets one small sweep case
+    (`sweep_noise`, one Tier 1 case through `sweep_rows.run_case`), so that a change on the
+    sweep path can be timed.
+71. **Plan 3.7 and 3.10 belong to this session**, as part of the public interface work
+    (confirms ruling 47).
+72. **Gates as before** (rulings 39, 65): `make lint` and the compiled fast suite before each
+    commit, the pure-Python run of a commit before the next, the branch pushed only when every
+    commit is green, and `tools/review_ab.py` against the commit before for anything on the
+    solver or sweep path, with the 5 % limit. Where `plan.md` and the session brief differ,
+    `plan.md` wins.
+73. **The proposal in a file.** The public interface of step 1 is written to
+    `docs/review/public_interface.md` and shown to the owner in full, with the old-to-new
+    table of exported key names (the schema bump) in the same file (ruling 10).
+74. **Viewer tests.** No exported key and no viewer key changes unless the viewer's browser
+    tests run. Without a working browser the session makes the input types, the entry points,
+    the docstrings and the lint limits with the exported keys left exactly as they are, stops
+    at a green commit and reports that the schema bump waits for a machine with one. (In this
+    environment they run: `PLAYWRIGHT_BROWSERS_PATH` pointed at a directory whose
+    `chromium-1243/chrome-linux/chrome` links to the installed
+    `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`; 26 passed.)
+75. **Long session.** If the context runs long, the session stops at a green commit and says
+    where.
