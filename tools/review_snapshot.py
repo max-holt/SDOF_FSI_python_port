@@ -27,6 +27,8 @@ import test_review_snapshot as snapshot  # noqa: E402
 
 
 def main() -> int:
+    """Compare the snapshot documents with today's code, or write them with ``--write``
+    (compiled path only); the exit status, 1 when a document differs."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="write the documents")
     args = parser.parse_args()
