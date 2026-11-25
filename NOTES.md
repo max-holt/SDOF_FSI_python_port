@@ -6,6 +6,40 @@ up to the `v0.4-handover` tag; `docs/handover.md` is the orientation for a new r
 
 ## Current stage
 
+Close-out pass (2026-11-25, after R.12): **documentation only**, before the merge. No
+statement of code changed apart from one default flag in a review tool; every commit touching
+Python is AST-equal to its parent once docstrings are stripped (comments are not in the AST),
+except `tools/review_baseline.py`, whose only AST change is `--ignore-noqa` in the ruff
+command. Gates: lint before every commit; `make test-both` (966 + 24 / 964 + 26 each time)
+on every commit touching Python, run on its tree before it was committed; the `data_format.md`
+commit (a file `test_export` and `test_sweep_jc` read) was tested in the tree of the commit
+after it, which changed only docstrings. The other docs-only commits change no file a test
+reads.
+
+Done: `data_format.md` meaning column in schema-3 keys (E4, line 205); `response` docstrings
+(parity path, `Trace.column`, `_trace_request` solver names: R7, R8, R9); module docstrings
+of `coupling`, `structure`, `trace` and `moc.py:28` (C1, S1/S2, T8, M3); `docs/style.md` §11:
+the loads nesting and `histories.canonical` reasons restated with their `noqa` texts (L1,
+H4), new lines for `_record_frame`, the two review harnesses and the functions over 40 code
+lines, the kernel's 55 statements; session and stage labels removed from the live modules'
+docstrings and comments, and the rule in style §7; `review_baseline.py` ignores `noqa` by
+default (K14); remaining structural findings marked "deferred to Stage 6" in `findings.md`
+and `findings_r12.md`. `report.md` has an addendum.
+
+**Speed, accepted (owner):** the pure-Python lumped runs (`NUMBA_DISABLE_JIT=1`) are about
+1.8 times slower than at the branch point `177c8b1` (1.85 / 1.77 on r20 / r80, R.12 bench,
+relative to the literal port). This is accepted: the pure-Python mode is for verification
+only, and the compiled path, the one that is used, is 3-22 % faster. The cause was not
+investigated.
+
+Not done (outside this pass's list; `findings_r12.md` "now; not done"): R16, R24, S6, the
+T3 docstring and annotation, E11, H5. Session labels remain in `tools/` and `tests/`; the
+style §7 rule names the live modules.
+
+**Next:** the owner's decision on the merge. Not merged, not tagged.
+
+Previous: session R.12 (below).
+
 Session R.12 (2026-11-25): **review close-out**, no code changed. `7e726e0` corrects the
 `test_is_capped` comment (its second case reaches free decay inside the window; case and
 assertion unchanged). `docs/review/report.md` is the close-out; `findings_r12.md` the fresh
@@ -855,7 +889,8 @@ tag was local only and never pushed (the published tags are `v0.1-literal-port`,
 
 ## Next action
 
-See "Current stage" (R.12): the merge decision, then the report's "fix now" list.
+See "Current stage": the merge decision; the report's "fix now" list is done apart from the
+items the close-out pass lists as not done.
 
 **Still open for the owner:** R.0b question 5 (the `docs/viz/data/` files and the viewer's
 old schema at the bump) and 8 (lint rules for style §7-§9); for Ben: the derivation
