@@ -10,3 +10,25 @@ tests/.golden_cache/
 .hypothesis/
 tests/.artifacts/
 out/
+
+# Coverage and type-checker output
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Notebooks, local environment, node tooling
+.ipynb_checkpoints/
+.env
+node_modules/
+
+# Personal Claude Code settings (the shared .claude/settings.json stays tracked)
+.claude/settings.local.json
